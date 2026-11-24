@@ -105,8 +105,9 @@ def test_matched_precision():
 
 
 def test_a_hitnet_run_trains_its_head_and_plays_without_trials(states_dir, tmp_path):
+    # ow-start from the bare state ``start``: no state_routes, so --all-routes (round 40, ``lab.recipe.check_routes``)
     run = train.main(['--name', 'hitnet', '--run-id', 'h1', '--families', f'ow-start={start_task()}', '--parallel',
-                      '2',
+                      '2', '--all-routes',
                       '--steps-per-update', '64', '--device', 'cpu', '--models-dir', str(tmp_path), '--seed', '5',
                       '--iterations', '2', '--arch', 'hitnet', '--arch-config',
                       json.dumps({**SMALL, 'feed': True}), '--aux', 'hit=hit:0.5', '--try-others', '2:0.5'])

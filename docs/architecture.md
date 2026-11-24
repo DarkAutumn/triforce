@@ -1835,17 +1835,22 @@ every step, so following an enemy that moves away pays again, and knockback rese
   architecture, hit head, act mode, file), `models` (`legacy`: the models dir, until the store), `arguments` (paths
   labelled), `seeds`, `job`. No absolute path of a checkout: `label` writes a path relative to the checkout of this
   repository it lies in (main or a worktree, so arms in two worktrees compare), else `~/...`. Hashing is by content
-  (zol@d3first's 3,396 harvested states 0.17 s, wizzrobe's 17,410 curriculum files 2.1 s, warm cache).
-- **Diffs and arms** (`triforce manifest diff A B [--json]`, `show X`): A and B are run dirs, `run.json` files, chain
-  outputs or their `.meta.json`, or statistics files; every difference one line, grouped (code, task, data, networks,
-  arguments, then the run's own fields). A record from before manifests is read for what it holds (`legacy_train`:
-  the args, the harvested count, the curriculum's tracks, the warm start; `legacy_chain`: the provenance's networks
-  and route) and lists what it cannot say (`unknown`). `train --same-recipe-as RUN [--except KEY,...]` refuses (exit
-  2) a training whose manifest differs from RUN's but for the run's own fields (seed, run id, outputs, logs, its
-  module's build time) and the excepted keys (a key names every path whose dotted parts it matches: `sil_coeff`,
-  `harvested`, `reward.firing_lines`), printing every difference; what the reference never recorded is printed as
-  unknown and does not refuse. `eval-chain --same-team-as OUTPUT [--except FAMILY,...]` does the same for a chain's
-  team (every network and task config; a family names its route keys too).
+  (zol@d3first's 3,396 harvested states 0.17 s, wizzrobe's 17,410 curriculum files 2.1 s, warm cache). A lab run
+  (`python -m triforce.lab.train`, kind `lab-train`, `lab.recipe.build`) records `task` as its group, route and
+  every task, `data` per task, `networks.student` (architecture, settings, the keys it reads), `networks.teachers`, and
+  a `training` part (PPO, auxiliary, look-ahead, teacher and sampling settings); a curriculum folder of links (the
+  lab's `--state-route` view) is hashed through its links.
+- **Diffs and arms** (`triforce manifest diff A B [--json]`, `show X`): A and B are run dirs, store runs `NAME/RUN`,
+  `run.json` files, chain outputs or their `.meta.json`, or statistics files; every difference one line, grouped
+  (code, task, data, networks, training, arguments, then the run's own fields). A record from before manifests is
+  read for what it holds (`legacy_train`: the args, the harvested count, the curriculum's tracks, the warm start;
+  `legacy_chain`: the provenance's networks and route) and lists what it cannot say (`unknown`). `train
+  --same-recipe-as RUN [--except KEY,...]` (and the lab's, and the lab's `--resume` against its own record) refuses
+  (exit 2) a training whose manifest differs from RUN's but for the run's own fields (seed, run id, a lab run's set
+  name, `--resume`, outputs, logs, its module's build time) and the excepted keys (a key names every path whose dotted
+  parts it matches: `sil_coeff`, `harvested`, `reward.firing_lines`), printing every difference; what the reference
+  never recorded is printed as unknown and does not refuse. `eval-chain --same-team-as OUTPUT [--except FAMILY,...]`
+  does the same for a chain's team (every network and task config; a family names its route keys too).
 - **Red flags** (`jobs.flag(code, text, level='red'|'note')`): appended to the job's row (`flags`, a JSON list of
   `{'level', 'code', 'text'}`) and printed; `triforce job list` and `history` print them under the job, the training
   GUI draws a badge (red: the bad colour; a note: the in-between purple) with the sentence under it on the job's

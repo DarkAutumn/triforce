@@ -35,6 +35,7 @@ class Family:
     key: str
     config: SpecialistConfig
     envs: int = 1
+    yaml: str = ''          # the task: a yaml path, or a family name (its own yaml)
 
     @property
     def family(self) -> str:
@@ -80,20 +81,29 @@ def route_only(config: SpecialistConfig, route: str, states_dir=None, tracks_dir
         return config.replace(curriculum={'enabled': False})
     out = Path(tracks_dir or paths.scratch('route-tracks')).resolve() / route / config.name
     out.mkdir(parents=True, exist_ok=True)
-    for track in tracks:
-        link = out / track.name
-        if not link.is_symlink():
-            link.symlink_to(track.resolve())
-    return config.replace(curriculum={'enabled': True, 'trajectories': str(out)})
+    # The folder is exactly the route's tracks of today's source: a link of a track gone from it is removed, one that
+    # points elsewhere (an earlier snapshot) is pointed again.
+    wanted = {track.name: track.resolve() for track in tracks}
+    for link in out.iterdir():
+        if link.is_symlink() and (link.name not in wanted or link.resolve() != wanted[link.name]):
+            link.unlink(missing_ok=True)
+    for name, target in wanted.items():
+        if not (out / name).is_symlink():
+            try:
+                (out / name).symlink_to(target)
+            except FileExistsError:     # another run of this checkout made it meanwhile
+                pass
+    # The task's other curriculum settings (fraction, threshold, the untracked declaration) stay.
+    return config.replace(curriculum={**config.to_dict()['curriculum'], 'enabled': True, 'trajectories': str(out)})
 
 
 def parse_families(items, parallel: int, shares: Optional[dict] = None, state_route: Optional[str] = None,
-                   curriculum: bool = True, states_dir=None) -> list[Family]:
+                   curriculum: bool = True, states_dir=None, tracks_dir=None) -> list[Family]:
     """``key[=yaml]`` items (a key's task: the given yaml, else ``task_yaml``) with ``parallel`` envs split by
     ``shares`` (key -> weight; default equal), every family at least one; with ``state_route``, each task on that
-    route's states alone (``route_only``).  Every input a task declares is checked (``triforce.inputs``: its
-    start-state globs and harvested states under ``states_dir``, with ``curriculum`` its tracks); a missing one stops
-    the run."""
+    route's states alone (``route_only``, its links under ``tracks_dir``).  Every input a task declares is checked
+    (``triforce.inputs``: its start-state globs and harvested states under ``states_dir``, with ``curriculum`` its
+    tracks); a missing one stops the run."""
     families = []
     for item in items:
         key, _, path = item.partition('=')
@@ -101,14 +111,14 @@ def parse_families(items, parallel: int, shares: Optional[dict] = None, state_ro
         try:
             check_start_states(config, states_dir)
             if state_route:
-                config = route_only(config, state_route, states_dir)
+                config = route_only(config, state_route, states_dir, tracks_dir)
             check_harvested(config, states_dir)
             if curriculum and config.curriculum.enabled:
                 check_curriculum(config, config.curriculum.trajectories or paths.data_dir('trajectories') / config.name,
                                  states_dir)
         except MissingInput as error:
             raise SystemExit(f"{key}: {error}" if key.split('@')[0] != config.name else str(error)) from None
-        families.append(Family(key, config))
+        families.append(Family(key, config, yaml=path or task_yaml(key)))
     keys = [f.key for f in families]
     if len(set(keys)) != len(keys):
         raise SystemExit(f"a family is named twice: {keys}")
@@ -124,6 +134,12 @@ def parse_families(items, parallel: int, shares: Optional[dict] = None, state_ro
     for family, count in zip(families, envs):
         family.envs = count
     return families
+
+
+def teacher_paths(keys, root=None, checkpoints: Optional[dict] = None, route: Optional[str] = None) -> dict:
+    """Each key's teacher checkpoint (``Teachers``): the given one, else ``registry.policy_checkpoint(key, root,
+    route)``."""
+    return {key: (checkpoints or {}).get(key) or registry.policy_checkpoint(key, root, route) for key in keys}
 
 
 class Teachers:
@@ -142,8 +158,9 @@ class Teachers:
         # Each teacher as run.json names it (round 40, `lineage.identity`: family, run, iterations, SHA-1).
         self.identities: dict[str, dict] = {}
         loaded: dict[str, tuple] = {}
+        chosen = teacher_paths(keys, root, checkpoints, route)
         for key in keys:
-            path = (checkpoints or {}).get(key) or registry.policy_checkpoint(key, root, route)
+            path = chosen[key]
             real = str(Path(path).resolve())
             if real not in loaded:
                 network, checkpoint = registry.load_model(path)
@@ -387,6 +404,16 @@ class NeedSampler:
         """Adds a rollout's finished episodes of ``key`` (``episode`` events)."""
         for event in episodes:
             self.recent[key].append(event['info'].get('outcome') == 'success')
+
+    def state(self) -> dict:
+        """What a resumed run restores (``restore``): each family's recent outcomes, oldest first."""
+        return {key: [bool(x) for x in recent] for key, recent in self.recent.items()}
+
+    def restore(self, state: dict):
+        """The recent outcomes ``state`` saved; a family it does not name starts empty."""
+        for key, recent in self.recent.items():
+            recent.clear()
+            recent.extend(bool(x) for x in state.get(key, ()))
 
     def success(self, key: str) -> Optional[float]:
         recent = self.recent[key]

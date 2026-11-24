@@ -138,7 +138,9 @@ def test_the_hit_head_learns_only_from_its_own_loss():
 
 
 def test_a_hit_head_run_trains_on_its_labels_and_plays_without_trials(states_dir, tmp_path):
+    # ow-start from the bare state ``start``: no state_routes, so --all-routes (round 40, ``lab.recipe.check_routes``)
     run = train.main(['--name', 'hit', '--run-id', 'h1', '--families', f'ow-start={start_task()}', '--parallel', '2',
+                      '--all-routes',
                       '--steps-per-update', '64', '--device', 'cpu', '--models-dir', str(tmp_path), '--seed', '5',
                       '--iterations', '2', '--arch', 'hithead',
                       '--arch-config', '{"hidden_dim": 32, "depth": 1, "hit_dim": 32}',
