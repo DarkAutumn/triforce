@@ -81,6 +81,15 @@ BOMB_RULE_CHANGES = {
         '5_65e_2.state': '759b1ad911d12582e94319e01e130047850f43514c82c8f782341e133cfac36a',
     },
 }
+# The trace the weapon rooms changed (decisions 2026-11-23 "Manhandla and Dodongo are never fought without a bomb"),
+# with its hash on that code.  Compared step by step with the code before (same seed): boss-manhandla `3_4dw_2` lays
+# its third and last bomb at step 16; the bag then stayed at 0 to the end, and is now topped up to 1 at once and
+# after every bomb laid.  `3_4dw_0` and `3_4dw_1` never run out in their 50 steps and keep their hashes.
+WEAPON_ROOM_CHANGES = {
+    'boss-manhandla': {
+        '3_4dw_2.state': 'c9869f57b78559eaa61891ca7502e2fdf7848884e73b3d631c4cf8270fce614e',
+    },
+}
 # Round 31 (the owner's phase IX route, docs/experiments/round31.md): Dungeon 1 leaves 0x72, 0x74, 0x52 and 0x42 out,
 # so the 21 states of the steps that left the route are deleted (`ROUTE31_DELETED`: no trace), and the states of the
 # steps after them were rebuilt from the new route's chains (what Link holds and which doors are open differ from the
@@ -228,7 +237,8 @@ def test_schema5_columns_are_unchanged(name):
     if name not in golden['families']:
         pytest.skip(f"{name}: no schema 5 record (a family added after the record)")
     recorded = golden['families'][name]
-    changed = ROUTE_CHANGES.get(name, {}) | BOMB_RULE_CHANGES.get(name, {}) | ROUTE31_CHANGES.get(name, {})
+    changed = (ROUTE_CHANGES.get(name, {}) | BOMB_RULE_CHANGES.get(name, {}) | ROUTE31_CHANGES.get(name, {})
+               | WEAPON_ROOM_CHANGES.get(name, {}))
     kept = {state: digest for state, digest in recorded.items() if state not in ROUTE31_DELETED}
     assert family_hashes(name, recorded) == kept | changed
 

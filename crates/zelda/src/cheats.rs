@@ -739,9 +739,10 @@ mod tests {
     }
 
     /// [`bomb_opens`] on game.yaml: every `requires_bombs` room is bombed for something it opens (a dungeon bomb
-    /// wall, an overworld rock wall) but Dodongo's 2:0x0e, where the bomb is the weapon; an untagged room is none.
+    /// wall, an overworld rock wall) but the two where the bomb is the weapon (`bomb_weapon`): Dodongo's 2:0x0e and
+    /// Manhandla's 3:0x4d, whatever the state of his W wall; an untagged room is none.
     #[test]
-    fn every_requires_bombs_room_but_dodongos_has_something_to_open() {
+    fn every_requires_bombs_room_but_the_weapon_rooms_has_something_to_open() {
         let map = GameMap::builtin();
         let weapon: Vec<MapLocation> = map
             .rooms()
@@ -749,8 +750,8 @@ mod tests {
             .copied()
             .filter(|&room| map.requires_bombs(room) && !bomb_opens(&map, room))
             .collect();
-        assert_eq!(weapon, [DODONGO]);
-        for (level, room) in [(0, 0x2c), (0, 0x67), (3, 0x5b), (3, 0x4c), (3, 0x4d), (5, 0x66), (7, 0x69), (7, 0x1a)] {
+        assert_eq!(weapon, [DODONGO, MapLocation::new(3, 0x4d, false)]);
+        for (level, room) in [(0, 0x2c), (0, 0x67), (3, 0x5b), (3, 0x4c), (5, 0x66), (7, 0x69), (7, 0x1a)] {
             assert!(bomb_opens(&map, MapLocation::new(level, room, false)), "{level}:{room:#04x}");
         }
         assert!(!bomb_opens(&map, SOUTH), "2:0x1e is no requires_bombs room");
