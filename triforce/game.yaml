@@ -3456,6 +3456,7 @@ rooms:
   trigger: kill-all-item  # attr F & 7 = 7
 - level: 3
   location: '0x59'
+  name: darknut lock room  # the owner's working name (Nov 24): five Red Darknuts, the S shutter opens when they are dead
   specialist: darknut
   exits:
     N:
@@ -3492,6 +3493,7 @@ rooms:
   treasure: compass
 - level: 3
   location: '0x5b'  # the central Darknut room; its bombs appear when the Darknuts are dead
+  name: darknut treasure room  # the owner's working name (Nov 24)
   specialist: darknut
   requires_bombs: true    # round 22 (the owner, Nov 13): its E wall is bombed open into 0x5c on the last visit
   exits:
@@ -3550,6 +3552,7 @@ rooms:
   trigger: kill-all-item  # attr F & 7 = 7
 - level: 3
   location: '0x69'  # Darknuts; stairs at tiles (26-27, 10-11) down to the raft cellar 0x0f
+  name: raft room  # the owner's working name (Nov 24)
   specialist: darknut
   exits:
     N:
@@ -3838,7 +3841,7 @@ rooms:
   trigger: kill-all  # attr F & 7 = 1
 - level: 4
   location: '0x32'  # Like Likes, Zols and Bubbles; a pushed block reveals the stairs to the ladder cellar 0x60
-  name: Breakfast Room  # The owner (Nov 11): the room with the stairs to the ladder
+  name: Breakfast Room*  # The owner (Nov 11): the room with the stairs to the ladder. `*`: a canonical name (the owner, Nov 24)
   specialist: like-like  # Dungeon 4 (Nov 11)
   exits:
     W:  # open here; a shutter on 0x31's side
@@ -3961,7 +3964,7 @@ rooms:
 # --- Dungeon 5 (level 5) (scripts/level_rooms.py from the ROM; zelda-asm/levels/level-5.md) ---
 - level: 5
   location: '0x05'  # 6 Blue Darknuts; a pushed block (the room clear) reveals the stairs to the recorder cellar 0x04
-  name: Olive Garden  # the owner (Nov 14): the recorder looks like a breadstick; one of the hardest rooms of the game
+  name: Olive Garden*  # the owner (Nov 14): the recorder looks like a breadstick; one of the hardest rooms of the game. `*`: canonical
   specialist: darknut  # Dungeon 5 (round 24)
   exits:
     E:
@@ -5897,6 +5900,7 @@ rooms:
   stairs: [16, 10]
 - level: 9
   location: '0x10'
+  name: Reverse C*  # the owner (Nov 24): one of his three canonical room names
   specialist: wizzrobe  # round 29: the silver arrow's room, emptied for its block
   exits:
     S:  # bomb wall

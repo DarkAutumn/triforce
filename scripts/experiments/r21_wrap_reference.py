@@ -23,14 +23,11 @@ SPAN = {(0x5b, 'E'): (0, 9)}          # game.yaml: only 0x5b's upper E opening c
 
 
 def hp_values(rng, max_health):
-    """start_states::ram_randomization_values for hp [0.15, max], full_hp 0.5."""
+    """start_states::ram_randomization_values for hp [0.15, max], full_hp 0.5 (the bytes: ``hearts_encoding``)."""
     total = 2 * max_health
     low = max(1, round(0.15 * total))
     half = total if rng.random() < 0.5 else rng.randint(low, total - 1)
-    containers = (max_health - 1) & 0x0F
-    if half >= total:
-        return {'hearts_and_containers': (containers << 4) | containers, 'partial_hearts': 0xFF}
-    return {'hearts_and_containers': (containers << 4) | (half // 2), 'partial_hearts': 0x7F if half % 2 else 0}
+    return dict(native.hearts_encoding(half, max_health))
 
 
 out = {}

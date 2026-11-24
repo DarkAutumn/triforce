@@ -647,7 +647,7 @@ fn ram_byte(name: &str, value: i64) -> PyResult<u8> {
         .map_err(|_| PyValueError::new_err(format!("{name} = {value} does not fit a byte")))
 }
 
-fn overrides(values: Option<&Bound<'_, PyDict>>) -> PyResult<Vec<(Var, u8)>> {
+pub(crate) fn overrides(values: Option<&Bound<'_, PyDict>>) -> PyResult<Vec<(Var, u8)>> {
     let Some(values) = values else {
         return Ok(Vec::new());
     };
@@ -846,6 +846,20 @@ pub fn lane_probe<'py>(py: Python<'py>, ram: &Bound<'py, PyAny>) -> PyResult<Bou
 pub fn power_on_name(name: &str) -> PyResult<String> {
     zelda::power_on::name_cells(name).map_err(|e| PyValueError::new_err(e.to_string()))?;
     Ok(name.to_ascii_uppercase())
+}
+
+/// Link's hp as the game holds it (`env::start_states::hearts_encoding`, the training resets' own): `half_hearts`
+/// (1 to 2 x `max_health`) as `{'hearts_and_containers': .., 'partial_hearts': ..}` (`Game.set_value` names).
+#[pyfunction]
+pub fn hearts_encoding<'py>(py: Python<'py>, half_hearts: i64, max_health: i64) -> PyResult<Bound<'py, PyDict>> {
+    if !(1..=16).contains(&max_health) {
+        return Err(PyValueError::new_err(format!("max_health {max_health}: 1 to 16 containers")));
+    }
+    let out = PyDict::new(py);
+    for (var, value) in env::start_states::hearts_encoding(half_hearts, max_health) {
+        out.set_item(var.name(), value)?;
+    }
+    Ok(out)
 }
 
 /// One game session: load states, act, poke, render, snapshot.

@@ -15,10 +15,15 @@ from triforce.store import Run
 
 @pytest.fixture
 def shared(tmp_path, monkeypatch):
-    """An empty store root (``$TRIFORCE_SHARED``), made by the lead's init; this process's team caches cleared."""
+    """An empty store root (``$TRIFORCE_SHARED``), made by the lead's init; this process's team caches cleared.
+    ``$TRIFORCE_TEAM`` is unset for the test and put back after it: ``registry.use_team`` sets it in ``os.environ``
+    itself, and ``monkeypatch.delenv`` of a variable that is not set records nothing to restore, so a test that
+    called ``use_team`` left its team name behind for whatever test the worker ran next (Nov 24: two
+    ``test_registry`` tests failed with "no team 't1'" in one worktree's run)."""
     root = tmp_path / 'shared'
     monkeypatch.setenv(paths.SHARED_ENV, str(root))
-    monkeypatch.delenv(store.TEAM_ENV, raising=False)
+    monkeypatch.setenv(store.TEAM_ENV, 'recorded-so-it-is-restored')
+    monkeypatch.delenv(store.TEAM_ENV)
     monkeypatch.setattr(store, '_TEAMS', {})
     monkeypatch.setattr(store, '_VIEWS', {})
     store.init()
@@ -290,6 +295,30 @@ def test_a_seal_that_fails_leaves_the_run_open_and_whole(shared, monkeypatch):
     monkeypatch.undo()
     monkeypatch.setenv(paths.SHARED_ENV, str(shared))
     assert store.seal_run(run)['filed'] == ['act', 'eval.json']
+
+
+def test_the_backup_copies_what_is_missing_and_the_index_every_time(shared, tmp_path):
+    """`triforce-lead backup --apply`: sealed runs and teams are copied once, read-only; a dated copy of the index
+    is made on every run and holds the audit row of the backup that made it."""
+    run = _sealed('zol', 'r1')
+    store.create_team('t1', {'zol': store.slot_of(run)}, 'test')
+    archive = tmp_path / 'archive'
+    assert 'runs/zol/r1' in lead.backup(archive, apply=False, out=lambda *_: None) and not archive.exists()
+    copied = lead.backup(archive, apply=True, out=lambda *_: None)
+    assert {'runs/zol/r1', 'teams/t1.json'} <= set(copied)
+    assert (archive / 'runs/zol/r1/ckpt.pt').read_bytes() == (run.path / 'ckpt.pt').read_bytes()
+    assert not os.access(archive / 'runs/zol/r1/ckpt.pt', os.W_OK)
+    indexes = sorted(archive.glob('store.db.*'))
+    assert len(indexes) == 1
+    import sqlite3  # pylint: disable=import-outside-toplevel
+    con = sqlite3.connect(indexes[0])
+    try:
+        assert con.execute("SELECT count(*) FROM audit WHERE op = 'backup'").fetchone()[0] == 1
+        assert con.execute("SELECT count(*) FROM runs WHERE name = 'r1'").fetchone()[0] == 1
+    finally:
+        con.close()
+    assert lead.backup(archive, apply=True, out=lambda *_: None) == []       # nothing left to copy
+    store.make_writable(archive)
 
 
 def test_views_of_gone_processes_are_swept(tmp_path):

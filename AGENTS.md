@@ -520,6 +520,11 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 
 ## The owner's standing rules
 
+- **How the owner names a room** (Nov 24: "I'm also getting tired of dN 0x?? notation"): `3x59` is Dungeon 3's
+  room 0x59; `ox1f` is the overworld's room 0x1f; a bare `0x12` is most likely a slip: take the level from the
+  sentence before it or ask. A room with a name is called by its name (game.yaml `name:`: the Breakfast Room 4x32,
+  the Olive Garden 5x05); more rooms will get names. Reports and messages TO the owner use his notation and the
+  names; code, data, logs and file names keep `level:0xNN` (`3:0x59`) unchanged.
 - **Commit after each finished item.** If an experiment makes no forward progress, ask whether to commit the code or
   only update the experiment ledger.
 - **The lead reviews before anything merges or runs at length** (the owner, Nov 23, until he says otherwise: "Treat
@@ -768,7 +773,11 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 
 ## Versioning (the owner, Nov 11; the third number and model compatibility redefined Nov 23)
 
-- **One version, `MAJOR.MINOR.GEN.REV`, in the `VERSION` file** (now `2.0.0.15`: Manhandla's 3:0x4d and Dodongo's 2:0x0e are `bomb_weapon` rooms
+- **One version, `MAJOR.MINOR.GEN.REV`, in the `VERSION` file** (now `2.0.0.16`: a training reset writes Link's hearts as the game holds them
+  (`env::start_states::hearts_encoding`: a whole number of hearts below full was written with an empty partial heart,
+  which the HUD draws the same but which survives one hit more: 22% of zol's and 15% of darknut's resets on `d3first`;
+  found by the owner playing `emu-zelda.py`; chains and replays carry the game's own hearts and are unchanged, single-room
+  evaluations with randomised hearts read lower); 2.0.0.15: Manhandla's 3:0x4d and Dodongo's 2:0x0e are `bomb_weapon` rooms
   (game.yaml): Link is never left without a bomb there, whatever the state of the room's walls (the owner, Nov 23;
   round 24's "the need ends when the room's bomb walls are open" had given Manhandla's room no bomb since: Dungeon 3
   39.2% -> 45.7% of 1000 runs paired, no network changed); 2.0.0.14: the engine plays `d3first`'s two

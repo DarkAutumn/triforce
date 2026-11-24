@@ -10,6 +10,7 @@ mod config;
 mod context;
 mod convert;
 mod describe;
+mod emu;
 mod envpool;
 mod envs;
 mod errors;
@@ -324,9 +325,11 @@ mod _native {
     #[pymodule_export]
     use crate::external::{PyExternalPolicy, PyExternalQueue};
     #[pymodule_export]
+    use crate::emu::PyLiveGame;
+    #[pymodule_export]
     use crate::game::{
-        PyChange, PyGame, PyGameState, PySnapshot, danger_blocks, observe, power_on_idle_states, power_on_name,
-        lane_probe, threat_blocks,
+        PyChange, PyGame, PyGameState, PySnapshot, danger_blocks, hearts_encoding, observe, power_on_idle_states,
+        power_on_name, lane_probe, threat_blocks,
     };
     #[pymodule_export]
     use crate::policy::{PyPolicy, act_mode, act_probabilities, keyed_noise};

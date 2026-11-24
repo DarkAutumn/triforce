@@ -173,6 +173,7 @@ uv run training-gui.py --web-only                               # only the web v
 .venv/bin/python play-zelda.py 2x3 runs/replays                  # or a folder of replay files, round and round (one FILE.tfreplay: on loop)
 .venv/bin/python play-zelda.py 1x1 run.tfreplay --thoughts       # over the picture: what the replay says the agent was steered to (objective, targets), could do (the mask) and chose (network, action, probability, danger)
 .venv/bin/python play-zelda.py 1x1 corpus/replays/golden-d3first-single-network.tfreplay   # ONE network in every slot beating the game by a golden path on d3first, from power on (golden-d3first-51-networks: the 51 specialists'; golden-d2first-34-networks: d2first's; single-run-d3first-old-order-51-networks: one unbroken run on 2.0.0.3's order)
+uv run emu-zelda.py 5 05 --bombs 0                              # play a room yourself (Dungeon 5's 0x05; level o = overworld) from d3first's start state, PS5 controller or keyboard; DONE on leaving the room or dying; square/S saves a replay to ~/triforce-review/played/ (paused or DONE); triangle/R1 start over; -/+ the rate (--entry, --visit, --chain, --route, --hearts, --keys, --seed, --no-sound, --scale; --help for the keys)
 .venv/bin/python create-video.py wins.mp4 2x3 runs/wins --sound  # film replays on a grid into a video (needs ffmpeg; 1x1 by default; --sound: the middle cell's, else the top left one's; --no-music, --no-sound-effects, --no-heart-beep; --split-audio: music and effects as two audio tracks; --controller; --thoughts)
 .venv/bin/python zelda-headless.py runs/wins 3 --wins-only       # no window: play until 3 runs won, keep them as replays (--deaths-only, --stuck-only, --power-on, --stop-at step:N, --clips off, --route d2first)
 .venv/bin/python zelda-headless.py runs/golden 1 --golden --power-on   # the golden path on d3first: games race triforce to triforce from each winner's state, stitched into one replay (--route d2first for the other)
@@ -240,7 +241,7 @@ model, no GPU memory); `nice`, `ionice`, `timeout` or `CARGO_BUILD_JOBS=` after 
 train, record and bench, every script that plays, trains or crunches) refuse to run outside a job unless a terminal
 is attached, so the commands under "Commands" work as typed at a shell. The queue is one SQLite database
 (`~/.local/state/triforce/queue.db`) with kernel locks for its places and no server; the training GUI and `triforce
-job list` read it. Exempt: `play-zelda.py`, `zelda-map.py`, `training-gui.py` and what finishes in seconds. The
+job list` read it. Exempt: `play-zelda.py`, `emu-zelda.py`, `zelda-map.py`, `training-gui.py` and what finishes in seconds. The
 rest (names, descriptions, ending a job, an old tree's commands): AGENTS.md "The job queue".
 
 `zelda-map.py` stitches each level's rooms (Overworld, Dungeon 1–9) into one zoomable map from the savestates'
