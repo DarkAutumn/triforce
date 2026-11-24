@@ -2714,6 +2714,157 @@ track's first differences, the track's value -> today's reset's).
 | ganon | 9_32s | none | none | none | untracked `9_32s_[0-9]` |
 | ganon | 9_42s | none | none | none | untracked `9_42s_[0-9]` |
 
+## The untracked states' tracks (Tracks41, branch `r40-tracks2`)
+
+anthropic/claude-opus-5-5 (Tracks41), on `r40-gencode` at 42d15e02. Tracks for the 27 states the generation's tasks
+declared `curriculum.untracked` for want of one (above: Tracks40's 25 and States40's 3x59 from N at 4 bombs, chains 1
+and 2), by the generation's own means, in the lead's order: the scripted rules, Darknut40's fighter, the explorer
+aimed by what its searches reached; nothing from a network's play (the fourth means was not needed). **All 27 have a
+track that belongs** (Tracks40's audit: its first state equals the explorer's own reset of today's file): 20 by seven
+rules (none lost a heart by its end; the six of 7x1c and 7x1b were hit once and healed), 4 by the fighter, unhit, 3 by
+the explorer; none is declared untracked any more. No start state, route data, reward or training changed.
+
+**What a track must start from.** The explorer resets with the family's `d3first` task and no RAM randomization, the
+run-time clips switch on (`env::explore::explore_config`). Every track here was recorded from that same reset: an
+env of the `d3first` task (`lab.collect.task_yaml`) with `ram_randomization` empty and the clips' `off_share` 0, the
+state file before each decision (`Snapshot.state_file`, as `r29_demos.write_track` writes rule tracks), so its
+`0000.state` is the reset but for the random numbers, which the audit does not compare.
+
+**1. The scripted rules** (`scripts/experiments/r32p_rules.py`). The store's `~rule` tracks were made by
+`r31_curricula.sh`'s `rule`: `<script> ROOM --runs 20 --tracks OUT/<family> --max-loss H`, `r29_demos.play`'s first
+won run of a state (seeds from 1000) that lost at most H hearts and played no masked choice, one a state
+(`--per-state 1`). Brought up to today: (a) the route steps of the rooms that moved since 2.0.0.0 (garden-05 103 ->
+128, digdogger-24 118 -> 143, digdogger-1c 187 -> 171, goriya-1b 186 -> 170; zol-4b 10, like-like-32 38, vire-31 37,
+vire-12 50, gleeok-13 51 unchanged; the 0:0x2d cave, 0:0x0c and 0:0x62 rooms are off the route and left as they are);
+(b) the env is the family's `d3first` task (it was the family's own yaml); (c) `--hearts reset`: no draw at all, the
+room's `DRAWS` included (`own` gave goriya-1b's runs 1 bomb, so its tracks would not have belonged). The timing needed
+nothing: the rules decide from the RAM at every decision, so the missing closing frame after a MOVE only changes how
+far a MOVE walks, which they read back; all seven won from today's states at once (job #1135, 2 runs each: Gleeok
+lost both, a death and a `no-damage`). Recorded (job #1136, `target/tracks41/rules.sh`): per state the first won run
+that lost no heart by its end (a hit healed by a heart counts as none), else at most 1, 2, any (every state found one
+at 0), 40 runs a state, Gleeok 150:
+
+| rule | states | hearts in | won | endings | hearts lost in wins (mean) |
+|---|---|---:|---:|---|---:|
+| gleeok-13 (4x13, boss-gleeok) | `4_13w_0..2` | 4 | 329 of 450 | 99 `no-damage` (the task's 120 steps without a hit), 21 deaths, 1 `stuck` | 0.68 |
+| digdogger-1c (7x1c, boss-digdogger) | `7_1cw_0..2` | 9 | 117 of 120 | 3 deaths | 2.62 |
+| goriya-1b (7x1b) | `7_1bw_0..2` | 9 | 120 of 120 | | 1.49 |
+| like-like-32 (the Breakfast Room 4x32) | `4_32w_0..2` | 4 | 120 of 120 | | 0.29 |
+| vire-12 (4x12) | `4_12n_0..2` | 4 | 120 of 120 | | 0.14 |
+| vire-31 (4x31) | `4_31w_0..2` | 4 | 120 of 120 | | 0.16 |
+| zol-4b (3x4b) | `3_4bs_0`, `_1` | 3 | 68 of 80 | 11 `no-damage`, 1 `stuck` | 0.03 |
+
+**2. Darknut40's fighter** (`scripts/experiments/r40_darknut_fighter.py`, `scripts/experiments/r41_tracks.py
+fighter`). A visit as its demonstrations are built (`teach`: the look-ahead of 3 decisions near a Darknut, then the
+backtracking search where Link is still hit), seeds from 100000, the first that leaves by the route's exit unhit,
+played again from the reset as the track (`<state>~fighter<seed>`; `teach` now hands back its actions, `way=`).
+3x59 from N with 4 bombs and a reserve of 5 (none usable): seed 100000 kept on both chains (253 and 190 steps). 3x5b's
+last pass is a new room of the fighter, `5b-last`, in the order the route's objective gives a bag of 4 (Carrier40b's
+`wall_first_rooms`: 4 + the room's 4 do not overflow the bag): the fight with the sword (no weapon bomb in 3x5b), the
+room's bombs (the room item, slot $13; 4 -> 8), then the wall (BOMB E on the row Y $8D from X $B8 or more, where the
+mask offers it; 8 -> 7), the blast waited out, out E. A bag of 5 or more (the wall first) is refused, not played: the
+three start states hold 4 (a run that took the first pass's drop enters with 8 and would need it). About an hour of
+work, not a day. Job #1143: seed 100000 kept on both chains,
+141 steps each; seeds 100000-100003 won unhit on both (`trace`: the fight in 96 decisions, the bombs at 113, the
+bomb at 123, out at 140).
+
+**3. The explorer, aimed** (`python -m triforce.explore`). Why Tracks40's searches failed, from the same searches
+again (job #1145: seed 0, 3000 iterations, patience 300, each family's `d3first` task; `ExploreResult` now carries
+what a search reached and `explore.py` prints it under an unsolved state: the failed episodes by ending, the living
+enemies at the reset and the fewest any cell held, the longest cell path, the best closeness): no step limit was met
+(no `max-steps` ending; the longest paths 188-321 steps against `max_steps` 900-2000), and no hit rule ended a search
+episode but death; the closeness reaches 1.00 in every search (the objective's target is reached during the fight),
+so it says nothing here.
+
+| states | enemies at the reset -> fewest | longest path | failed episodes | reading |
+|---|---|---:|---|---|
+| Gleeok `4_13w_0..2` | 2 -> 2 | 188-225 | 1700-2076 deaths | the fight never won: no head hit at 4 hearts |
+| Digdogger `7_1cw_0..2` | 1 -> 0 | 227-275 | 1375-1684 deaths, 24-54 `exit-wrong` | the big one split, the three small ones never all killed |
+| goriya `7_1bw_0..2` | 6 -> 3, 1, 3 | 216-297 | 808-913 deaths, 75-94 `exit-wrong` | the fight never won |
+| goriya `1_23s_1`, `_2` | 3 -> 0 | 296, 280 | 223, 185 deaths; 115, 118 `exit-wrong` | the fight won, the exit (the key, the W key door) never reached |
+| goriya `2_1es_1` | 5 -> 0 | 285 | 692 deaths | the fight won, the N door never reached |
+| like-like `4_32w_0..2` | 4 -> 1, 0, 0 | 289-321 | 724-791 deaths | won on two chains, the push and the stairs never reached |
+| vire `4_12n_0..2`, `4_31w_0..2` | 5 -> 0 (12n_1: 1) | 214-305 | 628-1568 deaths | the fight won, the exit never reached |
+| zol `3_4bs_0`, `_1` | 3 -> 1, 0 | 246, 292 | 472, 567 deaths | the key and the W door never reached |
+| darknut `3_59n_2` | 5 -> 3 | 194 | 2061 deaths | the fight never won (`3_59n_1` was solved today, 194 steps, 2 hearts lost) |
+| darknut `3_5bw_0`, `_2` | 3 -> 0 | 277, 319 | 1292, 1154 deaths | the bombs and the wall never reached |
+
+So the budget, not the step limit or the task: the searches spend their iterations dying in the fight and end
+before the last part of the way. For the three states no rule plays (goriya `1_23s_1`, `_2`, `2_1es_1`) the same
+searches with `--iterations 20000` (job #1149) solved all three just past 3000 iterations (4189, 3863, 4413), keeping
+the first success after patience 300: 0.5, 1.5 and 1.5 hearts left, 8-10 hits. Kept going 5000 iterations past it
+(`--patience 5000`, job #1152; the explorer keeps its healthiest success) they ended at 8889, 8563 and 9113 iterations
+with 2.5, 5.0 and 2.0 hearts left in 172, 214 and 224 steps: those are the tracks. Gleeok's searches ran beside the
+first as its rule's backup and were stopped once the rule had its tracks.
+
+**Found on the way: 3x5b's first pass.** Audited beside the store's current snapshot (`261124-gen1`) on today's
+generation code, its three `darknut/d3first_3_5bs_*` tracks (States40's explored ones, which belonged when Tracks40
+audited them on `r40-gen` 95eea9e9) are now stale: their first state holds 1 bomb, the explorer's reset of today's
+files 0 (the state files are the same since 95eea9e9; [INFERENCE] the reset no longer tops up 3x5b's wall grant on
+entering from S since Carrier40's c8cf0c82, "the wall's cheated bomb follows the objective"). `compose` drops them,
+and the proof then refuses both darknut tasks (3 seed states without a track). Replaced by the fighter's first pass
+(`--room 5b`, one Red Darknut, its bombs if it drops them, out N; job #1183): seed 100000 on each chain, unhit, 74,
+89 and 97 steps, all three belong. The installed snapshot still holds the stale three: a darknut@d3first training on
+it starts those curriculum episodes with a bomb the state does not hold.
+
+**The table** (`r41_tracks.py table`, job #1192: hits are the hearts falling from one state file to the next, and on
+the last step by `trajectory.json`'s `health` where that is the end's; round 29's rule tracks record the start's hearts
+there, so their last step is not read; Gleeok's heart container raises the hearts by one):
+
+| state | means | track | steps | hits |
+|---|---|---|---:|---:|
+| boss-gleeok `4_13w_0` | rule gleeok-13 | `~rule1002` | 368 | 0 |
+| boss-gleeok `4_13w_1` | rule gleeok-13 | `~rule1000` | 257 | 0 |
+| boss-gleeok `4_13w_2` | rule gleeok-13 | `~rule1000` | 309 | 0 |
+| boss-digdogger `7_1cw_0` | rule digdogger-1c | `~rule1003` | 134 | 1 (healed) |
+| boss-digdogger `7_1cw_1` | rule digdogger-1c | `~rule1000` | 84 | 1 (healed) |
+| boss-digdogger `7_1cw_2` | rule digdogger-1c | `~rule1000` | 84 | 1 (healed) |
+| goriya `7_1bw_0` | rule goriya-1b | `~rule1003` | 228 | 1 (healed) |
+| goriya `7_1bw_1` | rule goriya-1b | `~rule1001` | 216 | 1 (healed) |
+| goriya `7_1bw_2` | rule goriya-1b | `~rule1002` | 171 | 1 (healed) |
+| like-like `4_32w_0` | rule like-like-32 | `~rule1000` | 203 | 0 |
+| like-like `4_32w_1` | rule like-like-32 | `~rule1000` | 246 | 0 |
+| like-like `4_32w_2` | rule like-like-32 | `~rule1001` | 360 | 0 |
+| vire `4_12n_0` | rule vire-12 | `~rule1002` | 113 | 0 |
+| vire `4_12n_1` | rule vire-12 | `~rule1000` | 167 | 0 |
+| vire `4_12n_2` | rule vire-12 | `~rule1002` | 113 | 0 |
+| vire `4_31w_0` | rule vire-31 | `~rule1001` | 192 | 0 |
+| vire `4_31w_1` | rule vire-31 | `~rule1000` | 162 | 0 |
+| vire `4_31w_2` | rule vire-31 | `~rule1000` | 132 | 0 |
+| darknut `3_59n_1` | the fighter (`59`) | `~fighter100000` | 253 | 0 |
+| darknut `3_59n_2` | the fighter (`59`) | `~fighter100000` | 190 | 0 |
+| darknut `3_5bw_0` | the fighter (`5b-last`) | `~fighter100000` | 141 | 0 |
+| darknut `3_5bw_2` | the fighter (`5b-last`) | `~fighter100000` | 141 | 0 |
+| zol `3_4bs_0` | rule zol-4b | `~rule1000` | 231 | 0 |
+| zol `3_4bs_1` | rule zol-4b | `~rule1000` | 202 | 0 |
+| goriya `1_23s_1` | the explorer, 20000 iterations, patience 5000 | (the state's name) | 172 | 5 (2.5 hearts) |
+| goriya `1_23s_2` | the explorer, 20000 iterations, patience 5000 | (the state's name) | 214 | 0 |
+| goriya `2_1es_1` | the explorer, 20000 iterations, patience 5000 | (the state's name) | 224 | 9 (5 hearts) |
+| darknut `3_5bs_0` (replaced, above) | the fighter (`5b`) | `~fighter100000` | 74 | 0 |
+| darknut `3_5bs_1` (replaced) | the fighter (`5b`) | `~fighter100000` | 89 | 0 |
+| darknut `3_5bs_2` (replaced) | the fighter (`5b`) | `~fighter100000` | 97 | 0 |
+
+**The folder: `/home/leculver/git/triforce-r40-tracks2/target/trajectories-gen2`** (`r40_tracks.py compose`, job
+#1192, `target/tracks41/final.sh`): the store's `261124-gen1` as hard links (1,387 of its 1,390 tracks) without its
+three stale `darknut/d3first_3_5bs_*`, plus the 30 new tracks (copies): **1,417 tracks, 119,486 files, 1,350,225,975
+bytes**. Audited again (`audit-gen2.json`): every `d3first` track belongs (315); the bare ones as the store has them
+(1,046 belong, 44 stale, 12 without a state: Tracks40's 56). For the lead:
+
+    triforce-lead data install trajectories 261124-gen2 --from /home/leculver/git/triforce-r40-tracks2/target/trajectories-gen2
+
+**The proof** (`r40_tracks.py proof`, job #1192, `target/tracks41/proof.json`), this worktree's `trajectories ->
+target/trajectories-gen2` (gitignored), on the merge of `r40-gen` b4270f31: **72 task files, none refused, no red
+flag**. `curriculum_tracks` (each equal to what `Curriculum::new` loaded) against `trajectories-gen1`'s: darknut 93 ->
+97 (d3first and own), zol 46 -> 48, vire 54 -> 60, like-like 51 -> 54, boss-gleeok 6 -> 9, goriya 135 -> 141,
+boss-digdogger's own file 18 (its `d3first` part has the curriculum off); every other task as before.
+
+**Not done, not tested.** No training read the folder. The tracks were checked by the audit (their first state) and
+their recorded ending (`exit-correct` on replay from the reset); what they teach was not measured. The fighter's
+`5b-last` plays only the bag of 4 or fewer (no wall-first order). The rules' `trajectory.json` `health` is the start's
+(round 29's writer, unchanged). Merging this branch before the lead installs `261124-gen2` as current makes the
+shipped-task test (`test_the_shipped_tasks_declare_every_input_they_draw`) and every d3first training of these
+families refuse: the declarations are gone and `261124-gen1` lacks the tracks.
+
 ## The lab trainer for the generation's teachers (Trainer41, branch `r40-trainer`)
 
 **The ask** (the lead, from GroupScout's map of the training path): the lab trainer (`python -m triforce.lab.train`)

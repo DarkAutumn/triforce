@@ -9,9 +9,8 @@ ram_randomization: {hp: [0.5, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.
 items: {bombs: never}                     # only the sword hurts Gleeok (invincibility mask $FE, zelda-asm/enemies.md)
 curriculum:                              # trajectories/boss-gleeok (Go-Explore paths per start state)
   enabled: true
-  untracked:                              # round 40: the seed states that train without a track (triforce.inputs)
-  - d3first_4_13w_[0-9]                   # round 40 (Tracks40): as boss-gleeok@d3first (4:0x13, no explored track)
-  - d3first_8_3cs_[0-9]
+  untracked:                              # round 40: the seed states that train without a track (triforce.inputs);
+  - d3first_8_3cs_[0-9]                   # 4:0x13 has the rule gleeok-13's (Tracks41)
 # Round 30 (round30.md): a third of the resets from the chains' handoffs into 4:0x13 and 8:0x3c (triforce/states/
 # harvested/boss-gleeok, not in git: `eval-chain --from 4_71s_0 --stop-at step:133` and `--from 8_7es_0 --stop-at
 # step:296`, 300 runs each, `--first-seed 5000 --harvest DIR`), at the hearts the runs bring: a harvested start keeps

@@ -15,12 +15,8 @@ items: {bombs: free, food: true}           # The owner, Nov 11: bombs as a weapo
 clips: {enabled: true, off_share: 0}      # round 26: 7:0x1a's block clip to the stairs; clips only (the owner, Nov 18): no episode with CLIP masked
 curriculum:                              # trajectories/goriya (Go-Explore paths per start state)
   enabled: true
-  untracked:                              # round 40: the seed states that train without a track (triforce.inputs)
-  - d3first_1_23s_1                       # round 40 (Tracks40): as goriya@d3first (no explored track)
-  - d3first_1_23s_2
-  - d3first_2_1es_1
-  - d3first_7_1bw_[0-9]
-  - d3first_7_49s_[0-9]
+  untracked:                              # round 40: the seed states that train without a track (triforce.inputs);
+  - d3first_7_49s_[0-9]                   # 1:0x23, 2:0x1e explored, 7:0x1b the rule goriya-1b's (Tracks41)
 # Round 27 (round26.md §17): Dungeon 2's two rooms had 6 of 15 seed states (40% of the resets) before Dungeon 7 joined
 # and 6 of 54 (11%) after.  Resets start from handoffs harvested from chains (triforce/states/harvested/goriya, not
 # in git), at the hearts and bombs the chain brings.  Round 30 (round30.md): beside Dungeon 2's 566 (`eval-chain
