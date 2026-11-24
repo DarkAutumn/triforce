@@ -625,6 +625,10 @@ pub struct GameCompletion {
     /// told before every objective by the env that keeps it: [`GameCompletion::set_cheated_bombs`]): every "is the bag
     /// full" test of the route's rules counts his own bombs only ([`GameCompletion::own_bombs`]).
     cheated_bombs: i32,
+    /// Link's own bombs at the last objective in his room, and whether they fell there on a wall-first step (the
+    /// wall's bomb laid: [`GameCompletion::wall_first`] is over for the visit).
+    visit_own_bombs: i32,
+    wall_bomb_laid: bool,
     /// Remembered room treasure per visited room (`RoomMemory.item`).
     rooms: HashMap<MapLocation, Option<String>>,
     /// The last map objective, keyed by its route key and the room's shape then: the intact bomb walls' direction
@@ -719,6 +723,8 @@ impl GameCompletion {
             macros: map.macros.get(route).cloned().unwrap_or_default(),
             entry_bombs: 0,
             cheated_bombs: 0,
+            visit_own_bombs: 0,
+            wall_bomb_laid: false,
             rooms: HashMap::new(),
             last_route: None,
             collected_key_rooms: BTreeSet::new(),
@@ -1002,6 +1008,7 @@ impl GameCompletion {
     fn wall_first(&self, state: &GameView) -> bool {
         let here = state.full_location();
         self.wall_first_step(here)
+            && !self.wall_bomb_laid
             && self.own_bombs(state) + ROOM_BOMBS > state.bomb_max()
             && self.current_step(here).and_then(|s| Direction::from_exit(&s.exit)).is_some_and(|d| {
                 state.bomb_walls().iter().any(|w| w.wall_direction == d)
@@ -1315,6 +1322,15 @@ impl GameCompletion {
         if entered && self.apply_off_pending(state) && self.repick {
             self.pick_step(state);
         }
+        // The owner's ordering (`wall_first`) ends the moment the wall's bomb is laid: Link's own bombs fell in the room
+        // on its wall-first step (under `wall_only` a bomb there is the wall's, or the 10th kill's).
+        let own = self.own_bombs(state);
+        if entered || prev.is_none() {
+            self.wall_bomb_laid = false;
+        } else if own < self.visit_own_bombs && self.wall_first_step(here) {
+            self.wall_bomb_laid = true;
+        }
+        self.visit_own_bombs = own;
         self.open_raft_crossings(state);
         self.check_cave_waypoint(prev, state);
         // Every finished waypoint goes, not one per call (a completion without a step keeps them all at first); the

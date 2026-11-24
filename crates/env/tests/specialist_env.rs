@@ -954,7 +954,9 @@ fn bombs_are_a_weapon_only_where_the_route_must_clear_the_room() {
 /// of is a fight when Link comes in with 7 or fewer and a crossing with 8: 7:0x1b (round 34's floor of 2 gone),
 /// 8:0x3f (the shared step's `{if_bombs_below: 5}` gives way: 5 is a fight), 3:0x5b's last pass (whatever Link held,
 /// before).  `d2first`'s 8:0x3f keeps its 5.  A room's override (`treasure_below_rooms`, 7:0x1b `below: 2`, the
-/// crossing the owner allows if the fight kills too many runs) wins over the floor.
+/// crossing the owner allows if the fight kills too many runs) wins over the floor. Round 40 (the owner's ordering,
+/// `wall_first_rooms`): 3:0x5b's last pass at 5 to 8 is the wall first, no fight yet (was: a fight at 7, recorded so
+/// before the ruling: 7 + 4 overflows the bag); at 4 it is a fight, as before.
 #[test]
 fn the_route_fights_for_a_rooms_bombs_below_its_floor() {
     let Some(mut nes) = open_core() else { return };
@@ -974,7 +976,8 @@ fn the_route_fights_for_a_rooms_bombs_below_its_floor() {
         (data(), "darknut", "d3first_8_3fw_0", "MOVE E 16", 8, false),
         (data(), "darknut", "8_3fw_0", "MOVE E 16", 5, false),
         (data(), "darknut", "8_3fw_0", "MOVE E 16", 4, true),
-        (data(), "darknut", "d3first_3_5bw_0", "MOVE E 16", 7, true),
+        (data(), "darknut", "d3first_3_5bw_0", "MOVE E 16", 4, true),
+        (data(), "darknut", "d3first_3_5bw_0", "MOVE E 16", 7, false),
         (data(), "darknut", "d3first_3_5bw_0", "MOVE E 16", 8, false),
         (&crossing, "goriya", "d3first_7_1bw_0", "MOVE E 16", 7, false),
         (&crossing, "goriya", "d3first_7_1bw_0", "MOVE E 16", 1, true),
