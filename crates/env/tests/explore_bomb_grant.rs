@@ -38,8 +38,12 @@ fn a_track_through_a_bomb_wall_room_with_an_empty_bag_replays() {
     env.set_banked_kills(Some(vec![KILLS]));
     env.reset(Some(SEED), Some(STATE)).unwrap();
     assert_eq!(env.route().0, "d3first");
-    assert_eq!(env.session().state().bombs(), 1, "the wall's bomb");
-    assert_eq!(env.context().1.room.bombs, 1, "an empty bag: the bomb is granted (by the room)");
+    // Round 40 (`d3first`'s `bomb_rules: {wall_grant: objective}`): the room's bomb is no longer handed over on
+    // entering; with a Darknut alive the objective is the fight, so the bag stays empty until the E wall is next (it
+    // was 1, granted by the room, under the room rule). The search and its replay must still agree on the grant that
+    // comes later in the episode, which is what this test is for.
+    assert_eq!(env.session().state().bombs(), 0, "the fight first: no wall bomb yet");
+    assert_eq!(env.context().1.room.bombs, 0, "nothing granted while the objective is the fight");
 
     let mut explorer = Explorer::new(&config, data.clone(), nes, TfzStore::new(), SEED).unwrap();
     explorer.set_banked_kills(Some(vec![KILLS]));
