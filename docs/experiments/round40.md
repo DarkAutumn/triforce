@@ -2713,3 +2713,82 @@ track's first differences, the track's value -> today's reset's).
 | patra | 9_61e | none | none | none | untracked `9_61e_[0-9]` |
 | ganon | 9_32s | none | none | none | untracked `9_32s_[0-9]` |
 | ganon | 9_42s | none | none | none | untracked `9_42s_[0-9]` |
+
+## The generation's tasks (Tasks41, branch `r40-tasks`)
+
+anthropic/claude-opus-5-5 (Tasks41). The lead's brief: make the tasks of the generation's teachers say what the
+generation trains on, make a chain play a network with the inputs it trained with, record darknut@d3first's
+demonstrations again with those inputs, and show a training reads them. Status file `local://r40-tasks41-status.md`.
+
+### The task files
+
+**One place for the generation's switches**: `specialists/d3first/_generation.yaml` holds `obs.threat: true`,
+`obs.chase: true`, `reward.aimless_penalty: 0.002` (the lead's default, Switch40's report) and `warm_start: null`.
+Every task of the 34 families (the four groups and the seven bosses are every family of the route) is
+`specialists/d3first/<family>.yaml` and extends it. A task's `extends:` may now be a list (the lead's decision): the
+bases merge in order, each over the one before, the file's own keys last (`env::config::task_value`; a string is
+read as before: the 71 task files of `r40-gen` give the same effective configs under the old and the new code). The
+21 existing d3first tasks gained one line, `extends: _generation.yaml`; the 13 families that had only a bare file got
+a d3first file `extends: [../<family>.yaml, _generation.yaml]` with `state_routes: [d3first]` (the bare files, which
+today's team and every `d2first` chain read, are untouched; ow-ghini's and ow-boulder's d3first files keep only the
+start globs d3first has states for: 0:0x31, 0:0x21 and 0:0x17). The six bare-only families with a `warm_start`
+(wizzrobe from like-like, ow-ghini from ow-moblin, lanmola and patra from moldorm, boss-gohma from boss-digdogger,
+ganon from boss-gohma) lose it in their d3first file through `_generation.yaml`. A file named `_*.yaml` is a common
+block, no task: the registry lists only `specialists/*.yaml`, and `tests/test_inputs.py`, `tests/test_lab_train.py`
+and `scripts/experiments/r40_tracks.py`, which walk the folders, skip it.
+
+The measured per-room settings: darknut@d3first `items.bomb_catch: 2` (Darknut40's mask, lifted by the code where
+one bomb is right); wallmaster@d3first `items.candle: true` (7:0x0d: the boomerang stays on, the default; its other
+room 1:0x45 comes before the red candle, and CANDLE is only offered while Link holds it); wizzrobe@d3first
+`items: {boomerang: true, candle: false}` (6:0x38, the defaults written out). No other family plays either room on
+d3first (routes.yaml's shared `dungeon-7` and the Dungeon 6 block: 7:0x0d is wallmaster's step, 6:0x38 wizzrobe's).
+A room's items are a family's `items` switches (dungeon rooms have no per-room CANDLE rule; routes' `candle_facings`
+are the overworld's trees), so these are the whole of it. `reward.chase_penalty` stays 0 everywhere.
+
+What each generation task now sets, against the file before (the effective config, `to_dict`, every key):
+
+| tasks | differs from before in |
+|---|---|
+| the 21 existing d3first tasks | `obs.threat` false -> true, `obs.chase` false -> true, `reward.aimless_penalty` 0 -> 0.002; darknut also `items.bomb_catch` 0 -> 2; wallmaster also `items.candle` false -> true |
+| boss-dodongo, d2-rope, dodongo-crossing, equipment-room, ow-boulder, ow-peahat, trap-room (new; against the bare file) | `obs.threat`, `obs.chase` on, aimless 0.002, `state_routes: [d3first]` (ow-boulder: start globs) |
+| boss-gohma, ganon, lanmola, ow-ghini, patra, wizzrobe (new) | the same, and `warm_start` -> null (ow-ghini: start globs) |
+
+**The bare tasks and `d2first` are unchanged**: the effective config hashes of the 34 bare files are the same before
+and after (pinned in `tests/test_inputs.py` `BARE_EFFECTIVE`, first 16 hex of the SHA-256 `manifest.task` takes),
+and a `d2first` chain plays each family with exactly its bare config (no `specialists/d2first/`). Experiment files
+that extend a d3first task follow it (that is what `extends` means), so their effective configs moved with these
+lines: `experiments/r40-darknut/*.yaml` (the fighter's cases), `specialists/experiments/r40-states/darknut-59n-*`,
+`specialists/experiments/r40-switch/{ow-start,pols-voice}-aimless-*` and `wallmaster-0d*` (Switch40's arms: their
+runs' manifests keep what they trained on; run again, `wallmaster-0d.yaml` now offers CANDLE).
+
+### Chains play a network with its training's inputs
+
+Until now a chain played every family with its bare task (`runner.Policies`: `load_specialist(name)`;
+`ChainEnv::config_for`: `GameData::specialist`), so a network trained on a d3first task with `obs.threat` on would
+have been chained with zeros there. Now a chain of route R plays family F, both its policy keys (`F` and `F@R`),
+with **F's bare task except the keys `env::config::CHAIN_FROM_ROUTE_TASK` names, taken from R's task for F**
+(`specialists/R/F.yaml`) where there is one (`GameData::chain_specialist`, built once when the data load;
+`SpecialistConfig.for_chain` for Python, `runner.chain_config`). The list is `["obs"]`: the observation switches
+(`objective`, `target`, `hidden_positions`, `threat`, `chase`) are what a network reads. Everything else stays the
+bare task's: items and masks, rewards, clips, budgets. Why: those are the chain's rules of play, and today's team
+must play exactly as it does (darknut's `bomb_catch` and wallmaster's candle would change its play). **The cost,
+for the lead to decide when the generation's team is chained:** a generation network chained today plays under the
+bare masks, so darknut is offered weapon BOMBs `bomb_catch` would refuse and wallmaster never CANDLE in 7:0x0d. One
+word in `CHAIN_FROM_ROUTE_TASK` (`"items"`) moves them, at that team's cutover. Every d3first obs block but the two
+switches equals its bare one, so today's networks, which read neither block, see the same inputs.
+
+**The guard** (`runner.check_inputs`): a network whose architecture reads a block that only a switch fills (a
+`hitnet` with the token group `threat` reads `entity_threat`, `chase` reads `chase` and `entity_chase`;
+`runner.SWITCHED_BLOCKS`, read from the network's `HitNet` modules, a `hitshift`'s hit body too) is refused where
+its chain config has the switch off. The sentence, for the generation's network put on darknut in a `d2first`
+chain: `darknut: family darknut's network reads chase (obs.chase), entity_chase (obs.chase), entity_threat
+(obs.threat), but obs.chase and obs.threat are off in the task it is chained with, specialists/darknut.yaml (route
+d2first has no task of its own for it): it would read zeros. Chain it on a route whose task for darknut has the
+switch on, or give it a config that does (--specialist-config)`.
+
+Tests: `tests/test_inputs.py` (every generation task's switches, no warm start, the route's states, the measured
+items; the bare hashes; `for_chain` takes `obs` and nothing else; the guard refuses and names, passes on d3first, a
+network without the groups plays anywhere), `tests/test_manifest.py` (a list of two bases merges as stated; a loop, a
+missing base and an empty list are refused naming the file; the manifest names both bases with their hashes;
+`triforce manifest diff` shows a change made in the common block as `task.effective.reward.aimless_penalty` and
+`task.extends`).
