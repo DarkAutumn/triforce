@@ -1,5 +1,7 @@
 """What a result was produced by: the code version, the game data, the models and the start state.  Stored with
-chain results (``Runner.provenance``), evaluations (``eval.json``) and replays (``replay.meta``)."""
+chain results (``Runner.provenance``), evaluations (``eval.json``) and replays (``replay.meta``).  Light to import
+(no torch: ``registry`` is imported where a checkpoint is described), so ``replay.meta`` serves a tool with no
+networks (``emu-zelda.py``'s own script environment)."""
 
 import hashlib
 import subprocess
@@ -8,7 +10,6 @@ from pathlib import Path
 from typing import Iterable, Optional
 
 from . import _native
-from .registry import CHECKPOINT_NAME, SNAPSHOTS_NAME, checkpoint_sha1, model_version
 
 
 def _git(*args) -> str:
@@ -53,6 +54,7 @@ def checkpoint_label(checkpoint) -> str:
     """A checkpoint (a ``ckpt.pt`` or its run dir) as provenance records it: ``<specialist>/<run>/ckpt.pt``, a
     numbered checkpoint (``registry.snapshot_dir``) ``<specialist>/<run>/checkpoints/it<N>/ckpt.pt``; no local
     directory (the ``checkpoint_sha1`` / network ``hash`` next to it identify the weights)."""
+    from .registry import CHECKPOINT_NAME, SNAPSHOTS_NAME  # pylint: disable=import-outside-toplevel
     path = Path(checkpoint)
     if path.is_dir():
         path = path / CHECKPOINT_NAME
@@ -65,6 +67,7 @@ def models_header(names: Iterable[str], policies: Iterable, checkpoints: dict, a
     (``checkpoint_label``), Rust network hash, the act mode it played by (``act``, canonical spelling) and the
     triforce version its run dir is stamped with (None without a checkpoint or a stamp).  Replays describe their
     networks with ``replay_models`` instead (no path)."""
+    from .registry import model_version  # pylint: disable=import-outside-toplevel
     return [{'name': name, 'checkpoint': None if checkpoints.get(name) is None else checkpoint_label(checkpoints[name]),
              'hash': f'{policy.hash:016x}', 'act': act,
              'version': None if checkpoints.get(name) is None else model_version(checkpoints[name])}
@@ -133,6 +136,7 @@ def _without_layout(config):
 def checkpoint_description(network, saved: dict, checkpoint) -> dict:
     """``network_description`` of the network loaded from ``checkpoint`` (file or run dir; ``saved``: its dict) with
     the ``ckpt.pt`` SHA-1 and the version its run dir is stamped with: the checkpoint by content, never by path."""
+    from .registry import checkpoint_sha1, model_version  # pylint: disable=import-outside-toplevel
     return {**network_description(network, saved), 'checkpoint_sha1': checkpoint_sha1(checkpoint),
             'version': model_version(checkpoint)}
 

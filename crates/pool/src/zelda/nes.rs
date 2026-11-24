@@ -82,6 +82,12 @@ impl<N: Nes> PoolNes<N> {
         &self.inner
     }
 
+    /// The emulator, for what is not the machine's state (its sound log, `ZCore::set_sound`): frames and pokes
+    /// go through [`Nes`] on this wrapper, or the recording misses them.
+    pub fn inner_mut(&mut self) -> &mut N {
+        &mut self.inner
+    }
+
     pub fn into_inner(self) -> N {
         self.inner
     }

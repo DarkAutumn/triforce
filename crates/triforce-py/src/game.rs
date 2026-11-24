@@ -647,7 +647,7 @@ fn ram_byte(name: &str, value: i64) -> PyResult<u8> {
         .map_err(|_| PyValueError::new_err(format!("{name} = {value} does not fit a byte")))
 }
 
-fn overrides(values: Option<&Bound<'_, PyDict>>) -> PyResult<Vec<(Var, u8)>> {
+pub(crate) fn overrides(values: Option<&Bound<'_, PyDict>>) -> PyResult<Vec<(Var, u8)>> {
     let Some(values) = values else {
         return Ok(Vec::new());
     };
