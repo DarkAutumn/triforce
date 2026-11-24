@@ -1,0 +1,15 @@
+# Round 40 (Darknut40; the lead's case, Nov 24): 3:0x5b's first pass from S (the owner's Dungeon 3 plan: kill ONE
+# Red Darknut with the drop cycle at 0 for its bombs, take them, leave), hearts drawn 0.5-3.0 of 3 (the task's partial
+# draw only, as the chain saw them on entering). The bag empty and no kill streak (no kill before 0x5b: the drop is
+# the table's, not a forced one), the cycle at 0.
+extends: ../../specialists/d3first/darknut.yaml
+start_states:
+- 3_5bs*_[0-9]
+ram_randomization:
+  bombs: [0, 0]
+  bombs_share: 1.0
+  help_count: [0, 0]
+  hp: [0.15, max]
+  full_hp: 0.0
+  room_kill_cycle:
+    (3, 0x5b, S): [0, 0]

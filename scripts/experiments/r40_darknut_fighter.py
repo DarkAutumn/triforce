@@ -76,6 +76,7 @@ import collections
 import heapq
 import json
 import multiprocessing
+import os
 import sys
 import time
 from pathlib import Path
@@ -93,6 +94,9 @@ OBJ_SHOVE_DIR, OBJ_SHOVE_LEFT = 0xC0, 0xD3          # asm:ObjShoveDir, asm:ObjSh
 BOMB_STATE = (0xBC, 0xBD)                           # slots $10/$11 ObjState (asm:Bomb_UpdateBombOrFire)
 INV_BOMBS = 0x658                                   # asm:InvBombs
 INV_CLOCK = 0x66C                                   # asm:InvClock: monsters frozen, Link invincible
+INV_MAX_BOMBS = 0x67C                               # asm:InvMaxBombs
+OBJ_STATE = 0xAC                                    # asm:ObjState; a dropped item's id (asm:Item_ObjItemId)
+DROPPED_ITEM, ITEM_BOMBS = 0x60, 0x00               # asm:Obj_EndMetastate's drop type; the bombs' item id
 OBJ_GRID_OFFSET = 0x394                             # asm:ObjGridOffset
 RED, BLUE = 0x0B, 0x0C
 SPEED = {RED: 0.5, BLUE: 0.625}                     # asm:Darknut_Init: q-speed $20 / $28
@@ -125,6 +129,9 @@ ROOMS = {
     'garden': {'states': 'd3first_5_05e', 'room': (5, 0x05), 'reserve': 0, 'exit': 'stairs',
                'block': (112, 141), 'stairs': (208, 93)},
     '59': {'states': 'd3first_3_59n', 'room': (3, 0x59), 'reserve': 5, 'exit': 'S'},
+    # 3:0x5b's first pass (the owner's Dungeon 3 plan, decisions 2026-11-23): one Red Darknut killed with the drop
+    # cycle at 0 for its bombs (41%), the bombs taken, out N; no weapon bomb there (routes.yaml `wall_only`).
+    '5b': {'states': 'd3first_3_5bs', 'room': (3, 0x5b), 'reserve': 255, 'exit': 'N', 'kill_one': True},
 }
 
 
@@ -365,6 +372,7 @@ class Fighter:
         self.bomb_pred = []                                   # per bomb laid: that prediction
         self.pushed = False
         self.bombs_ok = bombs_used_ok
+        self.start_count = None                               # the Darknuts in the room at the first decision
 
     # --- geometry --------------------------------------------------------------------------------------------------
 
@@ -598,6 +606,29 @@ class Fighter:
             return HOTSPOT
         return self.shadow(x, y, d)
 
+    def departing(self, nuts) -> bool:
+        """A kill-one room (3:0x5b's first pass) whose one kill is made: from now on Link takes its bombs and leaves."""
+        return bool(self.room.get('kill_one')) and self.start_count is not None and len(nuts) < self.start_count
+
+    def exit_spot(self) -> tuple[int, int]:
+        """Where Link stands to leave by the room's door (the N door: X $78 on the room's top row)."""
+        return {'N': (0x78, 0x5D), 'S': (0x78, 0xBD)}[self.room['exit']]
+
+    @staticmethod
+    def drop(ram: bytes) -> tuple[int, int] | None:
+        """Where Link takes a dropped bomb lying in the room while his bag has room (a slot of type $60, item id 0,
+        asm:Item_ObjItemId; taken within 9 pixels of X and of Y + 3, asm:Item_TryTake), as a lattice point."""
+        if ram[INV_BOMBS] >= ram[INV_MAX_BOMBS]:
+            return None
+        for s in range(1, 12):
+            if ram[OBJ_TYPE + s] == DROPPED_ITEM and ram[OBJ_STATE + s] == ITEM_BOMBS:
+                return lattice(ram[OBJ_X + s], ram[OBJ_Y + s] - 3)
+        return None
+
+    def departure(self, ram) -> tuple[int, int]:
+        """The departing goal: the dropped bombs, then the door."""
+        return self.drop(ram) or self.exit_spot()
+
     def field(self, goal, nuts) -> dict:
         """Dijkstra's distance to `goal` over Link's 8-pixel lattice (the floor and the doorways), a step 8 pixels;
         cells near a Darknut, and on a Darknut's line behind it, cost more."""
@@ -646,12 +677,16 @@ class Fighter:
         x, y = ram[OBJ_X], ram[OBJ_Y]
         facing = GAME_DIR.get(ram[OBJ_DIR] & 0x0F)
         nuts = darknuts(ram)
-        if not nuts:
+        if self.start_count is None:
+            self.start_count = len(nuts)
+        departing = self.departing(nuts)
+        inside = 0x20 <= x <= 0xD0 and 0x5D <= y <= 0xBD
+        if not nuts or (departing and self.drop(ram) is None and (lattice(x, y) == self.exit_spot() or not inside)):
             return self.leave(ram, ok, grid)
         outward = None                                        # in a doorway: never the way out (a wrong exit)
-        if not (0x20 <= x <= 0xD0 and 0x5D <= y <= 0xBD):
+        if not inside:
             outward = 'E' if x > 0xD0 else 'W' if x < 0x20 else 'N' if y < 0x5D else 'S'
-        goal = self.goal(ram, nuts)
+        goal = self.departure(ram) if departing else self.goal(ram, nuts)
         dist = self.field(goal, nuts)
 
         def togo(px, py):
@@ -663,7 +698,9 @@ class Fighter:
             if ok(text) and not (step is None and self.still >= STALL) and step != outward:
                 options.append((text, [(step, 4)], 'move', None))
         for text, first, d, f in self.strikes(ram, nuts, ok):
-            options.append((text, first, 'strike', (d, f)))
+            if departing and d.hp <= 1:
+                continue                                      # one kill was the room's: no second
+            options.append((text, first, 'strike' if not departing else 'pass', (d, f)))
         for text, first, caught in self.bomb_options(ram, nuts, ok):
             options.append((text, first, 'bomb', caught))
         plain = [d.futures(self.floor, (x, y)) for d in nuts]
@@ -671,7 +708,7 @@ class Fighter:
         scored = []
         for rank, (text, first, kind, extra) in enumerate(options):
             futures = plain
-            if kind == 'strike':
+            if kind in ('strike', 'pass'):
                 d, f = extra
                 futures = [d.futures(self.floor, (x, y), struck=text.split()[1], hit_at=f) if n is d else p
                            for n, p in zip(nuts, plain)]
@@ -680,7 +717,7 @@ class Fighter:
             if kind == 'move' and text != 'WAIT 4' and np.allclose(paths[0, 4], (x, y)):
                 continue                                      # a wall
             touch = contact(paths, futures)
-            if kind == 'strike':                              # a miss must leave him time to step away after it
+            if kind in ('strike', 'pass'):                    # a miss must leave him time to step away after it
                 plain_touch = contact(paths, plain)
                 swing_end = sum(n for _, n in first) + 4
                 touch = np.where(plain_touch <= swing_end, plain_touch, touch)
@@ -689,7 +726,7 @@ class Fighter:
             after = paths[0, sum(n for _, n in first)]
             chase = any(self.chasing(after[0], after[1], d) for d in nuts if not d.cloud and not d.flash)
             stay = bool(kind == 'move' and self.bomb_held and text == f'MOVE {self.bomb_held[0]} 4')
-            value = {'strike': 0, 'bomb': 1, 'move': 2}[kind]
+            value = {'strike': 0, 'bomb': 1, 'move': 2, 'pass': 2}[kind]
             target_first = 0 if kind != 'strike' or extra[0].slot == self.target else 1
             crowd = sum(abs(after[0] - d.x) < CROWD and abs(after[1] - d.y) < CROWD
                         for d in nuts if d.slot != self.target and not d.cloud)
@@ -712,10 +749,12 @@ class Fighter:
         x, y = ram[OBJ_X], ram[OBJ_Y]
         room = self.room
         here = lattice(x, y)
-        if room['exit'] == 'S':
-            goal = (0x78, 0xBD)
-            if here == goal or (x == 0x78 and y > 0xBD):
-                return ['MOVE S 4']
+        if room['exit'] in ('S', 'N'):
+            way = room['exit']
+            goal = self.departure(ram)
+            outside = y > 0xBD if way == 'S' else y < 0x5D
+            if self.drop(ram) is None and (here == goal or (x == 0x78 and outside)):
+                return [f'MOVE {way} 4']
         else:
             block = [(c, r) for r, row in enumerate((grid or '').splitlines()[1:]) for c, ch in enumerate(row[4:])
                      if ch == 'P']
@@ -776,10 +815,15 @@ class Fighter:
 
 # --- playing visits ---------------------------------------------------------------------------------------------------
 
+HEARTS_VARIANT = 'R40_DARKNUT_HEARTS'                         # `--hearts`: the case task's hearts variant (workers too)
+
+
 def task_file(room: str, bombs: int) -> Path:
-    """The case's task (`experiments/r40-darknut/<room>-b<bombs>.yaml`: the darknut task with the room's entry
-    states and the bag fixed), the one `triforce evaluate` plays today's network on."""
-    return ROOT / 'experiments' / 'r40-darknut' / f'{room}-b{bombs}.yaml'
+    """The case's task (`experiments/r40-darknut/<room>-b<bombs>[-<hearts>].yaml`: the darknut task with the room's
+    entry states and the bag fixed, and for 3:0x5b the hearts drawn as `--hearts` names), the one `triforce evaluate`
+    plays today's network on."""
+    hearts = os.environ.get(HEARTS_VARIANT)
+    return ROOT / 'experiments' / 'r40-darknut' / f"{room}-b{bombs}{'-' + hearts if hearts else ''}.yaml"
 
 
 def make_env(room: str, bombs: int, states_dir=None):
@@ -810,10 +854,24 @@ class Tally:
         self.chase_frames = 0                                 # frames of steps ending on a Darknut's line behind it
         self.bomb_hurt = []                                   # per bomb laid: Darknuts it hurt
         self.live_bomb = None                                 # index into bomb_hurt while its blast may land
+        ram = bytes(env.state.ram)
+        self.start_bombs = self.bombs_now = ram[INV_BOMBS]
+        self.kills, self.first_kill = 0, None                 # Darknuts killed; the frame the first death began
+        self.dropped = False                                  # a bomb drop appeared
 
     def step(self, ram_before: bytes, text: str, env, info, fighter: Fighter | None):
         ram = bytes(env.state.ram)
         self.frames += info.get('frames', 0)
+        died = sum(1 for d in darknuts(ram_before)           # its death sparkle began (asm:Damage_KillMonster), or done
+                   if ram[OBJ_META + d.slot] >= 0x10 or ram[OBJ_TYPE + d.slot] in (0, DROPPED_ITEM))
+        died = died if info.get('room') is None or tuple(info['room'][:2]) == (ram_before[0x10], ram_before[0xEB]) \
+            else 0
+        if died:
+            self.kills += died
+            self.first_kill = self.first_kill or self.frames
+        self.dropped = self.dropped or any(ram[OBJ_TYPE + s] == DROPPED_ITEM and ram[OBJ_STATE + s] == ITEM_BOMBS
+                                           for s in range(1, 12))
+        self.bombs_now = ram[INV_BOMBS]
         if chasing_line(ram):
             self.chase_frames += info.get('frames', 0)
         if text.startswith('BOMB') and ram_before[INV_BOMBS] > ram[INV_BOMBS]:
@@ -931,7 +989,9 @@ def record(seed, start, info, tally, fighter, env) -> dict:
             'hearts_lost': round(tally.lost, 2),
             'start_hearts': tally.start_health, 'frames': tally.frames, 'swings': fighter.swings,
             'bombs': len(tally.bomb_hurt), 'bomb_hurt': tally.bomb_hurt, 'bomb_pred': fighter.bomb_pred,
-            'chase_frames': tally.chase_frames, 'where': tally.where}
+            'chase_frames': tally.chase_frames, 'kills': tally.kills, 'first_kill_frame': tally.first_kill,
+            'drop_appeared': tally.dropped, 'bag_gain': int(tally.bombs_now) - int(tally.start_bombs),
+            'where': tally.where}
 
 
 def starts(room: str, bombs: int, seed0: int, per_state: int):
@@ -990,6 +1050,12 @@ def summary(records: list[dict]) -> dict:
         'swings_per_visit': sum(r['swings'] for r in records) / n,
         'bombs_per_visit': sum(r['bombs'] for r in records) / n,
         'chase_frames_per_visit': sum(r.get('chase_frames', 0) for r in records) / n,
+        'visits_with_a_kill': sum(r.get('kills', 0) >= 1 for r in records),
+        'visits_with_two_kills_or_more': sum(r.get('kills', 0) >= 2 for r in records),
+        'first_kill_frame_mean': (lambda f: sum(f) / len(f) if f else None)(
+            [r['first_kill_frame'] for r in records if r.get('first_kill_frame')]),
+        'bomb_drops': sum(bool(r.get('drop_appeared')) for r in records),
+        'bombs_taken': sum(r.get('bag_gain', 0) > 0 for r in records),
         'darknuts_hurt_per_bomb': sum(bombs) / len(bombs) if bombs else None,
         'bombs_hurting_2plus': sum(h >= 2 for h in bombs), 'bombs_hurting_1': sum(h == 1 for h in bombs),
         'bombs_hurting_0': sum(h == 0 for h in bombs),
@@ -1206,6 +1272,7 @@ def main(argv) -> int:
             p.add_argument('out')
         p.add_argument('--room', choices=sorted(ROOMS), required=True)
         p.add_argument('--bombs', type=int, required=True, help="the bag at every reset")
+        p.add_argument('--hearts', default=None, help="the case task's hearts variant (3:0x5b: low, full, 1.5)")
         if name == 'trace':
             p.add_argument('seed', type=int)
             p.add_argument('--start', default=None)
@@ -1222,6 +1289,8 @@ def main(argv) -> int:
     g.add_argument('out')
     g.add_argument('files', nargs='+')
     args = parser.parse_args(argv)
+    if getattr(args, 'hearts', None):
+        os.environ[HEARTS_VARIANT] = args.hearts              # the spawned workers read the same task
     if args.cmd == 'trace':
         trace(args.room, args.bombs, args.seed, args.start, args.look)
         return 0
