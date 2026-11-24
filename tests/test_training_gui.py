@@ -967,6 +967,14 @@ def test_a_jobs_card_draws_its_progress_with_widgets_in_the_window_and_the_web_v
     'finished'.  A job without a log folder is drawn from its row alone."""
     monkeypatch.setattr(gui.MachineStatus, 'sample', lambda self: None)
     now = float(int(time_now()))
+    # The GUI's wall clock stands at `now` (its `time` module only): the cards' ages ("RUNNING tools 30s") were read
+    # against the real clock, and on a loaded machine building the window took over a second (seen: 31s; the suite
+    # rules out a time bound only an idle machine meets).
+    clock = importlib.import_module('time')
+    frozen = type('FrozenTime', (), {name: staticmethod(getattr(clock, name)) for name in dir(clock)
+                                     if not name.startswith('_') and callable(getattr(clock, name))})
+    frozen.time = staticmethod(lambda: now)
+    monkeypatch.setattr(gui, 'time', frozen)
     chain = queue.add(agent='Dark39b', task='r40', subtask='d3-route', description='Evaluates r40 on the d3 route.',
                       kind='chain', command=['python', '-m', 'triforce', 'eval-chain', '--runs', '250'],
                       admitted_ts=now - 725, estimate=2400.0,
