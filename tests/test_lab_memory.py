@@ -79,8 +79,9 @@ def test_a_recurrent_network_trains_on_sequences_and_plays(states_dir, tmp_path)
         if mode == 'imitate':
             registry.save_checkpoint('ow-start', 'teach', nets.create('zelda', native_spec()), root=tmp_path)
             registry.promote('ow-start', 'teach', tmp_path)
+        # ow-start from the bare state ``start``: no state_routes, so --all-routes (round 40, lab.recipe.check_routes)
         run = train.main(['--name', f'mem-{mode}', '--run-id', 'g1', '--families', f'ow-start={start_task()}',
-                          '--parallel', '2',
+                          '--parallel', '2', '--all-routes',
                           '--steps-per-update', '64', '--device', 'cpu', '--models-dir', str(tmp_path), '--seed', '6',
                           '--iterations', '2', '--arch', 'gru', '--bptt', '8', '--mode', mode,
                           '--arch-config', '{"hidden_dim": 32, "core_dim": 16}', *extra])
@@ -108,7 +109,7 @@ def test_a_need_sampled_run_changes_and_logs_each_familys_rows(tmp_path):
     yaml = tmp_path / 'short.yaml'
     yaml.write_text(_native.SpecialistConfig.load(start_task()).replace(max_steps=8).to_json())
     run = train.main(['--name', 'need', '--run-id', 'n1', '--families', f'ow-start={start_task()}',
-                      f'ow-start@d3first={yaml}',
+                      f'ow-start@d3first={yaml}', '--all-routes',
                       '--parallel', '2', '--steps-per-update', '64', '--device', 'cpu', '--models-dir', str(tmp_path),
                       '--seed', '7', '--iterations', '3', '--arch', 'wide', '--sampling', 'need',
                       '--need-target', '1.0', '--arch-config', '{"hidden_dim": 16, "depth": 1}',
