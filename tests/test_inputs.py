@@ -147,21 +147,23 @@ GENERATION = ['ow-start', 'ow-tektite', 'ow-leever', 'ow-moblin', 'ow-octorok', 
               'boss-digdogger', 'boss-gohma', 'ganon']
 
 # The effective configs (SHA-256 of `to_dict()`, as `manifest.task` hashes them; first 16 hex) of the bare task
-# files, the ones today's team and every `d2first` chain play with, as `r40-gen` (42d15e02) had them before the
-# generation's tasks were written: unchanged by them. A deliberate change to a bare task later updates its row.
+# files, the ones today's team and every `d2first` chain play with: unchanged by the generation's tasks (r40-tasks:
+# the same before and after on `r40-gen` 42d15e02). A deliberate change to a bare task updates its row: Tracks41
+# (r40-gen fee9db0c) dropped `curriculum.untracked` entries from boss-digdogger, boss-gleeok, darknut, goriya,
+# like-like, vire and zol (their states got tracks).
 BARE_EFFECTIVE = {
-    'boss-aquamentus': '964037cc7c6772f7', 'boss-digdogger': '41047b78dbba77c0', 'boss-dodongo': '2837d388d2bb32fc',
-    'boss-gleeok': '3dc3440b531af1f3', 'boss-gohma': '122a41323615e34b', 'boss-manhandla': 'e051deaf86f9ae1c',
-    'd2-rope': '5371a6f5d01257fc', 'darknut': 'c56e37d1b0edaeee', 'dodongo-crossing': '57c07e2b82521950',
+    'boss-aquamentus': '964037cc7c6772f7', 'boss-digdogger': '9fc25620d8af66a8', 'boss-dodongo': '2837d388d2bb32fc',
+    'boss-gleeok': '7e34d4a6d9495d86', 'boss-gohma': '122a41323615e34b', 'boss-manhandla': 'e051deaf86f9ae1c',
+    'd2-rope': '5371a6f5d01257fc', 'darknut': 'c6365d2aab2792a1', 'dodongo-crossing': '57c07e2b82521950',
     'equipment-room': '2dcc698ea994be84', 'ganon': '8d17a7f7e0532c21', 'gibdo': 'e14a78e5da3f71ca',
-    'goriya': '3d1314d2c83b53e4', 'lanmola': 'a863d8e087492eb7', 'like-like': 'df0fd97613a56b05',
+    'goriya': '587eafc639eeb4eb', 'lanmola': 'a863d8e087492eb7', 'like-like': '1fbad86272424f98',
     'moldorm': '196755b386307c5b', 'ow-boulder': 'af1cd69733b32f1b', 'ow-ghini': '192f1922e6745cab',
     'ow-leever': '4d74f994b3d7d936', 'ow-lynel': '13553bde87634c4f', 'ow-moblin': '84eafeaa06d972ea',
     'ow-octorok': '796292f6ddc66d68', 'ow-peahat': 'b854f9edb2964622', 'ow-start': '813e16e5602996f8',
     'ow-tektite': '729c50d784b9d954', 'ow-zora': '29c4b95850a4755e', 'patra': '25980d07f167f5c6',
     'pols-voice': '2ea6f0ac3df07a2c', 'stalfos-keese-gel': '8039e87cffe1a7ef', 'trap-room': '4bc878609d02e600',
-    'vire': '89d1daf8ace582e3', 'wallmaster': 'feca0df6d2aac23f', 'wizzrobe': 'f2207f2f47c5422a',
-    'zol': 'ec170ce3bf4cf099',
+    'vire': 'da0b4233fc7a3191', 'wallmaster': 'feca0df6d2aac23f', 'wizzrobe': 'f2207f2f47c5422a',
+    'zol': '8baa46c3cd7c7242',
 }
 
 
