@@ -31,8 +31,10 @@ without is drawn from its row alone.  The running jobs are on top, the one that 
 starts is added at the top and pushes the others down), then the queued ones in the order they will start, each
 lane's line
 (``jobqueue.line``) with its place.  A live log folder under the logs root that no job owns (a run the owner started
-at a terminal) is listed among the running ones.  The GUI only reads the queue (it marks the jobs whose wrapper is
-gone dead first, as ``triforce job list`` does); it controls nothing.  Below the live ones, under a 'finished'
+at a terminal) is listed among the running ones.  The GUI reads the queue (it marks the jobs whose wrapper is gone
+dead first, as ``triforce job list`` does) and controls one thing: a right click on a waiting job's box moves it to
+the top of its own line or back (``job_moves``, ``jobqueue.move_to_top``, as ``triforce job top``; the owner, Nov
+23); the web view stays read-only.  Below the live ones, under a 'finished'
 heading: the jobs that ended in the last 60 minutes (``RECENT_SECONDS``) and the folders whose training ended while
 shown, the one that ended last first: a job that ends joins that list at its top, so nothing below the running ones
 ever changes places.  A finished one leaves the list by itself 60 minutes after it ended, so the list never piles
@@ -64,8 +66,8 @@ from PySide6.QtCore import QObject, QPointF, QProcess, QRectF, Qt, QTimer, Signa
 from PySide6.QtGui import (QColor, QFont, QFontDatabase, QFontMetrics, QLinearGradient, QPainter, QPainterPath,
                            QPalette, QPen)
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, QGridLayout, QHBoxLayout, QLabel,
-                               QMainWindow, QPlainTextEdit, QPushButton, QScrollArea, QSplitter, QStackedWidget,
-                               QTabWidget, QVBoxLayout, QWidget)
+                               QMainWindow, QMenu, QPlainTextEdit, QPushButton, QScrollArea, QSplitter,
+                               QStackedWidget, QTabWidget, QVBoxLayout, QWidget)
 
 from triforce import jobqueue
 
@@ -1393,6 +1395,32 @@ def job_command(job: dict) -> str:
     return f"{what}  {where}  {' '.join(job.get('command') or [])}".strip()
 
 
+MOVE_UP, MOVE_BACK = 'Move to the top of its line', 'Back to its own place'
+OLDER_CODE = "Queued by older code: it can't be moved"
+
+
+def job_moves(job: dict | None) -> list[tuple[str, bool | None]]:
+    """What the right click on a job offers (the owner, Nov 23: "a right click in the gui that goosed something to the
+    top of the fast or slow queue"): for a waiting job [(MOVE_UP, False)], and once it was moved also (MOVE_BACK,
+    True); for a waiting job of older code, whose wrapper would not honour a move, [(OLDER_CODE, None)] (shown
+    greyed); for any other job nothing (a running or ended job keeps its place)."""
+    if job is None or job.get('status') != 'queued':
+        return []
+    if not job.get('top_aware'):
+        return [(OLDER_CODE, None)]
+    return [(MOVE_UP, False)] + ([(MOVE_BACK, True)] if job.get('top_ts') is not None else [])
+
+
+def move_job(job_id: int, undo: bool = False) -> dict:
+    """The menu's action: ``jobqueue.move_to_top`` on the machine's queue, the same function ``triforce job top``
+    calls (``jobqueue.MoveError`` for a job that isn't waiting any more)."""
+    con = jobqueue.connect()
+    try:
+        return jobqueue.move_to_top(con, job_id, undo=undo)
+    finally:
+        con.close()
+
+
 def job_sections(view: dict) -> list:
     """The detail pane's sections of a job without a log folder (``job_view``): its counters as bars, its steps,
     then who, what and where."""
@@ -1466,7 +1494,8 @@ def job_timing(job: dict, now: float) -> str:
         return f"{where} · {jobqueue.short(now - (job.get('admitted_ts') or now))}{tilde}"
     if status == 'queued':
         size = '' if estimate is None else f"~{jobqueue.short(estimate)} · "
-        return f"{size}waited {jobqueue.short(now - (job.get('queued_ts') or now))}"
+        moved = f" · {jobqueue.MOVED_MARK}" if job.get('top_ts') is not None else ''
+        return f"{size}waited {jobqueue.short(now - (job.get('queued_ts') or now))}{moved}"
     ran = (None if job.get('admitted_ts') is None or job.get('finished_ts') is None
            else job['finished_ts'] - job['admitted_ts'])
     code = '' if job.get('exit_code') in (None, 0) else f" · exit {job['exit_code']}"
@@ -2190,6 +2219,9 @@ class Header(Clickable):
         self.settled = False        # nothing left to animate until the folder's data changes (FolderView.poll)
         self.box: dict | None = None    # the job's box (``job_box``) as last drawn, None for a folder no job owns
 
+    def contextMenuEvent(self, event):
+        self.view.context_menu(event.globalPos())       # a job's box: the same menu as its card
+
     def read_box(self, now: float) -> dict | None:
         """The box of the view's job with its plan, None when no job owns the folder (a run started at a shell)."""
         view = self.view
@@ -2529,6 +2561,9 @@ class JobCard(Clickable):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         self.paint_card(p)
+
+    def contextMenuEvent(self, event):
+        self.view.context_menu(event.globalPos())
 
 
 def chain_sections(result: dict) -> list:
@@ -3557,6 +3592,34 @@ class FolderView(QWidget):
         self.header.selected = self.job_card.selected = key == 'round'
         self.header.update()
         self.job_card.update()
+
+    def menu(self) -> QMenu | None:
+        """The right click's menu on this entry's job (``job_moves``), None when it offers nothing (no job, or a job
+        that isn't waiting).  Only the window acts on the queue; the web view stays read-only."""
+        moves = job_moves(self.job)
+        if not moves:
+            return None
+        menu = QMenu(self)
+        for text, undo in moves:
+            action = menu.addAction(text)
+            if undo is None:
+                action.setEnabled(False)
+            else:
+                action.triggered.connect(lambda _checked=False, undo=undo: self.move(undo))
+        return menu
+
+    def move(self, undo: bool):
+        """The menu's choice: moves this entry's job (``move_job``), then the list re-sorts at once."""
+        try:
+            move_job(self.job['id'], undo)
+        except (jobqueue.MoveError, OSError, sqlite3.Error) as error:
+            self.owner.statusBar().showMessage(str(error), 15000)
+        self.owner._scan_and_update()           # pylint: disable=protected-access
+
+    def context_menu(self, position):
+        menu = self.menu()
+        if menu is not None:
+            menu.exec(position)
 
 
 MACHINE_MS = 2000      # status bar refresh

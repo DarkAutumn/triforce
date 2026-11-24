@@ -1035,7 +1035,9 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   the time waited). A waiting job is only its wrapper: no model, no GPU memory, a check a second. It prints
   `triforce job: #12 A-T-S waits for a place: estimated 40 minutes; 2 jobs are running (...)` every 5 minutes and
   `... starts (regular-1, nice 15, ...)` when it starts. **Seeing that line, wait**: don't kill jobs to get ahead,
-  don't split or stagger them by hand. **A job there is no reason to run any more is ended** (the owner, Nov 18):
+  don't split or stagger them by hand. **The owner can move a waiting job to the top of its line** (the GUI's right
+  click, `triforce job top ID [--undo]`); agents do NOT use `job top` on their own work. **A job there is no reason
+  to run any more is ended** (the owner, Nov 18):
   end your own with one SIGTERM to its wrapper, never another agent's or the owner's without asking. Priority, time
   limits and the cargo job count are the queue's: `nice`, `ionice`, `timeout` or `CARGO_BUILD_JOBS=` after `--` are
   refused. **Our tools refuse to run outside the queue** (they print the `triforce job run` form of the same command)

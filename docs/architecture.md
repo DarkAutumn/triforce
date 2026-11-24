@@ -1518,6 +1518,19 @@ every step, so following an enemy that moves away pays again, and knockback rese
   its two places and never waits behind a training or a chain. A waiting wrapper prints `triforce job: #12 A-T-S
   waits for a place: estimated 40 minutes; 2 jobs are running (...)` at first and every 5 minutes
   (`UPDATE_SECONDS`), then `... starts (regular-1, nice 15, ...)`.
+- Moving a job up (the owner, Nov 23: "a right click in the gui that goosed something to the top of the fast or slow
+  queue"; `jobqueue.move_to_top`, `triforce job top ID [--undo]`, the training GUI's right click on a waiting job's
+  box, "Move to the top of its line" / "Back to its own place"): a waiting job goes to the top of its own line (the
+  jobs line or the tools line), ahead of every job not moved; several moved: the one moved last first; the rest in
+  their usual order. Only the order changes: nothing running stops, the lane, the estimate and whether the job may
+  take the express place stay (a long job moved up still waits for a regular place, and an express-sized job behind
+  it still takes a free express place). The row's `top_ts` is the mark (cleared by `--undo`), `moved_ts` and
+  `history.moved` keep that it was moved; `job list`, `job history` and the GUI say "moved to the top by the
+  owner"; the web view shows the mark and offers no control. Mixed code: the columns are added in place by the
+  first connection of this code (an older wrapper never reads them and runs on); each waiting wrapper orders the
+  line itself, so only wrappers of this code honour a move: a job queued by older code can't be moved (its row has
+  no `top_aware`; the command and the menu say so) and doesn't see a moved job, so it may start ahead of one. Places
+  are still one holder each (their file locks). Agents don't move their own jobs.
 - Progress: a tool's log folder is named for the job, `<yymmdd>_<NNN>_<agent>-<task>-<subtask>` (`jobs.label`, from
   `$TRIFORCE_JOB_LABEL`), and its first plan is recorded in the job's row (`jobs.record_plan`), where `triforce job
   list` and the training GUI draw its runs. A command reports its movement into the row's `progress` JSON (one

@@ -13,6 +13,7 @@ the exit code is the command's (the wrapper's own lines go to stderr, ``triforce
     triforce job history [--since 24h] [--agent A] [--metrics] [--json]
     triforce job run|golden|build|test ... --detach     (start outside this shell; prints a unit name)
     triforce job wait UNIT... [--timeout 30m]           (follow detached jobs; stopping it stops nothing)
+    triforce job top ID [--undo]                        (the owner's: a waiting job to the top of its own line)
 
 ``run`` takes the job's place in line before the command starts and runs it at nice ``RUN_NICE``.  A training or
 evaluation tool of this code (``jobs.announce``) is asked its work first (a dry call: its arguments are checked, an
@@ -26,7 +27,8 @@ served, never behind a training or a chain) at nice ``TOOL_NICE`` with ``CARGO_B
 ``test --build`` is one entry with both steps.  ``setup`` makes a worktree ``../triforce-<branch>`` with ``roms``,
 ``trajectories`` and ``models`` linked from the main checkout, its venv and its build, as one tools-lane entry.
 Priority and time limits are the queue's: ``nice``, ``ionice``, ``timeout`` or ``CARGO_BUILD_JOBS=`` after ``--`` are
-refused.
+refused.  ``top`` moves a waiting job to the top of its own line, or back (``jobqueue.move_to_top``; the training
+GUI's right click does the same): the owner's; agents don't use it on their own work.
 
 This module imports neither ``triforce._native`` nor torch: it works before the first build.
 """
@@ -265,7 +267,7 @@ class Wrapper:
         """Records the job as ``queued`` and holds its job lock (its liveness) from the same transaction on."""
         now = time.time()
         row = {**fields, 'status': 'queued', 'queued_ts': now, 'host': os.uname().nodename, 'pid': os.getpid(),
-               'nice': fields.get('nice')}
+               'nice': fields.get('nice'), 'top_aware': 1}     # this wrapper honours a move to the top (``q.line``)
         columns = [key for key in row if key in q._COLUMNS]     # pylint: disable=protected-access
         values = [json.dumps(row[key]) if key in q._JSON and row[key] is not None else row[key]  # pylint: disable=protected-access
                   for key in columns]
@@ -457,10 +459,11 @@ class Wrapper:
             work = q.chain_seconds(work, actual, status, plan if isinstance(plan, dict) else None)
         with q.transaction(self.con):
             q.update(self.con, self.id, status=status, finished_ts=now, exit_code=code, result=result)
-            self.con.execute("INSERT INTO history (job, kind, work, estimate, actual, status, finished_ts) "
-                             "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            moved = self.con.execute("SELECT moved_ts FROM jobs WHERE id = ?", (self.id,)).fetchone()
+            self.con.execute("INSERT INTO history (job, kind, work, estimate, actual, status, finished_ts, moved) "
+                             "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                              (self.id, self.row.get('kind'), json.dumps(work), self.row.get('estimate'), actual,
-                              status, now))
+                              status, now, int(moved is not None and moved['moved_ts'] is not None)))
             if isinstance(work, dict) and work.get('chains'):
                 q.refresh_estimates(self.con)    # what its chains took moves the live chains' estimates
         for fd in (self.place_fd, self.job_fd):
@@ -591,6 +594,10 @@ def build_parser() -> argparse.ArgumentParser:
     show = sub.add_parser('list', help="the queue: running, waiting and recently finished jobs")
     show.add_argument('--all', action='store_true', help="every finished job, not only the last hour's")
     show.add_argument('--calibration', action='store_true', help="estimates against actual times, per kind")
+    top = sub.add_parser('top', help="move a waiting job to the top of its own line (the owner's; agents don't use "
+                                     "it on their own work), or back to its own place (--undo)")
+    top.add_argument('job', type=int, help="the job's id (triforce job list)")
+    top.add_argument('--undo', action='store_true', help="back to its own place in the line")
     doctor = sub.add_parser('doctor', help="the checks every job start makes, for a checkout (exit 1 on a red flag)")
     doctor.add_argument('path', nargs='?', default='.', help="a folder of the checkout (default this one)")
     past = sub.add_parser('history', help="every job that ended: when it queued, started and ended, where it ran")
@@ -1023,6 +1030,29 @@ def cmd_history(args) -> int:
               f"{row['status']:11s} {row['name']}  {row['what']}")
         for line in q.flag_lines(row):
             print(f"{'':5s} {line}")
+        if row.get('moved_ts') is not None:
+            print(f"{'':5s} {q.MOVED_MARK} at {(q.iso(row['moved_ts']) or '?')[:19]}")
+    return 0
+
+
+def cmd_top(args) -> int:
+    """``triforce job top ID [--undo]``: the waiting job to the top of its own line, or back to its place
+    (``jobqueue.move_to_top``); prints that line as it now stands.  A job that isn't waiting is an error naming its
+    status."""
+    con = q.connect()
+    try:
+        try:
+            job = q.move_to_top(con, args.job, undo=args.undo)
+        except q.MoveError as error:
+            raise JobError(str(error)) from error
+        now = time.time()
+        jobs = q.read_jobs(con, "status IN ('queued', 'running')")
+    finally:
+        con.close()
+    what = 'back to its own place in' if args.undo else 'moved to the top of'
+    print(f"#{job['id']} {job.get('name') or '?'} {what} the {job['lane']} line; the line now:")
+    for place, waiting in enumerate(q.line(jobs, job['lane'], now), 1):
+        print(f"  {place:2d}. #{waiting['id']} {waiting.get('name') or '?'}  {q.tags(waiting, now, place)}")
     return 0
 
 
@@ -1035,13 +1065,13 @@ def main(argv=None) -> int:
             return detach(args, head, extra)
         if args.verb == 'run':
             return cmd_run(args, extra)
-        if extra and args.verb in ('setup', 'list', 'progress', 'history', 'wait', 'doctor'):
+        if extra and args.verb in ('setup', 'list', 'progress', 'history', 'wait', 'doctor', 'top'):
             raise JobError(f"{args.verb} takes nothing after --")
         verbs = {'golden': cmd_golden, 'build': cmd_build, 'test': cmd_test}
         if args.verb in verbs:
             return verbs[args.verb](args, extra)
         return {'setup': cmd_setup, 'list': cmd_list, 'progress': cmd_progress, 'history': cmd_history,
-                'wait': cmd_wait, 'doctor': cmd_doctor}[args.verb](args)
+                'wait': cmd_wait, 'doctor': cmd_doctor, 'top': cmd_top}[args.verb](args)
     except JobError as error:
         print(f"triforce job: error: {error}", file=sys.stderr)
         return 2

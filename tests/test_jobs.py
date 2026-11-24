@@ -44,6 +44,87 @@ def test_the_tools_lane_is_first_come_first_served():
     assert ids(q.line(jobs_, q.TOOLS_LANE, NOW)) == [2, 1]
 
 
+def test_a_moved_job_goes_to_the_top_of_its_own_line_the_last_moved_first():
+    """The owner's move (``move_to_top``): the moved jobs first, the one moved last first, then the line as always;
+    in the jobs line and in the tools line alike; only the order changes (a long job moved to the top still takes no
+    express place, and an express-sized job behind it still takes the free express place)."""
+    short, middle, long_ = row(1, estimate=60), row(2, estimate=600), row(3, estimate=3600)
+    assert ids(q.line([long_, middle, short], q.JOBS_LANE, NOW)) == [1, 2, 3]
+    moved = {**long_, 'top_ts': NOW - 10}
+    assert ids(q.line([moved, middle, short], q.JOBS_LANE, NOW)) == [3, 1, 2]
+    later = {**middle, 'top_ts': NOW - 5}                               # two moved: the last moved first
+    assert ids(q.line([moved, later, short], q.JOBS_LANE, NOW)) == [2, 3, 1]
+    assert ids(q.line([{**moved, 'top_ts': None}, middle, short], q.JOBS_LANE, NOW)) == [1, 2, 3]   # undone
+    ordered = q.line([moved, middle, short], q.JOBS_LANE, NOW)
+    assert q.assign(ordered, ['express-1'], q.JOBS_LANE) == {1: 'express-1'}     # the long one stays out of express
+    assert q.assign(ordered, ['regular-1', 'express-1'], q.JOBS_LANE) == {3: 'regular-1', 1: 'express-1'}
+    tools = [row(4, lane=q.TOOLS_LANE, queued=NOW - 30), row(5, lane=q.TOOLS_LANE, queued=NOW - 20),
+             row(6, lane=q.TOOLS_LANE, queued=NOW - 10, top_ts=NOW)]
+    assert ids(q.line(tools, q.TOOLS_LANE, NOW)) == [6, 4, 5]
+    assert ids(q.line(tools + [moved], q.JOBS_LANE, NOW)) == [3]       # each line keeps its own jobs
+
+
+def test_rows_of_older_code_order_exactly_as_before_the_move_existed():
+    """A row without ``top_ts`` (written by older code, or never moved) orders as the line did before: the same
+    order as a key without the move's part, in both lines, over many made-up rows."""
+    import random
+    rng = random.Random(7)
+    rows = [row(i, estimate=rng.choice([None, 30, 60, 600, 3600, 7200]), queued=NOW - rng.uniform(0, 9000),
+                lane=rng.choice([q.JOBS_LANE, q.TOOLS_LANE])) for i in range(1, 60)]
+    old_style = [{key: value for key, value in job.items() if key != 'top_ts'} for job in rows]
+    before_jobs = sorted((job for job in old_style if job['lane'] == q.JOBS_LANE),
+                         key=lambda job: (q.score(job, NOW), job['queued_ts'] or 0.0, job['id']))
+    before_tools = sorted((job for job in old_style if job['lane'] == q.TOOLS_LANE),
+                          key=lambda job: (job['queued_ts'] or 0.0, job['id']))
+    assert ids(q.line(old_style, q.JOBS_LANE, NOW)) == ids(before_jobs)
+    assert ids(q.line(old_style, q.TOOLS_LANE, NOW)) == ids(before_tools)
+    assert ids(q.line([{**job, 'top_ts': None} for job in old_style], q.JOBS_LANE, NOW)) == ids(before_jobs)
+
+
+def test_move_to_top_moves_a_waiting_job_only_and_upgrades_an_older_database_in_place(tmp_path):
+    """A database made by older code (no ``top_ts``, ``moved_ts``, ``top_aware``, no ``history.moved``) with a job
+    waiting in it is upgraded in place by the first connection of this code: the waiting row stays as it was and
+    orders as before; it can't be moved (its wrapper is older code); a job joined by this code can, back too; a job
+    that isn't waiting can't, and the error says its status."""
+    import sqlite3
+    old = sqlite3.connect(tmp_path / q.DB_NAME)
+    old_columns = {name: kind for name, kind in q._COLUMNS.items()     # pylint: disable=protected-access
+                   if name not in ('top_ts', 'moved_ts', 'top_aware')}
+    old.executescript(f"CREATE TABLE jobs (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                      f"{', '.join(f'{name} {kind}' for name, kind in old_columns.items())});"
+                      "CREATE TABLE history (job INTEGER, kind TEXT, work TEXT, estimate REAL, actual REAL, "
+                      "status TEXT, finished_ts REAL);")
+    old.execute("INSERT INTO jobs (status, lane, estimate, queued_ts, name) VALUES ('queued', 'jobs', 600, ?, 'old')",
+                (NOW - 60,))
+    old.commit()
+    old.close()
+    con = q.connect(tmp_path)
+    try:
+        assert {'top_ts', 'moved_ts', 'top_aware'} <= {r['name'] for r in con.execute('PRAGMA table_info(jobs)')}
+        assert 'moved' in {r['name'] for r in con.execute('PRAGMA table_info(history)')}
+        (old_row,) = q.read_jobs(con)
+        assert old_row['status'] == 'queued' and old_row['top_ts'] is None and old_row['top_aware'] is None
+        with pytest.raises(q.MoveError, match='queued by older code'):
+            q.move_to_top(con, old_row['id'], now=NOW)
+        new = con.execute("INSERT INTO jobs (status, lane, estimate, queued_ts, name, top_aware) "
+                          "VALUES ('queued', 'jobs', 3600, ?, 'new', 1)", (NOW,)).lastrowid
+        assert ids(q.line(q.read_jobs(con), q.JOBS_LANE, NOW)) == [old_row['id'], new]
+        moved = q.move_to_top(con, new, now=NOW)
+        assert (moved['top_ts'], moved['moved_ts']) == (NOW, NOW)
+        assert ids(q.line(q.read_jobs(con), q.JOBS_LANE, NOW)) == [new, old_row['id']]
+        assert q.MOVED_MARK in q.tags(q.read_jobs(con, 'id = ?', (new,))[0], NOW, 1)
+        back = q.move_to_top(con, new, undo=True, now=NOW + 1)
+        assert back['top_ts'] is None and back['moved_ts'] == NOW     # the record keeps that it was moved
+        assert ids(q.line(q.read_jobs(con), q.JOBS_LANE, NOW)) == [old_row['id'], new]
+        q.update(con, new, status='running', place='regular-1')
+        with pytest.raises(q.MoveError, match=f'job #{new} is running, not waiting'):
+            q.move_to_top(con, new, now=NOW)
+        with pytest.raises(q.MoveError, match='not in the queue'):
+            q.move_to_top(con, 999, now=NOW)
+    finally:
+        con.close()
+
+
 def test_places_regular_express_and_tools():
     long_, short, asked = row(1, estimate=3600), row(2, estimate=60), row(3, estimate=7200, express=1)
     free = ['regular-1', 'regular-2', 'express-1']

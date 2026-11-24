@@ -1160,6 +1160,48 @@ def test_frames_repaint_only_what_animates(qapp, tmp_path, monkeypatch):
             window.deleteLater()
 
 
+def test_a_waiting_jobs_right_click_moves_it_to_the_top_of_its_line(qapp, tmp_path, monkeypatch, queue):
+    """The owner's right click (Nov 23): a waiting job's box offers "Move to the top of its line" (and, once moved,
+    "Back to its own place"), which calls the queue's own move (``jobqueue.move_to_top``, as ``triforce job top``);
+    the list re-sorts at once and the box shows the mark.  A running job offers nothing; a waiting job of older code
+    offers only a greyed line saying it can't be moved.  The web view shows the mark and no control."""
+    monkeypatch.setattr(gui.MachineStatus, 'sample', lambda self: None)
+    now = time_now()
+    running = queue.add(subtask='running', admitted_ts=now - 60)
+    first = queue.add(subtask='w1', status='queued', estimate=3600.0, queued_ts=now - 120, top_aware=1)
+    second = queue.add(subtask='w2', status='queued', estimate=3600.0, queued_ts=now - 60, top_aware=1)
+    older = queue.add(subtask='old', status='queued', estimate=3600.0, queued_ts=now - 30)
+    keys = {job: gui.job_key({'id': job}) for job in (running, first, second, older)}
+    (tmp_path / 'gui-root').mkdir()
+    window = gui.Window(tmp_path / 'gui-root', None)
+    try:
+        assert window._shown() == [keys[running], keys[first], keys[second], keys[older]]
+        views = {view.key: view for view in window.views}
+        assert views[keys[running]].menu() is None                      # a running job keeps its place
+        menu = views[keys[older]].menu()
+        assert [(a.text(), a.isEnabled()) for a in menu.actions()] == [(gui.OLDER_CODE, False)]
+        menu = views[keys[second]].menu()
+        assert [(a.text(), a.isEnabled()) for a in menu.actions()] == [(gui.MOVE_UP, True)]
+        menu.actions()[0].trigger()                                    # what the click on it does
+        assert window._shown() == [keys[running], keys[second], keys[first], keys[older]]   # re-sorted at once
+        views = {view.key: view for view in window.views}
+        moved = views[keys[second]]
+        assert moved.job['top_ts'] is not None and gui.jobqueue.MOVED_MARK in texts(moved.job_card.head.lines)[2]
+        assert texts(moved.job_card.head.lines)[2].startswith('queued #1 ')
+        assert [a.text() for a in moved.menu().actions()] == [gui.MOVE_UP, gui.MOVE_BACK]
+        moved.job_card.grab()
+        snapshot = gui.WebState(tmp_path / 'gui-root', machine=lambda: '', scan_every=0).refresh()
+        web = {job['id']: job for job in snapshot['jobs']}
+        assert gui.jobqueue.MOVED_MARK in web[keys[second]]['state']
+        assert gui.jobqueue.MOVED_MARK not in web[keys[first]]['state']
+        assert 'contextmenu' not in gui.web_page().decode()            # the web view stays read-only
+        [a for a in moved.menu().actions() if a.text() == gui.MOVE_BACK][0].trigger()
+        assert window._shown() == [keys[running], keys[first], keys[second], keys[older]]
+    finally:
+        window.close()
+        window.deleteLater()
+
+
 def test_a_job_that_ends_stays_under_finished_for_an_hour(qapp, tmp_path, monkeypatch, queue):
     """A job whose wrapper dies is marked dead when the GUI reads the queue and listed under 'finished' (process
     gone); a job stays there for ``RECENT_SECONDS`` (60 minutes) after it ended, then leaves by itself: the list never

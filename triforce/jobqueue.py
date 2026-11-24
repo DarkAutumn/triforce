@@ -30,6 +30,15 @@ express place while it is free, else a regular place.  The tools lane (builds an
 served, at most ``len(TOOL_PLACES)`` at once, never behind a training or a chain.  A waiting wrapper holds no model
 and no GPU memory; it checks its turn every ``POLL_SECONDS``.
 
+Moving a job up (the owner, Nov 23; ``move_to_top``, ``triforce job top ID [--undo]``, the training GUI's right
+click on a waiting job): a waiting job can be put at the top of its own line, the jobs line or the tools line,
+ahead of every job not moved (several moved: the one moved last first).  Only the order changes: nothing running
+stops, and a job that may not take the express place still may not.  The mark is ``top_ts`` in its row; the record
+keeps that it was moved (``moved_ts``, ``history.moved``).  Mixed code: each waiting wrapper orders the line itself,
+so only wrappers of this code honour a move.  A job queued by older code can't be moved (its row lacks
+``top_aware``), and it doesn't see a moved job either: it may start ahead of one when a place frees.  Places are
+still one holder each (their file locks), so two wrappers that order the line differently never share a place.
+
 Estimates.  A tool's work (``UNITS``: training steps, evaluation episodes, chain route steps) comes from its arguments
 (``jobs.announce``, asked before anything loads); its estimate is the work at the rates refitted from ``history``
 (``rates``: per unit, over the ``RATE_WINDOW`` latest completed jobs that did some of it).  A chain is estimated by
@@ -91,8 +100,13 @@ _COLUMNS = {
     'commit_id': 'TEXT', 'host': 'TEXT', 'pid': 'INTEGER', 'child': 'INTEGER', 'nice': 'INTEGER', 'work': 'TEXT',
     'estimate': 'REAL', 'express': 'INTEGER', 'timeout': 'REAL', 'status': 'TEXT', 'place': 'TEXT',
     'queued_ts': 'REAL', 'admitted_ts': 'REAL', 'finished_ts': 'REAL', 'exit_code': 'INTEGER', 'result': 'TEXT',
-    'log_dir': 'TEXT', 'plan': 'TEXT', 'steps': 'TEXT', 'progress': 'TEXT', 'flags': 'TEXT'}
+    'log_dir': 'TEXT', 'plan': 'TEXT', 'steps': 'TEXT', 'progress': 'TEXT', 'flags': 'TEXT',
+    # Moving a waiting job to the top of its line (``move_to_top``): ``top_ts`` when it was moved (None: its own
+    # place; cleared by an undo), ``moved_ts`` when it was last moved (kept after an undo: the record says it was),
+    # ``top_aware`` set by a wrapper that honours the move (1; None: a wrapper of older code, which never reads it).
+    'top_ts': 'REAL', 'moved_ts': 'REAL', 'top_aware': 'INTEGER'}
 _JSON = ('command', 'work', 'steps', 'progress', 'flags')
+_HISTORY_COLUMNS = {'moved': 'INTEGER'}     # added to ``history`` after it was first made: 1 for a moved job
 SCHEMA = (f"CREATE TABLE IF NOT EXISTS jobs (id INTEGER PRIMARY KEY AUTOINCREMENT, "
           f"{', '.join(f'{name} {kind}' for name, kind in _COLUMNS.items())});"
           "CREATE TABLE IF NOT EXISTS history (job INTEGER, kind TEXT, work TEXT, estimate REAL, actual REAL, "
@@ -110,8 +124,9 @@ def queue_dir() -> Path:
 
 
 def connect(directory: Optional[Path] = None) -> sqlite3.Connection:
-    """The queue's database (created on first use; a column this code has and the file lacks is added, so checkouts
-    of different commits share one queue), autocommit: callers group their decisions in ``transaction``."""
+    """The queue's database (created on first use; a column this code has and the file lacks is added in place, so
+    checkouts of different commits share one queue and a wrapper of older code keeps running on it: it never reads
+    the new columns), autocommit: callers group their decisions in ``transaction``."""
     directory = queue_dir() if directory is None else Path(directory)
     (directory / LOCKS_DIR).mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(directory / DB_NAME, timeout=60, isolation_level=None)
@@ -119,13 +134,14 @@ def connect(directory: Optional[Path] = None) -> sqlite3.Connection:
     con.execute('PRAGMA journal_mode=WAL')
     con.execute('PRAGMA busy_timeout=60000')
     con.executescript(SCHEMA)
-    have = {row['name'] for row in con.execute('PRAGMA table_info(jobs)')}
-    for name, kind in _COLUMNS.items():
-        if name not in have:
-            try:
-                con.execute(f'ALTER TABLE jobs ADD COLUMN {name} {kind}')
-            except sqlite3.OperationalError:        # another process added it first
-                pass
+    for table, columns in (('jobs', _COLUMNS), ('history', _HISTORY_COLUMNS)):
+        have = {row['name'] for row in con.execute(f'PRAGMA table_info({table})')}
+        for name, kind in columns.items():
+            if name not in have:
+                try:
+                    con.execute(f'ALTER TABLE {table} ADD COLUMN {name} {kind}')
+                except sqlite3.OperationalError:        # another process added it first
+                    pass
     return con
 
 
@@ -217,11 +233,45 @@ def express_sized(job: dict) -> bool:
 
 
 def line(jobs: list[dict], lane: str, now: float) -> list[dict]:
-    """The queued jobs of ``lane`` in the order they start: by score (jobs lane) or join time (tools lane)."""
+    """The queued jobs of ``lane`` in the order they start: the jobs moved to the top first (``move_to_top``), the
+    one moved last first; then the rest as always, by score (jobs lane) or join time (tools lane).  A row without
+    ``top_ts`` (none was moved, or the row is older than the column) orders exactly as before it existed."""
     queued = [job for job in jobs if job.get('status') == 'queued' and job.get('lane') == lane]
+
+    def moved(job: dict) -> tuple:
+        top = job.get('top_ts')
+        return (top is None, -(top or 0.0))
     if lane == TOOLS_LANE:
-        return sorted(queued, key=lambda job: (job['queued_ts'] or 0.0, job['id']))
-    return sorted(queued, key=lambda job: (score(job, now), job['queued_ts'] or 0.0, job['id']))
+        return sorted(queued, key=lambda job: (*moved(job), job['queued_ts'] or 0.0, job['id']))
+    return sorted(queued, key=lambda job: (*moved(job), score(job, now), job['queued_ts'] or 0.0, job['id']))
+
+
+class MoveError(ValueError):
+    """A job that can't be moved: not in the queue, not waiting, or waited on by a wrapper of older code."""
+
+
+def move_to_top(con: sqlite3.Connection, job_id: int, undo: bool = False, now: Optional[float] = None) -> dict:
+    """Moves the waiting job ``job_id`` to the top of its own line (the owner, Nov 23: "a right click in the gui that
+    goosed something to the top of the fast or slow queue"), or back to its own place (``undo``); returns its row
+    as it now stands.  The jobs line or the tools line, whichever it waits in: the line is reordered (``line``),
+    nothing else (nothing running stops, its lane, its estimate and whether it may take the express place stay).
+    Several moved jobs: the one moved last first.  ``MoveError`` for a job that isn't in the queue, isn't waiting
+    (the error names its status), or whose wrapper is of older code (``top_aware`` unset: it would never honour
+    the move, and other old wrappers would not see it).  One transaction (``triforce job top``, the GUI's menu)."""
+    now = time.time() if now is None else now
+    with transaction(con):
+        rows = read_jobs(con, 'id = ?', (job_id,))
+        if not rows:
+            raise MoveError(f"job #{job_id} is not in the queue")
+        job = rows[0]
+        if job.get('status') != 'queued':
+            raise MoveError(f"job #{job_id} is {job.get('status')}, not waiting: only a waiting job can be moved")
+        if not job.get('top_aware'):
+            raise MoveError(f"job #{job_id} was queued by older code: its wrapper does not read the move to the top")
+        fields = {'top_ts': None} if undo else {'top_ts': now, 'moved_ts': now}
+        update(con, job_id, **fields)
+        job.update(fields)
+    return job
 
 
 def assign(ordered: list[dict], free: list[str], lane: str) -> dict:
@@ -572,6 +622,9 @@ def headline(job: dict) -> str:
     return f"Agent: {job.get('agent') or '?'}   Task: {job.get('task') or '?'}   Sub-task: {job.get('subtask') or '-'}"
 
 
+MOVED_MARK = 'moved to the top by the owner'    # a waiting job's mark once it was moved (``move_to_top``)
+
+
 def tags(job: dict, now: float, place: Optional[int] = None) -> str:
     """A job's state line: ``RUNNING express 3m of ~8m``, ``RUNNING regular 1h40m of ~40m OVERRUN``,
     ``RUNNING tools 2m  step 1/5: build``, ``RUNNING tools 6m  steps 2-5/5: test python, test asm, ...`` (steps run
@@ -590,7 +643,8 @@ def tags(job: dict, now: float, place: Optional[int] = None) -> str:
     if job.get('status') == 'queued':
         size = '' if estimate is None else (' express' if express_sized(job) else '') + f" ~{short(estimate)}"
         at = '' if place is None else f" #{place}"
-        return f"queued{at}{size} waited {short(now - (job.get('queued_ts') or now))}"
+        return (f"queued{at}{size} waited {short(now - (job.get('queued_ts') or now))}"
+                + (f"  {MOVED_MARK}" if job.get('top_ts') is not None else ''))
     ran = (None if job.get('admitted_ts') is None or job.get('finished_ts') is None
            else job['finished_ts'] - job['admitted_ts'])
     code = '' if job.get('exit_code') is None else f" exit {job['exit_code']}"
