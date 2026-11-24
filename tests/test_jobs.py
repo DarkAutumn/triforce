@@ -44,6 +44,87 @@ def test_the_tools_lane_is_first_come_first_served():
     assert ids(q.line(jobs_, q.TOOLS_LANE, NOW)) == [2, 1]
 
 
+def test_a_moved_job_goes_to_the_top_of_its_own_line_the_last_moved_first():
+    """The owner's move (``move_to_top``): the moved jobs first, the one moved last first, then the line as always;
+    in the jobs line and in the tools line alike; only the order changes (a long job moved to the top still takes no
+    express place, and an express-sized job behind it still takes the free express place)."""
+    short, middle, long_ = row(1, estimate=60), row(2, estimate=600), row(3, estimate=3600)
+    assert ids(q.line([long_, middle, short], q.JOBS_LANE, NOW)) == [1, 2, 3]
+    moved = {**long_, 'top_ts': NOW - 10}
+    assert ids(q.line([moved, middle, short], q.JOBS_LANE, NOW)) == [3, 1, 2]
+    later = {**middle, 'top_ts': NOW - 5}                               # two moved: the last moved first
+    assert ids(q.line([moved, later, short], q.JOBS_LANE, NOW)) == [2, 3, 1]
+    assert ids(q.line([{**moved, 'top_ts': None}, middle, short], q.JOBS_LANE, NOW)) == [1, 2, 3]   # undone
+    ordered = q.line([moved, middle, short], q.JOBS_LANE, NOW)
+    assert q.assign(ordered, ['express-1'], q.JOBS_LANE) == {1: 'express-1'}     # the long one stays out of express
+    assert q.assign(ordered, ['regular-1', 'express-1'], q.JOBS_LANE) == {3: 'regular-1', 1: 'express-1'}
+    tools = [row(4, lane=q.TOOLS_LANE, queued=NOW - 30), row(5, lane=q.TOOLS_LANE, queued=NOW - 20),
+             row(6, lane=q.TOOLS_LANE, queued=NOW - 10, top_ts=NOW)]
+    assert ids(q.line(tools, q.TOOLS_LANE, NOW)) == [6, 4, 5]
+    assert ids(q.line(tools + [moved], q.JOBS_LANE, NOW)) == [3]       # each line keeps its own jobs
+
+
+def test_rows_of_older_code_order_exactly_as_before_the_move_existed():
+    """A row without ``top_ts`` (written by older code, or never moved) orders as the line did before: the same
+    order as a key without the move's part, in both lines, over many made-up rows."""
+    import random
+    rng = random.Random(7)
+    rows = [row(i, estimate=rng.choice([None, 30, 60, 600, 3600, 7200]), queued=NOW - rng.uniform(0, 9000),
+                lane=rng.choice([q.JOBS_LANE, q.TOOLS_LANE])) for i in range(1, 60)]
+    old_style = [{key: value for key, value in job.items() if key != 'top_ts'} for job in rows]
+    before_jobs = sorted((job for job in old_style if job['lane'] == q.JOBS_LANE),
+                         key=lambda job: (q.score(job, NOW), job['queued_ts'] or 0.0, job['id']))
+    before_tools = sorted((job for job in old_style if job['lane'] == q.TOOLS_LANE),
+                          key=lambda job: (job['queued_ts'] or 0.0, job['id']))
+    assert ids(q.line(old_style, q.JOBS_LANE, NOW)) == ids(before_jobs)
+    assert ids(q.line(old_style, q.TOOLS_LANE, NOW)) == ids(before_tools)
+    assert ids(q.line([{**job, 'top_ts': None} for job in old_style], q.JOBS_LANE, NOW)) == ids(before_jobs)
+
+
+def test_move_to_top_moves_a_waiting_job_only_and_upgrades_an_older_database_in_place(tmp_path):
+    """A database made by older code (no ``top_ts``, ``moved_ts``, ``top_aware``, no ``history.moved``) with a job
+    waiting in it is upgraded in place by the first connection of this code: the waiting row stays as it was and
+    orders as before; it can't be moved (its wrapper is older code); a job joined by this code can, back too; a job
+    that isn't waiting can't, and the error says its status."""
+    import sqlite3
+    old = sqlite3.connect(tmp_path / q.DB_NAME)
+    old_columns = {name: kind for name, kind in q._COLUMNS.items()     # pylint: disable=protected-access
+                   if name not in ('top_ts', 'moved_ts', 'top_aware')}
+    old.executescript(f"CREATE TABLE jobs (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                      f"{', '.join(f'{name} {kind}' for name, kind in old_columns.items())});"
+                      "CREATE TABLE history (job INTEGER, kind TEXT, work TEXT, estimate REAL, actual REAL, "
+                      "status TEXT, finished_ts REAL);")
+    old.execute("INSERT INTO jobs (status, lane, estimate, queued_ts, name) VALUES ('queued', 'jobs', 600, ?, 'old')",
+                (NOW - 60,))
+    old.commit()
+    old.close()
+    con = q.connect(tmp_path)
+    try:
+        assert {'top_ts', 'moved_ts', 'top_aware'} <= {r['name'] for r in con.execute('PRAGMA table_info(jobs)')}
+        assert 'moved' in {r['name'] for r in con.execute('PRAGMA table_info(history)')}
+        (old_row,) = q.read_jobs(con)
+        assert old_row['status'] == 'queued' and old_row['top_ts'] is None and old_row['top_aware'] is None
+        with pytest.raises(q.MoveError, match='queued by older code'):
+            q.move_to_top(con, old_row['id'], now=NOW)
+        new = con.execute("INSERT INTO jobs (status, lane, estimate, queued_ts, name, top_aware) "
+                          "VALUES ('queued', 'jobs', 3600, ?, 'new', 1)", (NOW,)).lastrowid
+        assert ids(q.line(q.read_jobs(con), q.JOBS_LANE, NOW)) == [old_row['id'], new]
+        moved = q.move_to_top(con, new, now=NOW)
+        assert (moved['top_ts'], moved['moved_ts']) == (NOW, NOW)
+        assert ids(q.line(q.read_jobs(con), q.JOBS_LANE, NOW)) == [new, old_row['id']]
+        assert q.MOVED_MARK in q.tags(q.read_jobs(con, 'id = ?', (new,))[0], NOW, 1)
+        back = q.move_to_top(con, new, undo=True, now=NOW + 1)
+        assert back['top_ts'] is None and back['moved_ts'] == NOW     # the record keeps that it was moved
+        assert ids(q.line(q.read_jobs(con), q.JOBS_LANE, NOW)) == [old_row['id'], new]
+        q.update(con, new, status='running', place='regular-1')
+        with pytest.raises(q.MoveError, match=f'job #{new} is running, not waiting'):
+            q.move_to_top(con, new, now=NOW)
+        with pytest.raises(q.MoveError, match='not in the queue'):
+            q.move_to_top(con, 999, now=NOW)
+    finally:
+        con.close()
+
+
 def test_places_regular_express_and_tools():
     long_, short, asked = row(1, estimate=3600), row(2, estimate=60), row(3, estimate=7200, express=1)
     free = ['regular-1', 'regular-2', 'express-1']
@@ -100,6 +181,68 @@ def test_rates_are_refitted_from_the_latest_completed_jobs_and_calibration_compa
     (chain,) = q.calibration(rows[:3] + [history('chain', {}, 10.0, 40.0, at=50)])
     assert chain['kind'] == 'chain' and chain['jobs'] == 4 and chain['worst'] == pytest.approx(4.0)
     assert chain['median'] == pytest.approx(5.0 / 2.6)
+
+
+def chain(shape: str, runs: int, steps: int, seconds=None, parallel: int = 10, name=None) -> dict:
+    """One chain of a job's work (``runner.chain_entry``), with the ``seconds`` it took once it ended."""
+    return {'shape': shape, 'runs': runs, 'parallel': parallel, 'steps': steps,
+            **({'seconds': seconds} if seconds is not None else {}), **({'name': name} if name else {})}
+
+
+def chain_row(at: float, *chains, actual: float = 100.0) -> dict:
+    return history('chain', {'chain_steps': sum(c['runs'] * c['steps'] for c in chains), 'chains': list(chains)},
+                   1.0, actual, at)
+
+
+def test_a_chain_is_estimated_by_its_shapes_last_chains_and_an_unseen_shape_by_the_rate_per_step():
+    """The owner, Nov 23: "Fix the estimate [...] It would have been fine if not for estimating 37 hours"."""
+    start = q.CHAIN_START_SECONDS
+    # Dungeon 3 (18 steps asked): 1000 runs at parallel 10 took 1010 s, 1110 s, 910 s: 10, 11, 9 run-seconds.
+    rows = [chain_row(i, chain('d3first:6-24', 1000, 18, start + 100 * per_run))
+            for i, per_run in enumerate((10.0, 11.0, 9.0))]
+    model = q.chain_model(rows)
+    assert model.shapes == {'d3first:6-24': pytest.approx(10.0)}       # the median of the window
+    unit_rates = q.rates(rows)
+    asked = chain('d3first:6-24', 200, 18)
+    assert q.estimate({'chain_steps': 3600, 'chains': [asked]}, unit_rates, model) == pytest.approx(start + 200)
+    # A shape never seen: its asked steps at the rate per step, as before.
+    full = chain('d3first:0-290', 1000, 290)
+    seconds = q.estimate({'chain_steps': 290_000, 'chains': [full]}, unit_rates, model)
+    assert seconds == pytest.approx(290_000 * unit_rates['chain_steps'])
+    # One outlier (a loaded machine: 50 run-seconds) among the window moves the median one sample, not 5x.
+    slow = rows + [chain_row(3, chain('d3first:6-24', 1000, 18, start + 100 * 50.0))]
+    assert q.chain_model(slow).shapes['d3first:6-24'] == pytest.approx(11.0)
+    # Only the window's latest count: three slow chains in a row are the shape's time now.
+    later = slow + [chain_row(4 + i, chain('d3first:6-24', 1000, 18, start + 100 * 40.0)) for i in range(2)]
+    assert q.chain_model(later).shapes['d3first:6-24'] == pytest.approx(40.0)
+
+
+def test_a_batch_is_the_sum_of_its_chains_and_learns_each_from_its_plan_entry():
+    start = q.CHAIN_START_SECONDS
+    d3, post = chain('d3first:6-24', 1000, 18, name='d3'), chain('d3first:24-31', 1000, 7, name='post-d3')
+    work = {'chain_steps': 25_000, 'eval_episodes': 100, 'chains': [d3, post]}
+    plan = {'runs': [{'name': 'd3', 'status': 'ok', 'wall_seconds': start + 1000.0},
+                     {'name': 'post-d3', 'status': 'ok', 'wall_seconds': start + 200.0},
+                     {'name': 'family', 'status': 'ok', 'wall_seconds': 50.0}]}
+    recorded = q.chain_seconds(work, 9999.0, 'completed', plan)
+    assert [c['seconds'] for c in recorded['chains']] == [start + 1000.0, start + 200.0]
+    model = q.chain_model([history('batch', recorded, 1.0, 1300.0, 1)])
+    assert model.shapes == {'d3first:6-24': pytest.approx(10.0), 'd3first:24-31': pytest.approx(2.0)}
+    unit_rates = {**q.DEFAULT_RATES, 'eval_episodes': 0.5}
+    assert q.estimate(work, unit_rates, model) == pytest.approx(2 * start + 1000 + 200 + 100 * 0.5)
+    # An interrupted batch: its finished entries count, the stopped one doesn't; a lone chain that failed has none.
+    stopped = {'runs': [{'name': 'd3', 'status': 'ok', 'wall_seconds': 500.0},
+                        {'name': 'post-d3', 'status': 'interrupted'}]}
+    assert ['seconds' in c for c in q.chain_seconds(work, 600.0, 'interrupted', stopped)['chains']] == [True, False]
+    lone = {'chain_steps': 18, 'chains': [chain('d3first:6-24', 1, 18)]}
+    assert 'seconds' not in q.chain_seconds(lone, 60.0, 'failed', None)['chains'][0]
+    assert q.chain_seconds(lone, 60.0, 'completed', None)['chains'][0]['seconds'] == 60.0
+    assert q.chain_seconds({'train_steps': 5}, 60.0, 'completed', None) == {'train_steps': 5}
+
+
+def test_the_rates_per_unit_ignore_the_chains_list():
+    rows = [chain_row(i, chain('d3first:6-24', 100, 10, 50.0), actual=5.0) for i in range(3)]
+    assert q.rates(rows)['chain_steps'] == pytest.approx(0.005)
 
 
 def test_a_running_job_past_twice_its_estimate_is_flagged():
@@ -319,13 +462,14 @@ def test_setup_makes_the_worktree_its_links_venv_and_build_as_one_tools_entry(tm
     monkeypatch.setattr(job, 'run_job', run_job)
     assert job.main(['setup', 'r41-x']) == 0
     assert seen['fields']['lane'] == q.TOOLS_LANE and seen['fields']['nice'] >= job.TOOL_NICE
-    assert [step.name for step in seen['steps']] == ['worktree', 'links', 'venv', 'install', 'build']
+    assert [step.name for step in seen['steps']] == ['worktree', 'links', 'venv', 'install', 'build', 'stamp']
     assert seen['steps'][0].command[-3:] == ['-b', 'r41-x', 'main']
     target = tmp_path / 'triforce-r41-x'
     assert all((target / name).resolve() == main / name
                for name in ('roms', 'trajectories', 'triforce/states/harvested'))    # the data no checkout tracks
     assert not (target / 'models').exists()       # a worktree's runs and pointers stay its own
-    assert seen['steps'][-1].env['CARGO_BUILD_JOBS'] == str(job.CARGO_JOBS)
+    (build,) = [step for step in seen['steps'] if step.name == 'build']
+    assert build.env['CARGO_BUILD_JOBS'] == str(job.CARGO_JOBS)
 
 
 def test_the_record_keeps_every_job_and_says_what_the_lanes_really_ran(tmp_path):

@@ -13,6 +13,7 @@ the exit code is the command's (the wrapper's own lines go to stderr, ``triforce
     triforce job history [--since 24h] [--agent A] [--metrics] [--json]
     triforce job run|golden|build|test ... --detach     (start outside this shell; prints a unit name)
     triforce job wait UNIT... [--timeout 30m]           (follow detached jobs; stopping it stops nothing)
+    triforce job top ID [--undo]                        (the owner's: a waiting job to the top of its own line)
 
 ``run`` takes the job's place in line before the command starts and runs it at nice ``RUN_NICE``.  A training or
 evaluation tool of this code (``jobs.announce``) is asked its work first (a dry call: its arguments are checked, an
@@ -26,7 +27,8 @@ served, never behind a training or a chain) at nice ``TOOL_NICE`` with ``CARGO_B
 ``test --build`` is one entry with both steps.  ``setup`` makes a worktree ``../triforce-<branch>`` with ``roms``,
 ``trajectories`` and ``models`` linked from the main checkout, its venv and its build, as one tools-lane entry.
 Priority and time limits are the queue's: ``nice``, ``ionice``, ``timeout`` or ``CARGO_BUILD_JOBS=`` after ``--`` are
-refused.
+refused.  ``top`` moves a waiting job to the top of its own line, or back (``jobqueue.move_to_top``; the training
+GUI's right click does the same): the owner's; agents don't use it on their own work.
 
 This module imports neither ``triforce._native`` nor torch: it works before the first build.
 """
@@ -45,6 +47,7 @@ import time
 from pathlib import Path
 from typing import Callable, Optional, Union
 
+from . import build
 from . import jobqueue as q
 from . import jobs
 from .jobs import JOB_ESTIMATE_ENV, JOB_ID_ENV, JOB_LABEL_ENV
@@ -70,6 +73,8 @@ SUITES = ('python', 'asm', 'check', 'rust')     # ``triforce job test``'s suites
 # (load 3-5): one process 410-433 s; 6 processes 78 s, 8 61 s, 12 71 s.  The tools lane runs two test jobs at
 # once: two suites of 8 leave 4 of the 20 threads to the owner's player and the jobs.
 PYTEST_WORKERS = 8
+# The Rust suite: the release-tests profile is release without link-time optimisation (Cargo.toml)
+CARGO_TEST = ('cargo', 'test', '--profile', 'release-tests', '--workspace', '--features', 'zelda/zcore')
 
 
 class JobError(Exception):
@@ -262,7 +267,7 @@ class Wrapper:
         """Records the job as ``queued`` and holds its job lock (its liveness) from the same transaction on."""
         now = time.time()
         row = {**fields, 'status': 'queued', 'queued_ts': now, 'host': os.uname().nodename, 'pid': os.getpid(),
-               'nice': fields.get('nice')}
+               'nice': fields.get('nice'), 'top_aware': 1}     # this wrapper honours a move to the top (``q.line``)
         columns = [key for key in row if key in q._COLUMNS]     # pylint: disable=protected-access
         values = [json.dumps(row[key]) if key in q._JSON and row[key] is not None else row[key]  # pylint: disable=protected-access
                   for key in columns]
@@ -438,16 +443,29 @@ class Wrapper:
         return code
 
     def finish(self, status: str, code: Optional[int], result: Optional[str] = None):
-        """Marks the job ended and appends it to the history table (the rates and the calibration learn from it).
-        The job's row stays for good: it is the machine's record of what ran (``triforce job history``)."""
+        """Marks the job ended and appends it to the history table (the rates, the chains' model and the calibration
+        learn from it; a chain's seconds from its plan, ``jobqueue.chain_seconds``).  The job's row stays for good:
+        it is the machine's record of what ran (``triforce job history``)."""
         now = time.time()
         admitted = self.row.get('admitted_ts')
+        actual = None if admitted is None else now - admitted
+        work = self.row.get('work') or {}
+        if isinstance(work, dict) and work.get('chains'):
+            found = self.con.execute("SELECT plan FROM jobs WHERE id = ?", (self.id,)).fetchone()
+            try:
+                plan = json.loads(Path(found['plan']).read_text(encoding='utf-8')) if found and found['plan'] else None
+            except (OSError, ValueError):
+                plan = None
+            work = q.chain_seconds(work, actual, status, plan if isinstance(plan, dict) else None)
         with q.transaction(self.con):
             q.update(self.con, self.id, status=status, finished_ts=now, exit_code=code, result=result)
-            self.con.execute("INSERT INTO history (job, kind, work, estimate, actual, status, finished_ts) "
-                             "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                             (self.id, self.row.get('kind'), json.dumps(self.row.get('work') or {}),
-                              self.row.get('estimate'), None if admitted is None else now - admitted, status, now))
+            moved = self.con.execute("SELECT moved_ts FROM jobs WHERE id = ?", (self.id,)).fetchone()
+            self.con.execute("INSERT INTO history (job, kind, work, estimate, actual, status, finished_ts, moved) "
+                             "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                             (self.id, self.row.get('kind'), json.dumps(work), self.row.get('estimate'), actual,
+                              status, now, int(moved is not None and moved['moved_ts'] is not None)))
+            if isinstance(work, dict) and work.get('chains'):
+                q.refresh_estimates(self.con)    # what its chains took moves the live chains' estimates
         for fd in (self.place_fd, self.job_fd):
             if fd is not None:
                 os.close(fd)
@@ -560,9 +578,9 @@ def build_parser() -> argparse.ArgumentParser:
                         help="how long the race may run: its estimate (10m or less: the express place)")
     golden.add_argument('--out', default=None, help="the replays' folder (default runs/golden/<yymmdd-hhmmss>)")
     golden.add_argument('--count', type=int, default=1, help="golden paths raced, each from its own seeds")
-    build = sub.add_parser('build', help="maturin develop --release in this checkout (tools lane)")
-    _common(build, subtask=False, desc=False)
-    build.add_argument('--timeout', type=parse_duration, default=None)
+    builder = sub.add_parser('build', help="maturin develop --release in this checkout (tools lane), then its stamp")
+    _common(builder, subtask=False, desc=False)
+    builder.add_argument('--timeout', type=parse_duration, default=None)
     test = sub.add_parser('test', help="test suites in this checkout, run side by side (tools lane)")
     test.add_argument('suites', nargs='+', choices=(*SUITES, 'all'), metavar='SUITE',
                       help=f"one or more of {', '.join(SUITES)}; all: the four")
@@ -576,6 +594,12 @@ def build_parser() -> argparse.ArgumentParser:
     show = sub.add_parser('list', help="the queue: running, waiting and recently finished jobs")
     show.add_argument('--all', action='store_true', help="every finished job, not only the last hour's")
     show.add_argument('--calibration', action='store_true', help="estimates against actual times, per kind")
+    top = sub.add_parser('top', help="move a waiting job to the top of its own line (the owner's; agents don't use "
+                                     "it on their own work), or back to its own place (--undo)")
+    top.add_argument('job', type=int, help="the job's id (triforce job list)")
+    top.add_argument('--undo', action='store_true', help="back to its own place in the line")
+    doctor = sub.add_parser('doctor', help="the checks every job start makes, for a checkout (exit 1 on a red flag)")
+    doctor.add_argument('path', nargs='?', default='.', help="a folder of the checkout (default this one)")
     past = sub.add_parser('history', help="every job that ended: when it queued, started and ended, where it ran")
     past.add_argument('--since', type=parse_duration, default=None, metavar='DURATION',
                       help="only jobs that ended within this long (24h, 90m); default: all")
@@ -656,18 +680,121 @@ def cmd_wait(args) -> int:
     return worst
 
 
+# What a legacy worktree reads through the links ``setup`` made (``docs/data-layout.md``).
+LEGACY_DATA = ('roms/zelda.nes', 'trajectories', 'triforce/states/harvested')
+FLAG_FILES = 8                      # the edited files a ``main-edited`` flag names before "and N more"
+
+
+def in_store(name: str) -> bool:
+    """Whether the shared store provides what ``LEGACY_DATA``'s ``name`` was linked for (its ROM, the current
+    trajectories and harvested snapshots): a worktree made with the store has no links (``cmd_setup``)."""
+    from . import paths  # pylint: disable=import-outside-toplevel
+    if not paths.store_exists():
+        return False
+    if name == 'roms/zelda.nes':
+        return (paths.shared_root() / paths.STORE_ROM).is_file()
+    return paths.current_name('trajectories' if name == 'trajectories' else 'harvested') is not None
+
+
+def _git_lines(root: Path, *args) -> list[str]:
+    try:
+        out = subprocess.run(['git', '-C', str(root), *args], capture_output=True, text=True, timeout=30, check=True)
+    except (OSError, subprocess.SubprocessError):
+        return []
+    return [line for line in out.stdout.splitlines() if line.strip()]
+
+
+def checkout_flags(root: Path, module: bool = True) -> list[dict]:
+    """The flags a job started in the checkout at ``root`` carries (round 40; ``jobs.flag``'s shape): the main
+    checkout's tracked files differing from HEAD beyond ``uv.lock`` (red ``main-edited``, naming them: agents must
+    never edit main); then, for a checkout whose tools are this code's (an old version's tree runs its own code in its
+    own layout), a worktree behind main (note ``behind-main``), a legacy worktree's data link missing (red
+    ``data-missing``), and with ``module`` a built module that is not the build of its sources (red
+    ``module-stale``, ``triforce.build``)."""
+    flags = []
+    try:
+        main = main_checkout(root)
+    except (OSError, subprocess.SubprocessError):
+        return [{'level': 'note', 'code': 'not-a-checkout',
+                 'text': f"git cannot read {root}: neither it nor the main checkout was looked at"}]
+    edited = [line[3:] for line in _git_lines(main, 'status', '--porcelain', '--untracked-files=no')
+              if line[3:] != 'uv.lock']
+    if edited:
+        more = f" and {len(edited) - FLAG_FILES} more" if len(edited) > FLAG_FILES else ''
+        flags.append({'level': 'red', 'code': 'main-edited',
+                      'text': f"the main checkout's tracked files differ from HEAD beyond uv.lock: "
+                              f"{', '.join(edited[:FLAG_FILES])}{more}"})
+    if not announces(root):
+        return flags
+    if root.resolve() != main.resolve():
+        behind = _git_lines(root, 'rev-list', '--count', 'HEAD..main')
+        if behind and behind[0] != '0':
+            flags.append({'level': 'note', 'code': 'behind-main',
+                          'text': f"{root.name} is {behind[0]} commits behind main"})
+        missing = [name for name in LEGACY_DATA if not (root / name).exists() and not in_store(name)]
+        if missing:
+            flags.append({'level': 'red', 'code': 'data-missing',
+                          'text': f"{root.name} lacks {', '.join(missing)}: the main checkout's data it reads "
+                                  f"through the links triforce job setup makes"})
+    # A tree from before build stamps (no triforce/build.py) cannot have one: its module is not looked at.
+    problem = build.problem(root) if module and (root / 'triforce' / 'build.py').is_file() else None
+    if problem:
+        flags.append({'level': 'red', 'code': 'module-stale', 'text': f"{root.name}: {problem}"})
+    return flags
+
+
 def _fields(args, verb: str, lane: str, kind: str, command: list, cwd: Path, nice: int, subtask: Optional[str],
             description: str, **extra) -> dict:
+    """A job's row as it joins the line, with its checkout's flags (``checkout_flags``: a build or a suite builds or
+    tests the module, so its stamp is not looked at), each also said."""
     facts = q.git_facts(cwd)
+    root = git_root(Path(cwd).resolve())
+    flags = [] if root is None else checkout_flags(root, module=verb not in ('build', 'test', 'setup'))
+    for entry in flags:
+        say(f"{'RED FLAG' if entry['level'] == 'red' else 'note'} {entry['code']}: {entry['text']}")
     return {'agent': args.agent, 'task': args.task, 'subtask': subtask, 'description': description, 'verb': verb,
             'lane': lane, 'kind': kind, 'name': q.job_label(args.agent, args.task, subtask), 'command': command,
-            'cwd': str(cwd), **facts, 'nice': max(nice, os.nice(0)), **extra}
+            'cwd': str(cwd), **facts, 'nice': max(nice, os.nice(0)), 'flags': flags, **extra}
 
 
-def _rates() -> dict:
+def cmd_doctor(args) -> int:
+    """``triforce job doctor [PATH]``: the checks every job start makes (``checkout_flags``, the module's stamp
+    included) for the checkout at PATH (default this one), each one's answer printed, then where each data kind
+    resolves for it (``data_lines``); exit 1 when one is red."""
+    root = git_root(Path(args.path).resolve())
+    if root is None:
+        raise JobError(f"{args.path} is in no git checkout")
+    flags = checkout_flags(root)
+    print(f"{root}: {'clean' if not flags else f'{len(flags)} flag(s)'}")
+    for entry in flags:
+        print(f"  {'RED FLAG' if entry['level'] == 'red' else 'note'} {entry['code']}: {entry['text']}")
+    for line in data_lines(root):
+        print(f"  {line}")
+    return 1 if any(entry['level'] == 'red' for entry in flags) else 0
+
+
+def data_lines(root: Path) -> list[str]:
+    """Where each data kind resolves for the checkout ``root`` (``paths.data_dir``): ``this checkout's folder``,
+    ``store snapshot NAME`` (current), or ``missing`` with both places looked in."""
+    from . import paths  # pylint: disable=import-outside-toplevel
+    lines = []
+    for kind, relative in paths.CHECKOUT_DATA.items():
+        legacy = root / relative
+        folder = paths.data_dir(kind, legacy)
+        if folder == legacy and legacy.exists():
+            lines.append(f"{kind}: this checkout's folder {legacy} (the layout before the store)")
+        elif folder != legacy:
+            lines.append(f"{kind}: store snapshot {folder.name} (current: {folder})")
+        else:
+            lines.append(f"{kind}: missing: {paths.data_missing(kind, legacy)}")
+    return lines
+
+
+def _estimate(work: dict) -> float:
+    """``work``'s estimate from the history as it is now (``jobqueue.estimate_now``)."""
     con = q.connect()
     try:
-        return q.rates(q.read_history(con))
+        return q.estimate_now(con, work)
     finally:
         con.close()
 
@@ -684,7 +811,7 @@ def cmd_run(args, command: list[str]) -> int:
             return answer
         kind, work = answer['kind'], answer['work'] or None
         if work is not None:
-            estimate = round(q.estimate(work, _rates()), 1)
+            estimate = round(_estimate(work), 1)
     if work is None and args.timeout is None:
         raise JobError("the queue can't measure this command (a script, a tool's subcommand without a work amount, "
                        "an old version's tool): give --timeout, its duration (e.g. --timeout 40m)")
@@ -749,37 +876,41 @@ def cmd_golden(args, extra: list[str]) -> int:
                    on_timeout=lambda: f"no golden path in {minutes:g} minutes", after=archive)
 
 
-def build_step(root: Path, extra: list[str]) -> Step:
+def build_steps(root: Path, extra: list[str]) -> list[Step]:
+    """``maturin develop --release`` in ``root``, then the module's stamp (``triforce.build``: the sources it was
+    built from, which the tools check before they start)."""
     maturin = root / '.venv' / 'bin' / 'maturin'
-    return Step('build', [str(maturin), 'develop', '--release', *extra], root,
-                {'CARGO_BUILD_JOBS': str(CARGO_JOBS), 'VIRTUAL_ENV': str(root / '.venv')})
+    return [Step('build', [str(maturin), 'develop', '--release', *extra], root,
+                 {'CARGO_BUILD_JOBS': str(CARGO_JOBS), 'VIRTUAL_ENV': str(root / '.venv')}),
+            Step('stamp', lambda: build.write_stamp(root), root)]
 
 
 def test_steps(root: Path, suites: list[str], extra: list[str]) -> list[Step]:
     """The steps of ``suites`` (``SUITES``, in that order whatever order they were given in): ``python`` (pytest of
     ``tests`` in ``PYTEST_WORKERS`` processes; ``-- -n 0`` runs it in one), ``asm`` (the disassembly's own tests),
-    ``check`` (``asm.py check``: no edit changed the code, every
-    ``asm:`` citation resolves), ``rust`` (the cargo workspace, through ``triforce.testlog``'s reader of cargo's
-    output).  Every pytest run and the Rust suite write a timing log into the logs folder (``triforce.testlog``;
-    ``triforce test-times`` reads them).  They run at the same time (``together``) and none is ``required``: each
-    runs whatever another did.  A worktree without its own ``models`` reads the main checkout's
-    (``$TRIFORCE_MODELS_DIR``; a few tests read the promoted team), never linked in."""
+    ``check`` (``asm.py check``: no edit changed the code, every ``asm:`` citation resolves), ``rust`` (the cargo
+    workspace's test programs side by side, ``triforce.cargo_tests``, which reports ``Rust tests`` done of the
+    listed total).  Every pytest run and the Rust suite write a timing log into the logs folder
+    (``triforce.testlog``; ``triforce test-times`` reads them).  They run at the same time (``together``) and none
+    is ``required``: each runs whatever another did.  The suites read the main checkout's ``models``
+    (``$TRIFORCE_MODELS_DIR``; a few tests read the promoted team), whatever a worktree's own holds (round 40: a
+    partial one gave the tests a partial team); a ``$TRIFORCE_MODELS_DIR`` already set is kept."""
     python = checkout_python(root)
     env = {'CARGO_BUILD_JOBS': str(CARGO_JOBS)}
-    if not (root / 'models').exists() and not os.environ.get('TRIFORCE_MODELS_DIR'):
-        try:
-            models = main_checkout(root) / 'models'
-        except (OSError, subprocess.SubprocessError):
-            models = None
-        if models is not None and models.is_dir():
-            env['TRIFORCE_MODELS_DIR'] = str(models)
-    cargo = ['cargo', 'test', '--release', '--workspace', '--features', 'zelda/zcore', *extra]
+    if not os.environ.get('TRIFORCE_MODELS_DIR'):
+        models = main_checkout(root) / 'models'
+        if not models.is_dir():
+            raise JobError(f"the test suites read the main checkout's team and {models} is not a folder")
+        env['TRIFORCE_MODELS_DIR'] = str(models)
+    # The runner runs every test program whatever another did (cargo alone stops at the first failing one, Nov 23:
+    # one failing program hid the state of thirty others for a 25-minute run).
+    cargo = [*CARGO_TEST, *extra]
     commands = {
         'python': ('test python', [python, '-m', 'pytest', '-q', '-n', str(PYTEST_WORKERS), '--dist', 'worksteal',
                                    'tests', *extra]),
         'asm': ('test asm', [python, '-m', 'pytest', '-q', 'zelda-asm/tests', *extra]),
         'check': ('asm check', [python, 'zelda-asm/tools/asm.py', 'check', *extra]),
-        'rust': ('test rust', [python, '-m', 'triforce.testlog', 'cargo', '--', *cargo]),
+        'rust': ('test rust', [python, '-m', 'triforce.cargo_tests', '--', *cargo]),
     }
     return [Step(*commands[name], root, env, required=False, together=True) for name in SUITES if name in suites]
 
@@ -794,10 +925,10 @@ def _tools_root() -> Path:
 def cmd_build(args, extra: list[str]) -> int:
     check_command(extra, options=True)
     root = _tools_root()
-    step = build_step(root, extra)
-    fields = _fields(args, 'build', q.TOOLS_LANE, 'build', step.command, root, TOOL_NICE, None,
+    steps = build_steps(root, extra)
+    fields = _fields(args, 'build', q.TOOLS_LANE, 'build', steps[0].command, root, TOOL_NICE, None,
                      f"Build of {root.name}.", timeout=args.timeout)
-    return run_job(fields, [step], args.timeout)
+    return run_job(fields, steps, args.timeout)
 
 
 def cmd_test(args, extra: list[str]) -> int:
@@ -806,10 +937,11 @@ def cmd_test(args, extra: list[str]) -> int:
     if extra and len(suites) > 1:
         raise JobError(f"options after -- go to one suite: name one (these are {len(suites)}: {' '.join(suites)})")
     root = _tools_root()
-    steps = ([build_step(root, [])] if args.build else []) + test_steps(root, suites, extra)
+    steps = (build_steps(root, []) if args.build else []) + test_steps(root, suites, extra)
     named = 'all' if suites == list(SUITES) else '+'.join(suites)
     subtask = f"{named}{'+build' if args.build else ''}"
-    fields = _fields(args, 'test', q.TOOLS_LANE, 'test', [part for step in steps for part in (step.command + [';'])][:-1],
+    fields = _fields(args, 'test', q.TOOLS_LANE, 'test', [part for step in steps if not callable(step.command)
+                                                         for part in (step.command + [';'])][:-1],
                      root, TOOL_NICE, subtask, f"{'Build, then the ' if args.build else 'The '}"
                      f"{', '.join(suites)} tests of {root.name}.", timeout=args.timeout)
     return run_job(fields, steps, args.timeout)
@@ -830,9 +962,14 @@ def cmd_setup(args) -> int:
     args.task = 'setup'
 
     def link() -> int:
-        # ``models`` is never linked: a worktree's own runs and pointers stay its own (it reads the main
-        # checkout's team with ``--models-dir``, and its tests with ``$TRIFORCE_MODELS_DIR``, ``test_steps``).
-        # The harvested start states are data no checkout tracks and every family's recipe draws from.
+        # With the shared store (``triforce.paths.store_exists``) a worktree gets no links and no models folder: its
+        # tools read the ROM, the data snapshots and the teams from the store (``docs/data-layout.md``).  Until the
+        # lead makes it (the staged cutover), a worktree links what it always did: ``roms``, ``trajectories`` and
+        # the harvested start states (never ``models``: it reads the main checkout's team with ``--models-dir``,
+        # its tests with ``$TRIFORCE_MODELS_DIR``, ``test_steps``).
+        from .paths import store_exists  # pylint: disable=import-outside-toplevel
+        if store_exists():
+            return 0
         for name in ('roms', 'trajectories', 'triforce/states/harvested'):
             if not (target / name).exists() and (main / name).exists():
                 (target / name).symlink_to(main / name)
@@ -844,7 +981,7 @@ def cmd_setup(args) -> int:
              Step('venv', ['uv', 'venv', '--python', '3.12', str(target / '.venv')], main),
              Step('install', ['uv', 'pip', 'install', '--python', venv_python, '-e', '.[dev]', 'maturin'], target,
                   {'CARGO_BUILD_JOBS': str(CARGO_JOBS)}),
-             build_step(target, [])]
+             *build_steps(target, [])]
     fields = _fields(args, 'setup', q.TOOLS_LANE, 'setup', ['triforce', 'job', 'setup', args.branch, '--from',
                                                            args.start], main, TOOL_NICE, args.branch,
                      f"Worktree {target.name} from {args.start}: links, venv and build.")
@@ -927,6 +1064,31 @@ def cmd_history(args) -> int:
         print(f"{row['id']:5d} {(q.iso(row['queued_ts']) or '?')[:19]:19s} {q.short(row['waited']):>7s} "
               f"{q.short(row['ran']):>7s} {q.short(row['estimate']):>7s} {row['place'] or '-':10s} "
               f"{row['status']:11s} {row['name']}  {row['what']}")
+        for line in q.flag_lines(row):
+            print(f"{'':5s} {line}")
+        if row.get('moved_ts') is not None:
+            print(f"{'':5s} {q.MOVED_MARK} at {(q.iso(row['moved_ts']) or '?')[:19]}")
+    return 0
+
+
+def cmd_top(args) -> int:
+    """``triforce job top ID [--undo]``: the waiting job to the top of its own line, or back to its place
+    (``jobqueue.move_to_top``); prints that line as it now stands.  A job that isn't waiting is an error naming its
+    status."""
+    con = q.connect()
+    try:
+        try:
+            job = q.move_to_top(con, args.job, undo=args.undo)
+        except q.MoveError as error:
+            raise JobError(str(error)) from error
+        now = time.time()
+        jobs = q.read_jobs(con, "status IN ('queued', 'running')")
+    finally:
+        con.close()
+    what = 'back to its own place in' if args.undo else 'moved to the top of'
+    print(f"#{job['id']} {job.get('name') or '?'} {what} the {job['lane']} line; the line now:")
+    for place, waiting in enumerate(q.line(jobs, job['lane'], now), 1):
+        print(f"  {place:2d}. #{waiting['id']} {waiting.get('name') or '?'}  {q.tags(waiting, now, place)}")
     return 0
 
 
@@ -939,13 +1101,13 @@ def main(argv=None) -> int:
             return detach(args, head, extra)
         if args.verb == 'run':
             return cmd_run(args, extra)
-        if extra and args.verb in ('setup', 'list', 'progress', 'history', 'wait'):
+        if extra and args.verb in ('setup', 'list', 'progress', 'history', 'wait', 'doctor', 'top'):
             raise JobError(f"{args.verb} takes nothing after --")
         verbs = {'golden': cmd_golden, 'build': cmd_build, 'test': cmd_test}
         if args.verb in verbs:
             return verbs[args.verb](args, extra)
         return {'setup': cmd_setup, 'list': cmd_list, 'progress': cmd_progress, 'history': cmd_history,
-                'wait': cmd_wait}[args.verb](args)
+                'wait': cmd_wait, 'doctor': cmd_doctor, 'top': cmd_top}[args.verb](args)
     except JobError as error:
         print(f"triforce job: error: {error}", file=sys.stderr)
         return 2

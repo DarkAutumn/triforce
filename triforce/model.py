@@ -58,11 +58,13 @@ ENTITY_TYPES_KEY = 'entity_types'
 ENTITY_FEATURES_KEY = 'entity_features'
 GRID_KEY = 'grid'
 MASK_KEY = 'action_mask'
-# Schema 7's per-entity token blocks (round36.md "Observation v7 and the hit network"): read by the token networks
-# (``nets/hitnet.py``), never by ``ZeldaPolicy`` (nor the Rust actor), whose layout leaves them out.
+# Schema 7's per-entity token blocks (round36.md "Observation v7 and the hit network") and schema 8's
+# (round40.md "Observation v7's danger block"): read by the token networks (``nets/hitnet.py``), never by
+# ``ZeldaPolicy`` (nor the Rust actor), whose layout leaves them out.
 ENTITY_REL_KEY = 'entity_rel'
 ENTITY_CONTACT_KEY = 'entity_contact'
-TOKEN_KEYS = (ENTITY_REL_KEY, ENTITY_CONTACT_KEY)
+ENTITY_THREAT_KEY = 'entity_threat'
+TOKEN_KEYS = (ENTITY_REL_KEY, ENTITY_CONTACT_KEY, ENTITY_THREAT_KEY)
 _SPECIAL_KEYS = (ROOM_KEY, ENTITY_TYPES_KEY, ENTITY_FEATURES_KEY, GRID_KEY, MASK_KEY) + TOKEN_KEYS
 
 

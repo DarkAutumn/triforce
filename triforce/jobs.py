@@ -29,7 +29,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
-from . import jobqueue
+from . import build, jobqueue
 
 JOB_ID_ENV = 'TRIFORCE_JOB_ID'              # the job this process belongs to (set by ``triforce job``)
 JOB_LABEL_ENV = 'TRIFORCE_JOB_LABEL'        # its name, ``<agent>-<task>-<subtask>``: the log folders'
@@ -38,12 +38,14 @@ ENFORCE = True                              # tools refuse to run outside ``trif
 UNITS = jobqueue.UNITS
 
 
-def work(**amounts) -> dict:
-    """A job's work, ``{unit: amount}`` (``UNITS``), without the units it has none of."""
+def work(chains: Optional[list] = None, **amounts) -> dict:
+    """A job's work, ``{unit: amount}`` (``UNITS``), without the units it has none of; ``chains``: the chains it
+    plays (``runner.chain_entry`` each: shape, runs, parallel, steps), which the queue estimates by their shape
+    (``jobqueue.chain_model``) where it has seen it before."""
     unknown = set(amounts) - set(UNITS)
     if unknown:
         raise ValueError(f"unknown work units {sorted(unknown)}; known: {UNITS}")
-    return {unit: amount for unit, amount in amounts.items() if amount}
+    return {**{unit: amount for unit, amount in amounts.items() if amount}, **({'chains': chains} if chains else {})}
 
 
 def job_id() -> Optional[int]:
@@ -77,9 +79,15 @@ def queue_command(argv: Optional[list] = None) -> str:
 
 def announce(kind: str, amounts: Optional[dict] = None, name: Optional[str] = None):
     """The start of a queued entry point, once its arguments are checked and before it loads, builds or creates
-    anything: in the wrapper's dry call (``$TRIFORCE_JOB_ESTIMATE``) writes ``{kind, work, name}`` there and exits 0;
-    inside a job (``$TRIFORCE_JOB_ID``) or at a terminal returns; otherwise (``ENFORCE``) refuses with the
-    ``triforce job run`` form of the command (exit 2)."""
+    anything: refuses (exit 2) a module that is not the build of this checkout's sources (``build.problem``, round 40);
+    in the wrapper's dry call (``$TRIFORCE_JOB_ESTIMATE``) writes ``{kind, work, name}`` there and exits 0; inside a
+    job (``$TRIFORCE_JOB_ID``) or at a terminal returns; otherwise (``ENFORCE``) refuses with the ``triforce job run``
+    form of the command (exit 2)."""
+    stale = build.problem()
+    if stale:
+        print(f"triforce: {Path(sys.argv[0]).name}: the built module is not this checkout's build: {stale}; rebuild "
+              f"with `triforce job build --agent A --task T`", file=sys.stderr, flush=True)
+        raise SystemExit(2)
     path = os.environ.get(JOB_ESTIMATE_ENV)
     if path:
         Path(path).write_text(json.dumps({'kind': kind, 'work': dict(amounts or {}), 'name': name}),
@@ -115,6 +123,20 @@ def _execute(sql: str, args: tuple):
             con.close()
     except (OSError, sqlite3.Error):
         pass
+
+
+def flag(code: str, text: str, level: str = 'red'):
+    """Raises a flag on the job this process runs in (round 40: ``{'level': 'red' | 'note', 'code': '<kebab-case>',
+    'text': '<one sentence>'}``, appended to its row's ``flags``: ``triforce job list``, ``history`` and the training
+    GUI show it) and prints it; outside a job it is only printed.  A red flag: the run may not be what it claims; a
+    note: worth a look."""
+    if level not in jobqueue.FLAG_LEVELS:
+        raise ValueError(f"flag level {level!r}: one of {jobqueue.FLAG_LEVELS}")
+    print(f"triforce: {'RED FLAG' if level == 'red' else 'note'} {code}: {text}", file=sys.stderr, flush=True)
+    job = job_id()
+    if job is not None:
+        _execute("UPDATE jobs SET flags = json_insert(coalesce(flags, '[]'), '$[#]', json(?)) WHERE id = ?",
+                 (json.dumps({'level': level, 'code': code, 'text': text}), job))
 
 
 def record_plan(log_dir, plan):

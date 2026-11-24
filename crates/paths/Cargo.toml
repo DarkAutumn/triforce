@@ -1,0 +1,11 @@
+[package]
+name = "paths"
+description = "Where the shared things are (the store's root, the ROM): the Rust twin of triforce/paths.py"
+edition.workspace = true
+rust-version.workspace = true
+version.workspace = true
+license.workspace = true
+publish = false
+
+[dev-dependencies]
+tempfile = "3.27.0"

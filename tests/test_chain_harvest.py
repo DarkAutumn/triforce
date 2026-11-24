@@ -63,19 +63,23 @@ def test_eval_chain_harvests_handoffs_named_by_seed_and_entry(states_dir, models
     assert all((serial / 'ow-moblin' / f).read_bytes() == (directory / 'ow-moblin' / f).read_bytes() for f in files)
 
 
-def test_eval_chain_command_harvests_into_the_default_harvested_dir(states_dir, models_dir, tmp_path):
-    """``eval-chain --harvest`` without DIR writes ``<states dir>/harvested/<specialist>/``, where each
-    specialist's ``harvested_dir`` reads by default."""
+def test_eval_chain_command_harvests_into_the_dir_it_names(states_dir, models_dir, tmp_path):
+    """``eval-chain --harvest DIR`` writes ``DIR/<specialist>/``; with DIR a states dir's ``harvested`` it is where each
+    specialist's ``harvested_dir`` reads by default.  A bare ``--harvest`` is refused with a models folder (round 40:
+    it wrote into the states every training draws; a store team's chain writes it into the job's folder)."""
     states = tmp_path / 'states'
     states.mkdir()
     shutil.copy(states_dir / 'start.state', states / 'start.state')
     walker = registry.save_checkpoint('ow-zora', 'walk-east', scripted('MOVE E 16'), root=tmp_path / 'models')
     output = tmp_path / 'chain.jsonl'
-    subprocess.run([sys.executable, '-m', 'triforce.cli', '--models-dir', str(models_dir), 'eval-chain',
-                    '--route', 'd2first', '--runs', '2', '--parallel', '2', '--from', str(require_state('0_5aw_0')),
-                    '--no-log',
-                    '--checkpoint', f'ow-zora={walker}', '--harvest', '--output', str(output)],
-                   check=True, capture_output=True, text=True, env={**os.environ, 'TRIFORCE_STATES_DIR': str(states)})
+    command = [sys.executable, '-m', 'triforce.cli', '--models-dir', str(models_dir), 'eval-chain',
+               '--route', 'd2first', '--runs', '2', '--parallel', '2', '--from', str(require_state('0_5aw_0')),
+               '--no-log', '--checkpoint', f'ow-zora={walker}', '--output', str(output)]
+    env = {**os.environ, 'TRIFORCE_STATES_DIR': str(states)}
+    bare = subprocess.run([*command, '--harvest'], check=False, capture_output=True, text=True, env=env)
+    assert bare.returncode == 2 and '--harvest needs a folder' in bare.stderr, bare.stderr
+    subprocess.run([*command, '--harvest', str(states / 'harvested')], check=True, capture_output=True, text=True,
+                   env=env)
     files = sorted(p.name for p in (states / 'harvested' / 'ow-moblin').iterdir())
     assert files and all(NAME.match(f) for f in files), files
     # ow-moblin's own config (no harvested_states) reads that dir: at harvested_fraction 1.0 every reset is one.

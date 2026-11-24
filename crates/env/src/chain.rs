@@ -1378,9 +1378,10 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         // The facings the route plays the recorder with (round 26: the whirlwind's count, the pond, a Digdogger fought).
         let facings = self.objectives.as_ref().map(|gc| gc.recorder_facings(self.session.state()));
         self.session.set_recorder_facings(facings);
-        // Round 36: the dock warp of the route's step, played by the engine (`zelda::Session::set_dock_warp`).
-        let dock = self.objectives.as_ref().and_then(|gc| gc.dock_warp(self.session.state()));
-        self.session.set_dock_warp(dock);
+        // Round 36: the dock warp of the route's step, played by the engine; round 40: the whirlwind macros and the
+        // unaided docks of the route's `macros:` (`zelda::Session::set_warp`).
+        let warp = self.objectives.as_ref().and_then(|gc| gc.warp(self.session.state()));
+        self.session.set_warp(warp);
         // Round 27: ARROW's facings by the route (N under a Gohma) and the doorways MOVE keeps out of.
         let arrows = self.objectives.as_ref().and_then(|gc| gc.arrow_facings(self.session.state()));
         self.session.set_arrow_facings(arrows);
@@ -1621,7 +1622,8 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             }
             if switch {
                 self.builder = ObservationBuilder::new(config.obs.objective, config.obs.target)
-                    .with_hidden_positions(config.obs.hidden_positions);
+                    .with_hidden_positions(config.obs.hidden_positions)
+                    .with_threat(config.obs.threat);
                 self.track = match self.rewards {
                     true => Some(RewardTrack::new(config.clone(), &state, &objective).map_err(|e| e.0)?),
                     false => None,

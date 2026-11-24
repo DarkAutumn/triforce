@@ -54,9 +54,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
 
-from .eval_batch import (ROOT, BatchError, Entry, Options, arrival, arrival_hearts, bare_state, batch_work,
+from . import paths, store
+from .eval_batch import (BatchError, Entry, Options, arrival, arrival_hearts, bare_state, batch_work,
                          chain_entry, parse_target, read_runs, route_segments, run_batch, segment_starts)
 from .jobs import announce
+from .paths import scratch
 
 LAST = 'last'
 PROMOTED = 'promoted'
@@ -204,6 +206,8 @@ class Plan:
     # The policy the candidates replace (round 32): ``family@route`` when the start is a step before the route's
     # ``own_models_until`` (a selection of the route's own run), else the family (``_native.step_policy``).
     key: Optional[str] = None
+    # ``--headless``: the candidates replace a network with a hit head and have none (eval-chain --headless).
+    headless: bool = False
 
     @property
     def policy(self) -> str:
@@ -223,7 +227,8 @@ def chain_output(plan: Plan, phase: str, label: str) -> Path:
 def candidate_args(plan: Plan, candidate: Candidate, phase: str) -> list[str]:
     """``eval-chain`` arguments of one candidate's chain in ``phase``."""
     runs, first_seed = plan.seeds(phase)
-    override = [] if candidate.path is None else ['--checkpoint', f'{plan.policy}={candidate.path}']
+    override = [] if candidate.path is None else ['--checkpoint', f'{plan.policy}={candidate.path}',
+                                                  *(['--headless', plan.policy] if plan.headless else [])]
     return [*plan.chain_args, '--runs', str(runs), '--first-seed', str(first_seed), *override]
 
 
@@ -408,6 +413,17 @@ def apply_choice(run_dir: Path, chosen: Path) -> dict:
             'previous_kept': kept.name, 'stale_evaluations': moved, 'act': mode, 'version': version}
 
 
+def derive_choice(run: 'store.Run', chosen: Path) -> dict:
+    """``--apply`` for a store run, which is sealed: the checkpoint in ``chosen`` becomes a new sealed run with ``run``
+    as its parent (its act mode the run's); returns what was made."""
+    # pylint: disable=import-outside-toplevel
+    from . import registry
+    row = store.get_run(run)
+    made = store.derive_run(run, chosen / registry.CHECKPOINT_NAME, 'selection', act=row['act'])
+    return {'from_sha1': row['sha1'], 'to_sha1': made['sha1'], 'source': chosen.name,
+            'run': f"{made['family']}/{made['name']}", 'parent': run.identity, 'act': made['act']}
+
+
 # ------------------------------------------------------------------------------------------------------- printing
 
 def _pct(value, se=None) -> str:
@@ -475,8 +491,14 @@ def build_parser() -> argparse.ArgumentParser:
                         help="default --first-seed + --runs (the seeds right after the screen's)")
     parser.add_argument('--only', default=None, help="comma-separated candidate labels (it<N>, last, promoted)")
     parser.add_argument('--no-promoted', action='store_true', help="leave the promoted run out")
-    parser.add_argument('--apply', action='store_true', help="make the chosen checkpoint the run's ckpt.pt")
-    parser.add_argument('--output', type=Path, default=None, help=f"default <run>/{SELECTION_NAME}")
+    parser.add_argument('--headless', action='store_true',
+                        help="the candidates have no hit head and replace a network that has one (eval-chain "
+                             "--headless; without it such a chain is refused)")
+    parser.add_argument('--apply', action='store_true',
+                        help="make the chosen checkpoint the run's ckpt.pt (a store run: a new sealed run with the run "
+                             "as its parent)")
+    parser.add_argument('--output', type=Path, default=None,
+                        help=f"default <run>/{SELECTION_NAME} (a store run: the job's folder of the store)")
     parser.add_argument('--chains-dir', type=Path, default=None,
                         help="default <repo>/target/select/<family>-<run>-<segment>-clips<on|off>")
     parser.add_argument('--name', default=None, help="the batch's name (default select-<family>-<run>-<segment>)")
@@ -485,6 +507,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--parallel', type=int, default=os.cpu_count() or 1, help="envs of each chain")
     parser.add_argument('--logs-dir', default=None)
     parser.add_argument('--models-dir', default=None)
+    parser.add_argument('--team', default=None,
+                        help="the store's team whose promoted run is the baseline (NAME, current, NAME+SLOT=RUN...)")
     return parser
 
 
@@ -494,7 +518,13 @@ def build_plan(args) -> tuple[Plan, list[Candidate]]:
     from . import registry
     from ._native import route_state, route_steps, step_policy
     from .runner import _start_step
-    run_dir = Path(args.run) if os.sep in args.run else registry.run_dir(args.family, args.run, args.models_dir)
+    name = args.run
+    if name.startswith(f'{args.family}/') and not Path(name).exists():
+        name = name[len(args.family) + 1:]         # a store run named as FAMILY/RUN (as train --load names it)
+    run_dir = Path(name) if os.sep in name else registry.run_dir(args.family, name, args.models_dir)
+    if not run_dir.exists() and os.sep not in name and paths.store_exists() and \
+            store.run_row(store.Run(args.family, name)) is not None:
+        run_dir = store.Run(args.family, name).path        # a store run of the family not in the team
     table = route_segments(args.route)
     if args.segment is not None:
         segments = dict(item.split(':', 1) for item in table.segments.split())
@@ -528,16 +558,17 @@ def build_plan(args) -> tuple[Plan, list[Candidate]]:
     tag = '-'.join([f"{args.family}-{run_dir.name}-{where}", *([f"to-{args.stop_at}"] if args.stop_at else []),
                     *([args.route] if args.route else []),
                     *([f"act-{args.act}"] if args.act != registry.MODEL_ACT else []), f"clips{args.clips}"])
-    chains_dir = args.chains_dir or ROOT / 'target' / 'select' / ''.join(
-        c if c.isalnum() or c in '-_.' else '-' for c in tag)
+    chains_dir = args.chains_dir or scratch('select', ''.join(
+        c if c.isalnum() or c in '-_.' else '-' for c in tag))
+    team = registry.team_in_use(args.models_dir)
     options = Options(args.name or f'select-{args.family}-{run_dir.name}-{where}', args.parallel, 1, args.models_dir,
-                      args.redo)
+                      args.redo, team and team['name'])
     # The part the candidates play (round 32): a start before the route's own_models_until selects its own run.
     route = args.route or registry.MAIN_ROUTE
     key = step_policy(route, _start_step(route_steps(route), start), args.family)
     plan = Plan(args.family, run_dir, start, args.clips == 'on', args.route, args.stop_at, chain_args, target,
                 args.runs, args.first_seed, args.confirm, confirm_first, args.confirm_top, Path(chains_dir).resolve(),
-                options, key=key)
+                options, key=key, headless=args.headless)
     only = None if args.only is None else [label for label in args.only.split(',') if label]
     pool = candidates(args.family, run_dir, args.models_dir, only, promoted=not args.no_promoted, route=args.route,
                       key=key)
@@ -552,6 +583,8 @@ def main(argv=None) -> int:
     from .events import write_json_atomic
     argv = list(sys.argv[1:] if argv is None else argv)
     args = build_parser().parse_args(argv)
+    from . import registry
+    registry.use_team(args.team, args.models_dir)
     try:
         plan, pool = build_plan(args)
     except BatchError as error:
@@ -573,14 +606,24 @@ def main(argv=None) -> int:
     except LookupError as error:
         print(f"triforce select-checkpoint: error: {error}", file=sys.stderr)
         return 1
-    output = args.output or plan.run_dir / SELECTION_NAME
+    stored = store.run_of_path(plan.run_dir) if paths.store_exists() else None
+    if stored is not None and args.output is None:      # a sealed run: the selection is the job's
+        output = store.output_dir(f'selection/{stored.identity}') / SELECTION_NAME
+    else:
+        output = args.output or plan.run_dir / SELECTION_NAME
     if args.apply and report['chosen'] != LAST:
         chosen = next(c for c in pool if c.label == report['chosen'])
-        report['applied'] = apply_choice(plan.run_dir, chosen.path)
+        report['applied'] = (derive_choice(stored, chosen.path) if stored is not None else
+                             apply_choice(plan.run_dir, chosen.path))
     write_json_atomic(output, report)
+    if stored is not None:
+        store.file_output(output, 'selection', run=stored.identity, name=f'{stored.identity}/{SELECTION_NAME}')
     for line in table(report):
         print(line)
-    if report['applied']:
+    if report['applied'] and stored is not None:
+        print(f"applied: {report['chosen']} of {stored.identity} is the new sealed store run "
+              f"{report['applied']['run']} (parent {stored.identity}); evaluate it")
+    elif report['applied']:
         print(f"applied: {plan.run_dir.name}/ckpt.pt is now {report['chosen']} (the previous one is "
               f"checkpoints/{report['applied']['previous_kept']}); evaluate the run again")
     print(f"selection in {output}")

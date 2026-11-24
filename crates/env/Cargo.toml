@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 indexmap = { version = "2.14.2", features = ["serde"] }
 parking_lot = "0.12.5"
+paths = { path = "../paths" }
 rand = "0.10.3"
 rand_chacha = "0.10.0"
 serde = { version = "1.0.229", features = ["derive"] }
@@ -16,6 +17,7 @@ serde_yaml_ng = "0.10"
 zelda = { path = "../zelda" }
 
 [dev-dependencies]
+replay = { path = "../replay", features = ["zcore"] }
 tempfile = "3.27.0"
 test-rom = { path = "../test-rom" }
 zcore = { path = "../zcore" }

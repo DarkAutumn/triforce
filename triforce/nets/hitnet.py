@@ -3,10 +3,11 @@ docs/experiments/round36.md "Observation v7 and the hit network"; experiment 2's
 
 The body keeps today's blocks but the entity encoder: the room embedding, the tile grid's convs, the float vectors
 (``history``, ``link``, ``objective``, ``room_state``, ``target``). The entities become tokens (any of the type
-embedding, ``entity_features``, schema 7's ``entity_rel`` and ``entity_contact``: ``tokens``), Link's ``link`` block
+embedding, ``entity_features``, schema 7's ``entity_rel`` and ``entity_contact``, schema 8's ``entity_threat``:
+``tokens``; ``threat`` needs a task with ``obs.threat`` on, the block reads zeros otherwise), Link's ``link`` block
 a token of its own, and ``layers`` transformer layers of width ``d_model`` let Link's token attend to them (empty
 slots masked); Link's final token, not a mean over the entities, joins the trunk. Policy and value towers and the
-kind-conditioned heads are today's.
+kind-conditioned heads are today's. ``room: False`` leaves the room embedding out.
 
 The hit head (``hit``): its own tower over the trunk, "taking this action now gets Link hit", returned as
 ``aux['hit']`` ``[B, 352]`` (one logit a joint action, ``kind * 32 + direction * 4 + duration``) for the lab's
@@ -25,15 +26,16 @@ import torch
 from torch import nn
 
 from ..actions import NUM_DIRECTIONS, NUM_DURATIONS, NUM_KINDS
-from ..model import (ENTITY_CONTACT_KEY, ENTITY_FEATURES_KEY, ENTITY_REL_KEY, ENTITY_TYPES_KEY, GRID_KEY, ROOM_KEY,
-                     _SPECIAL_KEYS, GridEncoder, ModelConfig, layer_init)
+from ..model import (ENTITY_CONTACT_KEY, ENTITY_FEATURES_KEY, ENTITY_REL_KEY, ENTITY_THREAT_KEY, ENTITY_TYPES_KEY,
+                     GRID_KEY, ROOM_KEY, _SPECIAL_KEYS, GridEncoder, ModelConfig, layer_init)
 from . import register
 from .base import Heads, LabNet
 from .wide import tower
 
 JOINT = NUM_KINDS * NUM_DIRECTIONS * NUM_DURATIONS
 LINK_KEY = 'link'
-TOKEN_GROUPS = {'features': ENTITY_FEATURES_KEY, 'rel': ENTITY_REL_KEY, 'contact': ENTITY_CONTACT_KEY}
+TOKEN_GROUPS = {'features': ENTITY_FEATURES_KEY, 'rel': ENTITY_REL_KEY, 'contact': ENTITY_CONTACT_KEY,
+                'threat': ENTITY_THREAT_KEY}
 HIT_SHAPES = {'joint': JOINT, 'kind_direction': NUM_KINDS * NUM_DIRECTIONS, 'none': 0}
 
 

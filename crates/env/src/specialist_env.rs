@@ -472,7 +472,8 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         );
         Ok(SpecialistEnv {
             builder: ObservationBuilder::new(config.obs.objective, config.obs.target)
-                .with_hidden_positions(config.obs.hidden_positions),
+                .with_hidden_positions(config.obs.hidden_positions)
+                .with_threat(config.obs.threat),
             specialist: Arc::from(config.name.as_str()),
             config,
             data,
@@ -668,7 +669,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         let name = match name {
             Some(n) => n,
             None => match &mut self.pool {
-                Some(pool) => pool.next(&mut self.rng),
+                Some(pool) => pool.next(&mut self.rng)?,
                 None => {
                     return Err(EnvError::StartState(
                         "reset() needs a start state: this env has no start-state pool".into(),
@@ -876,8 +877,8 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         self.session.set_bomb_targets(targets.as_deref());
         let facings = self.objectives.as_ref().map(|gc| gc.recorder_facings(self.session.state()));
         self.session.set_recorder_facings(facings);
-        let dock = self.objectives.as_ref().and_then(|gc| gc.dock_warp(self.session.state()));
-        self.session.set_dock_warp(dock);
+        let warp = self.objectives.as_ref().and_then(|gc| gc.warp(self.session.state()));
+        self.session.set_warp(warp);
         // Round 27: ARROW's facings by the route (N under a Gohma) and the doorways MOVE keeps out of.
         let arrows = self.objectives.as_ref().and_then(|gc| gc.arrow_facings(self.session.state()));
         self.session.set_arrow_facings(arrows);

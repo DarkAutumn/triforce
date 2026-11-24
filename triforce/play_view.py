@@ -8,11 +8,13 @@ result is written across the picture.
 
 One cell is heard.  In a grid of several it has a yellow frame while its sound is on; a single cell needs none.
 ``Window.hear(cell)`` (a click on the cell) moves the sound, ``Window.toggle_sound()`` (key s) turns it off and
-on.  Sound is made at the pace the cell's frames are played, so it is only on (and the frame only up) while the
-cells play at the console's own frame rate.
+on, and keys m, e and h the music, the sound effects and the low-hearts beep (``play_grid.Mix``).  Sound is made at
+the pace the cell's frames are played, so it is only on (and the frame only up) while the cells play at the
+console's own frame rate.
 """
 
 import argparse
+import dataclasses
 import json
 import re
 import time
@@ -23,7 +25,7 @@ from PySide6.QtGui import QAction, QActionGroup, QColor, QFont, QFontDatabase, Q
 from PySide6.QtWidgets import QApplication, QGridLayout, QLayout, QMainWindow, QWidget
 
 from . import replay
-from .play_grid import FILES, FRAME_SHAPE, GOLDEN, LIVE, NES_FPS, QUEUES
+from .play_grid import FILES, FRAME_SHAPE, GOLDEN, LIVE, NES_FPS, QUEUES, Mix
 
 FPS_STEP = 10               # +/- change the frame-rate cap by this much
 MIN_FPS = 10
@@ -53,6 +55,9 @@ SOURCE_KEYS = {Qt.Key.Key_B: 'best', Qt.Key.Key_W: 'success', Qt.Key.Key_K: 'stu
 SOURCE_MENU = (('Best', 'B', 'best'), ('Wins', 'W', 'success'), ('Stuck', 'K', 'stuck'), ('Died', 'D', 'died'),
                ('Random', 'R', 'random'), ('Golden path', 'G', GOLDEN))
 SCALES = (1, 2, 3, 4)       # the View menu's cell scales
+# The parts of the sound (``Mix`` fields) and their keys; the View menu: (label, key, part).
+PART_KEYS = {Qt.Key.Key_M: 'music', Qt.Key.Key_E: 'effects', Qt.Key.Key_H: 'heart_beep'}
+PART_MENU = (('Music', 'M', 'music'), ('Sound effects', 'E', 'effects'), ('Low-hearts beep', 'H', 'heart_beep'))
 
 FRAME_HEIGHT, FRAME_WIDTH, _ = FRAME_SHAPE
 GRID = re.compile(r'(\d+)[xX](\d+)')
@@ -186,13 +191,16 @@ def cheated_text(cheated: dict) -> str:
     return ', '.join(f"{n} {item if n != 1 else item[:-1]}" for item, n in cheated.items() if n)
 
 
-def sound_text(on: bool, cap: float, error: Optional[str]) -> str:
-    """The title's word on sound: off, on, why it is muted, or why there is none."""
+def sound_text(on: bool, cap: float, error: Optional[str], mix: Mix = Mix()) -> str:
+    """The title's word on sound: off, on (and which parts are off: ``Mix.text``), why it is muted, or why there is
+    none."""
     if not on:
         return 'sound off'
     if error:
         return f"no sound: {error}"
-    return 'sound on' if cap == NES_FPS else f"sound muted (not at {cap_label(NES_FPS)} fps)"
+    if cap != NES_FPS:
+        return f"sound muted (not at {cap_label(NES_FPS)} fps)"
+    return f"sound on ({mix.text()})" if mix.text() else 'sound on'
 
 
 def clips_title(clips: Optional[bool], live: bool = False) -> str:
@@ -408,13 +416,14 @@ class Window(QMainWindow):
     and only in a window of more than one cell.
 
     Keys: b best, w success (wins), k stuck, d died, r random, g golden; n the next replay in every cell; s sound
-    off / on; u uncap / cap at the NES rate; + and - the cap in FPS_STEP steps (capped only); p pause; c the
-    run-time clips switch off / on (``grid.set_clips``: new runs, and a live cell's run from its next decision;
-    not for files).  ``add_menus`` puts the same, and what has no key, into a menu bar."""
+    off / on; m music, e sound effects, h the low-hearts beep off / on (``mix``: ``grid.set_mix``, at once); u uncap
+    / cap at the NES rate; + and - the cap in FPS_STEP steps (capped only); p pause; c the run-time clips switch off
+    / on (``grid.set_clips``: new runs, and a live cell's run from its next decision; not for files).
+    ``add_menus`` puts the same, and what has no key, into a menu bar."""
     # pylint: disable=too-many-instance-attributes
 
     def __init__(self, grid, cols: int, rows: int, scale: int, benchmark: Optional[float] = None,
-                 sound: bool = True, heard: int = 0):
+                 sound: bool = True, heard: int = 0, mix: Mix = Mix()):
         # pylint: disable=too-many-arguments, too-many-positional-arguments
         super().__init__()
         self.grid = grid
@@ -425,6 +434,7 @@ class Window(QMainWindow):
         self.paused = False
         self.sound = sound
         self.heard = heard
+        self.mix = mix
         self.scale = scale
         self.setup: dict = {}               # what a remade grid is made with (add_menus: act, live)
         self._remake: Optional[Callable] = None
@@ -494,9 +504,10 @@ class Window(QMainWindow):
 
     def _apply_sound(self):
         """Tells the grid which cell to play the sound of (none while sound is off or the cells don't play at the
-        console's rate), frames that cell while it sounds (a lone cell needs no frame), and says so in the
-        title."""
+        console's rate) and which parts of it, frames that cell while it sounds (a lone cell needs no frame), and
+        says so in the title."""
         audible = self.sound and self.cap == NES_FPS
+        self.grid.set_mix(self.mix)
         self.grid.set_sound(self.heard if audible else None)
         for cell, view in enumerate(self.views):
             if view.heard != (audible and len(self.views) > 1 and cell == self.heard):
@@ -511,6 +522,11 @@ class Window(QMainWindow):
 
     def toggle_sound(self):
         self.sound = not self.sound
+        self._apply_sound()
+
+    def toggle_part(self, part: str):
+        """Turns one part of the sound off or on: 'music', 'effects' or 'heart_beep' (``Mix``)."""
+        self.mix = dataclasses.replace(self.mix, **{part: not getattr(self.mix, part)})
         self._apply_sound()
 
     def select(self, source: str):
@@ -537,6 +553,8 @@ class Window(QMainWindow):
             self.grid.skip()
         elif key == Qt.Key.Key_S:
             self.toggle_sound()
+        elif key in PART_KEYS:
+            self.toggle_part(PART_KEYS[key])
         elif key == Qt.Key.Key_C:
             self.toggle_clips()
         elif key == Qt.Key.Key_U:
@@ -645,6 +663,9 @@ class Window(QMainWindow):
 
         view = bar.addMenu('&View')
         self._item(view, 'Sound', 'S', self.toggle_sound, checked=lambda: self.sound)
+        for label, key, part in PART_MENU:
+            self._item(view, label, key, lambda part=part: self.toggle_part(part),
+                       checked=lambda part=part: getattr(self.mix, part))
         if hasattr(self.grid, 'set_controller'):
             self._item(view, 'Controller', '', self.toggle_controller, checked=lambda: self.grid.controller)
         scales = view.addMenu('Scale')
@@ -712,7 +733,7 @@ class Window(QMainWindow):
 
     def update_title(self):
         stats = self.grid.stats()
-        sound = sound_text(self.sound, self.cap, stats.get('sound_error'))
+        sound = sound_text(self.sound, self.cap, stats.get('sound_error'), self.mix)
         self.setWindowTitle(title_text(stats, self.fps, self.cap, self.paused, sound))
         self._sync_menus()
 

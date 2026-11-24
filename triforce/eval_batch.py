@@ -365,12 +365,15 @@ class BatchError(ValueError):
 
 @dataclass
 class Options:
-    """What every entry shares."""
+    """What every entry shares; ``team`` (the effective store team's name) and ``output_root`` (the job's folder in
+    the store) when a store team plays: chain outputs default there and every chain is filed by the job."""
     batch: str
     cores: int
     eval_parallel: int
     models_dir: Optional[str] = None
     redo: bool = False
+    team: Optional[str] = None
+    output_root: Optional[Path] = None
 
 
 def chain_entry(name: Optional[str], args: list[str], options: Options, *, output: Optional[Path] = None,
@@ -396,8 +399,8 @@ def chain_entry(name: Optional[str], args: list[str], options: Options, *, outpu
         target = route_segments(parsed.route).targets.get(starts[bare_state(parsed.start_from)])
     if target is not None:
         parse_target(target)
-    output = Path(parsed.output) if parsed.output else (output or Path('runs') / _safe(options.batch)
-                                                        / f"{_safe(name)}.jsonl")
+    output = Path(parsed.output) if parsed.output else (output or (options.output_root or Path('runs'))
+                                                        / _safe(options.batch) / f"{_safe(name)}.jsonl")
     tmp = Path(f"{output}.tmp")
     args = _drop_option(args, '--output')
     parallel = parsed.parallel if _has_option(args, '--parallel') else options.cores
@@ -419,6 +422,16 @@ def chain_entry(name: Optional[str], args: list[str], options: Options, *, outpu
             os.replace(meta_path(tmp), meta_path(output))
             os.replace(tmp, output)
             move_chain(tmp, output)
+        if options.team is not None:
+            from . import store
+            from .run_stats import stats_path
+            stats = stats_path(output)
+            summary_stats = json.loads(stats.read_text(encoding='utf-8')) if stats.is_file() else None
+            store.file_output(output, 'chain', team=options.team, summary=summary_stats,
+                              result={'n': summary.get('runs'), 'successes': summary.get('successes')})
+            store.file_output(meta_path(output), 'chain-meta', team=options.team)
+            if stats.is_file():
+                store.file_output(stats, 'stats', team=options.team, summary=summary_stats)
         return chain_headline(summary, read_runs(output) if target is not None else None, target)
 
     def resume():
@@ -429,7 +442,7 @@ def chain_entry(name: Optional[str], args: list[str], options: Options, *, outpu
         return chain_headline(summary, runs, target), [('chain', {**summary, 'resumed': True})]
 
     fields = {'route': parsed.route, 'runs': parsed.runs, 'act': parsed.act, 'start_from': parsed.start_from,
-              'stop_at': parsed.stop_at, 'target': target}
+              'stop_at': parsed.stop_at, 'power_on': bool(parsed.power_on), 'target': target}
     return Entry(name, 'chain', [command], parallel=parallel, total=parsed.runs, output=output, log=log,
                  fields=fields, prepare=prepare, complete=complete, resume=resume)
 
@@ -701,20 +714,23 @@ def _fits(entry: Entry, running: list[Entry], cores: int, jobs: int) -> bool:
 
 def batch_work(entries: list[Entry]) -> dict:
     """The batch's work (``triforce.jobs``): the sum of its entries' that an earlier run hasn't measured yet (their
-    ``resume``): a chain's route steps (``runner.chain_steps``), an evaluation's episodes; a report counts nothing."""
+    ``resume``): a chain's route steps (``runner.chain_steps``) and its shape (``runner.chain_entry``, named for the
+    entry: the queue learns each from its plan entry's seconds), an evaluation's episodes; a report counts nothing."""
     # pylint: disable=import-outside-toplevel
     from ._native import DEFAULT_ROUTE
-    from .runner import chain_steps
-    chains = episodes = 0
+    from .runner import chain_entry as queue_chain      # this module's chain_entry builds a batch entry
+    chains, episodes = [], 0
     for entry in entries:
         if entry.resume is not None and entry.resume() is not None:
             continue
         if entry.kind == 'chain':
-            chains += chain_steps(entry.fields.get('route') or DEFAULT_ROUTE, entry.total or 0,
-                                  entry.fields.get('start_from'), entry.fields.get('stop_at'))
+            chains.append(queue_chain(entry.fields.get('route') or DEFAULT_ROUTE, entry.total or 0, entry.parallel,
+                                      entry.fields.get('start_from'), entry.fields.get('stop_at'),
+                                      bool(entry.fields.get('power_on')), name=entry.name))
         elif entry.kind == 'eval':
             episodes += entry.total or 0
-    return work(chain_steps=chains, eval_episodes=episodes)
+    return work(chain_steps=sum(chain['runs'] * chain['steps'] for chain in chains), eval_episodes=episodes,
+                chains=chains)
 
 
 def run_batch(name: str, entries: list[Entry], *, logs_dir=None, cores: int = 1, jobs: int = 1, nice: int = 0,
@@ -908,15 +924,19 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--redo', action='store_true', help="measure entries again that an earlier run measured")
     parser.add_argument('--logs-dir', default=None, help=f"event logs root (default ${LOGS_DIR_ENV} or <repo>/logs)")
     parser.add_argument('--models-dir', default=None)
+    parser.add_argument('--team', default=None,
+                        help="the store's team every entry plays (NAME, current, NAME+SLOT=RUN...); chain outputs "
+                             "default to the job's folder of the store and every chain is filed by the job")
     return parser
 
 
-def build_entries(args) -> list[Entry]:
-    """The batch's entries in command-line order; raises BatchError (or argparse's SystemExit) when one is wrong."""
+def build_entries(args, team: Optional[str] = None, output_root: Optional[Path] = None) -> list[Entry]:
+    """The batch's entries in command-line order (``team`` / ``output_root``: ``Options``'); raises BatchError (or
+    argparse's SystemExit) when one is wrong."""
     # pylint: disable=import-outside-toplevel
     from . import registry
     from .room_stats import CHAINS_DIR
-    options = Options(args.name, args.parallel, args.eval_parallel, args.models_dir, args.redo)
+    options = Options(args.name, args.parallel, args.eval_parallel, args.models_dir, args.redo, team, output_root)
     entries = []
     for kind, value in getattr(args, 'entries', None) or []:
         if kind == 'chain':
@@ -954,11 +974,16 @@ def main(argv=None) -> int:
         print("triforce eval-batch: error: --parallel, --eval-parallel and --jobs must be >= 1", file=sys.stderr)
         return 2
     try:
+        from . import registry, store  # pylint: disable=import-outside-toplevel
+        registry.use_team(args.team, args.models_dir)
         entries = build_entries(args)
         announce('batch', batch_work(entries), args.name)
+        team = registry.team_in_use(args.models_dir)
+        if team is not None:      # the job's turn has come: its folder in the store holds the outputs
+            entries = build_entries(args, team['name'], store.output_dir('batches'))
         return run_batch(args.name, entries, logs_dir=args.logs_dir, cores=args.parallel, jobs=args.jobs,
                          nice=os.nice(0), command=[sys.executable, '-m', 'triforce.eval_batch', *argv],
-                         extra={'models_dir': args.models_dir})
+                         extra={'models_dir': args.models_dir, **({'team': team['name']} if team else {})})
     except BatchError as error:
         print(f"triforce eval-batch: error: {error}", file=sys.stderr)
         return 2

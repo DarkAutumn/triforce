@@ -288,16 +288,19 @@ impl StartStatePool {
             drawn: Vec::new(),
             resets: 0,
         };
-        if pool.draws_harvested() {
-            pool.scan_harvested();
-        }
-        if pool.seed.is_none() && pool.harvested.is_none() {
-            return Err(EnvError::StartState(format!(
-                "Specialist {:?} has no start states (globs {:?}, harvested dir {})",
-                config.name,
-                config.start_states,
-                pool.harvested_dir.display()
-            )));
+        if pool.draws_harvested()
+            && let Err(error) = pool.scan_harvested()
+        {
+            return Err(if pool.seed.is_none() {
+                EnvError::StartState(format!(
+                    "Specialist {:?} has no start states (globs {:?}, harvested dir {})",
+                    config.name,
+                    config.start_states,
+                    pool.harvested_dir.display()
+                ))
+            } else {
+                error
+            });
         }
         Ok(pool)
     }
@@ -308,9 +311,9 @@ impl StartStatePool {
     }
 
     /// Re-reads the harvested dir (the files of the family's namespaces; phase X: another route's harvest is never
-    /// drawn).  An empty dir drops the harvested states (resets go back to the seed states); a pool without seed
-    /// states keeps its list, so its next load fails loudly.
-    fn scan_harvested(&mut self) {
+    /// drawn).  A pool that draws harvested states and finds none is an error (round 40: missing is never "none";
+    /// the seed states alone are another recipe).
+    fn scan_harvested(&mut self) -> Result<(), EnvError> {
         let paths: Vec<String> = path_strings(glob(&self.harvested_dir.join("*.state")))
             .into_iter()
             .filter(|p| {
@@ -319,43 +322,53 @@ impl StartStatePool {
             })
             .collect();
         if paths.is_empty() {
-            if self.seed.is_some() {
-                self.harvested = None;
-            }
-            return;
+            let namespaces: Vec<&str> = self.namespaces.iter().map(|n| n.as_deref().unwrap_or("bare names")).collect();
+            // Neither the caller's harvested folder nor a store snapshot (`paths::data_dir`): say both.
+            let missing = match self.harvested_dir.parent() {
+                Some(folder) if !folder.exists() => format!("; {}", ::paths::data_missing("harvested", folder)),
+                _ => String::new(),
+            };
+            return Err(EnvError::StartState(format!(
+                "no harvested start states in {} (namespaces {namespaces:?}), and this pool draws them (harvested_fraction \
+                 {}{}){missing}",
+                self.harvested_dir.display(),
+                self.harvested_fraction,
+                if self.seed.is_none() { ", no seed states" } else { "" }
+            )));
         }
         match &mut self.harvested {
             None => self.harvested = Some(ProbabilisticSelector::new(paths).expect("non-empty")),
             Some(h) => h.set_states(paths),
         }
+        Ok(())
     }
 
-    /// Path of the next start state.  A harvested file deleted since the last rescan triggers a rescan and one
-    /// redraw (from the seed states when the harvested dir is now empty).
-    pub fn next<R: Rng + ?Sized>(&mut self, rng: &mut R) -> String {
+    /// Path of the next start state.  A harvested file deleted since the last rescan, or a harvested dir emptied, is
+    /// an error (round 40; until then the resets fell back to the seed states, F159).
+    pub fn next<R: Rng + ?Sized>(&mut self, rng: &mut R) -> Result<String, EnvError> {
         self.resets += 1;
         if self.draws_harvested() && self.resets.is_multiple_of(HARVEST_RESCAN_RESETS) {
-            self.scan_harvested();
+            self.scan_harvested()?;
         }
         if let Some(h) = &mut self.harvested
             && (self.seed.is_none() || rng.random::<f64>() < self.harvested_fraction)
         {
             let path = h.next(rng);
             if Path::new(&path).exists() {
-                return path;
+                return Ok(path);
             }
-            self.scan_harvested();
-            if let Some(h) = &mut self.harvested {
-                return h.next(rng);
-            }
+            return Err(EnvError::StartState(format!(
+                "harvested start state {path} was removed while this pool draws from {}",
+                self.harvested_dir.display()
+            )));
         }
         let seed = self.seed.as_mut().expect("seed states");
         if let Some(weights) = &self.weights
             && weights.fill(&seed.states, &mut self.drawn)
         {
-            return seed.states[weighted_index(rng, &self.drawn)].clone();
+            return Ok(seed.states[weighted_index(rng, &self.drawn)].clone());
         }
-        seed.next(rng)
+        Ok(seed.next(rng))
     }
 
     /// Feeds an episode result back to whichever selector owns the state.
@@ -753,27 +766,28 @@ mod tests {
         let mut pool = StartStatePool::new(&config, &seeds).unwrap();
         let mut r = rng();
         assert!(pool.harvested.is_none());
-        assert!((0..200).all(|_| pool.next(&mut r).ends_with("1_73s_0.state")));
+        assert!((0..200).all(|_| pool.next(&mut r).unwrap().ends_with("1_73s_0.state")));
         let mut half = config.clone();
         half.harvested_fraction = 0.5;
         let mut pool = StartStatePool::new(&half, &seeds).unwrap();
-        let picks: Vec<String> = (0..400).map(|_| pool.next(&mut r)).collect();
+        let picks: Vec<String> = (0..400).map(|_| pool.next(&mut r).unwrap()).collect();
         let n = picks.iter().filter(|p| p.ends_with("h1.state")).count();
         assert!((150..250).contains(&n), "{n}");
-        // F159: deleting the harvested files sends the next resets back to the seed states instead of failing.
+        // Round 40 (F159 reversed): a harvested file deleted under a running pool is an error, never a quiet return to
+        // the seed states; a pool that draws harvested states from an empty dir is refused when it is built.
         std::fs::remove_file(harvested.join("h1.state")).unwrap();
-        assert!((0..84).all(|_| pool.next(&mut r).ends_with("1_73s_0.state")));
-        assert!(pool.harvested.is_none());
+        assert!((0..84).any(|_| matches!(pool.next(&mut r), Err(EnvError::StartState(_)))));
+        assert!(matches!(StartStatePool::new(&half, &seeds), Err(EnvError::StartState(_))));
         std::fs::write(harvested.join("h1.state"), b"x").unwrap();
         let mut only = config.clone();
         only.harvested_fraction = 1.0;
         let mut pool = StartStatePool::new(&only, &seeds).unwrap();
-        assert!((0..20).all(|_| pool.next(&mut r).ends_with("h1.state")));
+        assert!((0..20).all(|_| pool.next(&mut r).unwrap().ends_with("h1.state")));
         // Without seed states the harvested files are drawn at any fraction.
         let mut harvest_only = config.clone();
         harvest_only.start_states.clear();
         let mut pool = StartStatePool::new(&harvest_only, &seeds).unwrap();
-        assert!((0..5).all(|_| pool.next(&mut r).ends_with("h1.state")));
+        assert!((0..5).all(|_| pool.next(&mut r).unwrap().ends_with("h1.state")));
         let mut none = config.clone();
         none.start_states.clear();
         none.harvested_states = Some(dir.path().join("empty").display().to_string());
@@ -804,10 +818,10 @@ mod tests {
         config.state_namespaces = vec![Some("d3first".into())];
         let mut pool = StartStatePool::new(&config, &seeds).unwrap();
         let mut r = rng();
-        assert!((0..50).all(|_| pool.next(&mut r).ends_with("/d3first_1_73s_h1_0.state")));
+        assert!((0..50).all(|_| pool.next(&mut r).unwrap().ends_with("/d3first_1_73s_h1_0.state")));
         config.state_namespaces = vec![None, Some("d3first".into())];
         let mut pool = StartStatePool::new(&config, &seeds).unwrap();
-        let picks: Vec<String> = (0..100).map(|_| pool.next(&mut r)).collect();
+        let picks: Vec<String> = (0..100).map(|_| pool.next(&mut r).unwrap()).collect();
         assert!(picks.iter().any(|p| p.ends_with("/1_73s_h1_0.state")));
         assert!(picks.iter().any(|p| p.ends_with("/d3first_1_73s_h1_0.state")));
     }
@@ -832,7 +846,7 @@ mod tests {
         shared.weights = Some(weights.clone());
         let (mut r1, mut r2) = (rng(), rng());
         for i in 0..400 {
-            let (a, b) = (plain.next(&mut r1), shared.next(&mut r2));
+            let (a, b) = (plain.next(&mut r1).unwrap(), shared.next(&mut r2).unwrap());
             assert_eq!(a, b, "draw {i}");
             let failed = a.ends_with("1_73s_0.state");
             plain.record(&a, !failed, i % 3 == 0);
@@ -843,7 +857,7 @@ mod tests {
             ("1_73w_0".to_owned(), 2.0),
             ("1_73e_0".to_owned(), 0.0),
         ])));
-        let picks: Vec<String> = (0..200).map(|_| shared.next(&mut r2)).collect();
+        let picks: Vec<String> = (0..200).map(|_| shared.next(&mut r2).unwrap()).collect();
         assert!(picks.iter().all(|p| state_label(p) == "1_73w_0"), "{picks:?}");
         shared.record(&picks[0], false, false);
         let selector = shared.seed.as_ref().unwrap();
@@ -853,7 +867,7 @@ mod tests {
         let mut unweighted = shared.clone();
         unweighted.weights = None;
         let mut r3 = r2.clone();
-        assert!((0..50).all(|_| unweighted.next(&mut r3) == shared.next(&mut r2)));
+        assert!((0..50).all(|_| unweighted.next(&mut r3).unwrap() == shared.next(&mut r2).unwrap()));
     }
 
     #[test]

@@ -388,6 +388,10 @@ pub struct ObsConfig {
     /// invisible; round 26). Default `ram`.
     #[serde(default)]
     pub hidden_positions: HiddenPositions,
+    /// Fill the `entity_threat` observation block (schema 8, round 40: range-aware contact, the shooter's threat lane,
+    /// the bomb carrier; `env::observation::threat_block`). Default off: zeros, as today's networks were trained.
+    #[serde(default, deserialize_with = "de_bool")]
+    pub threat: bool,
 }
 
 impl Default for ObsConfig {
@@ -396,6 +400,7 @@ impl Default for ObsConfig {
             objective: true,
             target: false,
             hidden_positions: HiddenPositions::Ram,
+            threat: false,
         }
     }
 }
@@ -412,7 +417,10 @@ pub enum HiddenPositions {
     Zero,
 }
 
-/// `curriculum:` block: the backward curriculum over `trajectories/<name>` (off unless enabled).
+/// `curriculum:` block: the backward curriculum over `trajectories/<name>` (off unless enabled).  `untracked`
+/// (round 40): globs of the seed states that train without a track (never explored, or no track found); every other
+/// seed state must have one, or `triforce train` refuses (`triforce.inputs.check_curriculum`): a missing track is
+/// an error, a declared one is the recipe.  Read by the checks only, never by the env.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CurriculumConfig {
@@ -424,6 +432,8 @@ pub struct CurriculumConfig {
     pub fraction: f64,
     #[serde(default = "default_threshold")]
     pub threshold: f64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub untracked: Vec<String>,
 }
 
 fn default_threshold() -> f64 {
@@ -437,6 +447,7 @@ impl Default for CurriculumConfig {
             trajectories: None,
             fraction: 0.5,
             threshold: 0.6,
+            untracked: Vec::new(),
         }
     }
 }
@@ -948,6 +959,43 @@ pub struct SpecialistConfig {
     pub notes: Option<String>,
 }
 
+/// The YAML of the task file at `path` with its `extends:` chain merged ([`SpecialistConfig::from_file`]); `seen`:
+/// the files on the way, a loop's guard.
+fn task_value(path: &Path, seen: &mut Vec<PathBuf>) -> Result<serde_yaml_ng::Value, ConfigError> {
+    let fail = |msg: String| ConfigError(format!("{}: {msg}", path.display()));
+    let real = path.canonicalize().map_err(|e| fail(e.to_string()))?;
+    if seen.contains(&real) {
+        return Err(fail(format!("extends: a loop through {}", real.display())));
+    }
+    seen.push(real);
+    let text = std::fs::read_to_string(path).map_err(|e| fail(e.to_string()))?;
+    let mut value: serde_yaml_ng::Value = serde_yaml_ng::from_str(&text).map_err(|e| fail(e.to_string()))?;
+    let Some(base) = value.as_mapping_mut().and_then(|m| m.remove("extends")) else {
+        return Ok(value);
+    };
+    let base = base.as_str().ok_or_else(|| fail("extends: a path to a task file".into()))?;
+    let mut merged = task_value(&path.parent().unwrap_or(Path::new(".")).join(base), seen)?;
+    merge_yaml(&mut merged, value);
+    Ok(merged)
+}
+
+/// `over`'s keys over `base`: mappings merged key by key, anything else replaced.
+fn merge_yaml(base: &mut serde_yaml_ng::Value, over: serde_yaml_ng::Value) {
+    match (base, over) {
+        (serde_yaml_ng::Value::Mapping(base), serde_yaml_ng::Value::Mapping(over)) => {
+            for (key, value) in over {
+                match base.get_mut(&key) {
+                    Some(slot) => merge_yaml(slot, value),
+                    None => {
+                        base.insert(key, value);
+                    }
+                }
+            }
+        }
+        (base, over) => *base = over,
+    }
+}
+
 impl SpecialistConfig {
     /// Parses YAML text (`source` names the file in errors) and validates it; the route check needs `map`.
     pub fn from_yaml(
@@ -958,6 +1006,18 @@ impl SpecialistConfig {
         let config: SpecialistConfig =
             serde_yaml_ng::from_str(text).map_err(|e| ConfigError(format!("{source}: {e}")))?;
         config.validated(source, map)
+    }
+
+    /// Reads the task file at `path` (round 40, `extends:`): a file with `extends: <path>` (relative to its own
+    /// folder) is that file with this one's keys over it, mappings merged key by key and anything else replaced, so
+    /// an experiment's task is its family's task plus the lines it changes; chains of `extends` are followed, a loop
+    /// is an error.  Then parsed and validated as [`Self::from_yaml`].
+    pub fn from_file(path: &Path, map: Option<&GameMap>) -> Result<SpecialistConfig, ConfigError> {
+        let source = path.display().to_string();
+        let value = task_value(path, &mut Vec::new())?;
+        let config: SpecialistConfig =
+            serde_yaml_ng::from_value(value).map_err(|e| ConfigError(format!("{source}: {e}")))?;
+        config.validated(&source, map)
     }
 
     /// Builds a config from JSON (`to_json` output, possibly with fields replaced) and validates it.
@@ -1121,11 +1181,13 @@ impl SpecialistConfig {
         self.state_namespaces.iter().map(Option::as_deref).collect()
     }
 
-    /// Directory of harvested start states (default `<states dir>/harvested/<name>`).
+    /// Directory of harvested start states: the task's `harvested_states`, else `<name>` under [`paths::data_dir`]'s
+    /// harvested folder: `<states dir>/harvested` while it exists (a caller's own states dir keeps its harvest), else
+    /// the store's current harvested snapshot.
     pub fn harvested_dir(&self, states_dir: &Path) -> PathBuf {
         match &self.harvested_states {
             Some(dir) => PathBuf::from(dir),
-            None => states_dir.join("harvested").join(&self.name),
+            None => paths::data_dir("harvested", &states_dir.join("harvested")).join(&self.name),
         }
     }
 
@@ -1360,7 +1422,7 @@ impl GameData {
             namespace_heart_values,
             specialists,
             states_dir: root.join(STATES_DIR),
-            trajectories_dir: root.join("trajectories"),
+            trajectories_dir: paths::data_dir("trajectories", &root.join("trajectories")),
         };
         data.cross_check()?;
         Ok(Arc::new(data))
@@ -1436,9 +1498,7 @@ impl GameData {
             return Ok(config.clone());
         }
         if name_or_path.ends_with(".yaml") && Path::new(name_or_path).exists() {
-            let text = std::fs::read_to_string(name_or_path)
-                .map_err(|e| ConfigError(format!("{name_or_path}: {e}")))?;
-            let config = SpecialistConfig::from_yaml(&text, name_or_path, Some(&self.map))?;
+            let config = SpecialistConfig::from_file(Path::new(name_or_path), Some(&self.map))?;
             self.check_config(&config)?;
             return Ok(Arc::new(config));
         }

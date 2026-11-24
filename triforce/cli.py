@@ -25,25 +25,31 @@ def load_chain_route(route_name: str, stop_at=None, start_from=None, power_on=No
 
 
 def chain_runner(route_name: str, parallel: int = 1, models_dir=None, overrides=None, act=None,
-                 specialist_configs=None, threads=None, harvest=None, harvest_every_room=False):
-    """A ``Runner`` for ``route_name`` with its models loaded (``--checkpoint`` overrides checked; raises
-    ``RunnerError``): only once the job's turn has come (``triforce.jobs``).  ``harvest_every_room``: ``Runner``'s."""
+                 specialist_configs=None, threads=None, harvest=None, harvest_every_room=False, headless=()):
+    """A ``Runner`` for ``route_name`` with its models loaded (``--checkpoint`` overrides checked, ``headless``:
+    ``Policies``'; raises ``RunnerError``): only once the job's turn has come (``triforce.jobs``).
+    ``harvest_every_room``: ``Runner``'s."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments, import-outside-toplevel
     from .runner import Runner
     return Runner(models_dir=models_dir, checkpoints=overrides, act=act, specialist_configs=specialist_configs,
                   parallel=parallel, threads=threads, harvest=harvest, route=route_name,
-                  harvest_every_room=harvest_every_room)
+                  harvest_every_room=harvest_every_room, headless=headless)
 
 
 def prepare_chain(route_name: str, parallel: int = 1, models_dir=None, overrides=None, act=None,
                   stop_at=None, start_from=None, specialist_configs=None, threads=None, harvest=None,
                   power_on=None, clips=True, clips_off_from=None, harvest_every_room=False):
-    """The route (``load_chain_route``) and its ``Runner`` (``chain_runner``), for a caller already in its turn (a
-    round's chain); raises ``RunnerError`` before anything plays."""
-    # pylint: disable=too-many-arguments, too-many-positional-arguments
+    """The route (``load_chain_route``) and its ``Runner`` (``chain_runner``) with a network for every policy its
+    runs reach (``runner.check_team``), for a caller already in its turn (a round's chain); raises ``RunnerError``
+    before anything plays."""
+    # pylint: disable=too-many-arguments, too-many-positional-arguments, import-outside-toplevel
+    from .runner import check_configs, check_team
     route = load_chain_route(route_name, stop_at, start_from, power_on, clips, clips_off_from)
-    return route, chain_runner(route_name, parallel, models_dir, overrides, act, specialist_configs, threads,
-                               harvest, harvest_every_room)
+    check_configs(route, specialist_configs or {})
+    runner = chain_runner(route_name, parallel, models_dir, overrides, act, specialist_configs, threads, harvest,
+                          harvest_every_room)
+    check_team(route, runner.policies)
+    return route, runner
 
 
 def eval_chain(route_name: str, runs: int, parallel: int = 1, models_dir=None, overrides=None,
@@ -137,9 +143,10 @@ def check_output(output, provenance: Optional[dict], append: bool) -> Optional[d
 class ChainOutput:
     """An eval-chain output while it is written: the provenance sidecar first (this batch marked unfinished), each
     run appended the moment it finishes (an interrupted chain keeps its finished runs), then ``finish`` sorts the
-    file by seed and marks the batch finished.  ``existing``: the sidecar of the file appended to (``check_output``)."""
+    file by seed and marks the batch finished.  ``existing``: the sidecar of the file appended to (``check_output``);
+    ``manifest``: the chain's (``triforce.manifest.chain``), kept in the sidecar of a new file."""
 
-    def __init__(self, output, provenance: dict, existing: Optional[dict]):
+    def __init__(self, output, provenance: dict, existing: Optional[dict], manifest: Optional[dict] = None):
         # pylint: disable=import-outside-toplevel
         from .events import write_json_atomic
         self.path = Path(output)
@@ -147,7 +154,7 @@ class ChainOutput:
         batch = {**{k: provenance[k] for k in BATCH_FIELDS}, 'finished': False}
         if existing is None:
             self.meta = {'provenance': {k: v for k, v in provenance.items() if k not in BATCH_FIELDS},
-                         'batches': [batch]}
+                         'batches': [batch], 'manifest': manifest}
             self.path.write_text('', encoding='utf-8')
         else:
             self.meta = {**existing, 'batches': existing['batches'] + [batch]}
@@ -171,6 +178,27 @@ class ChainOutput:
         self.meta['batches'][-1]['finished'] = True
         write_json_atomic(meta_path(self.path), self.meta)
         write_chain(self.path)
+
+
+def check_same_team(recipe: dict, reference: str, excepted: list[str]):
+    """``--same-team-as OUTPUT [--except FAMILY,...]``: raises ``RunnerError`` when this chain's team differs from
+    ``OUTPUT``'s in any network or task config but the excepted families', listing every difference; what a record
+    from before manifests never said is printed as unknown and does not refuse."""
+    # pylint: disable=import-outside-toplevel
+    from . import manifest
+    from .runner import RunnerError
+    try:
+        theirs = manifest.read(reference)
+    except ValueError as error:
+        raise RunnerError(f"--same-team-as {reference}: {error}") from None
+    differences, unknown = manifest.same_team(recipe, theirs, excepted)
+    for entry in unknown:
+        print(f"triforce eval-chain: --same-team-as: unknown in {reference}: {entry['path']}", file=sys.stderr)
+    if differences:
+        lines = '\n'.join(f"  {d['path']}: {manifest.short(d['a'])} (this chain) vs {manifest.short(d['b'])}"
+                          for d in differences)
+        raise RunnerError(f"--same-team-as {reference}: this chain's team differs in {len(differences)} more than "
+                          f"--except {','.join(excepted) or '(nothing)'} allows:\n{lines}")
 
 
 def chain_progress_events(events, runs: int, label: Optional[str] = None, route=None, seconds: float = 1.0):
@@ -201,27 +229,44 @@ def _cmd_eval_chain(args):
     from . import replay
     from .events import EventLog, has_plan, logged_job
     from .jobs import announce, work
-    from .registry import act_override
-    from .runner import RunnerError, check_overrides, parse_overrides, power_on_options
+    from . import manifest, store
+    from .registry import act_override, team_in_use, use_team
+    from .runner import RunnerError, check_configs, check_overrides, check_team, parse_overrides, power_on_options
     from .specialist import load_specialist
     nice = os.nice(0)
+    use_team(args.team, args.models_dir)
+    team = team_in_use(args.models_dir)
     configs = {config.name: config for config in (load_specialist(path) for path in args.specialist_config)}
     overrides = parse_overrides(args.checkpoint)
-    output = args.output or os.path.join('runs', f"eval-chain-{time.strftime('%y%m%d-%H%M%S')}.jsonl")
+    # A store team's chain writes its records into the job's folder of the store (chosen once the job's turn has
+    # come), the layout before the store into runs/ of the current folder.
+    default_name = f"eval-chain-{time.strftime('%y%m%d-%H%M%S')}.jsonl"
+    output = args.output or (None if team is not None else os.path.join('runs', default_name))
     # Everything an argument error needs (the route, the overrides' files, the output, the streams) is checked and
     # the work announced (the wrapper's dry call ends there) before anything loads (Nov 23: 17 chains loading their
     # networks outside the line held the machine for 25-48 minutes and none started).
     route = load_chain_route(args.route, args.stop_at, args.start_from, power_on_options(args),
                              clips=args.clips == 'on', clips_off_from=args.clips_off_from)
     check_overrides(overrides, configs, route=args.route)
-    check_output(output, None, args.append)
+    check_configs(route, configs)
+    unknown = sorted(set(args.headless) - set(overrides))
+    if unknown:
+        raise RunnerError(f"--headless {unknown}: no --checkpoint override of those keys")
+    if args.harvest == HARVEST_DEFAULT and team is None:
+        raise RunnerError("--harvest needs a folder (DIR); without one it writes into the job's folder of the store, "
+                          "which only a store team's chain has (round 40: a bare --harvest wrote into every "
+                          "training's input)")
+    if output is not None:
+        check_output(output, None, args.append)
     try:
         replay.options_from(args, {}) if args.replays is None else replay.parse_streams(args.streams)
     except ValueError as error:
         raise RunnerError(str(error)) from error
     what = (f"eval-chain-{args.route}" + (f"-from-{args.start_from}" if args.start_from else '')
             + ('-power-on' if args.power_on else ''))
-    announce('chain', work(chain_steps=args.runs * route.steps_played()), what)
+    from .runner import chain_entry  # pylint: disable=import-outside-toplevel
+    chain = chain_entry(args.route, args.runs, args.parallel, args.start_from, args.stop_at, bool(args.power_on))
+    announce('chain', work(chain_steps=args.runs * route.steps_played(), chains=[chain]), what)
     # --events into a folder with a plan: its driver (e.g. triforce eval-batch) owns the stream and the final 'end',
     # and this chain's counter is named for its stream (the batch's entry); into a folder without one: this chain
     # writes a plan there (the stream is the plan's), so the GUI lists it, and its counter is the job's 'runs'.
@@ -232,9 +277,18 @@ def _cmd_eval_chain(args):
         work=work(chain_steps=args.runs * route.steps_played()),
         events=stream.name if stream else 'round.jsonl', chain_runs=args.runs, nice=nice)
     with log as plan:
+        if output is None:
+            output = str(store.output_dir('chains') / default_name)
+        harvest = harvest_dir(args.harvest, team)
         runner = chain_runner(args.route, args.parallel, args.models_dir, overrides, act_override(args.act), configs,
-                              args.threads, args.harvest, args.harvest_every_room)
+                              args.threads, harvest, args.harvest_every_room, args.headless)
+        check_team(route, runner.policies)
+        recipe = manifest.chain(args, route, runner.policies, act_override(args.act))
+        if args.same_team_as:
+            check_same_team(recipe, args.same_team_as, args.except_)
         provenance = {**runner.provenance(route), 'first_seed': args.first_seed, 'runs': args.runs}
+        if team is not None:
+            provenance['team'] = store.team_record(team)
         try:
             record = replay.options_from(args, runner.record_meta(route))
         except ValueError as error:
@@ -248,7 +302,7 @@ def _cmd_eval_chain(args):
                         power_on=route.power_on, output=output, replays=args.replays, provenance=provenance,
                         nice=nice)
         try:
-            chain_output = ChainOutput(output, provenance, existing)
+            chain_output = ChainOutput(output, provenance, existing, recipe)
             progress = chain_progress_events(events, args.runs, stream.stem if driven else None, route)
 
             def on_result(result):
@@ -265,11 +319,13 @@ def _cmd_eval_chain(args):
             raise
         if events is not None:
             events.emit('chain', **summary)
+    if team is not None:        # a batch's chain is filed by its driver (it renames the output first)
+        file_chain(output, team, summary, args.replays, harvest, records=not driven)
     print(json.dumps(summary, indent=2))
     print(f"route {args.route}: {summary['successes']}/{summary['runs']} = {summary['success_rate']:.0%}  "
           f"(per-run JSON lines {'appended to' if existing else 'in'} {output}, provenance in {meta_path(output)})")
-    if args.harvest is not None:
-        print(f"{'room entry' if args.harvest_every_room else 'handoff'} states harvested under {args.harvest}")
+    if harvest is not None:
+        print(f"{'room entry' if args.harvest_every_room else 'handoff'} states harvested under {harvest}")
     if args.replays is not None:
         print(f"replays in {args.replays} (<seed>-<ending>{replay.SUFFIX}; `tf replay info|verify FILE`)")
     errors = sum(r.result == 'error' for r in results)
@@ -280,8 +336,48 @@ def _cmd_eval_chain(args):
     return 0
 
 
+# ``--harvest`` without a folder (``harvest_dir``).
+HARVEST_DEFAULT = '<default>'
+
+
+def harvest_dir(value: Optional[str], team: Optional[dict]) -> Optional[str]:
+    """Where ``--harvest`` writes: the folder given; without one (a store team's chain only: the layout before the
+    store refuses it, ``_cmd_eval_chain``) ``harvested/`` of the job's folder in the store, never a data snapshot (the
+    lead installs a harvest as one)."""
+    from . import store  # pylint: disable=import-outside-toplevel
+    if value != HARVEST_DEFAULT:
+        return value
+    assert team is not None, "a bare --harvest is refused without a store team"
+    return str(store.output_dir('harvested'))
+
+
+def file_chain(output, team: dict, summary: dict, replays: Optional[str], harvest: Optional[str],
+               records: bool = True):
+    """Files a store team's chain by its job: the records, their ``.meta.json`` and their statistics
+    (``<output>.stats.json``, ``run_stats``: the kept summary row and the statistics tables; ``records``), the
+    replays and the harvest (when made)."""
+    # pylint: disable=import-outside-toplevel
+    from . import store
+    from .run_stats import stats_path
+    if records:
+        stats = stats_path(output)
+        summary_stats = json.loads(stats.read_text(encoding='utf-8')) if stats.is_file() else None
+        store.file_output(output, 'chain', team=team['name'], summary=summary_stats,
+                          result={'n': summary['runs'], 'successes': summary['successes']})
+        store.file_output(meta_path(output), 'chain-meta', team=team['name'])
+        if stats.is_file():
+            store.file_output(stats, 'stats', team=team['name'], summary=summary_stats)
+    for kind, folder in (('replays', replays), ('harvest', harvest)):
+        if folder is not None and Path(folder).is_dir() and (kind == 'replays' or store.root() in Path(folder).parents):
+            store.file_output(folder, kind, team=team['name'])
+
+
 def _cmd_promote(args):
-    from .registry import promote  # pylint: disable=import-outside-toplevel
+    from .registry import promote, team_in_use  # pylint: disable=import-outside-toplevel
+    if args.models_dir is None and team_in_use() is not None:
+        print("triforce promote: error: this checkout plays a store team, which is never changed in place; the team "
+              "of record changes when a new team is made (ask the lead)", file=sys.stderr)
+        return 2
     print(promote(args.specialist, args.run_id, args.models_dir, args.act, args.route, args.late))
     return 0
 
@@ -337,20 +433,34 @@ def main(argv=None):
                    'eval-batch': ('triforce.eval_batch', 'main'), 'room-stats': ('triforce.room_stats', 'main'),
                    'convert-model': ('triforce.convert', 'main'),
                    'select-checkpoint': ('triforce.select_checkpoint', 'main'),
-                   'test-times': ('triforce.testlog', 'report_main'), 'stats': ('triforce.run_stats', 'main')}
-    # `triforce [--models-dir DIR] train|run|play|evaluate|eval-batch|room-stats|convert-model|select-checkpoint|test-times|stats ...`
-    # forwards the rest to the module's own CLI.
-    models_dir, rest = None, argv
+                   'test-times': ('triforce.testlog', 'report_main'), 'stats': ('triforce.run_stats', 'main'),
+                   'lineage': ('triforce.lineage', 'main'), 'manifest': ('triforce.manifest', 'main')}
+    # `triforce [--models-dir DIR | --team TEAM] train|run|play|evaluate|eval-batch|room-stats|convert-model|
+    # select-checkpoint|test-times|stats|lineage|manifest ...` forwards the rest to the module's own CLI (``--team``:
+    # ``registry.use_team``).
+    models_dir, team, rest = None, None, argv
     while rest:
-        if rest[0] == '--models-dir' and len(rest) > 1:
-            models_dir, rest = rest[1], rest[2:]
+        if rest[0] in ('--models-dir', '--team') and len(rest) > 1:
+            if rest[0] == '--team':
+                team = rest[1]
+            else:
+                models_dir = rest[1]
+            rest = rest[2:]
         elif rest[0].startswith('--models-dir='):
             models_dir, rest = rest[0].split('=', 1)[1], rest[1:]
+        elif rest[0].startswith('--team='):
+            team, rest = rest[0].split('=', 1)[1], rest[1:]
         else:
             break
     if rest and rest[0] == 'job':       # the job queue: before anything that needs the native module or torch
         from .job import main as job_main  # pylint: disable=import-outside-toplevel
         return job_main(rest[1:])
+    if rest and rest[0] == 'store':     # the shared store's listings (triforce.store_cli)
+        from .store_cli import main as store_main  # pylint: disable=import-outside-toplevel
+        return store_main(rest[1:])
+    if team is not None:
+        from .registry import use_team  # pylint: disable=import-outside-toplevel
+        use_team(team, models_dir)
     if rest and rest[0] in passthrough:
         import importlib  # pylint: disable=import-outside-toplevel
         module, entry = passthrough[rest[0]]
@@ -364,8 +474,13 @@ def main(argv=None):
     from .registry import ACT_HELP, act_argument  # pylint: disable=import-outside-toplevel
 
     parser = argparse.ArgumentParser(prog='triforce')
-    parser.add_argument('--models-dir', default=None)
+    parser.add_argument('--models-dir', default=None, help="an old-style models folder (the layout before the store)")
+    parser.add_argument('--team', default=None,
+                        help="the store's team to play: NAME, current, or NAME+SLOT=RUN... (an experiment's "
+                             "overrides; SLOT: family, family@route or family@route:late)")
     sub = parser.add_subparsers(dest='command', required=True)
+    sub.add_parser('store', help="where the shared things are and what the shared store holds (triforce store "
+                                 "paths|data|runs|teams|summaries|outputs|log|view)")
     sub.add_parser('train', help="python -m triforce.train ...")
     sub.add_parser('run', help="python -m triforce.run ...")
     sub.add_parser('play', help="python -m triforce.play ...")
@@ -382,6 +497,8 @@ def main(argv=None):
                                       "test's median and worst, the slowest, what grew (triforce.testlog)")
     sub.add_parser('stats', help="run statistics: list, show, compare (paired by seed), ingest (triforce.run_stats)")
     sub.add_parser('list', help="specialists, their promoted run and run count")
+    sub.add_parser('lineage', help="python -m triforce.lineage [--route R] (each promoted pointer's chain of "
+                                   "parents back to its origin)")
 
     promote = sub.add_parser('promote', help="mark a run as the specialist's promoted model")
     promote.add_argument('specialist')
@@ -420,6 +537,10 @@ def add_eval_chain_arguments(chain):
     from .registry import ACT_HELP, MAIN_ROUTE, MODEL_ACT, act_argument
     from .replay import add_arguments as replay_arguments
     from .runner import STOP_AT_HELP, add_power_on_arguments
+    chain.add_argument('--team', default=None,
+                       help="the store's team to play: NAME, current, or NAME+SLOT=RUN... (an experiment's overrides; "
+                            "SLOT: family, family@route or family@route:late); default: --models-dir, else "
+                            "<repo>/models while it exists, else the store's current team")
     chain.add_argument('--route', default=MAIN_ROUTE,
                        help=f"routes.yaml route (default {MAIN_ROUTE}, registry.MAIN_ROUTE); its promoted runs play "
                             "(a family's promoted.<route> over its promoted; on a route with own_models_until its "
@@ -445,21 +566,31 @@ def add_eval_chain_arguments(chain):
                        help="play this checkpoint file or run dir for the family: on a route with own_models_until "
                             "(d3first) for both parts, or with @ROUTE (darknut@d3first=DIR) for the route's own part "
                             "only, the steps before that one")
+    chain.add_argument('--same-team-as', default=None, metavar='OUTPUT',
+                       help="refuse to play unless this chain's team (every network, its act mode, hit head and "
+                            "task config) is OUTPUT's (a chain output, its .meta.json or a stats file) but for the "
+                            "--except families; every difference is printed")
+    chain.add_argument('--except', dest='except_', type=lambda text: [k for k in text.split(',') if k], default=[],
+                       metavar='FAMILY,...', help="with --same-team-as: the families (or keys) this arm changes")
+    chain.add_argument('--headless', action='append', default=[], metavar='KEY',
+                       help="declare that --checkpoint KEY=PATH has no hit head and replaces a network that has one "
+                            "(without it such a chain is refused; round 40)")
     chain.add_argument('--specialist-config', action='append', default=[], metavar='YAML',
                        help="override specialist config, selected by config.name (repeatable YAML paths)")
     chain.add_argument('--output', default=None,
-                       help="per-run JSON lines (default runs/eval-chain-<yymmdd-HHMMSS>.jsonl), with its provenance "
-                            "(models, checkpoints, act modes, route, code, data) in <output>.meta.json; an existing "
-                            "file is refused unless --append")
+                       help="per-run JSON lines (default runs/eval-chain-<yymmdd-HHMMSS>.jsonl; with a store team the "
+                            "job's folder of the store), with its provenance (models, checkpoints, act modes, route, "
+                            "code, data) in <output>.meta.json; an existing file is refused unless --append")
     chain.add_argument('--append', action='store_true',
                        help="add these runs to an existing --output played by the same models, act modes, route, "
                             "code and data (its .meta.json), with new seeds")
     replay_arguments(chain, default_state='embed')
-    chain.add_argument('--harvest', nargs='?', const=str(HARVESTED_DIR), default=None, metavar='DIR',
+    chain.add_argument('--harvest', nargs='?', const=HARVEST_DEFAULT, default=None, metavar='DIR',
                        help="save every handoff's pre-entry state (a correct room entry where the acting specialist "
-                            "changes) as DIR/<specialist>/<level>_<room><side>_h<seed>_<n>.state; without DIR: "
-                            f"{HARVESTED_DIR}, each specialist's default harvested_dir (read in training only "
-                            "by a config with harvested_fraction > 0, or one without seed states)")
+                            "changes) as DIR/<specialist>/<level>_<room><side>_h<seed>_<n>.state; DIR is required "
+                            f"with a models folder (round 40: a bare --harvest wrote into {HARVESTED_DIR}, every "
+                            "training's input); with a store team a bare --harvest writes into the job's folder of "
+                            "the store (never a data snapshot)")
     chain.add_argument('--harvest-every-room', action='store_true',
                        help="with --harvest: every correct room entry, also one from a room of the same family (a "
                             "handoff harvest never sees those: Dungeon 8's 0x4e-0x3e-0x3f, the Olive Garden's fight)")

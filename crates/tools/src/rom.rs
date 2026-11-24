@@ -9,22 +9,21 @@ pub fn workspace_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().expect("workspace root exists")
 }
 
-/// `$TRIFORCE_ROM`, else `<repo>/roms/zelda.nes`.
-pub fn default_rom_path() -> PathBuf {
-    match std::env::var_os("TRIFORCE_ROM") {
-        Some(p) => PathBuf::from(p),
-        None => workspace_root().join("roms/zelda.nes"),
-    }
-}
-
 pub struct RomInfo {
     pub bytes: Vec<u8>,
     pub payload_sha1: [u8; 20],
 }
 
+/// The ROM at `path`, else [`paths::rom_path`] (`$TRIFORCE_ROM`, else the shared store's `rom/zelda.nes`, else
+/// `<repo>/roms/zelda.nes`; missing: an error naming every place looked in).
 pub fn load(path: Option<&Path>) -> Result<RomInfo> {
-    let path = path.map(Path::to_path_buf).unwrap_or_else(default_rom_path);
-    ensure!(path.exists(), "ROM not found: set TRIFORCE_ROM or create roms/zelda.nes ({})", path.display());
+    let path = match path {
+        Some(path) => {
+            ensure!(path.exists(), "ROM not found: {}", path.display());
+            path.to_path_buf()
+        }
+        None => paths::rom_path(&workspace_root()).map_err(anyhow::Error::msg)?,
+    };
     let bytes = std::fs::read(&path).with_context(|| format!("reading {}", path.display()))?;
     ensure!(bytes.len() == 16 + 8 * 0x4000, "ROM {} is {} bytes, expected 131088", path.display(), bytes.len());
     ensure!(&bytes[..4] == b"NES\x1a", "ROM {} has no iNES header", path.display());

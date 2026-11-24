@@ -28,17 +28,37 @@ use crate::ZCore;
 pub const CPU_HZ: f64 = 39_375_000.0 / 22.0;
 
 /// `Event::register` of a sample byte the DMC fetched.
-const SAMPLE: u8 = 0xFF;
+pub(crate) const SAMPLE: u8 = 0xFF;
 /// Registers `$4000-$4017`.
 const REGISTERS: usize = 0x18;
 
 /// A register write or a fetched DMC sample byte, timed in CPU cycles from the start of its frame.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Event {
-    cycle: u32,
+    pub(crate) cycle: u32,
     /// `addr - $4000`, or [`SAMPLE`].
-    register: u8,
-    value: u8,
+    pub(crate) register: u8,
+    pub(crate) value: u8,
+}
+
+impl Event {
+    /// CPU cycles from the start of the frame.
+    #[must_use]
+    pub const fn cycle(&self) -> u32 {
+        self.cycle
+    }
+
+    /// The register written (`$4000-$4017`), or None for a sample byte the DMC fetched.
+    #[must_use]
+    pub const fn register(&self) -> Option<u16> {
+        if self.register == SAMPLE { None } else { Some(0x4000 + self.register as u16) }
+    }
+
+    /// The value written, or the sample byte.
+    #[must_use]
+    pub const fn value(&self) -> u8 {
+        self.value
+    }
 }
 
 /// The bus's notes for sound (module docs).  Never part of the machine state.
@@ -116,8 +136,8 @@ impl Tap {
 /// [`ZCore::sound`]: crate::ZCore::sound
 #[derive(Debug, Clone, Copy)]
 pub struct Frame<'a> {
-    events: &'a [Event],
-    cycles: u32,
+    pub(crate) events: &'a [Event],
+    pub(crate) cycles: u32,
 }
 
 impl Frame<'_> {
@@ -125,6 +145,12 @@ impl Frame<'_> {
     #[must_use]
     pub const fn cycles(&self) -> u32 {
         self.cycles
+    }
+
+    /// The frame's register writes and sample bytes, in order.
+    #[must_use]
+    pub const fn events(&self) -> &[Event] {
+        self.events
     }
 }
 
@@ -504,6 +530,21 @@ const TAPS: usize = 64;
 /// the rare louder moment is clipped.
 const GAIN: f32 = 2.0;
 
+bitflags::bitflags! {
+    /// Tone channels, for a synth that takes over only some of a machine's sound ([`Synth::resume_only`]).
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct Voices: u8 {
+        /// Pulse 1 (`$4000-$4003`).
+        const SQUARE0 = 0x01;
+        /// Pulse 2 (`$4004-$4007`).
+        const SQUARE1 = 0x02;
+        /// The triangle.
+        const TRIANGLE = 0x04;
+        /// The noise channel.
+        const NOISE = 0x08;
+    }
+}
+
 /// The console's sound from its register writes (module docs): mono samples in `-1.0..=1.0`.
 #[derive(Debug, Clone)]
 pub struct Synth {
@@ -610,6 +651,12 @@ impl Synth {
     ///
     /// [`ZCore::restore`]: crate::ZCore::restore
     pub fn resume(&mut self, nes: &ZCore) {
+        self.resume_only(nes, Voices::all());
+    }
+
+    /// [`Synth::resume`], but the tone channels outside `voices` start silent (their length counters at 0) until
+    /// they are written again.  The DMC takes the machine's output level either way.
+    pub fn resume_only(&mut self, nes: &ZCore, voices: Voices) {
         let (tap, apu) = nes.sound_source();
         let before = self.level();
         self.pulse = [Pulse::default(), Pulse { second: true, ..Pulse::default() }];
@@ -631,15 +678,45 @@ impl Synth {
         self.triangle.linear = if self.triangle.control { self.triangle.reload_value } else { 0 };
         self.triangle.reload = self.triangle.control;
         (self.noise.enabled, self.noise.length) = (apu.noise.enabled, apu.noise.counter);
+        for (pulse, voice) in self.pulse.iter_mut().zip([Voices::SQUARE0, Voices::SQUARE1]) {
+            if !voices.contains(voice) {
+                pulse.length = 0;
+            }
+        }
+        if !voices.contains(Voices::TRIANGLE) {
+            (self.triangle.length, self.triangle.linear) = (0, 0);
+        }
+        if !voices.contains(Voices::NOISE) {
+            self.noise.length = 0;
+        }
         self.five_step = apu.frame_counter.mode == 1;
         self.sequence = apu.frame_counter.cycle.min(LAST_STEP[usize::from(self.five_step)] - 1);
         // Where the channels' level jumped with the takeover, move the filters' memory with it: no thump.
-        let jump = self.level() - before;
+        self.follow(self.level() - before);
+    }
+
+    /// Moves the filters' memory by a jump of the mixer's level that is not a sound.
+    fn follow(&mut self, jump: f32) {
         for sample in &mut self.history {
             *sample += jump;
         }
         self.high_90.input += jump;
         self.sum += jump * self.count as f32;
+    }
+
+    /// The DMC's output level while it plays nothing (`$4011`, then where the last sample left it).
+    pub(crate) const fn resting_dmc(&self) -> Option<u8> {
+        if self.dmc.silent { Some(self.dmc.level) } else { None }
+    }
+
+    /// Sets the DMC's resting output level without a sound: the level shifts how loud the triangle and the
+    /// noise come out of the console's mixer, so a synth that plays no samples can mix as one that does.
+    pub(crate) fn rest_dmc(&mut self, level: u8) {
+        if self.dmc.level != level && self.dmc.silent {
+            let before = self.level();
+            self.dmc.level = level;
+            self.follow(self.level() - before);
+        }
     }
 
     fn write(&mut self, register: u8, value: u8) {

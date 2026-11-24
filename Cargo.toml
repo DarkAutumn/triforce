@@ -12,6 +12,7 @@ members = [
     "crates/replay",
     "crates/test-rom",
     "crates/theater",
+    "crates/paths",
 ]
 
 [workspace.package]
@@ -23,3 +24,9 @@ license = "MIT OR Apache-2.0"
 [profile.release]
 lto = "thin"
 codegen-units = 1
+
+# The Rust suite's builds (`triforce job test rust`): release optimisation without link-time optimisation, which
+# made every one of the 60 test programs re-optimise the whole crate graph (Nov 23: 2459 of 2621 CPU seconds).
+[profile.release-tests]
+inherits = "release"
+lto = "off"

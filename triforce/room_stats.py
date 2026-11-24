@@ -89,12 +89,12 @@ from typing import Optional
 
 from . import __version__, _native, jobs, registry
 from .events import write_json_atomic
-from .paths import ROOT
+from .paths import scratch
 from .variety import VISIT_RISK_KEYS, decisions_of, risk, variety
 
 FORMAT = 2                              # 2: by_clips (round 22); 1 is still read (every visit then played on)
 READ_FORMATS = (1, 2)
-CHAINS_DIR = ROOT / 'target' / 'r56-chains'
+CHAINS_DIR = scratch('r56-chains')
 SUFFIX = '-room-stats.json'
 NOCLIPS_SUFFIX = '-noclips'             # the switch-off measurement of a tag (r56_chains.sh CLIPS=off)
 BOTH_SUFFIX = '-both'                   # a room-stats file of a tag and its switch-off tag together

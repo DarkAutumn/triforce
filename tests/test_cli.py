@@ -138,17 +138,20 @@ def test_eval_chain_answers_the_wrapper_dry_call_and_creates_nothing(tmp_path):
                          env=environ, capture_output=True, text=True, timeout=120, check=False)
     assert out.returncode == 0, out.stderr
     steps = chain_steps('d2first', 3, None, '0:0x77')
+    chain = {'shape': f"d2first:0-{steps // 3}", 'runs': 3, 'parallel': 1, 'steps': steps // 3}
     assert steps > 0 and json.loads(estimate.read_text()) == {
-        'kind': 'chain', 'work': {'chain_steps': steps}, 'name': 'eval-chain-d2first'}
+        'kind': 'chain', 'work': {'chain_steps': steps, 'chains': [chain]}, 'name': 'eval-chain-d2first'}
     assert sorted(p.name for p in tmp_path.iterdir()) == ['estimate.json']
 
 
-def test_eval_chain_exits_non_zero_when_a_run_ends_in_an_error(tmp_path, capsys):
+def test_eval_chain_refuses_a_team_without_a_network_its_runs_reach(tmp_path, capsys):
+    """Round 40 (missing is an error): an empty models dir plays nothing; until then every run ended `error`."""
     output = tmp_path / 'chain.jsonl'
     assert cli.main(['--models-dir', str(tmp_path / 'models'), 'eval-chain', '--runs', '1', '--no-log',
-                     '--output', str(output)]) == 1
-    assert '1 of 1 runs ended in an error' in capsys.readouterr().err
-    assert json.loads(output.read_text())['result'] == 'error'
+                     '--output', str(output)]) == 2
+    err = capsys.readouterr().err
+    assert 'no network plays policies these runs reach' in err and 'ow-start (step 0: ' in err
+    assert not output.exists()
 
 
 def test_eval_chain_writes_provenance_and_appends_only_the_same_team(models_dir, tmp_path, capsys):

@@ -22,7 +22,7 @@ from triforce import jobqueue as q
 from triforce import jobs
 from triforce.registry import save_checkpoint
 
-from .conftest import ROOT, SEGMENT_STATE, SEGMENT_STOP_STEP, require_state, seeded_network
+from .conftest import ROOT, SEGMENT_STATE, SEGMENT_STOP_STEP, require_state, seeded_network, start_task
 from .test_evaluate import SMALL
 
 PYTHON = sys.executable
@@ -40,6 +40,9 @@ def environment(queue: Path, **extra) -> dict:
     env = {key: value for key, value in os.environ.items()
            if key not in (jobs.JOB_ID_ENV, jobs.JOB_LABEL_ENV, jobs.JOB_ESTIMATE_ENV)}
     env.update({q.QUEUE_DIR_ENV: str(queue)}, **extra)
+    # A test job in a made-up repo has no main checkout to take the team from (`test_steps`); the suite itself is
+    # run with the variable set by `triforce job test` and without it by hand: the tests must not differ.
+    env.setdefault('TRIFORCE_MODELS_DIR', str(queue))
     return env
 
 
@@ -134,6 +137,50 @@ def test_two_long_jobs_run_and_the_next_waits_for_one_of_them_at_no_cost(queue):
     second.kill()
 
 
+def test_a_job_moved_to_the_top_starts_before_the_ones_it_passed(queue):
+    """The owner's move (``triforce job top ID``): the places full, three short jobs waiting in join order; the third
+    is moved to the top and, when a place frees, starts before the second (and the first); ``job top`` prints the
+    line as it now stands, ``job list`` marks it, and a running job can't be moved (the error says its status)."""
+    queue.run('a', *sleeper())
+    queue.run('b', *sleeper())
+    queue.run('express', *sleeper(), timeout='5m')
+    wait_until(lambda: sum(row['status'] == 'running' for row in queue.rows()) == 3, 60, "the places full")
+    waiting = []
+    for name in ('c1', 'c2', 'c3'):          # long estimates: regular places only, in join order
+        waiting.append(queue.run(name, *sleeper(0.5)))
+        wait_until(lambda name=name: queue.status(name) == 'queued', 60, f"{name} waiting")
+    third = queue.row('c3')
+    moved = subprocess.run([PYTHON, '-c', WRAPPER, 'top', str(third['id'])], capture_output=True, text=True,
+                           env=environment(queue.folder), cwd=ROOT, check=False)
+    assert moved.returncode == 0, moved.stderr
+    lines = moved.stdout.splitlines()
+    assert lines[0].startswith(f"#{third['id']} tester-queue-c3 moved to the top of the jobs line")
+    assert [line.split()[1] for line in lines[1:]] == [f"#{queue.row(name)['id']}" for name in ('c3', 'c1', 'c2')]
+    assert q.MOVED_MARK in lines[1]
+    listing = subprocess.run([PYTHON, '-m', 'triforce.cli', 'job', 'list'], capture_output=True, text=True,
+                             env=environment(queue.folder), cwd=ROOT, check=True).stdout
+    assert listing.count(q.MOVED_MARK) == 1
+    running = queue.row('a')
+    refused = subprocess.run([PYTHON, '-c', WRAPPER, 'top', str(running['id'])], capture_output=True, text=True,
+                             env=environment(queue.folder), cwd=ROOT, check=False)
+    assert refused.returncode == 2 and f"job #{running['id']} is running, not waiting" in refused.stderr
+    queue.started[0].send_signal(signal.SIGTERM)                    # 'a' ends: one regular place frees
+    wait_until(lambda: queue.status('c3') in ('running', 'completed'), 60, "c3 starts")
+    assert queue.status('c2') == 'queued' and queue.status('c1') == 'queued'
+    queue.started[1].send_signal(signal.SIGTERM)                    # then 'b': the rest in their own order
+    for process in waiting:
+        assert process.wait(timeout=60) == 0
+    started = {name: queue.row(name)['admitted_ts'] for name in ('c1', 'c2', 'c3')}
+    assert started['c3'] < started['c1'] < started['c2']
+    assert queue.row('c3')['moved_ts'] is not None and queue.row('c1')['moved_ts'] is None
+    con = q.connect(queue.folder)
+    try:
+        history = {row['job']: row['moved'] for row in con.execute("SELECT job, moved FROM history")}
+    finally:
+        con.close()
+    assert history[third['id']] == 1 and history[queue.row('c1')['id']] == 0
+
+
 def test_a_short_job_runs_beside_two_long_ones_in_the_express_place(queue):
     queue.run('a', *sleeper())
     queue.run('b', *sleeper())
@@ -176,14 +223,17 @@ def test_builds_and_tests_have_two_places_of_their_own(queue, tmp_path):
 
 
 def fake_checkout(tmp_path: Path, build_seconds: float = 0) -> Path:
-    """A checkout whose ``.venv`` has a ``maturin`` that records its niceness and cargo job count, and a ``python``
-    whose test suite records its niceness."""
+    """A git checkout whose ``.venv`` has a ``maturin`` that records its niceness and cargo job count and leaves a
+    module the build's stamp records (``triforce.build``), and a ``python`` whose test suite records its niceness."""
     root = tmp_path / 'checkout'
-    (root / '.git').mkdir(parents=True)
     (root / '.venv' / 'bin').mkdir(parents=True)
+    (root / 'triforce').mkdir()
+    (root / 'models').mkdir()           # the team the suites read (``job.test_steps``)
+    subprocess.run(['git', 'init', '-q', str(root)], check=True)
     maturin = root / '.venv' / 'bin' / 'maturin'
     maturin.write_text(f"#!/bin/sh\necho \"build nice $(cut -d' ' -f19 /proc/$$/stat) jobs $CARGO_BUILD_JOBS\" "
-                       f">> {root / 'record.txt'}\nsleep {build_seconds}\n")
+                       f">> {root / 'record.txt'}\nsleep {build_seconds}\necho module > "
+                       f"{root / 'triforce' / '_native.abi3.so'}\n")
     maturin.chmod(0o755)
     python = root / '.venv' / 'bin' / 'python'
     python.write_text(f'#!/bin/sh\nexec {PYTHON} "$@"\n')
@@ -202,7 +252,9 @@ def test_test_with_build_is_one_entry_with_both_steps_at_nice_10(queue, tmp_path
     assert process.wait(timeout=120) == 0, process.out.read_text()
     (row,) = queue.rows()
     assert row['verb'] == 'test' and row['lane'] == q.TOOLS_LANE and row['status'] == 'completed'
-    assert row['steps'] == [{'name': 'build', 'status': 'completed'}, {'name': 'test python', 'status': 'completed'}]
+    assert row['steps'] == [{'name': 'build', 'status': 'completed'}, {'name': 'stamp', 'status': 'completed'},
+                            {'name': 'test python', 'status': 'completed'}]
+    assert json.loads((checkout / 'triforce' / '_native.build.json').read_text())['module'] == '_native.abi3.so'
     assert (checkout / 'record.txt').read_text().splitlines() == ['build nice 10 jobs 4', 'test nice 10 jobs 4']
 
 
@@ -333,7 +385,7 @@ else:
     runpy.run_module(target, run_name='__main__', alter_sys=True)
 '''
 
-ENTRY_POINTS = {'evaluate': ('eval', {'eval_episodes'}), 'eval-chain': ('chain', {'chain_steps'}),
+ENTRY_POINTS = {'evaluate': ('eval', {'eval_episodes'}), 'eval-chain': ('chain', {'chain_steps', 'chains'}),
                 'eval-batch': ('batch', {'eval_episodes'}), 'train': ('train', {'train_steps'}),
                 'round': ('round', {'train_steps', 'eval_episodes'})}
 
@@ -355,7 +407,7 @@ def commands(tmp_path, states_dir, scripted_models):
                        '--runs', '1', '--parallel', '1', '--output', str(tmp_path / 'chain.jsonl')],
         'eval-batch': ['triforce.eval_batch', 'qbatch', '--parallel', '1', '--evaluate',
                        ' '.join(['e:', *evaluate, '--output', str(tmp_path / 'batch-eval.json')])],
-        'train': ['triforce.train', '--specialist', 'ow-start', '--states-dir', str(states_dir), '--models-dir',
+        'train': ['triforce.train', '--specialist', start_task(), '--states-dir', str(states_dir), '--models-dir',
                   str(models), '--device', 'cpu', '--parallel', '1', '--steps-per-update', '16', '--iterations', '1',
                   '--no-curriculum', '--run-id', 'q'],
         'round': [str(ROOT / 'scripts' / 'train_round.py'), '--round', 'rq', '--specialists', 'ow-start',
@@ -375,7 +427,9 @@ def test_an_entry_point_answers_the_dry_call_with_its_work_having_loaded_nothing
     assert done.returncode == 0, done.stdout + done.stderr
     kind, units = ENTRY_POINTS[name]
     work = json.loads(answer.read_text())
-    assert work['kind'] == kind and set(work['work']) == units and all(v > 0 for v in work['work'].values())
+    assert work['kind'] == kind and set(work['work']) == units
+    assert all(v > 0 for unit, v in work['work'].items() if unit != 'chains')
+    assert all(chain['shape'] and chain['runs'] > 0 for chain in work['work'].get('chains', []))
     assert not marks.exists(), marks.read_text()
     assert not logs.exists() or not any(logs.iterdir())
 
@@ -392,7 +446,7 @@ def test_the_wrapper_estimates_a_tool_from_its_dry_call_and_an_argument_error_fa
                           'A tiny chain.', '--', PYTHON, '-m', *chain, TRIFORCE_LOGS_DIR=str(queue.folder / 'logs'))
     assert process.wait(timeout=600) == 0, process.out.read_text()
     row = queue.row('chain')
-    assert row['kind'] == 'chain' and set(row['work']) == {'chain_steps'} and row['estimate'] is not None
+    assert row['kind'] == 'chain' and set(row['work']) == {'chain_steps', 'chains'} and row['estimate'] is not None
     assert row['log_dir'] and Path(row['log_dir']).name.endswith('_tester-queue-chain')
     assert row['progress']['runs']['done'] == 1
 

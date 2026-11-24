@@ -3,6 +3,7 @@
 //! the single-specialist env, the chain runner and Go-Explore.  Emulator states are opaque (`zelda::Nes::State`);
 //! a [`start_states::StateStore`] loads and saves them.
 
+pub mod bomb_windows;
 pub mod chain;
 pub mod config;
 pub mod critic;

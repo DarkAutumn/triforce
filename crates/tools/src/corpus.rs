@@ -91,7 +91,7 @@ pub fn sync() -> Result<i32> {
 }
 
 /// Run `f` over `items` on `jobs` threads; results in item order.
-fn par_map<T: Sync, R: Send>(items: &[T], jobs: usize, f: impl Fn(&T) -> R + Sync) -> Vec<R> {
+pub(crate) fn par_map<T: Sync, R: Send>(items: &[T], jobs: usize, f: impl Fn(&T) -> R + Sync) -> Vec<R> {
     let next = AtomicUsize::new(0);
     let mut out: Vec<Option<R>> = items.iter().map(|_| None).collect();
     std::thread::scope(|s| {

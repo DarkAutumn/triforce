@@ -61,6 +61,11 @@ clips:
 harvested_fraction: 0.4
 curriculum:
   enabled: true
+  untracked:                              # round 40: the seed states that train without a track (triforce.inputs)
+  - d3first_4_20s_[0-9]
+  - d3first_4_30e_[0-9]
+  - d3first_6_2dn_[0-9]
+  - d3first_6_39n_[0-9]
 one_room: true
 max_steps: 2000
 warm_start: null

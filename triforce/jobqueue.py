@@ -30,12 +30,24 @@ express place while it is free, else a regular place.  The tools lane (builds an
 served, at most ``len(TOOL_PLACES)`` at once, never behind a training or a chain.  A waiting wrapper holds no model
 and no GPU memory; it checks its turn every ``POLL_SECONDS``.
 
+Moving a job up (the owner, Nov 23; ``move_to_top``, ``triforce job top ID [--undo]``, the training GUI's right
+click on a waiting job): a waiting job can be put at the top of its own line, the jobs line or the tools line,
+ahead of every job not moved (several moved: the one moved last first).  Only the order changes: nothing running
+stops, and a job that may not take the express place still may not.  The mark is ``top_ts`` in its row; the record
+keeps that it was moved (``moved_ts``, ``history.moved``).  Mixed code: each waiting wrapper orders the line itself,
+so only wrappers of this code honour a move.  A job queued by older code can't be moved (its row lacks
+``top_aware``), and it doesn't see a moved job either: it may start ahead of one when a place frees.  Places are
+still one holder each (their file locks), so two wrappers that order the line differently never share a place.
+
 Estimates.  A tool's work (``UNITS``: training steps, evaluation episodes, chain route steps) comes from its arguments
 (``jobs.announce``, asked before anything loads); its estimate is the work at the rates refitted from ``history``
-(``rates``: per unit, over the ``RATE_WINDOW`` latest completed jobs that did some of it).  A command the queue
-can't measure (a script, a golden race, an old version's tool) is estimated by its ``--timeout``.  ``calibration``
-compares estimates with what the jobs actually ran, per kind; a running job past ``OVERRUN`` x its estimate is
-flagged (``overrun``)."""
+(``rates``: per unit, over the ``RATE_WINDOW`` latest completed jobs that did some of it).  A chain is estimated by
+its shape instead (``chain_model``, the owner, Nov 23: "Fix the estimate [...] It would have been fine if not for
+estimating 37 hours"): its seconds per run learned from the last chains of that segment; a segment never seen by
+the rate per route step it asks for.  A command the queue can't measure (a script, a golden race, an old version's
+tool) is estimated by its
+``--timeout``.  ``calibration`` compares estimates with what the jobs actually ran, per kind; a running job past
+``OVERRUN`` x its estimate is flagged (``overrun``)."""
 
 import ctypes
 import fcntl
@@ -75,6 +87,12 @@ OVERRUN = 2.0                        # a running job past this many times its es
 UNITS = ('train_steps', 'eval_episodes', 'chain_steps')
 DEFAULT_RATES = {'train_steps': 0.00044, 'eval_episodes': 0.046, 'chain_steps': 0.0026}
 RATE_WINDOW = 20                     # the latest completed jobs a rate (and a kind's calibration) is taken over
+# Chains (``chain_model``; measured Nov 23 over the 64 chains and batches of the history): a chain takes
+# ``CHAIN_START_SECONDS`` + runs x run-seconds / parallel, its run-seconds the median of the last ``SHAPE_WINDOW`` of
+# its shape (a short window follows the machine's load, which moves a segment's time 2-3x within a day); a shape
+# never seen takes the rate per route step asked (``rates``), as every chain did before.
+CHAIN_START_SECONDS = 10.0
+SHAPE_WINDOW = 3
 
 _COLUMNS = {
     'agent': 'TEXT', 'task': 'TEXT', 'subtask': 'TEXT', 'description': 'TEXT', 'name': 'TEXT', 'verb': 'TEXT',
@@ -82,8 +100,13 @@ _COLUMNS = {
     'commit_id': 'TEXT', 'host': 'TEXT', 'pid': 'INTEGER', 'child': 'INTEGER', 'nice': 'INTEGER', 'work': 'TEXT',
     'estimate': 'REAL', 'express': 'INTEGER', 'timeout': 'REAL', 'status': 'TEXT', 'place': 'TEXT',
     'queued_ts': 'REAL', 'admitted_ts': 'REAL', 'finished_ts': 'REAL', 'exit_code': 'INTEGER', 'result': 'TEXT',
-    'log_dir': 'TEXT', 'plan': 'TEXT', 'steps': 'TEXT', 'progress': 'TEXT'}
-_JSON = ('command', 'work', 'steps', 'progress')
+    'log_dir': 'TEXT', 'plan': 'TEXT', 'steps': 'TEXT', 'progress': 'TEXT', 'flags': 'TEXT',
+    # Moving a waiting job to the top of its line (``move_to_top``): ``top_ts`` when it was moved (None: its own
+    # place; cleared by an undo), ``moved_ts`` when it was last moved (kept after an undo: the record says it was),
+    # ``top_aware`` set by a wrapper that honours the move (1; None: a wrapper of older code, which never reads it).
+    'top_ts': 'REAL', 'moved_ts': 'REAL', 'top_aware': 'INTEGER'}
+_JSON = ('command', 'work', 'steps', 'progress', 'flags')
+_HISTORY_COLUMNS = {'moved': 'INTEGER'}     # added to ``history`` after it was first made: 1 for a moved job
 SCHEMA = (f"CREATE TABLE IF NOT EXISTS jobs (id INTEGER PRIMARY KEY AUTOINCREMENT, "
           f"{', '.join(f'{name} {kind}' for name, kind in _COLUMNS.items())});"
           "CREATE TABLE IF NOT EXISTS history (job INTEGER, kind TEXT, work TEXT, estimate REAL, actual REAL, "
@@ -101,8 +124,9 @@ def queue_dir() -> Path:
 
 
 def connect(directory: Optional[Path] = None) -> sqlite3.Connection:
-    """The queue's database (created on first use; a column this code has and the file lacks is added, so checkouts
-    of different commits share one queue), autocommit: callers group their decisions in ``transaction``."""
+    """The queue's database (created on first use; a column this code has and the file lacks is added in place, so
+    checkouts of different commits share one queue and a wrapper of older code keeps running on it: it never reads
+    the new columns), autocommit: callers group their decisions in ``transaction``."""
     directory = queue_dir() if directory is None else Path(directory)
     (directory / LOCKS_DIR).mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(directory / DB_NAME, timeout=60, isolation_level=None)
@@ -110,13 +134,14 @@ def connect(directory: Optional[Path] = None) -> sqlite3.Connection:
     con.execute('PRAGMA journal_mode=WAL')
     con.execute('PRAGMA busy_timeout=60000')
     con.executescript(SCHEMA)
-    have = {row['name'] for row in con.execute('PRAGMA table_info(jobs)')}
-    for name, kind in _COLUMNS.items():
-        if name not in have:
-            try:
-                con.execute(f'ALTER TABLE jobs ADD COLUMN {name} {kind}')
-            except sqlite3.OperationalError:        # another process added it first
-                pass
+    for table, columns in (('jobs', _COLUMNS), ('history', _HISTORY_COLUMNS)):
+        have = {row['name'] for row in con.execute(f'PRAGMA table_info({table})')}
+        for name, kind in columns.items():
+            if name not in have:
+                try:
+                    con.execute(f'ALTER TABLE {table} ADD COLUMN {name} {kind}')
+                except sqlite3.OperationalError:        # another process added it first
+                    pass
     return con
 
 
@@ -208,11 +233,45 @@ def express_sized(job: dict) -> bool:
 
 
 def line(jobs: list[dict], lane: str, now: float) -> list[dict]:
-    """The queued jobs of ``lane`` in the order they start: by score (jobs lane) or join time (tools lane)."""
+    """The queued jobs of ``lane`` in the order they start: the jobs moved to the top first (``move_to_top``), the
+    one moved last first; then the rest as always, by score (jobs lane) or join time (tools lane).  A row without
+    ``top_ts`` (none was moved, or the row is older than the column) orders exactly as before it existed."""
     queued = [job for job in jobs if job.get('status') == 'queued' and job.get('lane') == lane]
+
+    def moved(job: dict) -> tuple:
+        top = job.get('top_ts')
+        return (top is None, -(top or 0.0))
     if lane == TOOLS_LANE:
-        return sorted(queued, key=lambda job: (job['queued_ts'] or 0.0, job['id']))
-    return sorted(queued, key=lambda job: (score(job, now), job['queued_ts'] or 0.0, job['id']))
+        return sorted(queued, key=lambda job: (*moved(job), job['queued_ts'] or 0.0, job['id']))
+    return sorted(queued, key=lambda job: (*moved(job), score(job, now), job['queued_ts'] or 0.0, job['id']))
+
+
+class MoveError(ValueError):
+    """A job that can't be moved: not in the queue, not waiting, or waited on by a wrapper of older code."""
+
+
+def move_to_top(con: sqlite3.Connection, job_id: int, undo: bool = False, now: Optional[float] = None) -> dict:
+    """Moves the waiting job ``job_id`` to the top of its own line (the owner, Nov 23: "a right click in the gui that
+    goosed something to the top of the fast or slow queue"), or back to its own place (``undo``); returns its row
+    as it now stands.  The jobs line or the tools line, whichever it waits in: the line is reordered (``line``),
+    nothing else (nothing running stops, its lane, its estimate and whether it may take the express place stay).
+    Several moved jobs: the one moved last first.  ``MoveError`` for a job that isn't in the queue, isn't waiting
+    (the error names its status), or whose wrapper is of older code (``top_aware`` unset: it would never honour
+    the move, and other old wrappers would not see it).  One transaction (``triforce job top``, the GUI's menu)."""
+    now = time.time() if now is None else now
+    with transaction(con):
+        rows = read_jobs(con, 'id = ?', (job_id,))
+        if not rows:
+            raise MoveError(f"job #{job_id} is not in the queue")
+        job = rows[0]
+        if job.get('status') != 'queued':
+            raise MoveError(f"job #{job_id} is {job.get('status')}, not waiting: only a waiting job can be moved")
+        if not job.get('top_aware'):
+            raise MoveError(f"job #{job_id} was queued by older code: its wrapper does not read the move to the top")
+        fields = {'top_ts': None} if undo else {'top_ts': now, 'moved_ts': now}
+        update(con, job_id, **fields)
+        job.update(fields)
+    return job
 
 
 def assign(ordered: list[dict], free: list[str], lane: str) -> dict:
@@ -282,15 +341,21 @@ def turn(con: sqlite3.Connection, directory: Path, job_id: int, now: Optional[fl
 
 # ------------------------------------------------------------------------------------------------ estimates
 
+def _units(work: dict) -> dict:
+    """``work``'s amounts by unit (its ``chains`` aside)."""
+    return {unit: amount for unit, amount in work.items() if unit in UNITS}
+
+
 def rates(history: list[dict]) -> dict:
     """Seconds per unit of work, refitted from ``history`` rows (``read_history``): per unit, over the
     ``RATE_WINDOW`` latest completed jobs that did some of it, the seconds they ran less what their other work takes
     at the other units' rates (those of jobs that did only that unit, else ``DEFAULT_RATES``), divided by the amount
     they did (a total, so a big job weighs as its size; Nov 22: small chains' start-up made a median 6x the rate of
     big chains).  ``DEFAULT_RATES`` where nothing finished yet."""
-    done = sorted((row for row in history if row.get('status') == 'completed' and (row.get('actual') or 0) > 0
-                   and isinstance(row.get('work'), dict) and row['work'] and set(row['work']) <= set(UNITS)
-                   and all((amount or 0) > 0 for amount in row['work'].values())),
+    done = sorted(({**row, 'work': _units(row['work'])} for row in history
+                   if row.get('status') == 'completed' and (row.get('actual') or 0) > 0
+                   and isinstance(row.get('work'), dict) and _units(row['work'])
+                   and all((amount or 0) > 0 for amount in _units(row['work']).values())),
                   key=lambda row: row.get('finished_ts') or 0.0, reverse=True)
 
     def total(samples: list, default: float) -> float:
@@ -311,9 +376,91 @@ def rates(history: list[dict]) -> dict:
     return result
 
 
-def estimate(work: Optional[dict], unit_rates: dict) -> float:
-    """Seconds ``work`` is expected to take at ``unit_rates``; 0 for no work."""
-    return float(sum(amount * unit_rates[unit] for unit, amount in (work or {}).items() if unit in unit_rates))
+@dataclass
+class ChainModel:
+    """What the history says chains take: ``shapes``, shape -> run-seconds (``chain_model``)."""
+    shapes: dict = field(default_factory=dict)
+
+    def seconds(self, chain: dict) -> Optional[float]:
+        """One chain's seconds (``runner.chain_entry``), None for a shape never seen."""
+        per_run = self.shapes.get(chain.get('shape'))
+        if per_run is None:
+            return None
+        return CHAIN_START_SECONDS + (chain.get('runs') or 0) * per_run / max(1, chain.get('parallel') or 1)
+
+
+def chain_model(history: list[dict]) -> ChainModel:
+    """The chains of ``history`` (rows whose work's ``chains`` carry the ``seconds`` they took: ``chain_seconds``,
+    recorded when the job ended) as run-seconds, ``(seconds - CHAIN_START_SECONDS) x parallel / runs``; per shape the
+    median of its ``SHAPE_WINDOW`` latest."""
+    samples: dict = {}
+    for row in sorted(history, key=lambda row: row.get('finished_ts') or 0.0):
+        for chain in ((row.get('work') or {}).get('chains') or []) if isinstance(row.get('work'), dict) else []:
+            if chain.get('seconds') is None or not chain.get('runs') or not chain.get('shape'):
+                continue
+            per_run = (chain['seconds'] - CHAIN_START_SECONDS) * max(1, chain.get('parallel') or 1) / chain['runs']
+            samples.setdefault(chain['shape'], []).append(max(0.05, per_run))
+    return ChainModel({shape: statistics.median(values[-SHAPE_WINDOW:]) for shape, values in samples.items()})
+
+
+def estimate(work: Optional[dict], unit_rates: dict, model: Optional[ChainModel] = None) -> float:
+    """Seconds ``work`` is expected to take at ``unit_rates``; its ``chains`` by ``model`` where it knows them
+    (the rest of the chain steps at the unit rate, as for a chain it can't place); 0 for no work."""
+    work = work or {}
+    amounts = _units(work)
+    seconds = 0.0
+    for chain in work.get('chains') or []:
+        known = None if model is None else model.seconds(chain)
+        if known is not None:
+            seconds += known
+            asked = (chain.get('runs') or 0) * (chain.get('steps') or 0)
+            amounts['chain_steps'] = max(0, amounts.get('chain_steps', 0) - asked)
+    return float(seconds + sum(amount * unit_rates[unit] for unit, amount in amounts.items() if unit in unit_rates))
+
+
+def chain_seconds(work: Optional[dict], actual: Optional[float], status: str, plan: Optional[dict]) -> Optional[dict]:
+    """``work`` with the ``seconds`` each of its ``chains`` took, as the history keeps it (``chain_model``): a job of
+    one chain that completed took ``actual``; a batch's chains (by entry ``name``) took their plan entry's
+    ``wall_seconds`` when that entry ended ``ok``, whatever the batch did after (an interrupted batch's finished
+    entries count).  A chain without a measure keeps none."""
+    if not isinstance(work, dict) or not work.get('chains'):
+        return work
+    chains = [dict(chain) for chain in work['chains']]
+    entries = {run.get('name'): run for run in (plan or {}).get('runs') or [] if isinstance(run, dict)}
+    for chain in chains:
+        entry = entries.get(chain.get('name'))
+        if entry is not None and entry.get('status') == 'ok' and entry.get('wall_seconds'):
+            chain['seconds'] = float(entry['wall_seconds'])
+        elif len(chains) == 1 and status == 'completed' and actual:
+            chain['seconds'] = float(actual)
+    return {**work, 'chains': chains}
+
+
+def estimate_now(con: sqlite3.Connection, work: Optional[dict]) -> float:
+    """``work``'s estimate from the history as it is now (``rates``, ``chain_model``)."""
+    history = read_history(con)
+    return estimate(work, rates(history), chain_model(history))
+
+
+def refresh_estimates(con: sqlite3.Connection) -> int:
+    """Recomputes the estimate of every live job whose work names its chains, from the history as it is now, so a
+    waiting or running job's estimate follows what the chains that ended since took; returns how many changed.  A
+    job announced without ``chains`` (an older tool) keeps the estimate it joined with.  Inside a transaction."""
+    history = read_history(con)
+    unit_rates, model = rates(history), chain_model(history)
+    changed = 0
+    for row in con.execute("SELECT id, work, estimate FROM jobs WHERE status IN ('queued', 'running')").fetchall():
+        try:
+            work = json.loads(row['work']) if row['work'] else None
+        except ValueError:
+            continue
+        if not isinstance(work, dict) or not work.get('chains'):
+            continue
+        new = round(estimate(work, unit_rates, model), 1)
+        if row['estimate'] is None or abs(new - row['estimate']) > 0.5:
+            con.execute("UPDATE jobs SET estimate = ? WHERE id = ?", (new, row['id']))
+            changed += 1
+    return changed
 
 
 def read_history(con: sqlite3.Connection) -> list[dict]:
@@ -475,6 +622,9 @@ def headline(job: dict) -> str:
     return f"Agent: {job.get('agent') or '?'}   Task: {job.get('task') or '?'}   Sub-task: {job.get('subtask') or '-'}"
 
 
+MOVED_MARK = 'moved to the top by the owner'    # a waiting job's mark once it was moved (``move_to_top``)
+
+
 def tags(job: dict, now: float, place: Optional[int] = None) -> str:
     """A job's state line: ``RUNNING express 3m of ~8m``, ``RUNNING regular 1h40m of ~40m OVERRUN``,
     ``RUNNING tools 2m  step 1/5: build``, ``RUNNING tools 6m  steps 2-5/5: test python, test asm, ...`` (steps run
@@ -493,7 +643,8 @@ def tags(job: dict, now: float, place: Optional[int] = None) -> str:
     if job.get('status') == 'queued':
         size = '' if estimate is None else (' express' if express_sized(job) else '') + f" ~{short(estimate)}"
         at = '' if place is None else f" #{place}"
-        return f"queued{at}{size} waited {short(now - (job.get('queued_ts') or now))}"
+        return (f"queued{at}{size} waited {short(now - (job.get('queued_ts') or now))}"
+                + (f"  {MOVED_MARK}" if job.get('top_ts') is not None else ''))
     ran = (None if job.get('admitted_ts') is None or job.get('finished_ts') is None
            else job['finished_ts'] - job['admitted_ts'])
     code = '' if job.get('exit_code') is None else f" exit {job['exit_code']}"
@@ -532,14 +683,24 @@ def progress_lines(job: dict, now: float) -> list[str]:
             for name, report in reports.items()]
 
 
+FLAG_LEVELS = ('red', 'note')        # a red flag: the run may not be what it claims; a note: worth a look
+
+
+def flag_lines(job: dict) -> list[str]:
+    """A job's flags (``jobs.flag``, the row's ``flags``), one a line: ``RED FLAG module-stale: ...``, ``note
+    behind-main: ...``."""
+    return [f"{'RED FLAG' if flag.get('level') == 'red' else 'note'} {flag.get('code')}: {flag.get('text')}"
+            for flag in job.get('flags') or []]
+
+
 def describe(job: dict, now: float, place: Optional[int] = None) -> list[str]:
     """A job's row as ``triforce job list`` and the training GUI show it: the headline, the description, the state
-    (``tags``), its progress (``progress_lines``), then what it is (verb, and kind where it says more), where it
-    runs and the command."""
+    (``tags``), its flags (``flag_lines``), its progress (``progress_lines``), then what it is (verb, and kind where
+    it says more), where it runs and the command."""
     where = job.get('branch') or Path(job.get('checkout') or job.get('cwd') or '?').name
     what = ' '.join(dict.fromkeys(part for part in (job.get('verb'), job.get('kind')) if part))
-    return [headline(job), job.get('description') or '', tags(job, now, place), *progress_lines(job, now),
-            f"{what}  {where}  {' '.join(job.get('command') or [])}".strip()]
+    return [headline(job), job.get('description') or '', tags(job, now, place), *flag_lines(job),
+            *progress_lines(job, now), f"{what}  {where}  {' '.join(job.get('command') or [])}".strip()]
 
 
 def iso(ts: Optional[float]) -> Optional[str]:

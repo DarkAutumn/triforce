@@ -8,6 +8,8 @@ from triforce.actions import MASK_SIZE, NUM_DIRECTIONS, NUM_DURATIONS, NUM_KINDS
 from triforce.metrics import read_jsonl
 from triforce.model import MASK_KEY
 
+from .conftest import start_task
+
 KINDS, DIRECTIONS, DURATIONS = list(_native.ACTION_KINDS), list(_native.DIRECTIONS), list(_native.DURATIONS)
 
 
@@ -64,7 +66,7 @@ def test_train_clones_the_demonstrations(states_dir, tmp_path):
     recorder.add(obs, 'MOVE N 8')
     recorder.keep()
     recorder.save(tmp_path / 'demos.npz')
-    common = ['--specialist', 'ow-start', '--states-dir', str(states_dir), '--models-dir', str(tmp_path),
+    common = ['--specialist', start_task(), '--states-dir', str(states_dir), '--models-dir', str(tmp_path),
               '--parallel', '2', '--steps-per-update', '16', '--iterations', '2', '--no-curriculum', '--seed', '3',
               '--device', 'cpu', '--demos', str(tmp_path / 'demos.npz'), '--demo-coeff', '0.5',
               '--ent-coeff', '0.03']

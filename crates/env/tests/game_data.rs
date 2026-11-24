@@ -11,7 +11,9 @@ use std::path::Path;
 fn copy_data() -> tempfile::TempDir {
     let tmp = tempfile::tempdir().unwrap();
     let repo = common::repo();
-    std::fs::create_dir_all(tmp.path().join("triforce")).unwrap();
+    // Its own (empty) harvested folder: else `paths::data_dir` reads the store's harvested snapshot, whose route
+    // namespaces would ask these trimmed tables for their own.
+    std::fs::create_dir_all(tmp.path().join("triforce/states/harvested")).unwrap();
     std::fs::create_dir_all(tmp.path().join("specialists")).unwrap();
     for rel in ["triforce/game.yaml", "triforce/routes.yaml", "triforce/heart_value.json", "triforce/chain_hp.json"] {
         std::fs::copy(repo.join(rel), tmp.path().join(rel)).unwrap();
