@@ -1432,6 +1432,16 @@ the direction it actually takes at its next grid point, read from the game a few
 rule the column states, and a policy tower fed its output (as `feed` does for the hit head) sees "this one will turn
 at me" before it happens.
 
+### Not done, not tested (status file `local://r40-chase40-status.md`)
+- No network has trained with `obs.chase` on; nothing says yet that the columns change play. The hit bench
+  (`r40_obs_bench.py`) was not run with the `chase` group.
+- The column does not walk walls or room bounds: a monster blocked at its next grid point decides there all the same
+  (the tile test turns it the frame after, which the column does not predict); `grid_time` counts game updates (lag
+  frames make it short in crowded rooms).
+- Zols, Gels, Dodongos and Armos have no turn column; the Vire's hop is handled by rounding its Y to its row (its
+  98.8% with the roll is the lowest of the wanderers; one Vire turn read by hand had no decision behind it).
+- The overworld X wrap is in the code and its unit test, not measured in play.
+
 ## The generation's base made green (Gen40fix, branch `r40-genfix`)
 
 `triforce job test all --build` on the base as received (5f5647c9, job #937) failed 8 Python tests; Rust, asm and
