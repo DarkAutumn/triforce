@@ -292,6 +292,30 @@ def test_a_seal_that_fails_leaves_the_run_open_and_whole(shared, monkeypatch):
     assert store.seal_run(run)['filed'] == ['act', 'eval.json']
 
 
+def test_the_backup_copies_what_is_missing_and_the_index_every_time(shared, tmp_path):
+    """`triforce-lead backup --apply`: sealed runs and teams are copied once, read-only; a dated copy of the index
+    is made on every run and holds the audit row of the backup that made it."""
+    run = _sealed('zol', 'r1')
+    store.create_team('t1', {'zol': store.slot_of(run)}, 'test')
+    archive = tmp_path / 'archive'
+    assert 'runs/zol/r1' in lead.backup(archive, apply=False, out=lambda *_: None) and not archive.exists()
+    copied = lead.backup(archive, apply=True, out=lambda *_: None)
+    assert {'runs/zol/r1', 'teams/t1.json'} <= set(copied)
+    assert (archive / 'runs/zol/r1/ckpt.pt').read_bytes() == (run.path / 'ckpt.pt').read_bytes()
+    assert not os.access(archive / 'runs/zol/r1/ckpt.pt', os.W_OK)
+    indexes = sorted(archive.glob('store.db.*'))
+    assert len(indexes) == 1
+    import sqlite3  # pylint: disable=import-outside-toplevel
+    con = sqlite3.connect(indexes[0])
+    try:
+        assert con.execute("SELECT count(*) FROM audit WHERE op = 'backup'").fetchone()[0] == 1
+        assert con.execute("SELECT count(*) FROM runs WHERE name = 'r1'").fetchone()[0] == 1
+    finally:
+        con.close()
+    assert lead.backup(archive, apply=True, out=lambda *_: None) == []       # nothing left to copy
+    store.make_writable(archive)
+
+
 def test_views_of_gone_processes_are_swept(tmp_path):
     alive = tmp_path / f'{store.VIEW_PREFIX}{os.getpid()}-abc'
     gone = tmp_path / f'{store.VIEW_PREFIX}999999999-def'

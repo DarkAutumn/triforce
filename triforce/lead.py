@@ -455,8 +455,10 @@ def stats_backfill(files: list, team: Optional[str] = None, out=print) -> dict:
 
 def backup(to: Optional[Path] = None, apply: bool = False, out=print) -> list[str]:
     """Copies into the archive (``$TRIFORCE_BACKUP/store``, else ``/backup/triforce/store``) the ROM, every sealed
-    run, team, snapshot, job folder, ``legacy/`` import and the index that is not there yet (its own disk: real
-    copies, made read-only).  The dry run prints each item and the totals per kind."""
+    run, team, snapshot, job folder, ``legacy/`` import that is not there yet (its own disk: real copies, made
+    read-only), then a dated copy of the index (``store.db.<yymmdd-HHMMSS>``, every time: SQLite's ``VACUUM INTO``,
+    which must run outside a transaction, so after the write is committed).  The dry run prints each item and the
+    totals per kind."""
     base = Path(to) if to else Path(os.environ.get(BACKUP_ENV) or DEFAULT_BACKUP) / 'store'
     root = store.root()
     items = ['rom'] if (root / 'rom').is_dir() else []
@@ -482,12 +484,20 @@ def backup(to: Optional[Path] = None, apply: bool = False, out=print) -> list[st
         for kind, (count, total) in sorted(totals.items()):
             out(f"  total {kind}: {count} items, {total / 1e9:.2f} GB")
         return todo
-    with store.writing('backup', {'to': str(base), 'items': len(todo)}, LEAD) as con:
+    with store.writing('backup', {'to': str(base), 'items': len(todo)}, LEAD):
         for item in todo:
             store.link_tree(store.root() / item, base / item, link=False)
             store.make_readonly(base / item)
-        index = base / f"store.db.{time.strftime('%y%m%d-%H%M%S')}"
-        con.execute(f"VACUUM INTO '{index}'")
+    stamp, index, again = time.strftime('%y%m%d-%H%M%S'), None, 0
+    while index is None or index.exists():                  # two backups within one second
+        index = base / (f'store.db.{stamp}' + (f'-{again}' if again else ''))
+        again += 1
+    con = store.connect()
+    try:
+        con.execute('VACUUM INTO ?', (str(index),))
+    finally:
+        con.close()
+    out(f"  index: {index}")
     return todo
 
 
