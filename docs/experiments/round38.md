@@ -1194,8 +1194,22 @@ the decision taken on 8 kills (`required` outside a wall room says no, and holds
 action: 4:0x50, 4:0x31); Metric A now asks only whether the mode is `never`. With that, 12 of 12 replays of the
 50-run check agree with RAM on every 10th kill (offline, no targets stream: the rule from RAM alone).
 
-**The baseline of record waits** for `r40-targets` (replays carrying the targets stream) and the 250 test on main:
-the 2.0.0.12 250 test is then scored from its replays, the path the backtest of old versions takes.
+**Checked on the 2.0.0.13 250 test's replays** (targets and masks recorded). Against a RAM-following reference written
+apart from the calculator (first 50 replays, 319 windows): Metric A armed 29 and other 35 agree, Metric B hit 7 and
+miss 10 agree, 0 unattributed, one difference: seed 49, frame 23677, 4:0x31, where the calculator's `armed` is right
+(on 9 kills Link's first bomb was exploding when he placed his last, the bag 1 → 0, and the first blast killed a Red
+Keese, `$51` set) and the reference was wrong (it asked for a bomb in the bag on the frame before the kill); fixed,
+and the frames are a test. Per dying type over all 250 (single deaths only), deaths that moved the cycle against
+those that did not: the rule holds for `$14` (0 / 4,083), `$1C` (0 / 1,310), `$5D` (0 / 204) and every type the game
+counts; the other "did not move" are no deaths the game ended: 248 empty slots (`$00`) keeping a dying metastate from
+an earlier object, refilled on a room entry (the calculator would have taken one for a death under way, which shuts
+Metric B's window: fixed, a dying slot must hold a monster); `$08` 4, `$0B` 1, `$10` 4, `$15` 4, `$17` 1 in their sparkle
+when Link left the room (mode 4, the next room's entry); `$0E` 7, 0:0x2c's Tektites in their sparkle when Link went
+into the cave (mode 11; twice the slot became the cave's person `$6B`); `$3C` 1, a Manhandla hand that dies while
+others live becomes the dead dummy (asm:Manhandla_CheckCollisions, as the disassembly says). The calculator counts
+none of these as a kill: a room left in a sparkle is `left` for Metric B and nothing for Metric A.
+
+**The baseline of record** runs on 2.0.0.14 (the whirlwind macros), scored from its replays.
 
 ## Moldorm crossed, 9:0x56's key
 
