@@ -45,6 +45,9 @@ const OBJ_WANTS_TO_SHOOT: usize = 0x412;
 const OBJ_GRID_OFFSET: usize = 0x394;
 /// asm:ObjQSpeedFrac ($3BC + slot).
 const OBJ_QSPEED: usize = 0x3BC;
+/// A red Goriya's expected frames to its throw once it may throw: 2 of 256 frames qualify
+/// (asm:Walker_SetInputDirAndTryThrowBoomerang).
+pub const RED_GORIYA_WAIT: f32 = 128.0;
 
 /// The horizon the observation uses, in frames: hits are decided in an action's first frames (round 36: half by
 /// frame 2, three quarters by frame 4; the bench's choice, round40.md).
@@ -132,10 +135,14 @@ pub fn lane(ram: &[u8], slot: usize, grid: &Grid) -> Option<Lane> {
     let live = ram[OBJ_METASTATE + slot] == 0 && ram[OBJ_STUN + slot] == 0;
     let (ready, wait) = if s.goriya {
         // It throws when its timer is 0 and it wants to; the wish is set only at a grid point, so without it the
-        // next throw is at least the frames to the next grid point away (measured on 2.0.0.13's replays: the timer
-        // alone read 0 up to 16 frames before most throws; round40.md "The lane against the game").
+        // next throw is at least the frames to the next grid point away. A red Goriya (`$06`) throws besides only on
+        // a frame whose random byte is $23 or $77 (2 of 256): its throw is a lottery, 128 frames away on average.
+        // Measured on 2.0.0.13's replays (round40.md "The lane against the game"): the timer alone read 0 eight
+        // frames before most throws.
         let timer = ram[OBJ_TIMER + slot] as f32;
-        let wait = if ram[OBJ_WANTS_TO_SHOOT + slot] != 0 {
+        let wait = if obj_type == 0x06 {
+            timer.max(RED_GORIYA_WAIT)
+        } else if ram[OBJ_WANTS_TO_SHOOT + slot] != 0 {
             timer
         } else {
             let speed = (ram[OBJ_QSPEED + slot] as f32 / 64.0).max(0.25);
