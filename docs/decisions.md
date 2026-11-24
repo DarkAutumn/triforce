@@ -3755,3 +3755,38 @@ the owner: "this is fine for now [...] we can tackle this later if the new model
 The shared store is cut over before the generation's trainings start, so it trains into the store (the owner:
 "acceptable").
 
+## 2026-11-23 — The fresh generation's Dungeon 3, continued: no kills before the Darknut room, and the bomb plan (the owner)
+
+The owner, on the lead's note that the first Darknut gives bombs only when the drop cycle stands right: "This is
+correct but the meta point here is that a well trained model will not kill anything before hitting the darknut room,
+including the overworld and the two zol rooms. In 0x76 and 0x75 BOTH should be screen wrapped (0x76 was walking across
+the screen in the replays I checked [...]) to avoid needing to kill anything. The zols in 7b 6b could be annoying and
+get in the way, we won't always land on the darknut room with 0 kills. But maybe even a 50-50 split training the 0x5b
+south entry to north should have the kill count at 0 or 1 to teach bypass or kill." And: "You may even want to start
+tracking goals of screen wrap and 'no kills'."
+
+The bombs: "Going 4a means we get possibly 8 total bombs. I want to cap the bomb usage in 0x59 so we never drop below
+4 when clearing it. That means when we transition from 0x49 -> 0x59 we should literally train with 4 or 8 bombs in
+0x59 because those are the exact states we will have. At 8 the agent can use up to 4, at 4 it can use none. Then in
+0x5b on the second pass, the training is as it was before. [...] it's important to not run out of bombs for
+manhandla. We should leave 0x5b with 8 bombs if all goes well, hit manhandla with 7 due to the 0x4c wall, and if we
+get lucky with our hits and counts bombing manhandla, we shouldn't need to cheat bombs."
+
+For 2.0.1.0's `d3first` (the retrain; nothing before it):
+- **No kill before 3:0x5b.** The overworld walk wraps the screen in 0:0x76 as well as 0:0x75; 3:0x7b (its key taken)
+  and 3:0x6b are crossed. The game's drop cycle (`WorldKillCycle`, zero at power on, `asm:Drop_SetUpItem`) then
+  stands at 0 in 3:0x5b, and the first Red Darknut killed uses column 1 of its group: bombs.
+- **3:0x5b's first pass (S -> N) is trained half with the cycle at 0 (kill one Darknut, take its bombs, leave) and half
+  at 1 (a kill was made on the way: nothing to gain, cross).** The bomb-carrier input says which it is.
+- **The bombs**: 3:0x4a's room bombs (4) and the first Darknut's (4) make 4 or 8 on entering 3:0x59 from 3:0x49, and
+  its training starts hold exactly 4 or 8. `bomb_reserve: 4` from 3:0x59 (today 0): at 8 Link may use up to 4 there,
+  at 4 none. The reserve holds to 3:0x5b's last pass, which is trained as today and whose room bombs bring him to 8;
+  the 0x4c wall takes one; Manhandla is met with 7.
+- **Tracked as goals** (run statistics, a route step's own expectation beside what happened): the screen wrap taken
+  where the route asks for it (0:0x76, 0:0x75), and no kill made where the route crosses (the overworld walk, 3:0x7b,
+  3:0x6b; the cycle's value on entering 3:0x5b).
+- The lead's notes: the Darknut's bombs are not certain even at the right count. A table drop appears only when the
+  dead monster's random byte is below its group's rate, `$68` of 256 for a Red Darknut: 41% (`asm:Drop_GroupRates`),
+  so 3:0x59 is entered with 8 in about two runs of five that arrive with the cycle at 0, and with 4 otherwise. And
+  the cycle counts Gels (`$15`) but not child Gels (`$14`): a Zol split on the way and finished moves it.
+
