@@ -253,3 +253,78 @@ board). Runs a segment, paths 1, 2, 3: to Dungeon 7's triforce 3, 5, 13; from th
 **Dungeon 4 after the two fine-tunes**: `d2b-all-w8` 52.4% (2.0.0.12 team 68.4%, -16.0 ± 2.1; `d1-all-w8` 57.0%).
 Gleeok 4:0x13 loses 427 a thousand entering (`d1-all-w8` 367, the team 282) and 4:0x11 65 (79, 0). No Gleeok row
 changed between them: the fight drifted with the fine-tunes on the legs' data.
+
+## 2.0.0.13: the team and the one network on every segment
+
+**What is compared.** On one side is 2.0.0.13's team (its 55 networks with their hit heads and `late.d3first`
+pointers) on 2.0.0.13's code, from a tree frozen at that version. On the other is the one network `r38c/d2b-all-w8`
+in every slot, on this branch at main 5be3350b (2.0.0.13's code plus the run statistics). The network was copied from
+the 51 on states and data recorded on 2.0.0.5 to 2.0.0.11, then fine-tuned on the overworld legs' teachers. Neither
+side has 2.0.0.14's whirlwind macros (0:0x0b, 0:0x22) or 2.0.0.15's Manhandla bombs.
+
+**How.** `eval-batch --chains TAG --runs 1000 --act model --chain-args "--clips on"`, seeds 0-999. Each segment is
+played from its start state to the end of the game, and its rate is the batch's own arrival at the segment's target
+(`eval_batch.D3FIRST_TARGETS`); d9 and the full route are scored by the game's end. Paired by seed; ± is one
+standard error. Hits and hearts lost a room visit are counted over each run's part before its arrival. Frames to
+arrive are compared on the runs where both sides arrived. "Where runs ended" counts the runs that did not arrive, by
+their last room, per 1,000 runs. Table: `target/r38/table2013.py`. `triforce stats compare` scores a chain by the
+game's end only, so for these chains it measures the full route and not a segment's arrival: I used it for the full
+route (below) and my script for the segments.
+
+| segment | team 2.0.0.13 | one network | network - team (rate) | hits a visit team / network | hearts lost a visit team / network | frames to arrive, both arrived (network - team) | team: where runs ended (per 1000) | network: where runs ended |
+|---|---|---|---|---|---|---|---|---|
+| d3 | 39.2% | 43.0% | +3.8 ± 2.2 | 0.246 / 0.217 | 0.170 / 0.158 | -156 ± 86 (n 170) | 3:0x4d 246 died, 3:0x69 148 died, 3:0x5b 59 died | 3:0x4d 250 died, 3:0x69 146 died, 3:0x5b 90 died |
+| post-d3 | 100.0% | 100.0% | +0.0 ± 0.0 | 0.088 / 0.043 | 0.044 / 0.021 | +5 ± 3 (n 1000) |  |  |
+| d4 | 68.4% | 52.4% | -16.0 ± 2.1 | 0.223 / 0.227 | 0.127 / 0.138 | +1334 ± 222 (n 368) | 4:0x13 268 died, 4:0x60 16 died, 4:0x12 11 died | 4:0x13 391 died, 4:0x11 64 lost, 4:0x12 6 died |
+| post-d4 | 100.0% | 100.0% | +0.0 ± 0.0 | 0.144 / 0.134 | 0.070 / 0.064 | +20 ± 3 (n 1000) |  |  |
+| d1 | 98.9% | 98.5% | -0.4 ± 0.5 | 0.187 / 0.169 | 0.064 / 0.053 | +720 ± 75 (n 974) | 1:0x35 7 died, 1:0x33 2 lost, 1:0x44 1 died | 1:0x23 12 lost, 1:0x35 2 died, 1:0x44 1 died |
+| post-d1 | 98.3% | 98.6% | +0.3 ± 0.5 | 0.342 / 0.321 | 0.178 / 0.168 | +38 ± 16 (n 970) | 0:0x4c 6 died, 0:0x3d 5 died, 0:0x4c 4 lost | 0:0x3d 7 died, 0:0x4c 4 died, 0:0x4c 3 lost |
+| d2 | 99.8% | 99.9% | +0.1 ± 0.2 | 0.406 / 0.356 | 0.152 / 0.140 | +322 ± 30 (n 997) | 2:0x0e 1 died, 2:0x5e 1 died | 2:0x5e 1 died |
+| post-d2 | 100.0% | 100.0% | +0.0 ± 0.0 | 0.153 / 0.141 | 0.073 / 0.068 | -100 ± 5 (n 1000) |  |  |
+| d5 | 66.1% | 71.7% | +5.6 ± 2.0 | 0.237 / 0.222 | 0.268 / 0.247 | +58 ± 51 (n 480) | 5:0x05 128 died, 5:0x64 48 died, 5:0x66 39 died | 5:0x05 130 died, 5:0x64 49 died, 5:0x37 22 died |
+| post-d5 | 82.3% | 78.8% | -3.5 ± 1.7 | 0.349 / 0.282 | 0.233 / 0.201 | +83 ± 43 (n 664) | 0:0x55 54 lost, 0:0x34 41 died, 0:0x1b 34 lost | 0:0x1b 77 lost, 0:0x34 39 died, 0:0x55 32 lost |
+| d7 | 77.3% | 66.3% | -11.0 ± 2.0 | 0.556 / 0.648 | 0.272 / 0.348 | +338 ± 148 (n 517) | 7:0x1b 67 died, 7:0x1c 56 died, 7:0x0d 26 lost | 7:0x1c 94 died, 7:0x1b 83 died, 7:0x18 48 died |
+| post-d7 | 99.3% | 98.3% | -1.0 ± 0.5 | 0.187 / 0.167 | 0.085 / 0.081 | +34 ± 22 (n 976) | 0:0x3f 5 died, 0:0x32 1 died, 0:0x3e 1 lost | 0:0x2f 11 lost, 0:0x3f 2 lost, 0:0x3f 2 died |
+| d6 | 35.7% | 48.6% | +12.9 ± 2.2 | 0.684 / 0.502 | 0.919 / 0.791 | +38 ± 81 (n 177) | 6:0x3a 327 died, 6:0x38 113 died, 6:0x29 82 died | 6:0x3a 275 died, 6:0x38 87 died, 6:0x2c 67 died |
+| post-d6 | 100.0% | 99.7% | -0.3 ± 0.2 | 0.192 / 0.169 | 0.095 / 0.088 | +11 ± 3 (n 997) |  | 6:0x78 3 died |
+| d8 | 88.6% | 82.4% | -6.2 ± 1.6 | 1.158 / 1.068 | 0.742 / 0.702 | +3235 ± 161 (n 731) | 8:0x3f 42 died, 8:0x3e 40 died, 8:0x3c 20 died | 8:0x4c 78 lost, 8:0x3f 35 died, 8:0x3e 24 died |
+| post-d8 | 100.0% | 99.9% | -0.1 ± 0.1 | 0.242 / 0.208 | 0.197 / 0.172 | +42 ± 8 (n 999) |  | 0:0x05 1 died |
+| d9 | 51.2% | 54.6% | +3.4 ± 2.3 | 0.587 / 0.569 | 0.374 / 0.366 | +890 ± 130 (n 272) | 9:0x10 143 died, 9:0x30 139 died, 9:0x42 52 died | 9:0x10 121 died, 9:0x30 115 died, 9:0x42 46 died |
+
+**The product of the 17 segment rates (an estimate**: it multiplies arrivals from fixed start states, so it ignores
+what a run brings into the next segment): team 0.0176, one network 0.0175, one in 57 each.
+
+**From the start** (the two `full` chains, 1,000 runs each), runs reaching each triforce and ending the game:
+
+|---|---|---|---|---|---|---|---|---|---|
+| team 2.0.0.13 | 379 | 211 | 201 | 192 | 94 | 36 | 5 | 4 | 2 |
+    team 2.0.0.13 win: seed 156, 168373 frames, 1 cheated items
+    team 2.0.0.13 win: seed 15, 140646 frames, 5 cheated items
+| one network | 421 | 226 | 224 | 212 | 121 | 47 | 18 | 13 | 2 |
+    one network win: seed 679, 145928 frames, 1 cheated items
+    one network win: seed 781, 152816 frames, 3 cheated items
+
+`triforce stats compare` on the two full chains: the rate is 0.2% for both (+0.0 ± 0.2). Hearts lost a run 8.82
+against 9.41 (+0.59 ± 0.51), within noise. Rooms cleared holding the beams 10.99 against 12.95 (+1.96 ± 0.31) and
+kills from range 6.11 against 7.66 (+1.55 ± 0.30), both better. The time to enter 5:0x05, the last step both entered
+in 20 or more runs, is +2,657 ± 1,101 frames, worse. The network's full chain ends stuck in 59 of 1,000 runs
+(max-steps 30, bounce-limit 25), the statistics' red flag.
+
+**What it says.** The one network is level with the 2.0.0.13 team on a run from the start: 2 against 2 endings, and
+the same product. It reaches more triforces on the way: D5 121 against 94, D6 18 against 5, D8 13 against 4. It is
+ahead on D6 (+12.9 ± 2.2: 6:0x3a's Wizzrobes 275 against 327 a thousand), D5 (+5.6 ± 2.0) and D3 (+3.8 ± 2.2, about
+two standard errors). It is behind on D4 (-16.0 ± 2.1: Gleeok 4:0x13 391 against 268, and 4:0x11's trap room stuck in
+64), D7 (-11.0 ± 2.0: 7:0x1c's Digdogger 94 against 56, 7:0x18 48), D8 (-6.2 ± 1.6: 8:0x4c, where the team's Pols
+Voice `r38t-pols` leaves the key and the network loses 78 a thousand, none of them deaths) and post-d5 (-3.5 ± 1.7: 0:0x1b
+77 lost). Every route leg is within a point, except post-d5 (above) and post-d7 (-1.0 ± 0.5: 11 lost at 0:0x2f's
+heart-container cave, which the team's fresh ow-start plays and the network's 51-era copy does not). The network
+takes fewer hits a visit on 15 of 17 segments, and more on D4 and D7.
+
+The from-start counts fall below the product because a run enters each later segment with what the earlier ones left
+it. On the network's own earlier measurement (2.0.0.11's code, 1,000 runs) 6 runs ended the game; here 2 do. Both
+counts are small, and the code between them differs (2.0.0.12 and 2.0.0.13's merges).
+
+The batch's last entry, `report`, exited 1 after the chains: `scripts/yardstick.py report` needs each family's own
+evaluation (`eval.json` in the run's act mode) in every slot, and the one-network root has none (the run was never
+evaluated family by family): "no evaluation in the run's act mode ... (or pass --allow-mode-mismatch)". Its room
+table is empty for the same reason ("room 0/51 evaluations"). That does not touch the chains.
