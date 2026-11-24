@@ -953,10 +953,48 @@ pub struct SpecialistConfig {
     /// Share of resets drawn from the harvested dir (0, the default: harvested starts are opt-in).
     #[serde(default)]
     pub harvested_fraction: f64,
+    /// `demos: {files: [NAME, ...], coeff: C}` (round 40): demonstration files (`triforce.demos`) the task's
+    /// trainings clone at weight `C` (`train --demos`'s term), each named relative to the `demos` data kind
+    /// (`triforce.paths.data_dir('demos')`: the checkout's `target/demos` while it has one, else the store's current
+    /// snapshot); a name that resolves to nothing refuses the training (`triforce.inputs.task_demos`).  Read by the
+    /// Python trainers only.
+    #[serde(default)]
+    pub demos: Option<DemosConfig>,
     #[serde(default = "yes", deserialize_with = "de_bool")]
     pub trainable: bool,
     #[serde(default)]
     pub notes: Option<String>,
+}
+
+/// A task's `demos:` ([`SpecialistConfig::demos`]).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DemosConfig {
+    /// File names under the `demos` data kind's folder (relative, no `..`).
+    pub files: Vec<String>,
+    /// The cloning term's weight (> 0).
+    pub coeff: f64,
+}
+
+impl DemosConfig {
+    fn validate(&self) -> Result<(), String> {
+        if self.files.is_empty() {
+            return Err("files must name at least one demonstration file".into());
+        }
+        for file in &self.files {
+            let path = Path::new(file);
+            if file.is_empty()
+                || path.is_absolute()
+                || path.components().any(|c| !matches!(c, std::path::Component::Normal(_)))
+            {
+                return Err(format!("{file:?}: a file name relative to the demos data folder (no '..', not absolute)"));
+            }
+        }
+        if !(self.coeff.is_finite() && self.coeff > 0.0) {
+            return Err(format!("coeff must be a finite number above 0, got {}", self.coeff));
+        }
+        Ok(())
+    }
 }
 
 /// The YAML of the task file at `path` with its `extends:` chain merged ([`SpecialistConfig::from_file`]); `seen`:
@@ -1120,6 +1158,9 @@ impl SpecialistConfig {
         self.ram_randomization
             .validate()
             .map_err(|e| fail("ram_randomization", e))?;
+        if let Some(demos) = &self.demos {
+            demos.validate().map_err(|e| fail("demos", e))?;
+        }
         let steps = 1..=i64::from(u32::MAX);
         if !steps.contains(&self.max_steps) {
             return Err(fail("max_steps", format!("max_steps must be in {steps:?}")));
@@ -1736,6 +1777,28 @@ mod tests {
             ("{room_bombs_share: 2}", "probability"),
         ] {
             let e = minimal(&format!("ram_randomization: {bad}\n")).unwrap_err().0;
+            assert!(e.contains(why), "{bad}: {e}");
+        }
+    }
+
+    /// `demos` (round 40): file names relative to the demos data folder and a weight above 0; absent by default.
+    #[test]
+    fn demos_parse_and_reject_bad_entries() {
+        assert_eq!(minimal("").unwrap().demos, None);
+        let c = minimal("demos: {files: [r40-d3-69-line.npz, sub/b.npz], coeff: 0.05}\n").unwrap();
+        let demos = c.demos.unwrap();
+        assert_eq!(demos.files, ["r40-d3-69-line.npz", "sub/b.npz"]);
+        assert_eq!(demos.coeff, 0.05);
+        for (bad, why) in [
+            ("{files: [], coeff: 0.05}", "at least one"),
+            ("{files: [/tmp/a.npz], coeff: 0.05}", "relative"),
+            ("{files: [../a.npz], coeff: 0.05}", "relative"),
+            ("{files: [a.npz], coeff: 0}", "above 0"),
+            ("{files: [a.npz], coeff: .nan}", "above 0"),
+            ("{files: [a.npz]}", "coeff"),
+            ("{files: [a.npz], coeff: 0.1, weight: 2}", "unknown field"),
+        ] {
+            let e = minimal(&format!("demos: {bad}\n")).unwrap_err().0;
             assert!(e.contains(why), "{bad}: {e}");
         }
     }

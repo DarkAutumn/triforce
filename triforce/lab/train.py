@@ -20,8 +20,9 @@ Also (docs/lab.md): auxiliary targets (``--aux OUTPUT=TARGET:COEFF``) and look-a
 (``--try-others K:P``, training only); a recurrent network (``LabNet.initial_state``) trains on sequences of
 ``--bptt`` decisions from stored states; ``--sampling need`` shares the rows by each family's need (``--need-target-for``
 a family's own target); ``--teacher-weight`` scales or removes a family's teacher term; ``--rehearse`` keeps tasks
-outside the rollout in the loss by their stored teacher rows; demonstrations (``--demos``), the early stop
-(``--stop-success``) and numbered checkpoints (``--checkpoint-every``) as in ``triforce train``.
+outside the rollout in the loss by their stored teacher rows; demonstrations (``--demos``, and each family task's own
+``demos:`` unless ``--no-task-demos``: one pool of rows, one weight), the early stop (``--stop-success``) and numbered
+checkpoints (``--checkpoint-every``) as in ``triforce train``.
 """
 
 import argparse
@@ -35,9 +36,10 @@ from typing import Optional
 
 import torch
 
-from .. import lineage, nets, paths, registry, store
+from .. import lineage, manifest, nets, paths, registry, store
 from ..best_of_n import success_by_state
-from ..demos import load_demos
+from ..demos import load_demos, recipe as demo_recipe
+from ..inputs import MissingInput, task_demos
 from ..events import EventLog, logged_job
 from ..jobs import announce, work
 from ..jobs import progress as job_progress
@@ -125,8 +127,12 @@ def parse_args(argv=None):
     parser.add_argument('--rehearse-rows', type=int, default=300_000, help="rows held, equal a key")
     parser.add_argument('--rehearse-coeff', type=float, default=1.0)
     parser.add_argument('--demos', nargs='+', default=None, metavar='FILE',
-                        help="demonstration files (triforce.demos) behavior-cloned during PPO (--demo-coeff)")
-    parser.add_argument('--demo-coeff', type=float, default=0.2)
+                        help="demonstration files (triforce.demos) behavior-cloned during PPO (--demo-coeff), with the "
+                             "families' task demos")
+    parser.add_argument('--demo-coeff', type=float, default=None,
+                        help="the cloning weight (default: the tasks' demos: coeff, else 0.2)")
+    parser.add_argument('--no-task-demos', action='store_true',
+                        help="leave out the demonstration files the families' tasks declare (demos:)")
     parser.add_argument('--stop-success', type=float, default=None,
                         help="stop once every family's start-state-balanced training success >= this for "
                              "--stop-patience iterations and an evaluation of each confirms it")
@@ -337,6 +343,14 @@ def main(argv=None) -> Path:
     families = parse_families(args.families, args.parallel, shares, args.state_route,
                               curriculum=not args.no_curriculum, states_dir=args.states_dir)
     keys = [f.key for f in families]
+    try:
+        declared = [] if args.no_task_demos else [task_demos(family.config) for family in families]
+    except MissingInput as error:
+        raise SystemExit(str(error)) from None
+    missing = [path for path in args.demos or () if not Path(path).is_file()]
+    if missing:
+        raise SystemExit(f"--demos {', '.join(missing)}: no such file")
+    args.demos, args.demo_coeff = demo_recipe(declared, args.demos, args.demo_coeff)
     steps_per_env = max(1, args.steps_per_update // args.parallel)
     total = args.iterations * steps_per_env * args.parallel
     announce('train', work(train_steps=total), f'lab-{args.name}')
@@ -418,7 +432,8 @@ def main(argv=None) -> Path:
                'parameters': network.parameter_count(), 'model_config': network.config.to_dict(),
                'ppo_config': cfg.to_dict(), 'source': source, 'parent': parent,
                'teachers': None if teachers is None else teachers.paths,
-               'teacher_ids': None if teachers is None else teachers.identities}
+               'teacher_ids': None if teachers is None else teachers.identities,
+               'demos': [{'file': manifest.label(p), 'sha256': manifest.file_sha256(p)} for p in args.demos or ()]}
         (out_dir / 'run.json').write_text(json.dumps(run, indent=2, default=str), encoding='utf-8')
         if stored is None:      # a store run's families find it through a team's slots, not links
             link_families(root, args.name, run_id, keys)
