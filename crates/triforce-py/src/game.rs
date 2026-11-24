@@ -840,6 +840,87 @@ pub fn lane_probe<'py>(py: Python<'py>, ram: &Bound<'py, PyAny>) -> PyResult<Bou
     Ok(PyArray::from_vec(py, out).reshape([n, 12, 5])?.into_any())
 }
 
+/// The RAM rows `[N, W]` (W >= 2048: the 2 KB work RAM first, as datasets and `ReplayPlayer.ram` give them) as one
+/// slice and `N`.
+fn ram_rows<'py>(
+    py: Python<'py>,
+    ram: &Bound<'py, PyAny>,
+) -> PyResult<(numpy::PyReadonlyArrayDyn<'py, u8>, usize, usize)> {
+    use numpy::PyUntypedArrayMethods;
+    let ram = crate::policy::contiguous::<u8>(py, ram, "uint8", "ram")?;
+    let shape = ram.shape().to_vec();
+    if shape.len() != 2 || shape[1] < 0x800 {
+        return Err(PyValueError::new_err(format!("want ram [N, W >= 2048]; got {shape:?}")));
+    }
+    Ok((ram, shape[0], shape[1]))
+}
+
+/// Schema 9's `chase` `[N, 7]` and `entity_chase` `[N, 12, 12]` (`env::observation::chase_blocks`) of `N` RAM rows:
+/// what the engine puts in those keys with `obs.chase` on, for parity tests and the replay check.
+#[pyfunction]
+pub fn chase_blocks<'py>(
+    py: Python<'py>,
+    ram: &Bound<'py, PyAny>,
+) -> PyResult<(Bound<'py, PyAny>, Bound<'py, PyAny>)> {
+    use env::observation::{CHASE_SIZE, ENTITY_CHASE_SIZE, NUM_ENTITY_SLOTS};
+    let (ram, n, width) = ram_rows(py, ram)?;
+    let ram = ram.as_slice()?;
+    let mut global = Vec::with_capacity(n * CHASE_SIZE);
+    let mut per = Vec::with_capacity(n * NUM_ENTITY_SLOTS * ENTITY_CHASE_SIZE);
+    for i in 0..n {
+        let (g, p) = env::observation::chase_blocks(&ram[i * width..i * width + 0x800]);
+        global.extend_from_slice(&g);
+        per.extend_from_slice(p.as_flattened());
+    }
+    Ok((
+        PyArray::from_vec(py, global).reshape([n, CHASE_SIZE])?.into_any(),
+        PyArray::from_vec(py, per).reshape([n, NUM_ENTITY_SLOTS, ENTITY_CHASE_SIZE])?.into_any(),
+    ))
+}
+
+/// Columns of [`chase_probe`].
+const PROBE: usize = 11;
+
+/// `zelda::chase::turn_at` of every object slot 1-12 of `N` RAM rows, raw: `[N, 12, 11]` float32 per slot `rule` (0
+/// none, 1 wanderer, 2 Goriya rule), `frames` to its decision, `x`, `y` there, `dir` it moves in, `lingers` (decisions
+/// at the point if it keeps its direction), `toward` (direction bit of the turn toward the chase target, 0 none),
+/// `chance`, `timer_turn` (direction bit of the timer turn when its timer is out by then, 0 none), `toward_link`
+/// (0 none), `rate` (the turn rate, 256 for the Goriya rule). For `scripts/experiments/r40_chase_check.py`.
+#[pyfunction]
+pub fn chase_probe<'py>(py: Python<'py>, ram: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    use zelda::chase::{Rule, turn_at};
+    let (ram, n, width) = ram_rows(py, ram)?;
+    let ram = ram.as_slice()?;
+    let mut out = vec![0f32; n * 12 * PROBE];
+    for i in 0..n {
+        let image = &ram[i * width..i * width + 0x800];
+        for slot in 1..=12usize {
+            let Some(t) = turn_at(image, slot) else {
+                continue;
+            };
+            let (kind, rate) = match t.rule {
+                Rule::Wanderer(r) => (1.0, r as f32),
+                Rule::Goriya => (2.0, 256.0),
+            };
+            let p = t.point;
+            out[(i * 12 + slot - 1) * PROBE..(i * 12 + slot) * PROBE].copy_from_slice(&[
+                kind,
+                p.frames as f32,
+                p.x as f32,
+                p.y as f32,
+                p.dir as f32,
+                p.lingers as f32,
+                t.toward.unwrap_or(0) as f32,
+                t.chance,
+                t.timer_turn.unwrap_or(0) as f32,
+                t.toward_link.unwrap_or(0) as f32,
+                rate,
+            ]);
+        }
+    }
+    Ok(PyArray::from_vec(py, out).reshape([n, 12, PROBE])?.into_any())
+}
+
 /// The name a power-on start registers for `name`: upper-cased.  ValueError if it can't be registered (1 to 8
 /// of A-Z, 0-9 and space, not all spaces) or starts the second quest (ZELDA).
 #[pyfunction]

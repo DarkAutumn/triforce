@@ -166,6 +166,8 @@ fn space_matches_contract() {
         "entity_rel",
         "entity_contact",
         "entity_threat",
+        "chase",
+        "entity_chase",
     ]
     .into_iter()
     .collect();

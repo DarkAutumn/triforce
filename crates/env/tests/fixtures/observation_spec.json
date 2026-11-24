@@ -344,6 +344,29 @@
   "lane_soon",
   "bomb_carrier"
  ],
+ "CHASE_FEATURES": [
+  "other",
+  "target_dx",
+  "target_dy",
+  "flip_time",
+  "hotspot_dx",
+  "hotspot_dy",
+  "mirror_gap"
+ ],
+ "ENTITY_CHASE_FEATURES": [
+  "turns",
+  "grid_time",
+  "toward",
+  "toward_N",
+  "toward_S",
+  "toward_W",
+  "toward_E",
+  "chance",
+  "reverse",
+  "timer_turn",
+  "toward_link",
+  "reverse_link"
+ ],
  "spaces": {
   "action_mask": {
    "shape": [
@@ -449,6 +472,23 @@
    "shape": [
     12,
     15
+   ],
+   "dtype": "float32",
+   "low": 0.0,
+   "high": 1.0
+  },
+  "chase": {
+   "shape": [
+    7
+   ],
+   "dtype": "float32",
+   "low": -1.0,
+   "high": 1.0
+  },
+  "entity_chase": {
+   "shape": [
+    12,
+    12
    ],
    "dtype": "float32",
    "low": 0.0,

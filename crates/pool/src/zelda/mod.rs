@@ -60,6 +60,9 @@ pub const ENTITY_REL: usize = 10;
 pub const ENTITY_CONTACT: usize = 11;
 /// Schema 8's per-entity key, after them.
 pub const ENTITY_THREAT: usize = 12;
+/// Schema 9's keys, after it.
+pub const CHASE: usize = 13;
+pub const ENTITY_CHASE: usize = 14;
 
 /// The observation layout of `env::OBS_SPEC` (schema v2).
 pub fn obs_layout() -> ObsLayout {
@@ -95,6 +98,8 @@ pub fn write_observation(obs: &Observation, row: &mut ObsRow<'_>) {
     row.f32(ENTITY_REL).copy_from_slice(obs.entity_rel.as_flattened());
     row.f32(ENTITY_CONTACT).copy_from_slice(obs.entity_contact.as_flattened());
     row.f32(ENTITY_THREAT).copy_from_slice(obs.entity_threat.as_flattened());
+    row.f32(CHASE).copy_from_slice(&obs.chase);
+    row.f32(ENTITY_CHASE).copy_from_slice(obs.entity_chase.as_flattened());
 }
 
 /// Names of the interrupt codes: index 0 is no interrupt, `1 + i` is `Interrupt::ALL[i]`.
@@ -254,9 +259,8 @@ mod tests {
     use super::*;
     use crate::layout::ObsData;
     use env::observation::{
-        ENTITY_CONTACT_SIZE, ENTITY_FEATURE_SIZE, ENTITY_REL_SIZE, ENTITY_THREAT_SIZE, GRID_ROWS, HISTORY_SIZE,
-        LINK_SIZE,
-        NUM_ENTITY_SLOTS, OBJECTIVE_SIZE, ROOM_STATE_SIZE, TARGET_SIZE,
+        CHASE_SIZE, ENTITY_CHASE_SIZE, ENTITY_CONTACT_SIZE, ENTITY_FEATURE_SIZE, ENTITY_REL_SIZE, ENTITY_THREAT_SIZE,
+        GRID_ROWS, HISTORY_SIZE, LINK_SIZE, NUM_ENTITY_SLOTS, OBJECTIVE_SIZE, ROOM_STATE_SIZE, TARGET_SIZE,
     };
     use zelda::MASK_SIZE;
 
@@ -276,6 +280,8 @@ mod tests {
             (ENTITY_REL, "entity_rel"),
             (ENTITY_CONTACT, "entity_contact"),
             (ENTITY_THREAT, "entity_threat"),
+            (CHASE, "chase"),
+            (ENTITY_CHASE, "entity_chase"),
         ];
         assert_eq!(names.len(), OBS_SPEC.len());
         let layout = obs_layout();
@@ -313,6 +319,8 @@ mod tests {
             entity_rel: [[0.0; ENTITY_REL_SIZE]; NUM_ENTITY_SLOTS],
             entity_contact: [[0.0; ENTITY_CONTACT_SIZE]; NUM_ENTITY_SLOTS],
             entity_threat: [[0.0; ENTITY_THREAT_SIZE]; NUM_ENTITY_SLOTS],
+            chase: [0.0; CHASE_SIZE],
+            entity_chase: [[0.0; ENTITY_CHASE_SIZE]; NUM_ENTITY_SLOTS],
         };
         obs.room_state.iter_mut().for_each(|v| *v = next());
         obs.link.iter_mut().for_each(|v| *v = next());
@@ -326,6 +334,8 @@ mod tests {
         obs.entity_rel.iter_mut().flatten().for_each(|v| *v = next());
         obs.entity_contact.iter_mut().flatten().for_each(|v| *v = next());
         obs.entity_threat.iter_mut().flatten().for_each(|v| *v = next());
+        obs.chase.iter_mut().for_each(|v| *v = next());
+        obs.entity_chase.iter_mut().flatten().for_each(|v| *v = next());
         for (i, t) in obs.entity_types.iter_mut().enumerate() {
             *t = 100 + i as i64;
         }
@@ -356,5 +366,7 @@ mod tests {
         assert_eq!(data.f32(ENTITY_REL), obs.entity_rel.as_flattened());
         assert_eq!(data.f32(ENTITY_CONTACT), obs.entity_contact.as_flattened());
         assert_eq!(data.f32(ENTITY_THREAT), obs.entity_threat.as_flattened());
+        assert_eq!(data.f32(CHASE), obs.chase);
+        assert_eq!(data.f32(ENTITY_CHASE), obs.entity_chase.as_flattened());
     }
 }

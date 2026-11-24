@@ -480,7 +480,8 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         Ok(SpecialistEnv {
             builder: ObservationBuilder::new(config.obs.objective, config.obs.target)
                 .with_hidden_positions(config.obs.hidden_positions)
-                .with_threat(config.obs.threat),
+                .with_threat(config.obs.threat)
+                .with_chase(config.obs.chase),
             specialist: Arc::from(config.name.as_str()),
             config,
             data,

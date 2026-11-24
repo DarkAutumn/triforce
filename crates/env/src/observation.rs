@@ -38,14 +38,19 @@ use zelda::{Action, Change};
 /// 8 (round 40, "Observation v7's danger block"): one NEW key, `entity_threat` (per entity slot, range-aware: frames to
 /// contact within a horizon, the shooter's threat lane, the bomb carrier: `threat_block`), filled only with
 /// `obs.threat` (zeros otherwise, as `target`); no schema 7 key or column changes.
-pub const OBS_SCHEMA_VERSION: u32 = 8;
+/// 9 (round 40, "The chase target"): two NEW keys, `chase` (where the monsters are sent: the flip, the target relative
+/// to Link, the frames to the next flip, Link's offset from the mirror's fixed point) and `entity_chase` (per entity
+/// slot, what a grid-point walker may do at its next grid point), filled only with `obs.chase` (zeros otherwise:
+/// `chase_blocks`); no schema 8 key or column changes.
+pub const OBS_SCHEMA_VERSION: u32 = 9;
 
 /// The oldest observation schema whose checkpoints still load as they are (AGENTS.md "Versioning": compatibility is
 /// decided by the schema numbers, not the repo version): their `model_config.obs_spec` a subset of `OBS_SPEC` (same
 /// shapes and vocabularies), every column they read meaning what it meant. A change that only adds keys, or columns
 /// at a block's end, leaves it; one that changes what an existing column means raises it to the new
-/// `OBS_SCHEMA_VERSION` (older models are then widened by `triforce convert-model` or retrained). 6: schemas 7 and 8
-/// only added keys (`entity_rel`, `entity_contact`; `entity_threat`); schema 5 is widened by `convert-model`.
+/// `OBS_SCHEMA_VERSION` (older models are then widened by `triforce convert-model` or retrained). 6: schemas 7, 8 and 9
+/// only added keys (`entity_rel`, `entity_contact`; `entity_threat`; `chase`, `entity_chase`); schema 5 is widened by
+/// `convert-model`.
 pub const OLDEST_OBS_SCHEMA: u32 = 6;
 
 /// NES object slots 1-$B, then the room item ("treasure").
@@ -73,6 +78,10 @@ pub const ENTITY_REL_SIZE: usize = 10;
 pub const ENTITY_CONTACT_SIZE: usize = 23;
 /// Schema 8: `entity_threat` columns a slot (`threat_block`).
 pub const ENTITY_THREAT_SIZE: usize = 15;
+/// Schema 9: `chase` columns (`chase_blocks`).
+pub const CHASE_SIZE: usize = 7;
+/// Schema 9: `entity_chase` columns a slot (`chase_blocks`).
+pub const ENTITY_CHASE_SIZE: usize = 12;
 
 const PLAY_Y0: f64 = 64.0;
 const PLAY_H: f64 = 176.0;
@@ -339,6 +348,9 @@ pub struct FeatureNames {
     pub entity_contact: Vec<String>,
     /// Schema 8: `entity_threat` columns.
     pub entity_threat: Vec<String>,
+    /// Schema 9: `chase` and `entity_chase` columns.
+    pub chase: Vec<String>,
+    pub entity_chase: Vec<String>,
     pub target: Vec<String>,
 }
 
@@ -573,6 +585,11 @@ fn build_feature_names() -> FeatureNames {
         entity_threat.extend(["stand", "N", "S", "W", "E"].iter().map(|m| format!("{group}_{m}")));
     }
     entity_threat.extend(s(&["lane_ready", "lane_wait", "lane_in", "lane_soon", "bomb_carrier"]));
+    let chase = s(&["other", "target_dx", "target_dy", "flip_time", "hotspot_dx", "hotspot_dy", "mirror_gap"]);
+    let entity_chase = s(&[
+        "turns", "grid_time", "toward", "toward_N", "toward_S", "toward_W", "toward_E", "chance", "reverse",
+        "timer_turn", "toward_link", "reverse_link",
+    ]);
 
     FeatureNames {
         room_state: rs,
@@ -584,6 +601,8 @@ fn build_feature_names() -> FeatureNames {
         entity_rel,
         entity_contact,
         entity_threat,
+        chase,
+        entity_chase,
     }
 }
 
@@ -601,7 +620,7 @@ pub struct ObsKeySpec {
 }
 
 /// Every observation key, in `observation_space` order.
-pub const OBS_SPEC: [ObsKeySpec; 13] = [
+pub const OBS_SPEC: [ObsKeySpec; 15] = [
     ObsKeySpec {
         key: "room_id",
         shape: &[1],
@@ -706,6 +725,22 @@ pub const OBS_SPEC: [ObsKeySpec; 13] = [
         low: 0.0,
         high: 1.0,
     },
+    ObsKeySpec {
+        key: "chase",
+        shape: &[CHASE_SIZE],
+        vocab: None,
+        dtype: "float32",
+        low: -1.0,
+        high: 1.0,
+    },
+    ObsKeySpec {
+        key: "entity_chase",
+        shape: &[NUM_ENTITY_SLOTS, ENTITY_CHASE_SIZE],
+        vocab: None,
+        dtype: "float32",
+        low: 0.0,
+        high: 1.0,
+    },
 ];
 
 /// One observation (every key of `OBS_SPEC`).
@@ -730,6 +765,11 @@ pub struct Observation {
     /// Schema 8: per entity slot, range-aware contact, the shooter's lane, the bomb carrier (`threat_block`; all
     /// zero with `obs.threat` off).
     pub entity_threat: [[f32; ENTITY_THREAT_SIZE]; NUM_ENTITY_SLOTS],
+    /// Schema 9: where the monsters are sent (`chase_blocks`; all zero with `obs.chase` off).
+    pub chase: [f32; CHASE_SIZE],
+    /// Schema 9: per entity slot, what a grid-point walker may do at its next grid point (`chase_blocks`; all zero
+    /// with `obs.chase` off).
+    pub entity_chase: [[f32; ENTITY_CHASE_SIZE]; NUM_ENTITY_SLOTS],
 }
 
 /// `room_id` embedding index for (level, in_cave, room).
@@ -999,6 +1039,62 @@ pub fn threat_block(
     out
 }
 
+/// Schema 9's two blocks (round40.md "The chase target"; `zelda::chase`): where the monsters are sent and what each
+/// grid-point walker may do at its next grid point. Arithmetic on the current RAM only (no emulator step, no random
+/// byte). Observation slot `i` is RAM object slot `i + 1`; the treasure slot is all 0.
+///
+/// `chase` (`[7]`): `other` (`$60`: the monsters chase the stored point, not Link); `target_dx`, `target_dy` (the
+/// chase target `$61/$62` minus Link's corner, / 255: 0 while it is Link); `flip_time` (frames to the next flip of
+/// `$60`, `zelda::chase::flip_frames`, / 70); `hotspot_dx`, `hotspot_dy` (Link's corner minus the mirror's fixed point
+/// 127.5, / 128, clipped); `mirror_gap` (the larger axis gap between Link and his mirror, |2v - 255|, / 255).
+///
+/// `entity_chase` (`[12, 12]`), for a monster `zelda::chase::turn_at` covers (the wanderers and the Goriya rule; a
+/// live one that is not knocked back, stunned or frozen by the clock), else all 0: `turns` 1; `grid_time` (frames to
+/// the frame it decides at its next grid point, / 64, at most 1); `toward` (the chase target is within its turn
+/// window there: 8 px on an axis for a wanderer, $51 on the longer axis for the Goriya rule); `toward_{N,S,W,E}` (the
+/// direction of that turn); `chance` (the chance it is taken there: (rate + 1) / 256 a decision over the decisions it
+/// makes at the point, 1 for the Goriya rule; 0 without `toward`); `reverse` (that turn is a reversal: the target
+/// behind it on its line); `timer_turn` (its turn timer is out by then: without the homing turn it turns
+/// perpendicular, toward the target); `toward_link`, `reverse_link` (the same test with Link's own corner as the
+/// target: a turn at him, and whether it reverses onto him: the owner's "don't chase").
+pub fn chase_blocks(ram: &[u8]) -> ([f32; CHASE_SIZE], [[f32; ENTITY_CHASE_SIZE]; NUM_ENTITY_SLOTS]) {
+    use zelda::chase;
+    let c = chase::chase(ram);
+    let (lx, ly) = (ram[OBJ_X] as f32, ram[OBJ_Y] as f32);
+    let gap = |v: f32| (2.0 * v - 255.0).abs();
+    let global = [
+        b(c.other),
+        ((c.x as f32 - lx) / 255.0).clamp(-1.0, 1.0),
+        ((c.y as f32 - ly) / 255.0).clamp(-1.0, 1.0),
+        (c.flip as f32 / chase::FLIP_MAX as f32).min(1.0),
+        ((lx - chase::HOTSPOT) / 128.0).clamp(-1.0, 1.0),
+        ((ly - chase::HOTSPOT) / 128.0).clamp(-1.0, 1.0),
+        gap(lx).max(gap(ly)) / 255.0,
+    ];
+    let mut per = [[0f32; ENTITY_CHASE_SIZE]; NUM_ENTITY_SLOTS];
+    for (i, row) in per.iter_mut().enumerate().take(TREASURE_SLOT) {
+        let Some(t) = chase::turn_at(ram, i + 1) else {
+            continue;
+        };
+        let dir = t.toward.unwrap_or(0);
+        *row = [
+            1.0,
+            (t.point.frames as f32 / chase::MAX_FRAMES as f32).min(1.0),
+            b(t.toward.is_some()),
+            b(dir == 8),
+            b(dir == 4),
+            b(dir == 2),
+            b(dir == 1),
+            t.chance,
+            b(t.reverse()),
+            b(t.timer_turn.is_some()),
+            b(t.toward_link.is_some()),
+            b(t.reverse_link()),
+        ];
+    }
+    (global, per)
+}
+
 /// `entity_threat`'s `bomb_carrier` per observation slot: the monsters whose death may drop bombs now, by the owner's
 /// Metric B, so the metric and the flag are one definition: while `zelda::bomb_windows::bomb_carrier_window` is open,
 /// each monster `is_bomb_carrier` says is one. Link's own bombs are the bag (`state.bombs()`: the cheated wall bombs
@@ -1039,6 +1135,8 @@ pub struct ObservationBuilder {
     pub hidden_positions: HiddenPositions,
     /// Fill the `entity_threat` block (`obs.threat`; zeros otherwise).
     pub threat: bool,
+    /// Fill the `chase` and `entity_chase` blocks (`obs.chase`; zeros otherwise).
+    pub chase: bool,
     prev_room: Option<(u8, bool, u8)>,
     prev_types: [i64; NUM_ENTITY_SLOTS],
     prev_xy: [[f32; 2]; NUM_ENTITY_SLOTS],
@@ -1058,6 +1156,7 @@ impl ObservationBuilder {
             rupee_reserve: 0,
             hidden_positions: HiddenPositions::Ram,
             threat: false,
+            chase: false,
             prev_room: None,
             prev_types: [0; NUM_ENTITY_SLOTS],
             prev_xy: [[0.0; 2]; NUM_ENTITY_SLOTS],
@@ -1076,6 +1175,12 @@ impl ObservationBuilder {
     /// The builder with `obs.threat` = `on`.
     pub fn with_threat(mut self, on: bool) -> ObservationBuilder {
         self.threat = on;
+        self
+    }
+
+    /// The builder with `obs.chase` = `on`.
+    pub fn with_chase(mut self, on: bool) -> ObservationBuilder {
+        self.chase = on;
         self
     }
 
@@ -1150,6 +1255,11 @@ impl ObservationBuilder {
         } else {
             [[0.0; ENTITY_THREAT_SIZE]; NUM_ENTITY_SLOTS]
         };
+        let (chase, entity_chase) = if self.chase {
+            chase_blocks(state.ram())
+        } else {
+            ([0.0; CHASE_SIZE], [[0.0; ENTITY_CHASE_SIZE]; NUM_ENTITY_SLOTS])
+        };
         Observation {
             room_id: room_index(rs.level, rs.in_cave, rs.room),
             room_state: room_state(&rs, state),
@@ -1168,6 +1278,8 @@ impl ObservationBuilder {
             entity_rel,
             entity_contact,
             entity_threat,
+            chase,
+            entity_chase,
         }
     }
 
