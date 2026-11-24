@@ -3790,3 +3790,21 @@ For 2.0.1.0's `d3first` (the retrain; nothing before it):
   so 3:0x59 is entered with 8 in about two runs of five that arrive with the cycle at 0, and with 4 otherwise. And
   the cycle counts Gels (`$15`) but not child Gels (`$14`): a Zol split on the way and finished moves it.
 
+## 2026-11-23 — 3:0x69 is crossed by a line, with the sword, without a hit (the owner)
+
+The owner confirmed the lead's four readings of the Dungeon 3 plan (the 41% drop; count 0 kill one, count 1 cross;
+the reserve of 4 holding from 3:0x59 to 3:0x5b's last pass; the wrap in 0:0x76 as the route's way) and added, on
+3:0x69 (eight Red Darknuts, crossed to the stairs and back; 170-190 deaths in 1000 Dungeon 3 runs today, the largest
+loss after Manhandla): "0x69 is traversed with a sword. There's actually a golden route through the room. Going in
+the door, immediate east until you can't, south to line up the stairs, then east to stairs. The one catch is that
+sometimes the darknut paths in your way and sometimes it doesn't. If you time it right, you can sword the darknut to
+safely pass through him. No matter which way the room plays out, a speedrunner will NEVER take damage there, ever. If
+that's a high death room, planning that route and teaching the teacher network is probably a good idea."
+
+For the retrain: the line is planned in the emulator (in by the N door, E along the top to the wall, S to the stairs'
+row, E to the stairs at tiles (26-27, 10-11); and the way back out), given to the objective as the room's path
+(`path_costs`, as 5:0x37's column in round 25) and taught by a scripted rule's clean runs cloned during training
+(`train --demos`), the sword-through included (a Darknut flashing from a hit cannot hurt Link: the rule swords the
+one in the way and walks through it). The room's goal, tracked like the wrap and the no-kill goals: hits taken in
+3:0x69 a visit, on each pass, toward zero. No bomb is used there (the reserve of 4).
+

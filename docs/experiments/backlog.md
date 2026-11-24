@@ -521,3 +521,10 @@ thing and have to be taught again. Swept from this backlog Nov 23 (the lead):
   by state / row / wall so the harness runs the parts side by side (same coverage); estimated floor 60-70 s.
 - **A flaky test**: `tests/test_train_cli.py::test_an_interrupted_run_saves_but_exits_130` failed once in a full
   suite under load (exit 1 instead of 130) and passed three times alone.
+- **For the retrain (decisions 2026-11-23, three entries on Dungeon 3):** the wrap in 0:0x76 and 0:0x75 as the
+  route's way; 3:0x7b (key taken) and 3:0x6b crossed; 3:0x5b's first pass trained half at drop cycle 0 (kill one
+  Darknut for its bombs) and half at 1 (cross); 3:0x59's starts at exactly 4 or 8 bombs with `bomb_reserve: 4` held
+  to 3:0x5b's last pass; 3:0x69's golden line planned, given as `path_costs` and taught by demos, sword only; the
+  Moldorm fought again for its key and the route's key and bomb budget redone; goals tracked in the run statistics
+  (wrap taken, no kill where the route crosses, the cycle on entering 3:0x5b, hits a visit in 3:0x69).
+
