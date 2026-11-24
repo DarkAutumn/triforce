@@ -667,6 +667,8 @@ oldest schema whose checkpoints still load, "Checkpoint" below), `ROOM_VOCAB`,
 | `entity_rel` | float32 [12, 10] | schema 7: Link-relative geometry per entity slot (below) |
 | `entity_contact` | float32 [12, 23] | schema 7: velocity, the touch rule and its extrapolation per entity slot (below) |
 | `entity_threat` | float32 [12, 15] | schema 8: range-aware contact, the shooter's threat lane, the bomb carrier per entity slot; all zero unless `obs.threat` (below) |
+| `chase` | float32 [7] | schema 9: where the monsters are sent (the chase target, its flip, Link from the mirror's fixed point); all zero unless `obs.chase` (below) |
+| `entity_chase` | float32 [12, 12] | schema 9: per entity slot, what a grid-point walker may do at its next grid point; all zero unless `obs.chase` (below) |
 
 When the objective block is on, the env attaches the objective (`crates/env/src/objective.rs`) before calling
 the builder.
@@ -808,6 +810,35 @@ else.
 
 Aimed shots (Zora, Aquamentus, Gleeok, Gohma fireballs) and the Wizzrobes' magic have no lane: their shots are seen
 by `soon_*` once they exist. The treasure slot and Gleeok's heads have no RAM slot and so no lane.
+
+**Schema 9 (round 40, `docs/experiments/round40.md` "The chase target"; the owner's Darknut lesson,
+`docs/owner/darknuts.md`).** Two NEW keys, `chase` and `entity_chase`, after `entity_threat`; no schema 8 key or
+column changes (`OLDEST_OBS_SCHEMA` stays 6). Both are `model.TOKEN_KEYS`: a `ZeldaPolicy` and the Rust actor never
+read them; `hitnet` reads them with the token group `chase` (`entity_chase` joins the entity tokens, `chase` joins
+Link's own token beside `link`). Filled only with **`obs.chase: true`** (`env::config::ObsConfig::chase`, default
+false: zeros). `env::observation::chase_blocks` computes both from the RAM alone (`zelda::chase`: the chase target
+`$60`-`$62` and asm:Mode5Play_UpdateWorld@CheckChaseTarget's flip, asm:Wanderer_MoveAndTurn's and asm:Goriya_Update's
+grid-point turns, asm:Obj_MoveByQSpeed's motion to the next grid point): no emulator step and no random byte, so the
+turn is given as a chance, never as the roll. `_native.chase_blocks(ram)` gives both for recorded RAM,
+`_native.chase_probe(ram)` the raw per-slot prediction (`scripts/experiments/r40_chase_check.py`).
+`zelda::chase`'s unit tests and `tests/test_obs_chase.py` (the env's blocks are `chase_blocks`, the switch changes
+nothing else) check it; round40.md has it against 250 replays.
+
+| Key, columns | Names | Value |
+|---|---|---|
+| `chase` 0 | `other` | `$60`: the monsters are sent to the stored point (Link's mirror, or food), not Link |
+| `chase` 1-2 | `target_dx`, `target_dy` | the chase target (`$61`, `$62`) minus Link's corner, / 255: 0 while the target is Link |
+| `chase` 3 | `flip_time` | frames to the next toggle of `$60` / 70 (`zelda::chase::flip_frames`: `ChaseLongTimer` `$4A` ticks on the frames LongTimerCycle `$26` wraps) |
+| `chase` 4-5 | `hotspot_dx`, `hotspot_dy` | Link's corner minus the mirror's fixed point (127.5, 127.5), / 128, clipped to ±1 |
+| `chase` 6 | `mirror_gap` | the larger of \|2X − 255\| and \|2Y − 255\| (how far apart Link and his mirror are) / 255 |
+| `entity_chase` 0 | `turns` | a monster `zelda::chase::rule` covers (wanderers: Darknuts, Gibdo, Stalfos, Like-Like, Vire, Bubbles, Ghini, Moblins, Octoroks, Blue Leever; the Goriya rule: Goriyas, Lynels), live, not knocked back, stunned or frozen by the clock, with a next grid point |
+| `entity_chase` 1 | `grid_time` | frames to the frame of its next decision (walking on as asm:Obj_MoveByQSpeed moves it; walls aside) / 64 |
+| `entity_chase` 2 | `toward` | the current chase target is inside its turn window at that point: within 8 px on an axis (a wanderer; \|dX\| as a signed byte), or under $51 px on the longer axis (the Goriya rule) |
+| `entity_chase` 3-6 | `toward_{N,S,W,E}` | the direction of that turn |
+| `entity_chase` 7 | `chance` | the chance the turn is taken there: 1 − (1 − (rate + 1) / 256)^n over the n decisions it makes at the point (a frame without a pixel decides again), 1 for the Goriya rule; 0 without `toward` |
+| `entity_chase` 8 | `reverse` | that turn is a reversal (the target behind it on its line) |
+| `entity_chase` 9 | `timer_turn` | a wanderer whose turn timer (`$478`) is out by then: without the homing turn it turns perpendicular, toward the target |
+| `entity_chase` 10-11 | `toward_link`, `reverse_link` | the same window test with Link's own corner as the target, and whether that turn reverses onto him (the owner's "don't chase") |
 
 Checkpoints saved before r56 carry `model_config.grid_encoder: 'conv'`; the conv encoder is the only one left, so
 `ModelConfig.from_dict` drops that key and refuses any other encoder.

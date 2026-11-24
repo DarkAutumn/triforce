@@ -1,0 +1,6 @@
+# Round 40, Switch40: the red candle in 7:0x0d learned, not only offered (today's networks never chose CANDLE: 0.06 a
+# visit when offered). wallmaster@d3first's own training task on 7:0x0d's entry states only (its staging and hearts as
+# the family trains), no harvested handoffs; the base of a continuation pair. round40.md "Switch40".
+extends: ../../d3first/wallmaster.yaml
+start_states: ['7_0d*_[0-9]']
+harvested_fraction: 0.0

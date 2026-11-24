@@ -1,0 +1,3 @@
+# Round 40, Switch40: 6:0x38 (wizzrobe-38.yaml) with items {candle: true, boomerang: false}.
+extends: wizzrobe-38.yaml
+items: {candle: true, boomerang: false}

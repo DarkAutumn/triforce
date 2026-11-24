@@ -1666,7 +1666,8 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             if switch {
                 self.builder = ObservationBuilder::new(config.obs.objective, config.obs.target)
                     .with_hidden_positions(config.obs.hidden_positions)
-                    .with_threat(config.obs.threat);
+                    .with_threat(config.obs.threat)
+                    .with_chase(config.obs.chase);
                 self.track = match self.rewards {
                     true => Some(RewardTrack::new(config.clone(), &state, &objective).map_err(|e| e.0)?),
                     false => None,

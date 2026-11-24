@@ -215,6 +215,11 @@ pub fn obs_values(o: &Observation) -> Vec<(&'static str, Vec<f64>)> {
             "entity_threat",
             o.entity_threat.iter().flat_map(|r| f(r)).collect(),
         ),
+        ("chase", f(&o.chase)),
+        (
+            "entity_chase",
+            o.entity_chase.iter().flat_map(|r| f(r)).collect(),
+        ),
     ]
 }
 

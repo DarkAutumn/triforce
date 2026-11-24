@@ -1,0 +1,5 @@
+# Round 40, Switch40: `penalty-aimless` on or off for the fresh generation (round38.md "Aimless walking", the
+# experiment written there): ow-start@d3first's task with `reward.aimless_penalty` 0.002 a frame, continued from today's
+# network against the family's own task (0). round40.md "Switch40".
+extends: ../../d3first/ow-start.yaml
+reward: {aimless_penalty: 0.002}

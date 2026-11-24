@@ -11,56 +11,56 @@ Contents (generated; `L` = line in this file):
 
 <!-- toc -->
 - L66 How to read this
-- L85 Drop tables
-- L130 Octorok (red, blue; slow, fast)
-- L173 Tektite (blue, red)
-- L211 Leever (blue, red)
-- L249 Peahat
-- L286 Moblin (blue, red)
-- L321 Lynel (blue, red)
-- L357 Zora
-- L402 Armos
-- L437 Ghini (and flying Ghini)
-- L474 Boulder
-- L508 Keese (blue, red, black)
-- L558 Gel
-- L599 Zol
-- L646 Rope
-- L687 Stalfos
-- L732 Goriya (blue, red)
-- L780 Wallmaster
-- L827 Bubble (flashing, red, blue)
-- L871 Darknut (red, blue)
-- L914 Gibdo
-- L950 Pols Voice
-- L993 Like-Like
-- L1036 Vire
-- L1081 Wizzrobe (blue, red)
-- L1135 Lanmola (red, blue)
-- L1185 Aquamentus
-- L1241 Dodongo
-- L1309 Manhandla
-- L1366 Gleeok
-- L1426 Digdogger
-- L1483 Gohma (blue, red)
-- L1530 Moldorm
-- L1575 Patra
-- L1624 Ganon
-- L1675 Trap
-- L1706 Statue fireballs
-- L1738 Fireball
-- L1769 Monster shots (rock, sword shot, magic shot)
-- L1805 Monster arrow
-- L1830 Monster boomerang
-- L1855 Standing fire
-- L1880 Guard fire
-- L1903 Zelda
-- L1924 Old men and shopkeepers (cave and dungeon persons)
-- L1982 Grumble Goriya
-- L2007 Rupee stash
-- L2026 Pond fairy
-- L2049 Item fairy
-- L2072 Dropped items
+- L86 Drop tables
+- L131 Octorok (red, blue; slow, fast)
+- L174 Tektite (blue, red)
+- L212 Leever (blue, red)
+- L250 Peahat
+- L287 Moblin (blue, red)
+- L322 Lynel (blue, red)
+- L358 Zora
+- L403 Armos
+- L438 Ghini (and flying Ghini)
+- L475 Boulder
+- L509 Keese (blue, red, black)
+- L559 Gel
+- L600 Zol
+- L647 Rope
+- L688 Stalfos
+- L733 Goriya (blue, red)
+- L781 Wallmaster
+- L828 Bubble (flashing, red, blue)
+- L872 Darknut (red, blue)
+- L915 Gibdo
+- L951 Pols Voice
+- L994 Like-Like
+- L1037 Vire
+- L1082 Wizzrobe (blue, red)
+- L1136 Lanmola (red, blue)
+- L1186 Aquamentus
+- L1242 Dodongo
+- L1310 Manhandla
+- L1367 Gleeok
+- L1427 Digdogger
+- L1484 Gohma (blue, red)
+- L1531 Moldorm
+- L1576 Patra
+- L1625 Ganon
+- L1676 Trap
+- L1707 Statue fireballs
+- L1739 Fireball
+- L1770 Monster shots (rock, sword shot, magic shot)
+- L1806 Monster arrow
+- L1831 Monster boomerang
+- L1856 Standing fire
+- L1881 Guard fire
+- L1904 Zelda
+- L1925 Old men and shopkeepers (cave and dungeon persons)
+- L1983 Grumble Goriya
+- L2008 Rupee stash
+- L2027 Pond fairy
+- L2050 Item fairy
+- L2073 Dropped items
 <!-- /toc -->
 
 # How to read this
@@ -77,6 +77,7 @@ Every monster section has the same eight labelled lines in the same order. Numbe
 - The boomerang does 0 damage and sets the stun timer to `$10` (10-frame units: 151-160 frames); a stunned monster's touch does not hurt Link. [`Collision_CheckWeaponPointVsMonster`](src/bank1/weapon-damage-death.asm#L82), [`Link_CheckMonsterTouch`](src/bank1/link-collision-harm.asm#L48)
 - **Behaviour**: speeds are q-speeds, pixels per frame = q-speed / 64 (`$20` = 0.5); `ObjTimer` counts down 1 per frame, the "long" timers 1 per 10 frames. [`Obj_MoveByQSpeed`](src/bank7/walker-move.asm#L244), [`Nmi_Isr`](src/bank7/run-game-nmi.asm#L140)
 - "Chase target" is `ChaseTargetX/Y`: Link's position, or for random spells of up to 70 frames the fixed point (255 - X, 255 - Y) mirrored from Link's position, or food on the ground. [`Mode5Play_UpdateWorld@CheckChaseTarget`](src/bank7/mode5-play-update.asm#L145), [`ChaseTargetX`](src/Variables.inc#L144)
+- Which monsters steer by the chase target, which by Link's real position and which by neither, with what that means for following one on its line, walking beside it and the point (128, 128) where Link and his mirror coincide: [mechanics.md](mechanics.md) "Who chases what". [`Wanderer_MoveAndTurn`](src/bank4/walker-wanderer-common.asm#L224), [`Goriya_Update`](src/bank4/goriya.asm#L45)
 - "Clock" is `InvClock` = 1, from a dropped clock until Link leaves the room: no touch or shot is tested against Link; what each monster still does is in its section. [`Link_CheckMonsterTouch`](src/bank1/link-collision-harm.asm#L48), [`Link_ResetStateAndClock`](src/bank7/init-mode-dispatch.asm#L354)
 - **Spawn**: room entry writes the room's monster types to slots 1..count; positions come from fixed spot lists, or in rooms with the edge attribute monsters walk in from the screen edge one at a time. Rooms per type: `data/levelblock-ow.md`, `data/objlists.md`. [`Room_EnterCommon`](src/bank5/enter-room.asm#L143), [`Spawn_AssignPositions`](src/bank5/spawn-positions.asm#L64), [`Obj_Init@InitMonsterFromEdge`](src/bank7/object-init-table.asm#L79)
 - During the spawn cloud (metastate 1-3) a monster's update does not run and nothing is tested against it: it cannot hurt or be hurt. [`Obj_Update`](src/bank7/object-update-table.asm#L120), [`Obj_AnimateMetastate`](src/bank7/object-animation.asm#L54)
