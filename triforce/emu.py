@@ -205,6 +205,8 @@ class Session:
     done_rule: str = 'room'
     states_dir: Optional[Path] = None
     start: Start = field(init=False)
+    overrides: dict = field(init=False)                  # the spec's writes over the start state
+    game: _native.LiveGame = field(init=False, repr=False)
     done: Optional[str] = field(init=False, default=None)
     home: Optional[Where] = field(init=False, default=None)
 
@@ -243,9 +245,10 @@ class Session:
     def screen(self):
         return self.game.screen()
 
-    def set_sound(self, on: bool) -> Optional[str]:
-        """Sound of the frames from the next one on, or off; returns why there is none (no device)."""
-        return self.game.set_sound(on)
+    def set_sound(self, on: bool, speed: float = 1.0) -> Optional[str]:
+        """Sound of the frames from the next one on, or off; ``speed``: the frames' rate against the console's (the
+        sound follows it as a tape would).  Returns why there is none (no device)."""
+        return self.game.set_sound(on, speed)
 
     def meta(self) -> dict:
         spec = self.spec
@@ -278,9 +281,14 @@ class Session:
         return '_'.join(parts) + replay.SUFFIX
 
     def save(self, folder: Path = PLAYED_DIR, when: Optional[datetime] = None) -> Path:
-        """Writes the recording so far into ``folder`` (made if missing) and returns the file."""
+        """Writes the recording so far into ``folder`` (made if missing) and returns the file; a name already there
+        (two saves in one second) gets ``-2``, ``-3``, ... before its suffix: no file is ever written over."""
         folder = Path(folder)
         folder.mkdir(parents=True, exist_ok=True)
-        path = folder / self.file_name(when)
+        name = self.file_name(when)
+        path, count = folder / name, 1
+        while path.exists():
+            count += 1
+            path = folder / f"{name.removesuffix(replay.SUFFIX)}-{count}{replay.SUFFIX}"
         path.write_bytes(self.replay())
         return path

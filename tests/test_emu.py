@@ -196,3 +196,23 @@ def test_the_olive_garden_from_its_route_entry_with_no_bombs():
     assert session.done is None
     assert session.file_name(datetime(2026, 11, 24, 10, 15, 2)) == '5x05_E_bombs0_seed5_261124-101502.tfreplay'
     assert _native.replay_verify(session.replay())['frames'] == session.frames
+
+
+def test_an_agent_reads_link_and_the_monsters_frame_by_frame():
+    """The recipe of docs/architecture.md "Playing a room by hand": a ReplayPlayer stepped a frame at a time, its
+    machine read through Game.load(save_state(), controllable=True)."""
+    session = session_of(Spec(5, 0x05, bombs=0), 3)
+    seen = []
+    for _ in range(40):
+        session.step(LEFT)
+        seen.append((session.state.link['x'], [e['name'] for e in session.state.enemies]))
+    data = session.replay()
+    player = _native.ReplayPlayer(data)
+    reader = _native.Game(states_dir=str(REPO_STATES_DIR))
+    player.step(_native.Replay(data).frames - 40, False)
+    read = []
+    for _ in range(40):
+        player.step(1, False)
+        state = reader.load(player.save_state(), randomize_rng=False, controllable=True)
+        read.append((state.link['x'], [e['name'] for e in state.enemies]))
+    assert read == seen and 'BlueDarknut' in read[-1][1]

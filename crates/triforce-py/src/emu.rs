@@ -31,8 +31,11 @@ struct Inner {
     /// The sound device, opened the first time sound is turned on (None: never, or it failed: `sound_error`).
     speaker: Option<Speaker>,
     sound_error: Option<String>,
-    /// Sound asked for ([`PyLiveGame::set_sound`]).
+    /// Sound asked for ([`PyLiveGame::set_sound`]) and the speed the frames are played at against the
+    /// console's: each frame makes `1 / speed` times its samples, so the sound runs on without gaps, lower or
+    /// higher, as a tape played slow or fast.
     hear: bool,
+    speed: f64,
     /// The sound of the frames being played while sound is on.
     tracks: Option<Tracks>,
     audio: Vec<f32>,
@@ -61,9 +64,9 @@ impl Inner {
     }
 
     fn step(&mut self, buttons: u8) {
-        let Inner { session, tracks, speaker, audio, .. } = self;
+        let Inner { session, tracks, speaker, audio, speed, .. } = self;
         if let (Some(tracks), Some(speaker)) = (tracks.as_mut(), speaker.as_ref()) {
-            tracks.set_rate(speaker.ring().feed_rate());
+            tracks.set_rate(speaker.ring().feed_rate() / *speed);
             tracks.prepare(session.nes().inner());
         }
         session.press(buttons, 1);
@@ -116,6 +119,7 @@ impl PyLiveGame {
                 speaker: None,
                 sound_error: None,
                 hear: false,
+                speed: 1.0,
                 tracks: None,
                 audio: Vec::new(),
             }),
@@ -256,10 +260,15 @@ impl PyLiveGame {
         Ok(PyBytes::new(py, &rec.finish(seed, ending, Context::default(), &end)))
     }
 
-    /// Plays each frame's sound on the default sound device from the next frame on (on), or stops it (off): a
-    /// restart takes the machine's sound as it stands, nothing made earlier is played late.  Returns why there
-    /// is no sound (no device), else None.
-    fn set_sound(&self, on: bool) -> Option<String> {
+    /// Plays each frame's sound on the default sound device from the next frame on (on), or stops it (off);
+    /// `speed`: the frames' rate against the console's (each frame then makes `1 / speed` times its samples).
+    /// Turned on, the sound takes the machine's as it stands: nothing made earlier is played late.  A call that
+    /// only changes the speed goes on without a break.  Returns why there is no sound (no device), else None.
+    #[pyo3(signature = (on, speed=1.0))]
+    fn set_sound(&self, on: bool, speed: f64) -> PyResult<Option<String>> {
+        if !(speed.is_finite() && speed > 0.0) {
+            return Err(PyValueError::new_err(format!("speed {speed}: a positive number")));
+        }
         let mut g = self.inner.lock();
         if on && g.speaker.is_none() && g.sound_error.is_none() {
             match Speaker::open() {
@@ -267,9 +276,12 @@ impl PyLiveGame {
                 Err(error) => g.sound_error = Some(error),
             }
         }
-        g.hear = on;
-        g.restart_sound();
-        g.sound_error.clone()
+        g.speed = speed;
+        if on != g.hear {
+            g.hear = on;
+            g.restart_sound();
+        }
+        Ok(g.sound_error.clone())
     }
 
     /// Whether frames are heard now.
