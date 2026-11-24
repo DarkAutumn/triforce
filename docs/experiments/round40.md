@@ -660,19 +660,49 @@ are for Darknuts crossing X $60 or the door's column.
 **Against the owner's bar.** Zero hits is reachable (the search above found it for every seed tried), and the way out
 reaches it; the way in does not: 814 of 1000 of the look-ahead's visits and 172 of 300 of the rule alone's are clean. What
 separates them is timing the rule cannot see (whether a Darknut on a grid point turns toward Link). The look-ahead
-here is a 4-decision check of the rule's own choices, not a search; deeper look-ahead, or a search teacher, is the
-next lever if the clean share matters more than the rows' being the rule's own.
+here is a 4-decision check of the rule's own choices, not a search; the demonstrations below come from a search.
 
-### Demonstrations
+### Demonstrations: the builder searches every visit (Line40b, branch `r40-line2`, the merged generation's code)
 
-`demos` with `--look 4`: the clean visits (left by the exit, no hit) of both passes from seeds 100000..100099, as rows
-`train --demos` reads (a MOVE or WAIT row without its duration, a strike 8 times), the darknut@d3first task's
-observation. Files: `target/demos/r40-d3-69-line-0..3.npz` in the `r40-line` worktree (for the lead's `triforce-lead
-data install`; this worktree's own `target/demos` is what its tools read until then). Kept: 77 of 100 in-pass visits and 99 of 100 out-pass visits, 15,167 rows (files 0-3:
-4,709, 2,845, 4,062, 3,551).
-`specialists/d3first/darknut.yaml` declares them: `demos: {files: [r40-d3-69-line-0..3.npz], coeff: 0.05}` (round
-25's 5:0x37 weight). If the generation's task changes the observation, the rows must be recorded again with it
-(`load_demos` refuses files whose keys differ; a changed shape fails at the first update).
+The owner allows moving the emulator ahead and back when building demonstrations, never at play. So the builder
+(`r40_d3_69_line.py demos --pass in|out`) does not teach the rule: for each visit it searches the env's own actions
+(MOVE 4 frames each way, WAIT 4, SWORD each way, BEAMS where the mask offers them at full hearts; a strike only with a
+Darknut within 32 pixels) best-first, a state's priority the frames spent plus twice the frames left along the line
+(`togo`, a pixel off the line counted twice), every child whose hearts fell dropped, every situation seen once (Link's
+position and facing, each Darknut's position, facing, flash and knockback); 25,000 decisions tried, then 50,000 at
+weight 1, then the rule with its look-ahead (never needed). The way found is played again from the visit's reset as
+one episode (`replay`) and kept only if it leaves by the exit unhit; the file is written as the visits end. Entries
+as `measure` draws them (the step's entry states round robin, the start's random numbers and spawn draw, the task's hp
+draw, 4 or 8 bombs by the seed's parity, a third of the way out from the chains' harvested handoffs), seeds 100000
+on. Express jobs of 32 (in) or 240 (out) visits, 8 workers, on a machine at load 30-40; the visits a job had not
+finished at its 10-minute limit are not counted (11 seeds of the way in: 100005, 100029, 100055, 100102, 100160,
+100193, 100195, 100217, 100221, 100305, 100317; not failures of the search, unmeasured). The search failed on no
+finished entry.
+
+| pass | visits | clean way found | by weight 2 / 1 | 4 / 8 bombs | actions (mean, max) | strikes a visit | waits a visit | frames | seconds a visit (mean, median, max) |
+|---|---|---|---|---|---|---|---|---|---|
+| in | 309 | 309 (100%) | 298 / 11 | 158 / 151 | 33.5, 39 | 0.90 (257 visits strike) | 0.50 | 254 (median 252) | 72.6, 34.8, 558 (14 over 300) |
+| out | 480 | 480 (100%) | 480 / 0 | 240 / 240 | 21.1, 24 | 0 | 0 | 235 | 0.52, -, 1.1 |
+
+Every kept visit is hit-free and leaves by the exit; the way in takes 254 frames against the rule's 600 with the
+look-ahead, the way out 235 against 486. Full hearts (beams) and partial hearts alike: in 145 / 164 visits, 257 / 251
+frames. The way in strikes in 257 of 309 visits (the pocket Darknut of ($A0, $7D) in the column, as with the rule) and
+walks through untouched in 52; it hardly waits.
+
+**The files** (`target/demos/` in the `r40-line2` worktree, for the lead's `triforce-lead data install`; this
+worktree's own `target/demos` is what its tools read until then; the pieces joined by `r40_d3_69_line.py merge`):
+`r40-d3-69-in.npz` 309 visits, 12,319 rows (sha256 a7f0d2cd...), `r40-d3-69-out.npz` 480 visits, 10,112 rows
+(2eeceae2...); a row a decision (a MOVE or WAIT without its duration, a strike 8 times), the darknut@d3first task's
+observation on the merged code. `specialists/d3first/darknut.yaml` declares them: `demos: {files: [r40-d3-69-in.npz,
+r40-d3-69-out.npz], coeff: 0.05}` (round 25's 5:0x37 weight). Line40's rule files (`r40-d3-69-line-0..3.npz`, 77 of
+100 in-pass and 99 of 100 out-pass visits, 15,167 rows, on the code before the merge) are replaced. If the
+generation's task changes the observation, the rows must be recorded again with it (`load_demos` refuses files whose
+keys differ; a changed shape fails at the first update). Records: `target/r40-line2/{in,out}-N.jsonl` (each visit's
+seed, start, bombs, hearts, actions, `way`, the search's decisions and seconds; `summarize` reads them).
+
+**Training logs the room** (for the smoke and every later darknut run): the env's terminal info carries `hits` (the
+episode's steps that lost health, a room visit's definition) and training's metrics `room/<room>/<entry>/episodes`,
+`success_rate` and `hits` (`room/3:0x69/N/...` the way in, `room/3:0x69/cave/...` the way out).
 
 ### A task's `demos:` key (for the lead's conditions)
 
@@ -694,7 +724,9 @@ that clones the task's file at its weight, records it with its checksum, takes `
 
 ### Not done, not tested
 
-- The darknut network has not been trained with the demonstrations (the generation's trainings are the lead's).
+- The darknut network has not been trained with the demonstrations: the short smoke pair (with them and with
+  `--no-task-demos`, `--same-recipe-as`) was left to the lead, the express place being hours deep.
+- The 11 way-in seeds the jobs did not finish in their time were not searched to the end.
 - The in-pass rule alone was measured on 300 visits a pass, not 1000; the 1000-visit figures are the look-ahead's.
 - The `null` endings (400 decisions) were not looked into.
 - `d2first`'s chains were not run (its 0x69 step reads the shared room, without the line's costs, as before).
