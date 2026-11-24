@@ -870,29 +870,12 @@ def set_current_team(name: str, entry: str = LEAD) -> dict:
 # start a slot (a slot starts with its family), so a group never collides with a family's name.
 GROUP_SLOT = '@'
 SPEC_SEPARATOR = '+'
-# The generation's teachers until Trainer41's groups file is merged (``triforce/groups.yaml``, read by
-# ``triforce.lab.groups.load``): ``groups()`` reads that file when the module exists; then delete this table and the
-# ImportError branch.
-FALLBACK_ROUTE = 'd3first'
-FALLBACK_GROUPS = {
-    'overworld': ('ow-start', 'ow-tektite', 'ow-leever', 'ow-moblin', 'ow-octorok', 'ow-zora', 'ow-peahat', 'ow-lynel',
-                  'ow-ghini', 'ow-boulder'),
-    'walkers': ('darknut', 'gibdo', 'stalfos-keese-gel', 'zol', 'like-like', 'vire', 'goriya', 'd2-rope',
-                'dodongo-crossing', 'moldorm'),
-    'others': ('wizzrobe', 'pols-voice', 'wallmaster', 'lanmola', 'patra'),
-    'rooms': ('equipment-room', 'trap-room'),
-    **{boss: (boss,) for boss in ('boss-manhandla', 'boss-gleeok', 'boss-aquamentus', 'boss-dodongo', 'boss-digdogger',
-                                  'boss-gohma', 'ganon')},
-}
 
 
 def groups() -> dict[str, tuple[str, tuple]]:
-    """Teacher name -> (route, member families): ``triforce.lab.groups.load()`` where that module exists, else
-    ``FALLBACK_GROUPS`` on ``FALLBACK_ROUTE``."""
-    try:
-        from .lab import groups as lab_groups  # pylint: disable=import-outside-toplevel
-    except ImportError:
-        return {name: (FALLBACK_ROUTE, families) for name, families in FALLBACK_GROUPS.items()}
+    """Teacher name -> (route, member families), from the generation's groups file (``triforce/groups.yaml``,
+    ``triforce.lab.groups.load``)."""
+    from .lab import groups as lab_groups  # pylint: disable=import-outside-toplevel
     return {name: (group.route, tuple(group.families)) for name, group in lab_groups.load().items()}
 
 
