@@ -105,20 +105,28 @@ def test_the_room_rule_on_sequences_of_where_link_is():
 
 
 def test_the_cellar_under_the_room_is_the_same_take_and_the_next_room_ends_it():
-    """3x69 from its stairs: right onto them, down to the raft's cellar, up the ladder, then N into 3x59."""
+    """3x69 from its stairs: right onto them, down to the raft's cellar, up the ladder, then N into 3x59.  Back in
+    3x69 Link walks right until he is in the N door's column (X $78), then up.  (A fixed 24 frames right brought him
+    to X $7B on main's start state, from which he turns into the doorway, and to X $80 on the generation's rebuilt
+    one, beside it, where he stood until the Darknuts killed him.)"""
     session = session_of(Spec(3, 0x69, entry='cave'), 1)
     seen = play(session, 'R200N200U200')
     assert (9, 3, 0x0f, True) in seen and seen[-1] == (5, 3, 0x69, False)            # there and back
     assert session.done is None
-    seen = play(session, 'R24U200')
+    for _ in range(60):                         # right to the door's column (asm:ObjX, Link's slot 0)
+        if session.state.ram[0x70] >= 0x78 or session.step(RIGHT):
+            break
+    seen = play(session, 'U200')
     assert session.done == 'left for 3x59' and seen[-1] == (5, 3, 0x59, False)
     with pytest.raises(RuntimeError, match='DONE'):
         session.step(0)
 
 
 def test_death_ends_the_take():
-    session = session_of(Spec(3, 0x69, entry='cave'), 1)
-    play(session, 'D4R200')                     # into the Darknuts with three hearts
+    """Into the Darknuts with half a heart (the first touch kills; with the start state's own hearts whether he
+    dies within the 200 frames depended on that state's contents)."""
+    session = session_of(Spec(3, 0x69, entry='cave', hearts=0.5), 1)
+    play(session, 'D4R200')
     assert session.done == 'died' and session.state.game_over
 
 
@@ -180,7 +188,7 @@ def test_the_saved_replay_verifies_replays_to_the_same_frame_and_keeps_the_bombs
 
 
 def test_endings_of_a_done_take(tmp_path):
-    session = session_of(Spec(3, 0x69, entry='cave'), 1)
+    session = session_of(Spec(3, 0x69, entry='cave', hearts=0.5), 1)     # the first touch kills (test_death_...)
     play(session, 'D4R200')
     recording = _native.Replay(session.replay())
     assert recording.ending == 'death' and recording.meta['human']['done'] == 'died'

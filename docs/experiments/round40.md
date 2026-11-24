@@ -1396,3 +1396,45 @@ cheated in either arm. Bombs at Manhandla's door (runs reaching him): off 4:1 5:
 every run of both arms (the start states held the explorer's kills; States40's patched states, above, came after it), so
 the first pass's carriers never opened; carriers were aimed at on the last pass (3 visits, 1 killed) and in 3:0x5c
 (6), none in the off arm.
+
+## The generation's base made green (Gen40fix, branch `r40-genfix`)
+
+`triforce job test all --build` on the base as received (5f5647c9, job #937) failed 8 Python tests; Rust, asm and
+check passed. Each failure, its cause and its fix:
+
+- **`test_r40_line.py::test_the_way_in_swords_the_darknut_in_the_column_and_passes`**: a fixed-seed walk of 3x69's
+  scripted rule on `d3first_3_69n_0`, rebuilt by r40-states after the test was written; on the base seed 3 has the
+  rule wait (no strike, unhit). A seed is chosen again, not a situation built: the test is of the rule on the route's
+  own entry, and a Darknut placed by writing RAM would be a spawn the game never makes. Seed 5 (8 bombs): Link
+  comes down the column X $90 and at Y $7B strikes S the Darknut at ($90, $88) below him, then walks to the stairs
+  unhit; the look-ahead's seed 4 on `_1` still strikes S from ($90, $66) at two Darknuts crossing the column below.
+  The docstring says how to choose them again after a rebuild (`trace --pass in SEED --start STATE`).
+- **`test_emu.py`** (three tests) and **`test_emu_zelda.py::test_done_saves_and_resets_with_the_same_or_a_new_seed`**:
+  main's emu tests (2.0.0.16), written on main's `d3first_3_69c_0`, which this branch rebuilt (4 bombs, its own
+  Darknuts). The cellar walk held RIGHT a fixed 24 frames back to the N door: on main's state Link was slowed and
+  stopped at X $7B, from which he turns into the doorway, on this one he reaches X $80, beside it, and the Darknuts
+  kill him there. Now he walks right until he is in the door's column (X $78). The three death tests walked into the
+  Darknuts with the state's three hearts, and whether he died within 200 frames was the state's; now with half a
+  heart (`Spec(hearts=0.5)`): the first touch kills, on seeds 0-15 alike.
+- **`test_obs_legacy.py`** (darknut, trap-room, ow-zora): main's heart encoding on this branch's timing. Compared
+  step by step with the merge's first parent feabd634 (same seeds, same actions): every moved trace differs at the
+  reset in the two heart bytes only, (H, $00) -> (H - 1, $FF). Darknut `5_05c_2`, `5_64e_0`, `5_64e_1` and trap-room
+  `1_22c_0` die of a hit Link survived before with an empty heart (steps 21, 10, 31, 33; before 26, 16, 47, none);
+  ow-zora `0_38n_2` and darknut `3_69n_2` hold one heart and the low-hearts beep plays (`Tune0Request` $40,
+  asm:Mode5Play_UpdateWorld): one observation's velocity columns are scaled by one frame more (step 27; step 5), and
+  in `3_69n_2` the MOVE of step 46 ends a frame sooner with Link 2 pixels short, positions differing to step 50. Six
+  hashes in `ROUND40_MERGE_CHANGES`; trap-room `3_5ae_2` (moved on main) keeps the cut-over's (hearts never below 2).
+- **`test_training_gui.py::test_a_jobs_card_draws_its_progress_with_widgets_in_the_window_and_the_web_view`**
+  ("AssertionError: 5", in the lead's, Line40's and Carrier40b's runs): neither the live queue (the test has its own)
+  nor test order, but the wall clock: job 5, a build admitted 30 s before the test's `now`, drew `RUNNING tools 31s`
+  when building the window took past a second. The window's clock is now held at `now` (`freeze_gui_clock`).
+- **`test_train_cli.py::test_an_interrupted_run_saves_but_exits_130`** (exit 1, not 130, under load; passes alone and
+  in 64 runs with the signal swept 0-2.5 s after the first metrics line): not the signal before the handler nor the
+  training ending first, but a product race. The test's SIGTERM follows the first line of `metrics.jsonl`, which
+  `MetricsLogger.log` writes just before the iteration's TensorBoard scalars; TensorBoard puts each on a bounded
+  queue, and a KeyboardInterrupt raised while `queue.put` waits in `Condition.wait` can surface as `RuntimeError:
+  release unlocked lock` (seen with an interrupt timed into `add_scalar` alone), which the training's `except
+  KeyboardInterrupt` does not catch: a traceback, exit 1, no summary. The training now holds a SIGTERM while it logs
+  an iteration's metrics (`train.interrupts_held`) and raises it after; a new test signals inside that block. The
+  interrupted test waits for the metrics line with no deadline (the suite's timeout bounds a hang) and keeps the
+  training's output for its failure message.
