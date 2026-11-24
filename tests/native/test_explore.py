@@ -4,6 +4,8 @@ import json
 
 from triforce import _native as native
 
+from ..conftest import REPO_STATES_DIR, require_rom
+
 
 def test_explorer_accepts_entering_a_room(states_dir, tmp_path):
     explorer = native.Explorer('ow-start', seed=3, states_dir=str(states_dir))
@@ -37,10 +39,11 @@ def test_explore_states_is_independent_of_parallelism(states_dir, tmp_path):
     assert run(1) == run(2)
 
 
-def test_an_unsolved_search_says_what_it_reached(states_dir):
+def test_an_unsolved_search_says_what_it_reached():
     """Round 40 (Tracks41): the failed episodes by ending, the living enemies at the reset and the fewest reached,
     the longest path and the best closeness, for the explorer's `reached:` line."""
-    explorer = native.Explorer('zol', seed=0, states_dir=str(states_dir))
+    require_rom()
+    explorer = native.Explorer('zol', seed=0, states_dir=str(REPO_STATES_DIR))
     result = explorer.explore('d3first_3_4bs_0', iterations=8, explore_steps=10, patience=1)
     assert not result.success
     assert all(isinstance(e, str) and n > 0 for e, n in result.failures)

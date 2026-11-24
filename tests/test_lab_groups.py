@@ -45,7 +45,8 @@ def test_every_generation_task_loads_on_the_route_as_it_does_without_it(tmp_path
     """``--group`` implies ``--state-route d3first`` (``lab.collect.route_only``): every member's task loads there
     (its inputs checked) and keeps its curriculum settings, the ``untracked`` declaration among them.  The lead hit
     the fault this pins (Nov 24): ``route_only`` rebuilt the curriculum block from ``enabled`` and the link folder
-    alone, so a task declaring states untracked (zol@d3first's 3:0x4b and Dungeon 5/6/9 states) was refused."""
+    alone, so a task declaring states untracked (zol@d3first's Dungeon 5/6/9 states; its 3:0x4b too until Tracks41
+    gave it tracks) was refused."""
     for group in groups.load().values():
         for key in group.members:
             bare, = parse_families([key], 1, states_dir=REPO_STATES_DIR)
@@ -57,7 +58,7 @@ def test_every_generation_task_loads_on_the_route_as_it_does_without_it(tmp_path
                 assert {k: v for k, v in mine.items() if k != 'trajectories'} == {
                     k: v for k, v in theirs.items() if k != 'trajectories'}, key
     zol, = parse_families(['zol@d3first'], 1, state_route='d3first', states_dir=REPO_STATES_DIR, tracks_dir=tmp_path)
-    assert 'd3first_3_4bs_0' in zol.config.to_dict()['curriculum']['untracked']
+    assert 'd3first_5_57w_[0-9]' in zol.config.to_dict()['curriculum']['untracked']
 
 
 @pytest.mark.parametrize('text, message', [
