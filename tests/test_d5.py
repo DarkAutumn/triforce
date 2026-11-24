@@ -181,6 +181,10 @@ def test_0x66_on_entry_is_crossed_to_its_w_wall_and_bombed_once(probe):
     assert room.allowed('BOMB'), 'at the W wall'
     room.act('BOMB W')
     assert room.state.bombs == 1
+    # The fuse first (round 40): a MOVE that stops at the closed wall's mouth now plays one frame (two before, with
+    # the closing frame), and the env calls the room stuck before 40 of them have let the bomb blow.
+    for _ in range(4):
+        room.act('WAIT 16')
     room.until_room_changes('MOVE W 16')
     assert (room.ending(), tuple(room.info['room'])) == ('exit-correct', (LEVEL, 0x65, False))
     assert room.rewards['reward-opened-bomb-wall'] > 0 and room.state.bombs == 1
