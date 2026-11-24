@@ -336,21 +336,18 @@ def table(directory: Path, base: str) -> str:
 def retrain(init: str, sources: list[str], save: str, epochs: int, lr: float, batch: int, device, seed: int,
              weights: list[float], fraction: float = 1.0, by_row: bool = False) -> None:
     """The hit network's trunk and hit tower trained on every source's training candidates (BCE, AdamW one-cycle,
-    as experiment 2's bench), from ``init`` (a ``hitnet`` or ``hitshift`` checkpoint, or ``fresh:POLICY``: a new
-    ``hitnet`` on that policy's observation plus schema 7's fields, as experiment 2's bench builds it); P = R on each
-    source's held-out decisions after every epoch. ``fraction``: the share of each source's training decisions kept
-    (drawn by decision, the same draw for a given seed: the data curve)."""
+    as experiment 2's bench), from ``init`` (a ``hitnet`` or ``hitshift`` checkpoint); P = R on each source's
+    held-out decisions after every epoch. ``fraction``: the share of each source's training decisions kept (drawn by
+    decision, the same draw for a given seed: the data curve). Round 40 retired ``fresh:POLICY`` (a new ``hitnet``
+    with the default tokens alone, so never one reading ``threat`` or ``chase``): a generation's student is a
+    ``hitnet`` whose hit head trains in the same pass as its imitation (``r36_merge_distill.py train --arch hitnet
+    --arch-config ... --aux hit=hit:C``, docs/lab.md "Stage 2")."""
+    if init.startswith('fresh:'):
+        raise SystemExit("retrain --init fresh:... is retired (round 40): train a hitnet's head with its imitation, "
+                         "r36_merge_distill.py train --arch hitnet --aux hit=hit:C")
     torch.manual_seed(seed)
     data = [load_rows(s) for s in sources]
-    if init.startswith('fresh:'):
-        from triforce._native import OBS_SPEC  # pylint: disable=import-outside-toplevel
-        spec = {**load(init[len('fresh:'):]).config.obs_spec,
-                **{k: {'shape': list(OBS_SPEC[k]['shape']), 'vocab': None} for k in ('entity_rel', 'entity_contact')}}
-        rate = float(np.mean(np.concatenate([r.c_lost[~r.held[r.c_row]] for r in data])))
-        network = nets.create('hitnet', spec, hit='joint', hit_prior=rate)
-    else:
-        network = load(init)
-    network = network.to(device)
+    network = load(init).to(device)
     hitnet = network.hit if isinstance(network, nets.ARCHS['hitshift']) else network
     keys = None
     for rows in data:
