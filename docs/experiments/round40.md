@@ -2767,6 +2767,9 @@ how each works; this is what was built and what it showed.
 - **Resume**: `--resume NAME/RUN` with the same command line; SIGTERM saves and exits 130 (the lab had no handler
   before its training block, and none that waited out a TensorBoard write); `run.json` is written before training,
   so a store run stopped anywhere stays open and resumes; the need sampler's outcomes ride in the checkpoint.
+- **A name no team spec could hold** (the lead's line, from Judge41's work on team specs): `--name` or `--run-id` with
+  `+` is refused as the arguments are read ("--name: '+' separates the slots of a team spec, so no --team could name
+  this run; use '-' or '_'").
 - **The lab's existing tests** train ow-start from the bare state `start` with no route: they now pass `--all-routes`
   (a comment says why); nothing else in them moved.
 
@@ -2810,7 +2813,11 @@ budget chosen on their chains.
 - boss-gleeok from scratch with the generation's layout (an experiment yaml in `target/t41/` turning `obs.threat` and
   `obs.chase` on over `specialists/d3first/boss-gleeok.yaml`; `--group boss-gleeok` itself is refused until the task
   files turn them on), tokens `type, features, rel, threat, chase`, `feed`, 1,608,836 parameters, 6 iterations, 8
-  envs: `t41-gleeok/s1`, sealed.
+  envs: `t41-gleeok/s1`, sealed. Two more seeds of it, 4 iterations each, both started on the clean commit b3eedb55
+  (`t41-gleeok/s4`, `s5`, jobs #1190, #1191): `triforce manifest diff t41-gleeok/s4 t41-gleeok/s5` prints only
+  `arguments.run_id: s4 -> s5`, `arguments.seed: 4 -> 5`, and under `run` `job.id`, `job.subtask`, `seeds.pools`,
+  `seeds.seed`: the seed and the run's identity. (Their rate, 120-190 decisions a second, was measured beside this
+  branch's full test suite and is no timing.)
 
 **A first timing** (a machine with other jobs: two of the lead's 2.5-hour zol trainings and an explorer ran beside
 them; decisions a second, `--try-others 4:0.25` included): boss-gleeok, generation layout, 8 envs: 390 a second over
