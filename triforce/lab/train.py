@@ -1,7 +1,7 @@
 """Lab training: one network over several families at once, with today's networks as teachers (docs/lab.md).
 
-    python -m triforce.lab.train --name zol+skg --families zol stalfos-keese-gel --parallel 8 --iterations 80 \\
-        --teacher-coeff 1.0 --teacher-hold 20 --teacher-fade 60
+    python -m triforce.lab.train --name zol-skg --families zol@d3first stalfos-keese-gel@d3first \\
+        --state-route d3first --parallel 8 --iterations 80 --teacher-coeff 1.0 --teacher-hold 20 --teacher-fade 60
 
 Each ``--families`` item is a policy key, optionally with its task yaml (``zol@d3first=path/zol.yaml``); a key's
 own yaml stays its task definition.  The run lives in ``<models>/<name>/<run-id>`` and every member family gets a
@@ -168,7 +168,12 @@ def parse_args(argv=None):
     parser.add_argument('--stop-patience', type=int, default=5)
     parser.add_argument('--logs-dir', default=None,
                         help="the root of the run's log folder (default logs/, $TRIFORCE_LOGS_DIR)")
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    for flag, value in (('--name', args.name), ('--run-id', args.run_id)):
+        if value and '+' in value:
+            parser.error(f"{flag}: '+' separates the slots of a team spec, so no --team could name this run; use '-' "
+                         f"or '_'")
+    return args
 
 
 def teacher_coeff(args, iteration: int) -> float:

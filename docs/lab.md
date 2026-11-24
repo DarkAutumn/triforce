@@ -238,6 +238,8 @@ entries, an architecture key as `networks.student.config.<key>` (`tests/test_lab
 
 Each stops the run before the queue gives it a place (exit 2), with what to change (`lab.recipe`):
 
+- a `--name` or `--run-id` holding `+` (a team spec splits its slots on `+`, so no `--team` could name the run;
+  refused as the arguments are read): use `-` or `_`;
 - a task with no `state_routes` and no `--state-route` (it would draw every route's states, `d2first`'s too):
   `--state-route d3first` (`--group` sets it), or `--all-routes` for a run meant to;
 - a task's `warm_start` (the lab never loads one: `--load` names the start, and the generation trains from scratch):
