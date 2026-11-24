@@ -3,7 +3,10 @@
 ``paths`` prints every location as JSON; ``data``, ``runs``, ``teams`` list what is there; ``summaries`` the kept
 rows of a run's or a team's measurements over time; ``outputs`` what a job filed; ``log`` the audit log (every
 write: when, which job and agent, what); ``view TEAM --into DIR`` writes an old-style models folder of links for an
-old version's tree.  Nothing here writes the store but ``view`` (which writes only DIR).
+old version's tree.  ``checkpoint FAMILY/RUN@itN`` (round 41) is the one command here that adds to the store: a
+numbered checkpoint of a run, open or sealed, made a sealed run of its own (``store.checkpoint_run``: only added,
+never changing the parent; ``--plan`` and ``--list`` only read).  Nothing else here writes the store but ``view``
+(which writes only DIR) and ``reindex`` (derived tables).
 """
 
 import argparse
@@ -124,6 +127,40 @@ def cmd_view(args) -> int:
     return 0
 
 
+def cmd_checkpoint(args) -> int:
+    text, iteration = store.split_checkpoint(args.run)
+    if iteration is not None and args.it is not None:
+        raise store.StoreError(f"{args.run}: the checkpoint is named twice (@ and --it): give one")
+    parent = store.parse_run(text)
+    if args.list:
+        row = store.get_run(parent)
+        found = store.numbered_checkpoints(parent, row['status'] == store.SEALED)
+        if args.json:
+            _print_json([{**c, 'dir': str(c['dir'])} for c in found])
+            return 0
+        print(f"{parent.identity} ({row['status']}): {len(found)} numbered checkpoints")
+        for c in found:
+            made = store.run_row(store.checkpoint_run_name(parent, c['iteration']))
+            print(f"  it{c['iteration']:06d}  " + (f"complete {c['sha1'][:12]}" if c['complete'] else
+                                                   f"being written: {c['why']}")
+                  + (f"  -> {store.checkpoint_run_name(parent, c['iteration']).identity}" if made else ''))
+        return 0
+    wanted = iteration if iteration is not None else (args.it or 'latest')
+    if wanted != 'latest' and not str(wanted).removeprefix('it').isdigit():
+        raise store.StoreError(f"--it {wanted}: an iteration (228, it228) or latest")
+    wanted = wanted if wanted == 'latest' else int(str(wanted).removeprefix('it'))
+    result = store.checkpoint_run(parent, wanted, make=not args.plan)
+    if args.json:
+        _print_json(result)
+        return 0
+    state = ('exists' if result['exists'] else 'made now' if result['made'] else
+             f"would be made ({result['weights']} from the {result['parent_status']} run)")
+    steps = f", {result['steps']:,} steps" if result.get('steps') is not None else ''
+    print(f"{result['run']}: iteration {result['iteration']} of {result['parent']}{steps}, sha1 "
+          f"{result['checkpoint_sha1'][:12]}, {result['weights']}; {state}")
+    return 0
+
+
 def cmd_query(args) -> int:
     from .store_stats import EXAMPLES  # pylint: disable=import-outside-toplevel
     if args.sql is None:
@@ -158,7 +195,8 @@ def cmd_reindex(args) -> int:  # pylint: disable=unused-argument
 def main(argv=None) -> int:
     """``triforce store ...``."""
     parser = argparse.ArgumentParser(prog='triforce store', description="Where the shared things are and what the "
-                                     "shared store holds (read-only: tools write it through triforce.store).")
+                                     "shared store holds (read-only but `checkpoint`, which only adds a sealed run: "
+                                     "tools write the store through triforce.store).")
     sub = parser.add_subparsers(dest='command', required=True)
     sub.add_parser('paths', help="every location as JSON (the store's layout.json, this checkout's scratch)")
     data = sub.add_parser('data', help="the named data snapshots")
@@ -183,18 +221,26 @@ def main(argv=None) -> int:
     view = sub.add_parser('view', help="an old-style models folder of links for TEAM (an old version's tree)")
     view.add_argument('team', help="NAME, current, or NAME+SLOT=RUN...")
     view.add_argument('--into', type=Path, required=True)
+    checkpoint = sub.add_parser('checkpoint', help="a run's numbered checkpoint as a sealed run a team can play, "
+                                                   "FAMILY/RUN-it<NNNNNN> (made once; the parent only read)")
+    checkpoint.add_argument('run', metavar='FAMILY/RUN[@itN|@latest]')
+    checkpoint.add_argument('--it', default=None, metavar='N|latest',
+                            help="the iteration (default latest: the newest completely written)")
+    checkpoint.add_argument('--plan', action='store_true', help="say which run it is and whether it exists; make "
+                                                                "nothing")
+    checkpoint.add_argument('--list', action='store_true', help="the run's numbered checkpoints, complete or not")
     query = sub.add_parser('query', help="the statistics tables (evaluations, evaluation_rooms) in SQL: an example's "
                                          "name or a SELECT; without one, the examples")
     query.add_argument('sql', nargs='?')
     query.add_argument('--param', action='append', default=[], metavar='NAME=VALUE',
                        help="a :NAME parameter (deaths-by-room-over-time: --param level=3 --param room=0x5b)")
     sub.add_parser('reindex', help="rebuild the statistics tables from the filed statistics files")
-    for parser_ in (data, runs, teams, summaries, outputs, log, query):
+    for parser_ in (data, runs, teams, summaries, outputs, log, query, checkpoint):
         parser_.add_argument('--json', action='store_true')
     args = parser.parse_args(argv)
     commands = {'paths': cmd_paths, 'data': cmd_data, 'runs': cmd_runs, 'teams': cmd_teams,
                 'summaries': cmd_summaries, 'outputs': cmd_outputs, 'log': cmd_log, 'view': cmd_view,
-                'query': cmd_query, 'reindex': cmd_reindex}
+                'query': cmd_query, 'reindex': cmd_reindex, 'checkpoint': cmd_checkpoint}
     try:
         return commands[args.command](args)
     except (store.StoreError, paths.MissingError) as error:

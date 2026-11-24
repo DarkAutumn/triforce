@@ -404,3 +404,122 @@ def test_data_is_the_callers_folder_else_the_stores_snapshot_else_refused_naming
     (states / 'harvested' / 'zol').mkdir(parents=True)
     assert Path(zol.harvested_dir(str(states))) == states / 'harvested' / 'zol'
     assert paths.data_dir('harvested', states / 'harvested') == states / 'harvested'
+
+
+# ------------------------------------------------------------------------------- a numbered checkpoint as a run
+
+def _training(family: str, name: str, iterations=(2, 4)) -> Run:
+    """An open run as a training leaves it: ``run.json`` with a manifest, ``ckpt.pt`` saved at each numbered
+    checkpoint and the numbered checkpoints written by the trainer's own ``registry.snapshot_checkpoint``."""
+    run = store.allocate_run(family, name)
+    (run.path / 'run.json').write_text(json.dumps({'manifest': {
+        'schema': 1, 'kind': 'lab-train', 'networks': {'student': {'arch': 'hitnet'}}, 'seeds': {'seed': 1}}}))
+    for iteration in iterations:
+        tmp = run.path / 'ckpt.tmp'
+        torch.save({'state_dict': {'w': torch.tensor([float(iteration)])}, 'specialist': family, 'run_id': name,
+                    'iterations': iteration, 'steps': 1000 * iteration}, tmp)
+        os.replace(tmp, run.path / 'ckpt.pt')
+        registry.snapshot_checkpoint(run.path / 'ckpt.pt', iteration)
+    return run
+
+
+def _mode(path: Path) -> int:
+    return path.stat().st_mode & 0o777
+
+
+def test_a_checkpoint_of_an_open_run_becomes_a_sealed_copy_and_the_parent_is_untouched(shared):
+    parent = _training('gen1-walkers', 's1')
+    numbered = parent.path / 'checkpoints' / 'it000002' / 'ckpt.pt'
+    before = {p: (_mode(p), p.stat().st_mtime_ns) for p in parent.path.rglob('*')}
+    made = store.checkpoint_run(parent, 2)
+    assert (made['run'], made['made'], made['exists'], made['weights']) == ('gen1-walkers/s1-it000002', True, False,
+                                                                            'copied')
+    assert (made['iteration'], made['steps'], made['parent_status']) == (2, 2000, store.OPEN)
+    snap = store.parse_run(made['run'])
+    row = store.get_run(snap)
+    assert (row['status'], row['origin'], row['parent'], row['sha1']) == (
+        store.SEALED, 'checkpoint', 'gen1-walkers/s1', store.file_sha1(numbered))
+    assert (snap.path / 'ckpt.pt').stat().st_ino != numbered.stat().st_ino and _mode(snap.path / 'ckpt.pt') == 0o444
+    # The parent: still open, every file and folder as it was (modes and times), nothing added.
+    assert store.get_run(parent)['status'] == store.OPEN
+    assert {p: (_mode(p), p.stat().st_mtime_ns) for p in parent.path.rglob('*')} == before
+    # run.json: the checkpoint, the parent's identity, the parent's manifest with the weights named.
+    record = json.loads((snap.path / 'run.json').read_text())
+    assert record['checkpoint']['weights'] == 'copied' and record['checkpoint']['checkpoint_sha1'] == row['sha1']
+    assert record['parent'] == {'family': 'gen1-walkers', 'run': 's1', 'iterations': 2, 'sha1': row['sha1']}
+    from triforce import manifest
+    recorded = manifest.read('gen1-walkers/s1-it000002')
+    assert recorded['networks']['student'] == {'arch': 'hitnet'} and recorded['kind'] == 'lab-train'
+    assert recorded['networks']['checkpoint'] == {'parent': 'gen1-walkers/s1', 'iteration': 2, 'steps': 2000,
+                                                  'checkpoint_sha1': row['sha1']}
+    # Idempotent: the same checkpoint again is the same run, nothing written.
+    writes = len(store.audit_log())
+    again = store.checkpoint_run(parent, 2)
+    assert (again['run'], again['exists'], again['made'], again['steps']) == (made['run'], True, False, 2000)
+    assert len(store.audit_log()) == writes
+    # latest: the newest completely written; a second snapshot differs from the first by its weights alone.
+    latest = store.checkpoint_run(parent, 'latest')
+    assert latest['run'] == 'gen1-walkers/s1-it000004' and latest['made']
+    differences = {d['path'] for d in manifest.diff(manifest.read(made['run']), manifest.read(latest['run']))}
+    assert differences == {'networks.checkpoint.iteration', 'networks.checkpoint.steps',
+                           'networks.checkpoint.checkpoint_sha1'}
+    # A team plays it like any sealed run.
+    store.create_team('t1', {'zol@d3first': store.slot_of(snap)}, 'test')
+    assert store.effective_team('t1+@walkers=gen1-walkers/s1-it000004')['slots']['zol@d3first']['run'] == \
+        'gen1-walkers/s1-it000004'
+
+
+def test_a_checkpoint_still_being_written_is_refused_and_latest_passes_it_by(shared):
+    parent = _training('gen1-walkers', 's1')
+    folder = parent.path / 'checkpoints' / 'it000006'
+    folder.mkdir()
+    (folder / '.ckpt.pt.123.tmp').write_bytes(b'half')            # the copy, not yet renamed
+    with pytest.raises(store.StoreError, match='still being written .no ckpt.pt yet'):
+        store.checkpoint_run(parent, 6)
+    shutil_copy = (parent.path / 'checkpoints' / 'it000004' / 'ckpt.pt').read_bytes()
+    (folder / 'ckpt.pt').write_bytes(shutil_copy)                  # renamed, act not yet written
+    with pytest.raises(store.StoreError, match='still being written .no act yet'):
+        store.checkpoint_run(parent, 6)
+    (folder / 'act').write_text('sample 0123456789\n')            # an act of other weights
+    with pytest.raises(store.StoreError, match='names other weights'):
+        store.checkpoint_run(parent, 6)
+    assert store.checkpoint_run(parent, 'latest', make=False)['iteration'] == 4
+    assert store.run_row(store.Run('gen1-walkers', 's1-it000006')) is None
+    with pytest.raises(paths.MissingError, match=r'no numbered checkpoint of iteration 8 .* found: 2, 4, 6 \(being'):
+        store.checkpoint_run(parent, 8)
+
+
+def test_a_checkpoint_of_a_sealed_run_is_a_hard_link(shared):
+    parent = _training('gen1-zol', 's1')
+    store.seal_run(parent)
+    made = store.checkpoint_run(parent, 'latest')
+    source = parent.path / 'checkpoints' / 'it000004' / 'ckpt.pt'
+    assert (made['weights'], made['parent_status']) == ('linked', store.SEALED)
+    assert (store.parse_run(made['run']).path / 'ckpt.pt').stat().st_ino == source.stat().st_ino
+    assert _mode(source) == 0o444
+
+
+def test_a_run_of_that_name_with_other_weights_is_refused(shared):
+    parent = _training('gen1-walkers', 's1')
+    other = store.allocate_run('gen1-walkers', 's1-it000002')
+    _checkpoint(other.path / 'ckpt.pt', 'other')
+    store.seal_run(other)
+    with pytest.raises(store.StoreError, match='is never written twice'):
+        store.checkpoint_run(parent, 2)
+
+
+def test_the_checkpoint_command_plans_makes_and_lists(shared, capsys):
+    from triforce import store_cli
+    _training('gen1-walkers', 's1')
+    assert store_cli.main(['checkpoint', 'gen1-walkers/s1@it2', '--plan']) == 0
+    assert 'gen1-walkers/s1-it000002: iteration 2 of gen1-walkers/s1' in capsys.readouterr().out
+    assert store.run_row(store.Run('gen1-walkers', 's1-it000002')) is None
+    assert store_cli.main(['checkpoint', 'gen1-walkers/s1', '--it', 'latest']) == 0
+    assert 'gen1-walkers/s1-it000004: iteration 4 of gen1-walkers/s1, 4,000 steps' in capsys.readouterr().out
+    assert store_cli.main(['checkpoint', 'gen1-walkers/s1', '--list']) == 0
+    out = capsys.readouterr().out
+    assert 'it000004  complete' in out and '-> gen1-walkers/s1-it000004' in out
+    assert store_cli.main(['checkpoint', 'gen1-walkers/s1@it2', '--it', '4']) == 2
+    assert store_cli.main(['checkpoint', 'gen1-walkers/s1@it9']) == 2
+    assert store.split_checkpoint('a/b@latest') == ('a/b', 'latest')
+    assert store.split_checkpoint('a/b@it000228') == ('a/b', 228) and store.split_checkpoint('a/b') == ('a/b', None)

@@ -21,7 +21,9 @@ read-only ones are read-only on disk so an accident fails; missing is an error n
 is a row of the audit log (when, job, agent, entry point, what).
 
 Public operations (``entry='public'``): ``allocate_run`` / ``seal_run`` / ``resume_run`` / ``derive_run`` (the
-trainings and ``select-checkpoint --apply``), ``job_folder`` / ``file_output`` (every tool's outputs, one kept summary
+trainings and ``select-checkpoint --apply``), ``checkpoint_run`` (a numbered checkpoint of a run, open or sealed, as a
+sealed run of its own: ``triforce store checkpoint``, ``eval-batch --teacher GROUP=FAMILY/RUN@itN``), ``job_folder`` /
+``file_output`` (every tool's outputs, one kept summary
 row each), and the read side (``runs``, ``teams``, ``snapshots``, ``read_team``, ``effective_team``, ``team_view``,
 ``write_view``).  The lead's (``triforce.lead``, ``entry='lead'``): install a snapshot, set a kind's current one,
 make a team, set the current team, the import, delete, back up.
@@ -648,6 +650,161 @@ def _drop_open(run: Run):
         shutil.rmtree(run.path, ignore_errors=True)
     with writing('run-drop', {'run': run.identity}, PUBLIC) as con:
         con.execute('DELETE FROM runs WHERE family = ? AND name = ? AND status = ?', (run.family, run.name, OPEN))
+
+
+# Round 41 (Check41): a numbered checkpoint of a run (``checkpoints/it<NNNNNN>/``, ``registry.snapshot_checkpoint``)
+# made a sealed run a team can play, ``<run>-it<NNNNNN>`` beside its parent, while the parent trains on or after.
+CHECKPOINT_ORIGIN = 'checkpoint'
+
+
+def checkpoint_run_name(parent: Run, iteration: int) -> Run:
+    """The sealed run a numbered checkpoint becomes: ``FAMILY/RUN-it<NNNNNN>``."""
+    return Run(parent.family, f'{parent.name}-it{int(iteration):06d}')
+
+
+def split_checkpoint(text: str) -> tuple[str, Optional[object]]:
+    """``FAMILY/RUN@it228`` (also ``@it000228``, ``@228``) -> (``FAMILY/RUN``, 228); ``@latest`` -> 'latest';
+    without such a suffix -> (text, None)."""
+    head, sep, tail = text.rpartition('@')
+    if sep and head:
+        if tail == 'latest':
+            return head, 'latest'
+        digits = tail[2:] if tail.startswith('it') else tail
+        if digits.isdigit():
+            return head, int(digits)
+    return text, None
+
+
+def numbered_checkpoints(parent: Run, sealed: bool) -> list[dict]:
+    """The numbered checkpoints of ``parent`` (``checkpoints/it<NNNNNN>/``), oldest first: ``iteration``, ``dir``,
+    ``complete`` and, complete, ``sha1``; else ``why``.  The trainer writes one in this order
+    (``registry.snapshot_checkpoint``): ``ckpt.pt`` through a temporary name and a rename, then ``version``, then
+    ``act`` holding the new ``ckpt.pt``'s SHA-1.  So a checkpoint of an open run is complete when its ``act`` names
+    its ``ckpt.pt``'s SHA-1; of a sealed run (nothing writes it) when its ``ckpt.pt`` exists."""
+    from . import registry  # pylint: disable=import-outside-toplevel
+    found = []
+    for iteration, folder in sorted((int(p.name[2:]), p) for p in (parent.path / registry.SNAPSHOTS_NAME).glob('it*')
+                                    if p.name[2:].isdigit() and p.is_dir()):
+        ckpt, act = folder / CHECKPOINT, folder / registry.ACT_NAME
+        item = {'iteration': iteration, 'dir': folder, 'complete': False}
+        if not ckpt.is_file():
+            item['why'] = f"no {CHECKPOINT} yet (the trainer renames it into place when written)"
+        elif sealed:
+            item.update(complete=True, sha1=file_sha1(ckpt))
+        elif not act.is_file():
+            item['why'] = f"no {registry.ACT_NAME} yet (the trainer writes it last)"
+        else:
+            sha1, named = file_sha1(ckpt), (act.read_text(encoding='utf-8').split() + ['', ''])[1]
+            if named == sha1:
+                item.update(complete=True, sha1=sha1)
+            else:
+                item['why'] = f"its {registry.ACT_NAME} names other weights ({named[:12] or 'none'}, {CHECKPOINT} is " \
+                              f"{sha1[:12]}): being written"
+        found.append(item)
+    return found
+
+
+def checkpoint_info(run: Run) -> Optional[dict]:
+    """What a run made by ``checkpoint_run`` records of its checkpoint (``run.json`` ``checkpoint``: parent,
+    iteration, steps, SHA-1, ...), None for any other run."""
+    path = run.path / 'run.json'
+    try:
+        return json.loads(path.read_text(encoding='utf-8')).get(CHECKPOINT_ORIGIN) if path.is_file() else None
+    except ValueError:
+        return None
+
+
+def checkpoint_run(parent: Run, iteration, make: bool = True, entry: str = PUBLIC) -> dict:
+    """The sealed run ``FAMILY/RUN-it<NNNNNN>`` (``checkpoint_run_name``) holding ``parent``'s numbered checkpoint of
+    ``iteration`` (an int, or ``'latest'``: the newest completely written one) as its ``ckpt.pt``, made when it does
+    not exist yet (``make``; otherwise only resolved).  The parent may be open (a training writing it) or sealed, and
+    is only read: never written, never sealed.  The weights are a copy when the parent is open (a hard link would
+    share the file's modes, and sealing would make the training's own file read-only) and a hard link when it is
+    sealed (its files are read-only already).  A checkpoint still being written (``numbered_checkpoints``) is
+    refused.  The same checkpoint again is the same run (idempotent); a run of that name holding other weights is
+    refused.  Its ``run.json``: ``checkpoint`` (parent, its status, iteration, steps, SHA-1, source, ``copied`` or
+    ``linked``, act mode), ``parent`` (``lineage.identity``) and ``manifest``: the parent's, with
+    ``networks.checkpoint`` added, so ``triforce manifest diff`` names the weights.  Returns the run's identity and
+    those fields with ``exists`` (before this call) and ``made``."""
+    from . import lineage, manifest, registry  # pylint: disable=import-outside-toplevel
+    row = get_run(parent)
+    sealed = row['status'] == SEALED
+    found = numbered_checkpoints(parent, sealed)
+    folder = parent.path / registry.SNAPSHOTS_NAME
+    listed = ', '.join(f"{c['iteration']}{'' if c['complete'] else ' (being written)'}" for c in found) or 'none'
+    if iteration == 'latest':
+        complete = [c for c in found if c['complete']]
+        if not complete:
+            raise MissingError(f"run {parent.identity} has no completely written numbered checkpoint in {folder} "
+                               f"(found: {listed})")
+        chosen = complete[-1]
+    else:
+        chosen = next((c for c in found if c['iteration'] == int(iteration)), None)
+        if chosen is None:
+            raise MissingError(f"run {parent.identity} has no numbered checkpoint of iteration {int(iteration)} "
+                               f"({folder / f'it{int(iteration):06d}'}; found: {listed})")
+        if not chosen['complete']:
+            raise StoreError(f"{chosen['dir']} is still being written ({chosen['why']}); try again in a minute")
+    run = checkpoint_run_name(parent, chosen['iteration'])
+    source = chosen['dir'] / CHECKPOINT
+    out = {'run': run.identity, 'parent': parent.identity, 'parent_status': row['status'],
+           'iteration': chosen['iteration'], 'checkpoint_sha1': chosen['sha1'], 'source': _relative(source),
+           'weights': 'linked' if sealed else 'copied'}
+
+    def existing() -> Optional[dict]:
+        have = run_row(run)
+        if have is None:
+            return None
+        if have['status'] != SEALED or have['origin'] != CHECKPOINT_ORIGIN or have['parent'] != parent.identity \
+                or have['sha1'] != chosen['sha1']:
+            raise StoreError(f"run {run.identity} exists ({have['status']}, origin {have['origin']}, parent "
+                             f"{have['parent']}, sha1 {(have['sha1'] or '-')[:12]}) and is not {source} (sha1 "
+                             f"{chosen['sha1'][:12]}): a run is never written twice")
+        return {**out, **(checkpoint_info(run) or {}), 'run': run.identity, 'exists': True, 'made': False}
+
+    done = existing()
+    if done is not None or not make:
+        return done or {**out, 'exists': False, 'made': False}
+    try:
+        allocate_run(run.family, run.name, parent=parent, origin=CHECKPOINT_ORIGIN, entry=entry)
+    except StoreError:
+        done = existing()       # made meanwhile by another process: the same run
+        if done is None:
+            raise
+        return done
+    try:
+        link_tree(source, run.path / CHECKPOINT, link=sealed)
+        out['weights'] = 'linked' if (run.path / CHECKPOINT).stat().st_ino == source.stat().st_ino else 'copied'
+        sha1 = file_sha1(run.path / CHECKPOINT)
+        if sha1 != chosen['sha1']:
+            raise StoreError(f"{source} changed while it was read (sha1 {chosen['sha1'][:12]} -> {sha1[:12]})")
+        stamp = chosen['dir'] / registry.VERSION_NAME
+        if stamp.is_file():
+            (run.path / registry.VERSION_NAME).write_text(stamp.read_text(encoding='utf-8'), encoding='utf-8')
+        saved = registry.load_checkpoint(run.path / CHECKPOINT, check_schema=False)
+        if saved.get('iterations') is not None and int(saved['iterations']) != chosen['iteration']:
+            raise StoreError(f"{source} holds iteration {saved['iterations']}, not {chosen['iteration']}")
+        act = registry.act_mode(source)
+        try:
+            parent_manifest = manifest.read(parent.path)
+        except ValueError:
+            parent_manifest = {'schema': 0, 'unknown': ['the parent run records no manifest']}
+        info = {**out, 'steps': saved.get('steps'), 'act': act, 'when': time.time()}
+        info.pop('run')
+        recorded = {**parent_manifest, 'networks': {**(parent_manifest.get('networks') or {}), CHECKPOINT_ORIGIN: {
+            key: info[key] for key in ('parent', 'iteration', 'steps', 'checkpoint_sha1')}}}
+        (run.path / 'run.json').write_text(json.dumps({
+            CHECKPOINT_ORIGIN: info, 'parent': lineage.identity(saved, run.path / CHECKPOINT),
+            'manifest': recorded}, indent=2, default=str) + '\n', encoding='utf-8')
+        seal_run(run, act=act, entry=entry)
+    except BaseException:
+        if sealed:      # the link is the sealed parent's own file: never left writable through this run
+            run.path.chmod(0o755)
+            (run.path / CHECKPOINT).unlink(missing_ok=True)
+            source.chmod(0o444)
+        _drop_open(run)
+        raise
+    return {**out, **info, 'run': run.identity, 'exists': False, 'made': True}
 
 
 def install_run(run: Run, source: Path, act: str, exclude: Iterable[str] = (), origin: str = 'import',
