@@ -71,7 +71,8 @@ SUITES = ('python', 'asm', 'check', 'rust')     # ``triforce job test``'s suites
 # (load 3-5): one process 410-433 s; 6 processes 78 s, 8 61 s, 12 71 s.  The tools lane runs two test jobs at
 # once: two suites of 8 leave 4 of the 20 threads to the owner's player and the jobs.
 PYTEST_WORKERS = 8
-CARGO_TEST = ('cargo', 'test', '--release', '--workspace', '--features', 'zelda/zcore')     # the Rust suite
+# The Rust suite: the release-tests profile is release without link-time optimisation (Cargo.toml)
+CARGO_TEST = ('cargo', 'test', '--profile', 'release-tests', '--workspace', '--features', 'zelda/zcore')
 
 
 class JobError(Exception):
@@ -681,7 +682,11 @@ def checkout_flags(root: Path, module: bool = True) -> list[dict]:
     ``data-missing``), and with ``module`` a built module that is not the build of its sources (red
     ``module-stale``, ``triforce.build``)."""
     flags = []
-    main = main_checkout(root)
+    try:
+        main = main_checkout(root)
+    except (OSError, subprocess.SubprocessError):
+        return [{'level': 'note', 'code': 'not-a-checkout',
+                 'text': f"git cannot read {root}: neither it nor the main checkout was looked at"}]
     edited = [line[3:] for line in _git_lines(main, 'status', '--porcelain', '--untracked-files=no')
               if line[3:] != 'uv.lock']
     if edited:
@@ -701,7 +706,8 @@ def checkout_flags(root: Path, module: bool = True) -> list[dict]:
             flags.append({'level': 'red', 'code': 'data-missing',
                           'text': f"{root.name} lacks {', '.join(missing)}: the main checkout's data it reads "
                                   f"through the links triforce job setup makes"})
-    problem = build.problem(root) if module else None
+    # A tree from before build stamps (no triforce/build.py) cannot have one: its module is not looked at.
+    problem = build.problem(root) if module and (root / 'triforce' / 'build.py').is_file() else None
     if problem:
         flags.append({'level': 'red', 'code': 'module-stale', 'text': f"{root.name}: {problem}"})
     return flags

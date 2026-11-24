@@ -2,6 +2,7 @@
 badge) and the checks every job start makes (``job.checkout_flags``, ``triforce job doctor``)."""
 
 import importlib.util
+import json
 import subprocess
 from pathlib import Path
 
@@ -67,6 +68,7 @@ def test_every_job_start_looks_at_main_and_its_worktree(tmp_path, monkeypatch):
     main = tmp_path / 'triforce'
     (main / 'triforce').mkdir(parents=True)
     (main / 'triforce' / 'jobs.py').write_text(f"{jobs.JOB_ESTIMATE_ENV}\n")       # this code's tools (``announces``)
+    (main / 'triforce' / 'build.py').write_text('')                     # a tree that stamps its builds
     (main / 'notes.txt').write_text('one\n')
     (main / 'uv.lock').write_text('lock\n')
     _git(main, 'init', '-q', '-b', 'main')
@@ -85,7 +87,7 @@ def test_every_job_start_looks_at_main_and_its_worktree(tmp_path, monkeypatch):
     (main / 'notes.txt').write_text('edited by an agent\n')
     flags = job.checkout_flags(tree)
     assert [f['code'] for f in flags] == ['main-edited'] and 'notes.txt' in flags[0]['text'] \
-        and 'uv.lock' not in flags[0]['text']
+        and 'uv.lock' not in flags[0]['text'].split(': ', 1)[1]
     (main / 'notes.txt').write_text('one\n')
     (main / 'more.txt').write_text('x\n')
     _git(main, 'add', 'more.txt')
@@ -97,3 +99,26 @@ def test_every_job_start_looks_at_main_and_its_worktree(tmp_path, monkeypatch):
     assert job.main(['doctor', str(tree)]) == 1
     monkeypatch.setattr(build, 'problem', lambda root: None)
     assert job.main(['doctor', str(tree)]) == 0
+
+
+def test_a_training_flags_what_its_promoted_run_drew_and_it_does_not(tmp_path, monkeypatch):
+    """``train.recipe_flags``: a continuation without --sil-coeff 0.1 is a note; a data set the family's promoted run
+    drew and this training draws none of is red (Nov 23: 0 harvested states where the reference drew 3396); a count
+    off by more than ``DATA_SHARE`` is a note."""
+    from types import SimpleNamespace
+    from triforce import registry, train
+    seen = []
+    monkeypatch.setattr(train, 'flag', lambda code, text, level='red': seen.append((level, code)))
+    promoted = tmp_path / 'zol' / 'base'
+    promoted.mkdir(parents=True)
+    (promoted / 'run.json').write_text(json.dumps({'manifest': {'data': {
+        'harvested': {'count': 3396}, 'curriculum': {'tracks': 40}, 'start_states': {'count': 12}}}}))
+    monkeypatch.setattr(registry, 'promoted_run', lambda name, root=None, route=None: 'base')
+    monkeypatch.setattr(registry, 'run_dir', lambda name, run, root=None: tmp_path / name / run)
+    config = SimpleNamespace(name='zol', to_dict=lambda: {'state_routes': ['d3first']})
+    recipe = {'data': {'harvested': {'count': 0}, 'curriculum': {'tracks': 30}, 'start_states': {'count': 12}}}
+    train.recipe_flags(SimpleNamespace(sil_coeff=0.0), config, recipe, 1700, tmp_path)
+    assert seen == [('note', 'continuation-sil'), ('red', 'no-harvested'), ('note', 'data-differs')]
+    seen.clear()
+    train.recipe_flags(SimpleNamespace(sil_coeff=0.1), config, {'data': {'harvested': {'count': 3400}}}, 0, tmp_path)
+    assert not seen

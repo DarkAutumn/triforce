@@ -40,6 +40,9 @@ def environment(queue: Path, **extra) -> dict:
     env = {key: value for key, value in os.environ.items()
            if key not in (jobs.JOB_ID_ENV, jobs.JOB_LABEL_ENV, jobs.JOB_ESTIMATE_ENV)}
     env.update({q.QUEUE_DIR_ENV: str(queue)}, **extra)
+    # A test job in a made-up repo has no main checkout to take the team from (`test_steps`); the suite itself is
+    # run with the variable set by `triforce job test` and without it by hand: the tests must not differ.
+    env.setdefault('TRIFORCE_MODELS_DIR', str(queue))
     return env
 
 

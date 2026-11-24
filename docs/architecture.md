@@ -1585,11 +1585,15 @@ every step, so following an enemy that moves away pays again, and knockback rese
   `outcome`, `seconds`, `setup` / `call` / `teardown`, `worker`) and `summary` (checkout, branch, commit, `job`:
   id, label, agent, task, subtask; `workers`, `load` at the start, `wall`, `collected`, `counts`, `test_seconds`,
   `exit`). The Rust suite runs as `python -m triforce.cargo_tests -- cargo test ...` (the owner, Nov 23: "Test rust
-  is now the extremely long leg of testing"): `cargo test --no-run --message-format=json-render-diagnostics` builds
+  is now the extremely long leg of testing"), built with the `release-tests` profile (Cargo.toml: release without
+  link-time optimisation; under `release`'s thin LTO each of the 60 test programs re-optimised the whole crate
+  graph, 2459 of the build's 2621 CPU seconds on Nov 23): `cargo test --no-run --message-format=json-render-diagnostics` builds
   and lists the test programs (`compiler-artifact` messages of test profile), each program's `--list` counts its
   tests (the job's progress: `Rust tests` done of that total, a program's counted as it ends, the doc tests added
   when they end), and the programs run `cargo_tests.JOBS` = 6 at a time, the longest first (each one's median
-  over the last five whole Rust suites of the timing logs; a program without history first), each as cargo runs
+  over the last five whole Rust suites of the timing logs; a program without history first), each with the
+  harness's own threads (Nov 23, load 11-30: the test phase is the longest program, 141 s; `--test-threads=3` a
+  program made it 170 s: `bomb_mask`'s and `attacks`' ten long tests waited for each other), each as cargo runs
   it (its package's folder, `CARGO_MANIFEST_DIR`, the build scripts' library folders on `LD_LIBRARY_PATH`), the
   doc tests (`cargo test --doc`) as one more entry. Every program runs whatever another did (cargo stops at the
   first failing program); each one's output is printed whole under cargo's `Running` line when it ends, the
