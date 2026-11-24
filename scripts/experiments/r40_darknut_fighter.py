@@ -138,16 +138,27 @@ class Floor:
     def __init__(self, grid: str):
         rows = grid.splitlines()[1:]
         self.cells = [[c not in '#P' for c in row[4:]] for row in rows]
+        self.seen = {}                                        # (X, Y, link) -> the tile test, whole pixels
 
     def open(self, x: float, y: float, link: bool = True) -> bool:
         if not (0x20 <= x <= 0xD0 and 0x5D <= y <= 0xBD):
             return link and ((x == 0x78 and (0x3D <= y < 0x5D or 0xBD < y <= 0xDD)) or
                              (y == 0x8D and (0x00 <= x < 0x20 or 0xD0 < x <= 0xF0)))
+        key = (int(x), int(y), link)
+        found = self.seen.get(key)
+        if found is None:
+            found = self.seen[key] = self.tiles(*key)
+        return found
+
+    def __deepcopy__(self, memo):
+        return self                                           # the room's floor never changes: a copied fighter shares it
+
+    def tiles(self, x: int, y: int, link: bool) -> bool:
         if link:
-            r0, r1 = (int(y) + 0x0B - 0x40) // 8, (int(y) + 0x12 - 0x40) // 8
+            r0, r1 = (y + 0x0B - 0x40) // 8, (y + 0x12 - 0x40) // 8
         else:
-            r0, r1 = (int(y) - 0x3D) // 8, (int(y) - 0x3D + 15) // 8
-        c0, c1 = int(x) // 8, (int(x) + 15) // 8
+            r0, r1 = (y - 0x3D) // 8, (y - 0x3D + 15) // 8
+        c0, c1 = x // 8, (x + 15) // 8
         return all(self.cells[r][c] for r in range(r0, r1 + 1) for c in range(c0, c1 + 1)
                    if 0 <= r < len(self.cells) and 0 <= c < len(self.cells[r]))
 
@@ -972,6 +983,13 @@ def summary(records: list[dict]) -> dict:
 
 BACK = 6                                                      # decisions the search backs up before a hit
 TRIES = 400                                                   # the search's branch points tried a visit at most
+LOOK_REACH = 48                                               # pixels within which a Darknut calls for the look-ahead
+
+
+def near(ram: bytes, reach: int = LOOK_REACH) -> bool:
+    """A Darknut out of its cloud within `reach` pixels of Link on both axes: where the look-ahead is worth its cost."""
+    x, y = ram[OBJ_X], ram[OBJ_Y]
+    return any(abs(d.x - x) < reach and abs(d.y - y) < reach for d in darknuts(ram) if not d.cloud)
 
 
 def teach(env, room: str, seed: int, start: str, probe, depth: int, recorder=None) -> dict:
@@ -996,7 +1014,7 @@ def teach(env, room: str, seed: int, start: str, probe, depth: int, recorder=Non
         order = fighter.ranked(ram, ok, grid)
         snapshot, route = env.snapshot(), env.route
         choice = 0
-        if depth and len(order) > 1 and darknuts(ram):
+        if depth and len(order) > 1 and near(ram):
             best = None
             for i, candidate in enumerate(order[:6]):
                 lasted = outlook(probe, snapshot, route, fighter, candidate, health, depth, grid)
