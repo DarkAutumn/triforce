@@ -14,7 +14,7 @@ import torch
 
 from triforce import build, job, paths, registry, train
 from triforce.inputs import (MissingInput, check_curriculum, check_harvested, check_start_states, check_task,
-                             declaration, track_starts)
+                             declaration, track_starts, untracked)
 from triforce.runner import Policies, Route, RunnerError, check_configs, check_team
 from triforce.specialist import load_specialist
 
@@ -96,6 +96,21 @@ def test_the_shipped_tasks_declare_every_input_they_draw():
         if trajectories is not None and not Path(trajectories).is_dir():
             pytest.skip(f"{trajectories}: this checkout has no trajectories")
         check_task(config, REPO_STATES_DIR, trajectories)
+
+
+def test_the_d3first_tasks_declare_the_rooms_left_without_a_track():
+    """Round 40 (the lead, Nov 24): 0:0x76's explored tracks walk across and kill, so ow-tektite@d3first trains its
+    three seeds without one; darknut@d3first's 0x59 from N with 4 bombs (chains 1 and 2) had no explored track. The
+    tasks load, and the declarations cover exactly those seeds."""
+    require_rom()
+    tektite = load_specialist(str(ROOT / 'specialists' / 'd3first' / 'ow-tektite.yaml'))
+    seeds = sorted(Path(p).stem for p in tektite.resolve_start_states(str(REPO_STATES_DIR)))
+    assert [s for s in seeds if s.startswith('d3first_0_76e_')] == [f'd3first_0_76e_{c}' for c in range(3)]
+    assert declaration([f'd3first_0_76e_{c}' for c in range(3)], seeds) == untracked(tektite)
+    darknut = load_specialist(str(ROOT / 'specialists' / 'd3first' / 'darknut.yaml'))
+    declared = untracked(darknut)
+    assert {'d3first_3_59n_1', 'd3first_3_59n_2'} <= set(declared)
+    assert not any(g.startswith('d3first_3_59n_0') or g == 'd3first_3_59n_[0-9]' for g in declared)
 
 
 def test_a_warm_start_names_a_checkpoint_or_a_family_with_one(tmp_path):

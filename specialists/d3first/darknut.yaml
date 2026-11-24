@@ -102,6 +102,8 @@ clips:
 curriculum:
   enabled: true
   untracked:                              # round 40: the seed states that train without a track (triforce.inputs)
+  - d3first_3_59n_1                       # round 40: 0x59 with 4 bombs (none to spend), no explored track in 3000
+  - d3first_3_59n_2                       # iterations; measured in round40.md "3:0x59 at 4 bombs" (the lead's item 1)
   - d3first_5_05c_[0-9]
   - d3first_5_05e_[0-9]
   - d3first_5_06c_[0-9]
