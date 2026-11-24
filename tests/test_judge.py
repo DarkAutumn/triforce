@@ -200,7 +200,7 @@ def test_checkpoints_are_planned_one_chain_a_job_then_collected_in_one_table(sha
     lines = [line for line in out.splitlines() if line.startswith('triforce job run')]
     assert len(lines) == 4 and all('--express --timeout 10m --detach' in line for line in lines)
     assert ("eval-batch gen1-gleeok-s1-r4-it000002 --teacher boss-gleeok=gen1-gleeok/s1@it2 --scopes to-d4 --runs 4 "
-            "--no-report --chains-dir") in lines[0] and '--subtask it000004-d4' in lines[3]
+            "--no-report --chains-dir") in lines[0] and '--subtask boss-gleeok-it000004-d4' in lines[3]
     # The pieces of iteration 2 played (their jobs made its run); iteration 4's not yet.
     team = {'name': 't1+@boss-gleeok=gen1-gleeok/s1-it000002',
             'overrides': {'boss-gleeok@d3first': store.checkpoint_run(parent, 2)['run']}}

@@ -233,6 +233,12 @@ override names the key. A group file without the block, and `--families` without
 (`zelda`, no auxiliary target, no look-ahead unless given). `--state-route` keeps each task's curriculum settings, its
 `untracked` declaration among them (until Nov 24 `route_only` dropped it and refused such a task).
 
+A teacher is judged in chains while it still trains (round 41): each numbered checkpoint becomes a sealed run of its
+own (`triforce store checkpoint gen1-walkers/s1@it228`, `<run>-it000228`; the open run is only read), which
+`triforce eval-batch NAME --teacher walkers=gen1-walkers/s1@it228` (or `@latest`) plays, and `triforce judge
+checkpoints walkers=gen1-walkers/s1 --dungeons d3 --runs 300 --plan` gives one express job a checkpoint and scope,
+then the table by iteration when run again (`docs/architecture.md` "A teacher's numbered checkpoints judged").
+
 ### The recipe on record
 
 A lab run writes `triforce train`'s kind of manifest (`triforce.manifest`, kind `lab-train`) into `run.json`'s

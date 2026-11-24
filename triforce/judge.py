@@ -540,7 +540,7 @@ def piece_command(plan: CheckpointsPlan, piece: Piece, agent: str, task: str, ti
     """The queue's command for one piece: an express job (``--timeout``, detached) of ``eval-batch`` with the teacher
     at that checkpoint on that scope alone, no report (``judge checkpoints`` collects)."""
     triforce = Path(sys.executable).with_name('triforce')
-    name = f"it{piece.iteration:06d}-{piece.judged.scope.name}"
+    name = f"{plan.group}-it{piece.iteration:06d}-{piece.judged.scope.name}"
     return ['triforce', 'job', 'run', '--agent', agent, '--task', task, '--subtask', name, '--desc',
             f"{plan.parent.identity} it {piece.iteration} judged on {piece.judged.scope.name}, {plan.runs} runs",
             '--express', '--timeout', timeout, '--detach', '--',

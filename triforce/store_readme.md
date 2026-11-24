@@ -14,7 +14,8 @@ data/<kind>/<name>/      named data snapshots, read-only: harvested, harvested-r
 data/<kind>/current      the name of the kind's default snapshot
 runs/<family>/<run>/     network runs: open while their training writes them, then sealed (read-only, checkpoint
                          SHA-1 and default act mode recorded); a continuation, a converted model or a chosen
-                         checkpoint is a new run with a parent
+                         checkpoint is a new run with a parent; <run>-it<NNNNNN> is a run's numbered checkpoint
+                         made a run of its own (`triforce store checkpoint`), the run itself only read
 teams/<name>.json        teams (immutable): per slot (family, family@route, family@route:late) the run, its
                          checkpoint SHA-1, its act mode and whether it has a hit head
 teams/current            the name of the team of record

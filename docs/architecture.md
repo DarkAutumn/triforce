@@ -2269,6 +2269,21 @@ every step, so following an enemy that moves away pays again, and knockback rese
   measurement's, the difference paired by seed with its standard error (unpaired without shared seeds), the three
   rooms where most of the measurement's runs end (the base's share beside), hearts lost a run with its paired
   difference, and the route goals a run (`run_stats.goal_run_values`) where the records carry them.
+- **A teacher's numbered checkpoints judged** (round 41, `store.checkpoint_run`, `judge.py`): a run's numbered
+  checkpoint (`checkpoints/it<NNNNNN>/`, open run or sealed) becomes a sealed run `FAMILY/RUN-it<NNNNNN>` beside it
+  (`triforce store checkpoint FAMILY/RUN@it228|@latest [--plan] [--list]`; docs/data-layout.md rule 2), so a team
+  can play it. `triforce eval-batch NAME --teacher GROUP=FAMILY/RUN@it228` (or `@latest`) makes it at the job's turn
+  (`--plan` and the queue's dry call only say which run it is) and judges it; `--scopes to-d3` keeps one scope and
+  `--no-report` leaves out the report and the comparison. A comparison whose team holds such a run names its
+  iteration and steps (the Measured column, a line per run). `triforce judge checkpoints GROUP=FAMILY/RUN [--its
+  114,228|all] [--dungeons dN] [--scopes S] --runs N [--plan|--submit]`: one chain a checkpoint and scope on seeds
+  0..N-1, each an express job (`--plan` prints `triforce job run --express --timeout 10m --detach -- eval-batch
+  <tag>-it<NNNNNN> --teacher GROUP=FAMILY/RUN@itN --scopes S --no-report ...` for every chain not yet played,
+  `--submit` queues them); run without either it reads the chains played (its `--chains-dir`, else filed in the
+  store), lists the rest and writes one table by iteration (steps, each scope's rate ± its standard error, the
+  paired difference with the baseline on those seeds, hearts lost a run, the rooms where most runs end, the tracked
+  goals) as `<tag>-checkpoints.md` / `.json`, filed in the store (kind `judge`) once every chain is in. The tag
+  defaults to `<family>-<run>-r<runs>`, so a second run count is a second set of chains.
 - `triforce room-stats TAG [--noclips [TAG2]] [--chains-dir DIR] [--output FILE] [--route NAME]` (`room_stats.py`)
   writes `<chains-dir>/<TAG>-room-stats.json` (default `target/r56-chains`, beside the chain files it reads;
   `scripts/experiments/r56_chains.sh report` writes it after the yardstick): per-room statistics in every **scope**

@@ -35,6 +35,16 @@ and the store keeps them in `layout.json` for tools that are not Python.
    checkpoint SHA-1 and default act mode recorded. A continuation (`train --load FAMILY/RUN` or a team slot), a
    checkpoint chosen by `select-checkpoint --apply`, a converted model is a **new run with a parent**. An interrupted
    training leaves its run open; its owner (the same agent) continues it in place with `train --resume FAMILY/RUN`.
+   **A numbered checkpoint** (`<run>/checkpoints/it<NNNNNN>/`, round 41) becomes a sealed run of its own,
+   `<family>/<run>-it<NNNNNN>` (origin `checkpoint`, parent the run), so a team can play it while the run still
+   trains (`triforce store checkpoint FAMILY/RUN@it228|@latest`, `eval-batch --teacher GROUP=FAMILY/RUN@it228`): the
+   parent is only read, never written or sealed; the weights are a copy when the parent is open (a hard link would
+   share the file's modes with the training's own file) and a hard link when it is sealed; a checkpoint the trainer
+   is still writing is refused (the trainer renames `ckpt.pt` into place, then writes `version`, then `act` naming
+   the new file's SHA-1: an open run's checkpoint is complete once its `act` names its `ckpt.pt`); the same
+   checkpoint again is the same run. Its `run.json`: `checkpoint` (parent, the parent's status then, iteration,
+   steps, SHA-1, source, `copied` or `linked`, act mode), `parent` and `manifest` (the parent's, with
+   `networks.checkpoint`), so `triforce manifest diff` and a team record name the weights.
 3. **What used to be written into a run dir after training** (`eval*.json`, `selection.json`, `act`) is filed by the
    job that made it, indexed by the run (`triforce store outputs --run FAMILY/RUN`); the act mode is the run's sealed
    default and each team slot's. A tool given a team reads a run's filed evaluations as files of the run (the view).
@@ -54,8 +64,9 @@ and the store keeps them in `layout.json` for tools that are not Python.
    the run statistics' compact row); the raw files in the job's folder are what a later trim may remove.
    `triforce store summaries --run FAMILY/RUN | --team NAME` lists them over time.
 7. **Missing is an error** that names where it looked (the ROM, a snapshot, a run, a team).
-8. **Only the store writes the store.** Agents use `triforce store ...` to look; the tools call `triforce.store` to
-   allocate, seal and file. Nobody copies, links, moves or edits anything there by hand.
+8. **Only the store writes the store.** Agents use `triforce store ...` to look (and `triforce store checkpoint`,
+   which only adds a sealed run); the tools call `triforce.store` to allocate, seal and file. Nobody copies, links,
+   moves or edits anything there by hand.
 
 ## The statistics tables (the aggregate kept for good)
 
