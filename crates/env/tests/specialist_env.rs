@@ -197,6 +197,7 @@ fn greedy_step(env: &mut Env) -> Result<StepResult, EnvError> {
     for direction in env.session().mask().directions(ActionKind::Move) {
         for duration in [4, 8] {
             let action = Action::new(ActionKind::Move, direction, duration).unwrap();
+            line_up_for_turn(env, direction);
             let change = env.session_mut().act(action)?;
             let score = if change.gained_triforce() {
                 -1
@@ -218,7 +219,32 @@ fn greedy_step(env: &mut Env) -> Result<StepResult, EnvError> {
             }
         }
     }
-    env.step(best.expect("a legal MOVE").1)
+    let action = best.expect("a legal MOVE").1;
+    line_up_for_turn(env, action.direction);
+    env.step(action)
+}
+
+/// Walker aid (controller input, round 40): before a turn toward `d`, Link is walked onto the grid line of the tile
+/// he is on. The game turns him on the nearest grid line, which may lie in the tile before (E from Y $88 in row 10
+/// went back to $85 in row 9; the closing frame of no buttons used to leave him on a grid line more often).
+fn line_up_for_turn(env: &mut Env, d: Direction) {
+    let facing = state(env).link.direction;
+    if !facing.is_cardinal() || d == facing || d == facing.opposite() {
+        return;
+    }
+    for _ in 0..8 {
+        let s = state(env);
+        let (tile, p) = (s.link.tile(), s.link.position);
+        let (gx, gy) = (tile.0 * 8, tile.1 * 8 + 0x3D);
+        let toward = if p.y != gy && matches!(d, Direction::E | Direction::W) {
+            if p.y < gy { Direction::S } else { Direction::N }
+        } else if p.x != gx && matches!(d, Direction::N | Direction::S) {
+            if p.x < gx { Direction::E } else { Direction::W }
+        } else {
+            return;
+        };
+        env.session_mut().press(zelda::executor::direction_buttons(toward), 1);
+    }
 }
 
 /// Steps until the episode ends; returns every step's result.
@@ -1063,11 +1089,21 @@ fn target_step(obs: &Observation) -> (char, Option<i32>) {
 
 /// One decision toward the target observation's step (MOVE 4; WAIT 8 on the target or with no step). Four frames,
 /// not eight (round 40): eight carry Link 11 pixels, past a one-row turn (3:0x5b's way E from the bombs, taken now
-/// from row 6, the row Link takes them from: S from Y $85 to $90 and back, never on row 10's $8D).
+/// from row 6, the row Link takes them from: S from Y $85 to $90 and back, never on row 10's $8D); a turn is lined
+/// up first (`line_up_for_turn`).
 fn toward_target(env: &mut Env, obs: &Observation) -> Observation {
     match target_step(obs) {
         ('-', _) | (_, Some(0)) => act(env, "WAIT 8").obs,
-        (step, _) => act(env, &format!("MOVE {step} 4")).obs,
+        (step, _) => {
+            let d = match step {
+                'N' => Direction::N,
+                'S' => Direction::S,
+                'W' => Direction::W,
+                _ => Direction::E,
+            };
+            line_up_for_turn(env, d);
+            act(env, &format!("MOVE {step} 4")).obs
+        }
     }
 }
 
@@ -1677,7 +1713,8 @@ fn movement_reward(env: &mut Env, direction: &str) -> f64 {
 }
 
 fn finish(env: &mut Env) -> StepInfo {
-    for _ in 0..100 {
+    // 200 steps: the walker's MOVE 4 (`greedy_step`) halves its stride.
+    for _ in 0..200 {
         let r = greedy_step(env).unwrap();
         if r.terminated || r.truncated {
             return r.info;
