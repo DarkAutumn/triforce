@@ -58,6 +58,7 @@ It plays many runs: a job of the machine's queue (``jobs.require_job``: ``trifor
 import argparse
 import collections
 import json
+import multiprocessing
 import random
 import sys
 from pathlib import Path
@@ -470,20 +471,34 @@ def starts(which: str, seed0: int, runs: int):
             yield seed, f'{STATES[which]}_{seed % 3}', 4 + 4 * (seed % 2)
 
 
-def measure(which: str, seed0: int, runs: int, depth: int = 0, progress=None, log: Path | None = None) -> dict:
-    """The visits' summary; `log`: each visit's record appended as a JSON line as it ends (`summarize` reads them)."""
+def _visits(task) -> list[dict]:
+    """One worker's share of `measure`: (which, [(seed, start, bombs)], depth) -> the records."""
+    which, visits, depth = task
     envs = {4: make_env(4), 8: make_env(8)}
     probes = {4: make_env(4), 8: make_env(8)} if depth else {}
-    records = []
-    for n, (seed, start, bombs) in enumerate(starts(which, seed0, runs)):
+    out = []
+    for seed, start, bombs in visits:
         record = play(envs[bombs], which, seed, start, probe=probes.get(bombs), depth=depth)
         record.update(harvested=start.endswith('.state'), bombs=bombs, look=depth, which=which)
-        records.append(record)
-        if log is not None:
-            with open(log, 'a', encoding='utf-8') as out:
-                out.write(json.dumps(record) + '\n')
-        if progress:
-            progress(n + 1, runs)
+        out.append(record)
+    return out
+
+
+def measure(which: str, seed0: int, runs: int, depth: int = 0, progress=None, log: Path | None = None,
+            workers: int = 1) -> dict:
+    """The visits' summary; `log`: each visit's record appended as a JSON line as it ends (`summarize` reads them);
+    `workers` processes share the visits, 10 at a time."""
+    visits = list(starts(which, seed0, runs))
+    tasks = [(which, visits[i:i + 10], depth) for i in range(0, len(visits), 10)]
+    records = []
+    with multiprocessing.get_context('spawn').Pool(workers) as pool:
+        for part in pool.imap(_visits, tasks):
+            records += part
+            if log is not None:
+                with open(log, 'a', encoding='utf-8') as out:
+                    out.write(''.join(json.dumps(record) + '\n' for record in part))
+            if progress:
+                progress(len(records), runs)
     return summary(which, records)
 
 
@@ -553,6 +568,7 @@ def main(argv) -> int:
     m.add_argument('--runs', type=int, default=1000)
     m.add_argument('--seed0', type=int, default=0)
     m.add_argument('--json', default=None, help="append each visit's record to this JSON-lines file")
+    m.add_argument('--workers', type=int, default=1, help="processes sharing the visits")
     m.add_argument('--look', type=int, default=0, metavar='DEPTH',
                    help="training-time look-ahead: each decision the first of the rule's ranked actions that a second "
                         "env, playing it and then the rule DEPTH decisions, finds unhit (0: the rule alone)")
@@ -579,7 +595,8 @@ def main(argv) -> int:
     jobs.require_job()
     if args.cmd == 'measure':
         result = measure(args.which, args.seed0, args.runs, args.look,
-                         lambda done, total: jobs.progress(done, total, 'visits'), Path(args.json) if args.json else None)
+                         lambda done, total: jobs.progress(done, total, 'visits'), Path(args.json) if args.json else None,
+                         args.workers)
         print(json.dumps({k: v for k, v in result.items() if k != 'hit_runs'}, indent=1))
         return 0
     result = demos(Path(args.out), args.seed0, args.runs, args.look,
