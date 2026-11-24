@@ -133,3 +133,40 @@ Nothing in the observation says where the monsters are being sent: neither the f
 `$62`) is an input, and no column says "this one may turn at you at its next grid point". The entity inputs do carry
 "on Link's row" and "on Link's column". Proposed for the fresh generation, the owner to decide: see the round's
 document.
+
+## The owner's answers to the lead's questions (Nov 24)
+
+**Is the clump zone the same in every room?** "I think so but you'd have to check enemy movement code, a lot of it
+is different than darknuts. Things like Vire and Blue Wizzrobes, and stalfos definitely follow it. What is true is
+that area top center of the screen is where both link and shadow link are, so if the monsters are programmed to go
+after link/shadow link, that's the hotspot. Moving outwards out of that area generally lets you isolate monsters, in
+the top center clumps them. For rooms where you want to bomb them (usually darknuts), you want them clumped. For
+rooms you have to kill all enemies, you don't want them scattered about (even if not using bombs) because then you
+have to chase them down (and this is a speedrun). Look through the movement code for exceptions to movement that
+might make it not gravitate towards the two (red wizzrobes right?), and find the 'range' where link/shadowlink is
+the closest in terms of tiles. That will tell you the bounds. It would be good to indirectly teach this to the
+model."
+
+**Gibdos and Stalfos the same way?** "Generally it's darknuts because you can't hit them from the front. Stalfos
+don't hit that hard and have medium health, so they aren't too hard to deal with. Gibdos...somewhat but not.
+Fighting gibdos from the side is preferable, but I chase them from behind ANTICIPATING they will turn around, so I
+do chase but I stay that 1.25 tiles (ish) behind and I'm ready with a quick sword because that will actually hit
+(unlike darknuts). However, chasing gibdos from behind is also where I lose a ton of health. So it's not good
+advice. I'd check their movement code, but it's likely fighting them exactly like a darknut is what I should be
+doing anyway."
+
+**A little ahead of it on purpose?** "Yes, a little ahead is the goal (but it's hard to do this in real time and
+stay consistent). The idea is if they make a 90 degree turn towards me, my plan was always 'sword to them, then
+IMMEDIATELY move in the direction they were'. So if they turn towards me and I'm a little ahead, I will move past
+them even though they tried to hit me, and I'm already parallel again (though now I need to get repositioned ~1.25
+tiles away and a little in front)."
+
+**The two inputs (where the monsters are sent; a monster may turn at Link at its next grid point)?** "Yes that's
+fine. Do that in this upcoming 2.0.1 though."
+
+**A scripted Darknut fighter and demonstrations from it?** "I think so? If you can somehow show the teachers how to
+do this and discourage direct following that would help the agent learn this. [...] this is how every real player
+kills darknuts, I personally don't know how you would teach the model this, but if you can figure out how it's a
+huge win. Similarly, teaching the model to use bombs when it hits 2+ things. A darknut by itself isn't really much
+of a threat except in confined spaces."
+
