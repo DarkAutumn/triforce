@@ -78,7 +78,8 @@ def test_start_state_outside_rooms(states_dir):
         env.reset()
 
 
-def test_no_start_states(tmp_path):
+def test_no_start_states(tmp_path, monkeypatch):
+    monkeypatch.setenv('TRIFORCE_SHARED', str(tmp_path / 'no-store'))     # no harvested snapshot either
     with pytest.raises(native.StartStateError, match='has no start states'):
         native.Env('ow-start', states_dir=str(tmp_path))
 

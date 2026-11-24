@@ -100,6 +100,7 @@ def test_compare_lists_the_rows_a_network_loses_on():
 def test_an_arrived_entry_plays_its_states_without_the_familys_randomization(tmp_path):
     entry = {'key': 'darknut@d3first', 'family': 'darknut', 'source': bench.ROOMS, 'arrived': True,
              'states': [f'{bench.ROOMS}/darknut/d3first_3_59n_h5_7']}
+    (tmp_path / bench.ROOMS).mkdir()        # the states dir's own harvested-rooms (else the store's snapshot)
     config, directory = bench.entry_task(entry, tmp_path)
     assert directory == str(tmp_path / bench.ROOMS / 'darknut')
     assert config.to_dict()['ram_randomization']['hp'] is None

@@ -12,7 +12,7 @@ from types import SimpleNamespace
 import pytest
 import torch
 
-from triforce import build, job, registry, train
+from triforce import build, job, paths, registry, train
 from triforce.inputs import (MissingInput, check_curriculum, check_harvested, check_start_states, check_task,
                              declaration, track_starts)
 from triforce.runner import Policies, Route, RunnerError, check_configs, check_team
@@ -91,7 +91,7 @@ def test_the_shipped_tasks_declare_every_input_they_draw():
     require_rom()
     for path in sorted((ROOT / 'specialists').rglob('*.yaml')):
         config = load_specialist(str(path))
-        trajectories = (str(config.curriculum.trajectories or train.TRAJECTORIES_DIR / config.name)
+        trajectories = (str(config.curriculum.trajectories or paths.data_dir('trajectories') / config.name)
                         if config.curriculum.enabled else None)
         if trajectories is not None and not Path(trajectories).is_dir():
             pytest.skip(f"{trajectories}: this checkout has no trajectories")

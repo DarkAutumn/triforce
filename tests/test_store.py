@@ -304,9 +304,9 @@ def test_views_of_gone_processes_are_swept(tmp_path):
 
 def test_data_is_the_callers_folder_else_the_stores_snapshot_else_refused_naming_both(tmp_path, monkeypatch):
     import re
-    from triforce import _native
     from triforce.inputs import MissingInput, check_curriculum, check_harvested
-    zol = _native.SpecialistConfig.load('zol')
+    from triforce.specialist import load_specialist
+    zol = load_specialist(str(Path(__file__).resolve().parents[1] / 'specialists' / 'd3first' / 'zol.yaml'))
     states = tmp_path / 'states'
     states.mkdir()
     shared = tmp_path / 'empty-store'
