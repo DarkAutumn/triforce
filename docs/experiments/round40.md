@@ -534,3 +534,36 @@ pass-through first and is reached without beams the second time).
 Replays for watching: every arm's runs split by whether they reached Manhandla, and the deaths in 3:0x49, were copied
 to the owner's review folder; the records are under the `r40-fireline` worktree's `target/r40f/`.
 
+
+## The baseline the fresh generation is compared with: 2.0.0.15's team, 1000 runs a segment (the lead)
+
+One batch (`r40-2015-1k`, job #615, 7 hours 59 minutes in one regular place) from a frozen tree at 2.0.0.15
+(`triforce-r40-base2015`, the store's team `2.0.0.15`, clips on, each model's act mode): the full route from the
+start state and 18 segments, 1000 runs each on seeds 0-999; records `target/r56-chains/r40-2015-1k-*.jsonl` there,
+room statistics `r40-2015-1k-room-stats.json`. A rate on 1000 runs has a standard error of at most 1.6 points.
+
+Two starts a dungeon, and they are not the same question. "From its entrance" starts on the dungeon's own start
+state, whose hearts are refilled as every entry state's. "From the triforce before" starts where the previous
+dungeon ended and plays the leg and the dungeon, so Link arrives as the leg leaves him.
+
+| Dungeon | From the triforce before | From its entrance | Deaths a run, the first start |
+|---|---:|---:|---|
+| 3 (from the game's start) | 43.2% | 45.7% | 3:0x4d Manhandla 18.8%, 3:0x69 13.9%, 3:0x5b 6.3% |
+| 4 | 45.8% | 68.4% | 4:0x13 Gleeok 37.4%, 4:0x32 4.4%, 4:0x31 3.5% |
+| 1 | 98.5% | 98.9% | 1:0x35 1.1% |
+| 2 | 93.8% | 99.8% | 2:0x0e 1.1%, 2:0x1e 1.0%, 2:0x5e 0.9% |
+| 5 | 57.8% | 66.1% | 5:0x05 the Olive Garden 20.0%, 5:0x64 4.3%, 5:0x24 4.1% |
+| 7 | 42.5% | 77.3% | 7:0x1b 21.2%, 7:0x39 6.1%, 7:0x1c 5.1% |
+| 6 | 18.2% | 35.7% | 6:0x3a 32.9%, 6:0x38 26.5%, 6:0x29 11.2% |
+| 8 | 88.9% | 88.6% | 8:0x3f 3.8%, 8:0x3e 3.5%, 8:0x3c 2.5% |
+| 9 (to the end) | 22.6% | 51.2% | 9:0x10 the Reverse C 19.2%, 9:0x30 11.3%, 9:0x05 5.0% |
+
+The full route: 3 wins of 1000 (0.3%); the product of the first column is 0.16%. Where the two columns part
+(Dungeons 4, 7, 6, 9: 20 to 35 points) the dungeon is lost on the hearts Link brings to its door, not inside it
+alone: Gleeok takes 37.4% of the runs that come from Dungeon 3's triforce and 26.8% of those that start at Dungeon
+4's entrance; 7:0x1b 21.2% against 6.7%.
+
+Most of this batch repeats One38d's of 2.0.0.13's team on the same seeds: between the two versions only Dungeon
+3 (Manhandla's bombs, 2.0.0.15) and the legs after Dungeons 5 and 6 (the whirlwinds, 2.0.0.14) play differently;
+Dungeon 4 (68.4%) and Dungeon 1 (98.9%) came out the same to the digit. The full route and those three segments
+would have been enough (the owner asked why it ran so long, Nov 24).
