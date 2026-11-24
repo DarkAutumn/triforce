@@ -190,6 +190,8 @@ pub struct GameplayCritic {
     pub beam_kill_reward: f64,
     pub beam_timed_reward: f64,
     pub beam_unfired_penalty: f64,
+    /// `reward.bomb_catch_min` (round 40; 0 off): [`GameplayCritic::critique_item_usage`].
+    pub bomb_catch_min: u8,
     /// The `retreat` ending is neutral (the default; `endings: {retreat: ...}` can make it a failure): leaving through
     /// a route step's `retreat` exit then costs no `penalty-wrong-location` either.
     pub neutral_retreat: bool,
@@ -217,6 +219,7 @@ impl GameplayCritic {
             beam_kill_reward: crate::config::BEAM_KILL_REWARD,
             beam_timed_reward: crate::config::BEAM_TIMED_REWARD,
             beam_unfired_penalty: crate::config::BEAM_UNFIRED_PENALTY,
+            bomb_catch_min: 0,
             neutral_retreat: true,
             correct_locations: HashSet::new(),
             correct_loops: HashSet::new(),
@@ -248,6 +251,7 @@ impl GameplayCritic {
         critic.beam_kill_reward = config.reward.beam_kill_reward;
         critic.beam_timed_reward = config.reward.beam_timed_reward;
         critic.beam_unfired_penalty = config.reward.beam_unfired_penalty;
+        critic.bomb_catch_min = config.reward.bomb_catch_min;
         critic.neutral_retreat = config.endings.get(RETREAT).is_none_or(|outcome| outcome == NEUTRAL);
         Ok(critic)
     }
@@ -504,6 +508,20 @@ impl GameplayCritic {
         }
     }
 
+    /// `reward.bomb_catch_min` (round 40, Darknut40's switched-off proposal): the step placed a bomb that hurt fewer
+    /// monsters than the minimum, where one bomb is not right (no boss hit, not the 10th damage-free kill's bomb, not
+    /// a `requires_bombs` room). Such a bomb pays no hit reward (`reward-hit`, `reward-bomb-hit`); its cost stands.
+    fn short_catch(&self, c: &Critique) -> bool {
+        let change = c.change;
+        let prev = &change.previous;
+        self.bomb_catch_min > 0
+            && change.placed_bomb()
+            && change.hits() < usize::from(self.bomb_catch_min)
+            && !prev.next_kill_arms_drop()
+            && !c.map.requires_bombs(prev.full_location())
+            && !change.enemies_hit.iter().any(|&(slot, _)| prev.enemy_by_index(slot).is_some_and(|e| enemy::is_boss(e.id)))
+    }
+
     fn critique_attack(&mut self, c: &Critique, rewards: &mut StepRewards) {
         let change = c.change;
         let (prev, curr) = (&change.previous, &change.state);
@@ -540,7 +558,7 @@ impl GameplayCritic {
                     break;
                 }
             }
-        } else if hits != 0 {
+        } else if hits != 0 && !self.short_catch(c) {
             if !curr.in_cave() {
                 let decay = self.combat_decay(curr.full_location());
                 rewards.add(Outcome::reward("reward-hit", REWARD_SMALL * decay));
@@ -629,7 +647,8 @@ impl GameplayCritic {
     /// Bombs: placing one costs (`penalty-bomb-used`: a bomb that hits nothing is a loss), each hit the look-ahead
     /// credits to the placing step pays (`reward-bomb-hit`), and a 10th damage-free kill made with a bomb, which
     /// arms a forced drop of 4 bombs, pays `reward-armed-bomb-drop` on the step it happens (the owner, Nov 11; picking
-    /// the bombs up is `reward-gained-bombs`).
+    /// the bombs up is `reward-gained-bombs`). With `reward.bomb_catch_min` the hits of a bomb that hurt fewer pay
+    /// nothing ([`GameplayCritic::short_catch`]).
     fn critique_item_usage(&mut self, c: &Critique, rewards: &mut StepRewards) {
         let change = c.change;
         if change.armed_bomb_drop() {
@@ -637,11 +656,8 @@ impl GameplayCritic {
         }
         if change.placed_bomb() {
             rewards.add(Outcome::penalty("penalty-bomb-used", -REWARD_SMALL));
-            if change.hits() != 0 {
-                rewards.add_scaled(
-                    Outcome::reward("reward-bomb-hit", REWARD_MEDIUM),
-                    change.hits() as f64,
-                );
+            if change.hits() != 0 && !self.short_catch(c) {
+                rewards.add_scaled(Outcome::reward("reward-bomb-hit", REWARD_MEDIUM), change.hits() as f64);
             }
         }
     }

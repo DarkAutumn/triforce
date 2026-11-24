@@ -1408,7 +1408,10 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         let granted = self.cheats.granted(CheatItem::Bombs);
         let map = self.session.game_map();
         let targets = items.bomb_targets(map, self.session.state(), self.objective.as_ref(), reserve, granted);
+        // Round 40 (Darknut40's switched-off proposal, `items.bomb_catch`): a weapon bomb only where it catches enough.
+        let catch = items.bomb_catch_in(map, self.session.state(), targets.is_some());
         self.session.set_bomb_targets(targets.as_deref());
+        self.session.set_bomb_catch(catch);
         // The facings the route plays the recorder with (round 26: the whirlwind's count, the pond, a Digdogger fought).
         let facings = self.objectives.as_ref().map(|gc| gc.recorder_facings(self.session.state()));
         self.session.set_recorder_facings(facings);
@@ -1427,6 +1430,9 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         });
         self.session.set_vetoed_doorways(doorways);
         crate::config::route_mask_rules(&mut rules, targets.is_some(), arrows.is_some(), candle.is_some(), doorways);
+        if catch > 0 {
+            rules.push((ActionKind::Bomb, "bomb-catch"));
+        }
         self.mask_rules = rules;
         self.session.set_clips(config.clips.enabled);
         // The switch in force: a switch off waits while Link stands stranded without the skips (round 24).

@@ -118,7 +118,7 @@ fn mask(mask: &ActionMask, rules: &[(ActionKind, &'static str)]) -> Mask {
     }
     for &(kind, why) in rules {
         let k = kind.index();
-        let limits = is_directional(kind) && matches!(why, "bomb-targets" | "facings" | "doorways");
+        let limits = is_directional(kind) && matches!(why, "bomb-targets" | "facings" | "doorways" | "bomb-catch");
         if (!mask.kind[k] || limits)
             && let Some(reason) = MASK_REASONS.iter().position(|r| *r == why)
         {

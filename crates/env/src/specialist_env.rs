@@ -886,7 +886,10 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         let granted = self.cheats.granted(CheatItem::Bombs);
         let map = self.session.game_map();
         let targets = items.bomb_targets(map, self.session.state(), Some(objective), reserve, granted);
+        // Round 40 (Darknut40's switched-off proposal, `items.bomb_catch`): a weapon bomb only where it catches enough.
+        let catch = items.bomb_catch_in(map, self.session.state(), targets.is_some());
         self.session.set_bomb_targets(targets.as_deref());
+        self.session.set_bomb_catch(catch);
         let facings = self.objectives.as_ref().map(|gc| gc.recorder_facings(self.session.state()));
         self.session.set_recorder_facings(facings);
         let warp = self.objectives.as_ref().and_then(|gc| gc.warp(self.session.state()));
@@ -900,6 +903,9 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         let doorways = zelda::objectives::doorways_kept_out(self.session.game_map(), self.session.state(), objective);
         self.session.set_vetoed_doorways(doorways);
         crate::config::route_mask_rules(&mut rules, targets.is_some(), arrows.is_some(), candle.is_some(), doorways);
+        if catch > 0 {
+            rules.push((zelda::ActionKind::Bomb, "bomb-catch"));
+        }
         self.mask_rules = rules;
         self.session.set_clips(self.config.clips.enabled);
         // The switch in force: a switch off waits while Link stands stranded without the skips (round 24).
@@ -1170,6 +1176,12 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         if self.config.reward.aimless_penalty > 0.0 && aimless.waste_frames > 0.0 {
             let value = self.config.reward.aimless_penalty * f64::from(aimless.waste_frames) * scale;
             rewards.add(Outcome::penalty("penalty-aimless", -value));
+        }
+        // `penalty-chase` (round 40, Darknut40's switched-off proposal, default off): the step's frames when it ends
+        // with some Darknut set to reverse onto Link at its next grid point (`zelda::darknut_rules::chasing`).
+        if self.config.reward.chase_penalty > 0.0 && !change.entered_room() && zelda::darknut_rules::chasing(&state) {
+            let value = self.config.reward.chase_penalty * f64::from(change.frames) * scale;
+            rewards.add(Outcome::penalty("penalty-chase", -value));
         }
 
         self.episode_steps += 1;

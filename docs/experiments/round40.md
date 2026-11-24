@@ -1731,6 +1731,223 @@ check passed. Each failure, its cause and its fix:
   interrupted test waits for the metrics line with no deadline (the suite's timeout bounds a hang) and keeps the
   training's output for its failure message.
 
+## The owner's Darknut fighter (Darknut40, branch `r40-darknut`)
+
+anthropic/claude-opus-5-5 (Darknut40). The owner's Darknut lesson (docs/owner/darknuts.md, Nov 24; his three takes in
+`replays/owner/darknut/`) as a scripted fighter over the env's own actions, measured alone on the generation's code
+beside today's network, its demonstrations, and two switched-off proposals. *Where it came from:* the rules and the
+takes are the owner's; the fighter, the geometry, the measurements, the builder and the proposals' mechanisms are the
+agent's. The rules stay Darknut-only (the lead, after Chase40's audit: Goriyas, Lynels and Armos turn at Link from
+farther; a Gibdo walks as a red Darknut, not used here).
+
+### The fighter (`scripts/experiments/r40_darknut_fighter.py`)
+
+Each decision reads what a player sees (positions, facings, flash timers, knockback, clouds, the bag, the clock) and
+ranks the env's actions (MOVE each way, WAIT, the strikes that land, the BOMBs that catch two or more):
+- **Safety** is `r40_d3_69_line`'s: no way on from the action (standing, or walking any way for 48 frames) touched by
+  any predicted way of any Darknut. The prediction walks a Darknut at its own speed (red 0.5, blue 0.625 pixel a
+  frame, asm:Darknut_Init), stopping on every 16-pixel grid point it passes (the game moves whole pixels; blue
+  Darknuts step 0.625 and would otherwise never stand on one), where it may go on, turn toward Link when he is
+  within 8 pixels of its row or column (129 in 256, asm:Wanderer_MoveAndTurn), or turn aside at a wall
+  (asm:Walker_CheckTileCollision). Link's own walk is modelled as the game moves him: his foot row alone meets the
+  floor (he overlaps blocks from below, zelda-asm mechanics.md "Why Link overlaps blocks"), and a turn across his axis
+  off his grid first takes him to a grid point by his grid offset `$394` (asm:Link_ModifyDirOnGridLine: on 4 or more
+  pixels out, back under 4). Both mattered: without them the first traces were hit stepping back into a Darknut.
+- **Never on its line behind it**: a place within 8 pixels of the line of a Darknut walking away, up to 64 pixels
+  behind it, is ranked after every safe one that is not.
+- **One Darknut, shadowed**: the goal is the spot 20 pixels off the chosen Darknut's line on Link's side and 8 ahead
+  of it (`OFF`, `AHEAD`: the take's landed swings are 15-24 off and 5-13 ahead); when its next grid point is closed
+  ahead (a wall), the spot is on the line it will walk after turning toward Link's side ("I know he will stop and
+  turn [...] sword towards the wall south of where I think he'll be").
+- **Strike its side**: a SWORD (BEAMS at full hearts, the beam's flight too) is a candidate when the game's sword box
+  (asm:Collision_CheckStabVsMonster from asm:Sword_LinkToWeaponOffsetsX/Y: the point against the monster's middle,
+  under $10 along, $0C across; held 1 pixel inside, two hitting frames running) holds the Darknut on the swing's
+  hitting frames 4-11, it does not face the blade (asm:Damage_HandleWeaponHit@CheckDarknut), its flash has been over
+  two frames, and it reaches no grid point first; and it is safe whether it lands (it flashes 32 frames, shoved only
+  along its axis or from a grid point, asm:Shove_Update) or misses (nothing touches him before the swing ends).
+- **Then the way it was going**: while the struck Darknut flashes within 32 pixels, the goal is 24 pixels on along
+  its old travel; for 6 decisions after it turns at Link, the same along the way it had walked.
+- **Bombs for two or more, above the reserve** (the Garden's 0, 3:0x59's 5: decisions 2026-11-24; the base's
+  routes.yaml still says 4 there, the fighter keeps the owner's 5): a BOMB way is a candidate when two Darknuts are
+  each caught with a chance of 0.6 or more and the chances sum to 2: the blast's box ($18 both ways from the bomb's
+  middle, 49-72 frames after it is laid) on a predicted way not facing against the bomb's direction (the shield),
+  out of its flash; the ways branch at three grid points, with a guessed 0.25 that the hidden turn timer runs out.
+  With bombs to spend and two or more Darknuts alive the goal is the hotspot (128, 128) (asm:Mode5Play_UpdateWorld:
+  the chase target and its mirror meet there). For six decisions after a bomb, a move on along the bomb's way is
+  ranked last ("I then stop moving").
+- **The clock** (a drop): the Darknuts stand and Link is untouchable; the goal is the nearest place from which a blade
+  not facing a shield holds one.
+- **Out**: the room clear, 3:0x59 by the S door; the Garden's block pushed S from above it, then the stairs
+  (asm:Warp_CheckUnderLink takes him on a frame that starts on their grid point: a step across his axis aligns him).
+
+**The owner's first six swings** (`tests/test_r40_darknut_fighter.py`, the take read frame by frame): his swings 1-4
+strike Darknut 5 walking E from 15, 24, 22, 16 pixels S of its line and 13, 10, 8, 5 ahead; the fighter's test accepts
+1-3 and would make the same strike (SWORD N at that Darknut); swing 4 lands on the frame the flash of swing 3 ends and
+one frame before the Darknut's grid point, which the fighter's margins refuse; swing 5 (anticipating the wall turn) is
+21 pixels above the E blade's box and misses; swing 6 is 1.6 frames from the grid point where the Darknut turns W,
+its shield to the blade, and is parried. The doc's "13 swings, 8 land" holds: the eighth kills (its HP is gone, no
+flash).
+
+### The two switched-off proposals (built and tested, OFF by default)
+
+Both read `zelda::darknut_rules` (crates/zelda/src/darknut_rules.rs):
+- **(a) `reward.chase_penalty`** (default 0): `penalty-chase`, the value times the step's frames (scaled by
+  `shaping_scale`), on a step that ends with some Darknut set to reverse onto Link at its next grid point:
+  `darknut_rules::chasing` is Chase40's `zelda::chase::turn_at(..).reverse_link()` (Link within 8 pixels of its line
+  at that grid point, behind it, at any distance; asm:Wanderer_MoveAndTurn, `CMP #$09`), so the reward and the
+  observation's `entity_chase` (`reverse_link`) say the same thing (the lead, after Chase40's merge; the first build
+  used its own test, the line within $30 behind the Darknut now). None while it decides nothing (the clock, a stun,
+  a shove, its cloud or death); a flashing one counts (its turns go on). Only Darknuts: no other shielded wanderer
+  exists, and Chase40's audit shows the other chasers turn from farther. Rooms where one bomb is right are
+  untouched (it is no bomb term).
+- **(b) bombs that catch two or more**: `reward.bomb_catch_min` (default 0): a placed bomb whose credited hits
+  (the look-ahead's, `Change::enemies_hit`, damage only) are fewer pays neither `reward-bomb-hit` nor the step's
+  `reward-hit`; its `penalty-bomb-used` stands, so a bomb that hurts one is a small net cost. And `items.bomb_catch`
+  (default 0): a `free` family's BOMB is offered only facing where `darknut_rules::bomb_catch` counts that many
+  (MASKS reason `bomb-catch`): the monsters a bomb laid now (where `zelda::bombs::landing` puts it) would hurt if each
+  walks on along its facing at its own q-speed (`$3BC`; standing with the clock), in the blast's reach on a blast
+  frame, out of its flash by then, not immune to bombs (its mask), a Darknut not facing against the bomb's way.
+  **Where one bomb is right, both are lifted**: a boss hit or a boss alive in the room (Manhandla, Gleeok, Digdogger,
+  Aquamentus; Dodongo's room is also `requires_bombs`), the 10th damage-free kill's bomb (`$50` = 9: it arms the
+  forced drop), every `requires_bombs` room (the walls, Dodongo), and while BOMB is kept to bomb targets (a wall, a
+  granted bomb). Tested: the in-game blast against `bomb_catch` and the mask (`crates/zelda/tests/darknut_rules.rs`:
+  the clock holds four Blue Darknuts, a bomb laid E hurts exactly the two counted, the one facing W is parried),
+  `chasing` against a Darknut's next grid point (and none under the clock), the critic (`crates/env/tests/critic.rs`),
+  the env's `penalty-chase` step by step against the script's port (`tests/test_r40_darknut_fighter.py`), the
+  config's rejections.
+
+### 3:0x5b's first pass: one Red Darknut for its bombs (the lead's case, the owner's Dungeon 3 plan)
+
+`--room 5b` (`ROOMS['5b']`, `kill_one`): the fighter as above until one Darknut dies; from then the goal is a dropped
+bomb lying in the room while the bag has room (a slot of type $60, item id 0, taken within 9 pixels of X and of
+Y + 3, asm:Item_TryTake), then the N door (d3first's step leaves the first pass N); no strike that would kill a
+second. Tasks `experiments/r40-darknut/5b-b0-{low,full,1.5}.yaml`: `d3first_3_5bs_0..2`, drop cycle 0
+(`room_kill_cycle`), no kill streak (`help_count` 0: the drop is the table's), the bag empty, hearts drawn 0.5-3.0 (as
+Carrier40b's chains saw them entering), full (3), or exactly 1.5. Visits as `triforce evaluate` lays them out.
+
+| hearts | base, fighter | visits | out with one kill | deaths | hits a visit | bombs dropped / taken | first kill (frame) | out (frame, mean won) |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| 1.5 | 95eea9e9, f7b153a6 (before the doorway fix) | 300 | 299 (2 killed two) | 1 | 0.057 | 121 / 121 | 312 (median 276, p90 484) | 600 |
+| 0.5-3.0 | same | 300 | 293 | 7 | 0.057 | 120 / 120 | 309 | 597 |
+| 3 | same | 300 | 300 | 0 | 0.037 | 128 / 128 | 287 | 571 |
+| 0.5-3.0 | 13782c50 (carrier targets), the doorway fix, local run | 300 | 298 | 2 | 0.020 | 128 / 128 | 318 | 607 |
+| 1.5 | 13782c50, fcc32db0 | 102 | 102 | 0 | 0.039 | 39 / 39 | 316 | 605 |
+| 0.5-3.0 | same | 102 | 101 | 1 | 0.039 | 39 / 39 | 313 | 603 |
+| 3 | same | 102 | 102 | 0 | 0.010 | 45 / 45 | 274 | 567 |
+
+**One Red Darknut can be killed with the wood sword at 1.5 hearts by the owner's method**: in 299 of 300 visits
+(and 102 of 102 with the carrier targets on), in about 300 frames to the kill and 600 to the door. The drop appears
+after 40.5% of the kills (the table's 41%, asm:Drop_GroupRates) and the fighter takes every one. The first table's
+hits were half Link waiting in the S doorway while a Darknut walked the bottom row past the door (Y $BD, the door
+row's line: the turn rule's 8 pixels): `ranked` now lets him back out of a doorway while the screen edge is more
+than a step away, and no sideways step is modelled or offered in a doorway (the game forces the input onto the
+doorway's axis); the 7 low-heart deaths fall to 2 (both a swing into a Darknut that walked into the blade's reach, at
+1.0 heart: seeds 26 and 148, frames 430 and 413). **The carrier target** (13782c50): after the carrier's death the cycle reads 1, the
+objective's target is the N exit and PBRS pays every step N, so with no drop Link leaves at once; with a drop the
+target is the bombs, then the exit (a trace of seeds 8 and 9). Today's network on the same 300 entries (base
+objective before the carrier targets, 2.0.0.15's `r38head-fam-w8`): out 289 / 270 / 300 of 300 (1.5 / 0.5-3.0 /
+full) and kills nothing (no drop): it crosses.
+
+### The fighter alone against today's network (the brief's four cases)
+
+The fighter at fcc32db0 on 13782c50's code; today's darknut@d3first network (`darknut/r38head-fam-w8`, team 2.0.0.15,
+its act mode) by `triforce evaluate` on the same entries (`experiments/r40-darknut/<room>-b<bag>.yaml`, two
+evaluations of 50 a state, seeds 0 and 150: the fighter's `starts` lays its visits out identically; network pieces
+ran on the base before and after the carrier merge, which touches neither room's objective). 300 visits a case. The
+owner's takes are the bar for style; the network's numbers are beside it.
+
+| room, bag | who | out | deaths | hits a visit | hearts lost a visit | frames (mean won) | bombs a visit | Darknuts hurt a bomb |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| Olive Garden, 0 | fighter | 284 (94.7%) | 15 | 0.51 | 1.00 | 2886 | 0 | - |
+| | network | 129 (43.0%) | 171 | 2.66 | 5.02 | 4084 | 0 | - |
+| Olive Garden, 8 | fighter | 293 (97.7%) | 6 | 0.35 | 0.70 | 2068 | 4.56 | 2.00 (911 of 1369 bombs hurt 2+, 346 one, 112 none) |
+| | network | 247 (82.3%) | 53 | 1.43 | 2.76 | 2836 | 8.00 | 0.90 |
+| 3:0x59, 4 (none usable) | fighter | 294 (98.0%) | 2 | 0.08 | 0.08 | 1388 | 0.02 (only after a drop took the bag to 8) | 2.5 |
+| | network | 218 (72.7%) | 54 | 0.92 | 0.89 | 1433 | 1.12 | 0.80 |
+| 3:0x59, 8 (three usable) | fighter | 287 (95.7%) | 4 | 0.06 | 0.06 | 1237 | 1.23 | 2.10 |
+| | network | 281 (93.7%) | 13 | 0.34 | 0.33 | 940 | 4.13 | 0.92 |
+
+The fighter's other endings are `no-damage` (600 decisions without a hit given or taken: 1, 1, 4, 9): a last Darknut
+it never finds a safe strike on. **Where it is still hit** (the `where` records' situations, about 300 hits over the
+four cases' 1,200 visits): during a swing (`swing`: Link stands in the swing while a Darknut walks into him) is the
+largest share in the Garden (84 of 153 at 0 bombs, 43 of 106 at 8); a Darknut that turned at Link at its grid point
+(`turned`, 35 and 46); on a Darknut's line behind it (`chasing`, 16 and 7), at a wall (`wall`), a flash running out
+(`flash-ended`), laying a bomb (`bomb`, 9 at 8 bombs). Examples by frame: the Garden at 0 bombs, seed 11
+(`5_05e_0`), frame 1088: Link at ($D0, $BD) in the SE corner swings N at a Darknut 11 pixels above him facing S (its
+shield toward him) and is touched (`swing`); seed 13, frame 335: Link at ($9D, $6D) steps N toward a Darknut at
+($A0, $62) facing S (`turned`). 3:0x59 at 8 bombs, seed 90 (`3_59n_1`), frame 159: Link at ($80, $73) lays a BOMB W
+with a Darknut at ($70, $6D) facing N beside him (`bomb`).
+
+### The demonstrations
+
+`r40_darknut_fighter.py demos FILE --room R --bombs B [--hearts H] --per-state 50 --seed0 100000`: the fighter's
+decisions timed by a look-ahead of 3 decisions near a Darknut (a decision whose look-ahead is hit is replaced by the
+best unhit one), a backtracking search from the last safe decisions where the visit is still hit; a visit is kept
+only unhit and out by the right exit; a row per kept decision (masked decisions are not recorded: the way out waits
+for a shutter still opening, the fault 3:0x59's first build hit). Seeds 100000 and up (the measurements' 0-299 are
+not taught). Files in the worktree's `target/demos/` beside the store's two 3:0x69 files; all nine are listed in
+darknut@d3first's `demos:` (coefficient 0.05, unchanged).
+
+| file | room, bag, hearts | visits | kept | rows | sha256 (12) |
+|---|---|---:|---:|---:|---|
+| r40-darknut-5b-low.npz | 3:0x5b first pass, 0, 0.5-3.0 | 150 | 150 | 19,971 | fb08a3c6ffd6 |
+| r40-darknut-5b-full.npz | 3:0x5b first pass, 0, full | 150 | 150 | 19,922 | 68a481e91495 |
+| r40-darknut-59-b4.npz | 3:0x59 from N, 4 (none usable) | 150 | 146 (4 `no-damage`) | 56,595 | c06efd81475e |
+| r40-darknut-59-b8.npz | 3:0x59 from N, 8 | 150 | 148 (2 `no-damage`) | 49,285 | bbb97e9a3fb4 |
+| r40-darknut-garden-b0.npz | Olive Garden from E, 0 | 150 | 148 | 126,726 | 0beb7c464227 |
+| r40-darknut-garden-b8.npz, -p2.npz | Olive Garden from E, 8 (the first piece stopped at a masked push after 57) | 57 + 93 | 56 + 93 | 29,328 + 51,830 | 1af28b7012a4, 0788ae628b5c |
+
+376,088 rows in all with 3:0x69's 22,431: the Garden at 0 bombs alone is a third. `demos.load_demos` pools rows, so
+3:0x69's line goes from all of the clone loss to 6% of it at the same coefficient; per-file weights do not exist (the
+lead's call whether 3:0x69's line wants its own share).
+
+### The two proposals measured (today's network's replays, 300 visits a case)
+
+`scripts/experiments/r40_darknut_proposals.py` over the network evaluations' replays (the same predicates as the Rust,
+frame by frame): a chasing frame is one where `chasing` holds; a hit follows it if Link's hearts drop in the next 32
+frames; a bomb's catch is read on the frame it appears, its outcome from the Darknuts' hit points after the blast.
+
+Chasing frames are read with `chasing` as it is now (a Darknut set to reverse onto Link at its next grid point); the
+first build's test (Link on the line within $30 behind it now) is in brackets: the network's, then the fighter's (its
+measurements ran on the first build).
+
+| case | chasing frames a visit [first test: network, fighter] | hit within 32 after a chasing frame / after any other [first test] | hits with a chasing frame in the 32 before [first test] | bombs laid | catch >= 2 read: hurt 2+ | catch < 2 read: hurt 2+ | Darknuts hurt a bomb |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Olive Garden, 0 | 669 [347, 118] | 6.4% / 2.4% [5.7% / 3.0%] | 663 of 938 [408] | 0 | - | - | - |
+| Olive Garden, 8 | 462 [255, 92] | 4.1% / 1.6% [3.3% / 1.9%] | 346 of 570 [181] | 2,411 | 259 of 490 (53%) | 176 of 1,921 (9%) | 0.88 |
+| 3:0x59, 4 | 186 [106, 52] | 5.1% / 2.5% [3.0% / 2.9%] | 177 of 419 [81] | 339 | 24 of 42 | 21 of 297 | 0.82 |
+| 3:0x59, 8 | 80 [59, 36] | 2.9% / 1.8% [1.7% / 1.9%] | 59 of 244 [26] | 1,255 | 117 of 203 (58%) | 173 of 1,052 (16%) | 0.99 |
+
+**(a) The chase.** With the chase module's reversal a hit follows a chasing frame 1.6-2.7 times as often as any
+other frame in all four cases, and 71% (Garden, 0 bombs), 61%, 42% and 24% of the network's hits have one in the 32
+frames before them; the first test, limited to $30 behind, saw it in the Garden only. Under the first test the
+network chased about three times as long as the fighter in the Garden and twice in 3:0x59. At 0.002 a frame the
+cost is 1.34 a Garden visit at 0 bombs, 0.92 at 8, 0.37 and 0.16 in 3:0x59: small beside a Darknut kill's reward.
+Only a training measures what the cost does; it is not measured here.
+
+**(b) Bombs for two or more**, measured with the mask (`items.bomb_catch: 2`, `experiments/r40-darknut/<room>-b8-catch2.yaml`)
+on today's network without training, 150 visits paired by seed against the same entries without it:
+
+| case | arm | out | hits a visit | bombs a visit | Darknuts hurt a bomb | hurt 2+ / 1 / 0 |
+|---|---|---:|---:|---:|---:|---|
+| Olive Garden, 8 | base (997) | 82.0% | 1.57 | 7.92 | 0.90 | |
+| | mask (1080) | 87.3% (+5.3 ± 3.2, within noise) | 1.41 (-0.16 ± 0.12) | 4.84 | 1.42-1.47 | 358 / 261 / 109 of 728 |
+| 3:0x59, 8 | base (1079) | 94.0% | 0.31 | 4.13 | 0.92 | |
+| | mask (1079) | 92.7% (-1.3 ± 2.7, within noise) | 0.36 | 2.53 | 1.40-1.43 | 167 / 148 / 69 of 384 |
+
+(`triforce stats compare`; the mask arm's Garden evaluation ran at 61a271f5, its base at 54be4867: `manifest diff`
+shows the code commit, the carrier merge, the demos list and the key; neither room's objective changed.) The mask
+cuts the bombs by 40%, a bomb hurts 1.6 times as many Darknuts, and neither room's rate or hits moves beyond
+noise. 70 of the Garden arm's 728 bombs read below 2 on the frame they appear: the Darknuts moved in the frames
+between the decision the mask read and the bomb. The reward key (`reward.bomb_catch_min`) needs a training to measure.
+
+**Recommendation.** Switch on (b)'s mask for darknut@d3first's training (`items.bomb_catch: 2`): no loss measured
+on today's network, 40% fewer bombs and the owner's "2+ with one bomb" by construction; the single-bomb cases stay
+open (`bomb_catch_in`: a target that wants bombs, a room that needs one, the 10th kill's drop, a boss). Train (a)
+as a second arm (`reward.chase_penalty: 0.002` on top of the mask) rather than switching it on blind: the chasing
+frames now precede most of the Garden's hits, but a cost on standing behind a Darknut can as well teach keeping
+away from it, and only a training shows which; the demonstrations already show the shadowing that replaces the chase.
+
 ## Three switches settled by measurement (Switch40, branch `r40-switch`)
 
 Three open switches of the fresh generation (backlog "The fresh generation (2.0.1.0)",

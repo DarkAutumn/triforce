@@ -1,0 +1,5 @@
+# Round 40 (Darknut40's switched-off proposal (b), the mask): the case garden-b8 with a weapon BOMB offered only facing where
+# a bomb laid now would hurt two or more monsters (zelda::darknut_rules::bomb_catch). Today's network, not retrained.
+extends: garden-b8.yaml
+items:
+  bomb_catch: 2

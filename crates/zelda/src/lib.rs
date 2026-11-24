@@ -14,6 +14,7 @@ pub mod cheats;
 pub mod clips;
 pub mod contact;
 pub mod change;
+pub mod darknut_rules;
 pub mod decisions;
 pub mod enums;
 pub mod executor;
