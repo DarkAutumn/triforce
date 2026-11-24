@@ -518,10 +518,13 @@ def build_plan(args) -> tuple[Plan, list[Candidate]]:
     from . import registry
     from ._native import route_state, route_steps, step_policy
     from .runner import _start_step
-    run_dir = Path(args.run) if os.sep in args.run else registry.run_dir(args.family, args.run, args.models_dir)
-    if not run_dir.exists() and os.sep not in args.run and paths.store_exists() and \
-            store.run_row(store.Run(args.family, args.run)) is not None:
-        run_dir = store.Run(args.family, args.run).path        # a store run of the family not in the team
+    name = args.run
+    if name.startswith(f'{args.family}/') and not Path(name).exists():
+        name = name[len(args.family) + 1:]         # a store run named as FAMILY/RUN (as train --load names it)
+    run_dir = Path(name) if os.sep in name else registry.run_dir(args.family, name, args.models_dir)
+    if not run_dir.exists() and os.sep not in name and paths.store_exists() and \
+            store.run_row(store.Run(args.family, name)) is not None:
+        run_dir = store.Run(args.family, name).path        # a store run of the family not in the team
     table = route_segments(args.route)
     if args.segment is not None:
         segments = dict(item.split(':', 1) for item in table.segments.split())
