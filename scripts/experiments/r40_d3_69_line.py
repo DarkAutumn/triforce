@@ -473,6 +473,7 @@ def play(env, which: str, seed: int, start: str, recorder=None, probe=None, dept
 SEARCH_ACTIONS = ('MOVE N 4', 'MOVE S 4', 'MOVE W 4', 'MOVE E 4', 'WAIT 4', 'SWORD N', 'SWORD S', 'SWORD W', 'SWORD E')
 SEARCHES = ((2.0, 25000), (1.0, 50000))   # (the heuristic's weight, decisions tried): the search, then a wider one
 REACH = 32                   # pixels (both axes) within which a Darknut may be struck: a strike farther is not tried
+SAVE_EVERY = 20              # seconds between the builder's saves of its file
 
 
 def search(env, which: str, obs, weight: float, budget: int):
@@ -673,21 +674,34 @@ def demos(out: Path, which: str, seed0: int, runs: int, depth: int = 4, progress
     """The demonstration builder: every visit of one pass from `starts` by `teach` (the search, else the rule timed
     by a `depth`-decision look-ahead), the visits that leave by the exit unhit written to `out` as rows (`triforce.
     demos`: a MOVE or WAIT without its duration, a strike `REPEAT` times); `log`: each visit's record as a JSON line;
-    `workers` processes share the visits, 2 at a time."""
+    `workers` processes share the visits one at a time.  The file is written as the visits end (at most every
+    `SAVE_EVERY` seconds, and at the end, through a temporary file), so a job stopped at its time limit keeps what
+    it found."""
     from triforce.demos import save_demos
+
+    def save():
+        if rows:
+            part = out.with_name(out.name + '.part')
+            save_demos(part, [obs for obs, _ in rows], [action for _, action in rows])
+            part.replace(out)
+
     visits = list(starts(which, seed0, runs))
-    tasks = [(which, visits[i:i + 2], depth) for i in range(0, len(visits), 2)]
+    tasks = [(which, [visit], depth) for visit in visits]
     records, rows = [], []
+    saved = time.time()
     with multiprocessing.get_context('spawn').Pool(workers) as pool:
-        for part, kept in pool.imap(_taught, tasks):
+        for part, kept in pool.imap_unordered(_taught, tasks):
             records += part
             rows += kept
             if log is not None:
                 with open(log, 'a', encoding='utf-8') as file:
                     file.write(''.join(json.dumps(record) + '\n' for record in part))
+            if time.time() - saved > SAVE_EVERY:
+                save()
+                saved = time.time()
             if progress:
                 progress(len(records), runs)
-    save_demos(out, [obs for obs, _ in rows], [action for _, action in rows])
+    save()
     result = summary(which, records)
     return {'file': str(out), 'rows': len(rows), 'played': len(records),
             'kept': sum(r['success'] and r['hits'] == 0 for r in records), 'builder': result['builder']}
