@@ -8,7 +8,17 @@ obs: {objective: true, target: true}       # schema 2 pointer, no item targets (
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}
 items: {bombs: tenth}                      # only the 10th damage-free kill's bomb (arms a forced bomb drop)
 clips: true                               # round 21: the screen wrap (W/E)
-curriculum: {enabled: true}             # round 24: the take-any cave's right ware, 0x2f's raft, the Lost Hills' four Ns
+curriculum:                              # round 24: the take-any cave's right ware, 0x2f's raft, the Lost Hills' four Ns
+  enabled: true
+  untracked:                              # round 40: the seed states that train without a track (triforce.inputs)
+  - d3first_0_0fc_[0-9]
+  - d3first_0_0fcave_[0-9]
+  - d3first_0_0fs_[0-9]
+  - d3first_0_2fc_[0-9]
+  - d3first_0_2fcave_[0-9]
+  - d3first_0_2fs_[0-9]
+  - d3first_0_77c_[0-9]
+  - d3first_0_77cave_[0-9]
 one_room: true                          # round 24: per-room episodes (a curriculum frame takes its seed state's entry)
 max_steps: 600                        # explored one-room paths are 3-140 steps
 warm_start: null

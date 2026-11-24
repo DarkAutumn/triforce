@@ -13,7 +13,15 @@ ram_randomization: {hp: [0.15, max], full_hp: 0.5, chain_hp: 0.5, bombs: [0, 8],
                     room_kills: {'(9, 0x14)': [1, 4]}, room_kills_share: 0.5}
 items: {bombs: tenth}                      # only the 10th damage-free kill's bomb (arms a forced bomb drop)
 clips: {enabled: true, off_share: 0}       # round 29: the block clip of 9:0x03 to its stairs; the owner, Nov 18: no episode with CLIP masked (the no-clip runs are dropped, 0x03 is not fought)
-curriculum: {enabled: true}             # trajectories/like-like (Go-Explore paths per start state)
+curriculum:                              # trajectories/like-like (Go-Explore paths per start state)
+  enabled: true
+  untracked:                              # round 40: the seed states that train without a track (triforce.inputs)
+  - d3first_6_1dc_[0-9]
+  - d3first_9_03e_[0-9]
+  - d3first_9_14c_[0-9]
+  - d3first_9_41s_[0-9]
+  - d3first_9_51s_[0-9]
+  - d3first_9_56s_[0-9]
 one_room: true
 max_steps: 2000
 warm_start: null

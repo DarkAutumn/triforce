@@ -19,7 +19,10 @@ import pytest
 import torch
 
 from triforce import registry, train
+from triforce.inputs import MissingInput
 from triforce.metrics import EpisodeTracker, read_jsonl
+
+from .conftest import start_task
 
 SPECIALIST = 'ow-start'
 GAMEPLAY_PREFIXES = ('kind/', 'duration/', 'interrupt/', 'ending/', 'outcome/', 'reward/', 'health', 'hearts/',
@@ -28,8 +31,9 @@ GAMEPLAY_KEYS = ('episodes', 'episode_steps', 'episode_frames', 'success_rate', 
 
 
 def _common(states_dir, tmp_path, *extra):
-    """Training on the CPU is opt-in (--device defaults to cuda); a later --device in extra wins."""
-    return ['--specialist', SPECIALIST, '--states-dir', str(states_dir), '--models-dir', str(tmp_path),
+    """Training on the CPU is opt-in (--device defaults to cuda); a later --device in extra wins.  The task is
+    ``start_task()``: ``SPECIALIST``'s with the session states dir's ``start`` as its seed state."""
+    return ['--specialist', start_task(), '--states-dir', str(states_dir), '--models-dir', str(tmp_path),
             '--device', 'cpu', *extra]
 
 
@@ -69,6 +73,10 @@ def test_train_then_resume(states_dir, tmp_path):
     assert all(resumed['optimizer']['state'][p]['step'] > first_steps[p] for p in first_steps)
     run = json.loads((second / 'run.json').read_text())
     assert run['args']['parallel'] == 2 and run['args']['threads'] == 2
+    # Round 40: the parent by identity (family, run, iterations, SHA-1), never a path; none from scratch.
+    assert json.loads((first / 'run.json').read_text())['parent'] is None
+    assert run['parent'] == {'family': checkpoint['specialist'], 'run': 'first', 'iterations': 1,
+                             'sha1': registry.checkpoint_sha1(first)}
 
 
 def test_supplied_config_and_explicit_start_state(states_dir, tmp_path):
@@ -404,7 +412,7 @@ def test_a_stop_proposal_is_confirmed_by_an_evaluation(states_dir, tmp_path, log
 
     monkeypatch.setattr(train, 'success_by_state', fake_eval)
     monkeypatch.setattr(train.EarlyStop, 'update', lambda self, *_: True)
-    run_dir = train.main(['--specialist', SPECIALIST, '--states-dir', str(states_dir), '--parallel', '2',
+    run_dir = train.main(['--specialist', start_task(), '--states-dir', str(states_dir), '--parallel', '2',
                           '--steps-per-update', '16', '--iterations', '3', '--models-dir', str(tmp_path),
                           '--run-id', 'confirm', '--seed', '5', '--no-curriculum', '--stop-success', '0.5',
                           '--stop-hearts-delta', '0', '--stop-bombs-delta', '0', '--device', 'cpu'])
@@ -448,7 +456,7 @@ def _plateau_checks(states_dir, tmp_path, logs_dir, monkeypatch, run_id, outcome
 
     monkeypatch.setattr(train, 'success_by_state', fake_eval)
     monkeypatch.setattr(train.EarlyStop, 'update', lambda self, *_: True)
-    run_dir = train.main(['--specialist', SPECIALIST, '--states-dir', str(states_dir), '--parallel', '2',
+    run_dir = train.main(['--specialist', start_task(), '--states-dir', str(states_dir), '--parallel', '2',
                           '--steps-per-update', '16', '--iterations', '8', '--models-dir', str(tmp_path),
                           '--run-id', run_id, '--seed', '5', '--no-curriculum', '--stop-success', '0.5',
                           '--stop-check-gap', '2', '--device', 'cpu', *flags])
@@ -521,12 +529,19 @@ def test_train_stops_early_and_writes_summary_and_events(states_dir, tmp_path, l
     assert [e['seq'] for e in events] == list(range(len(events)))
 
 
-def test_train_error_is_logged_before_raising(states_dir, tmp_path):
+def _failing_pool(*_args, **_kwargs):
+    raise RuntimeError("the pool could not be built")
+
+
+def test_train_error_is_logged_before_raising(states_dir, tmp_path, monkeypatch):
+    """A failure inside the run (here: building its pool, before 'start'; round 40's refusals of missing inputs
+    come before the run and its events) is logged and re-raised."""
+    monkeypatch.setattr(train, 'EnvPool', _failing_pool)
     events_path = tmp_path / 'stream.jsonl'
     (tmp_path / 'training.json').write_text('{}')                   # a driver's plan: the driver owns 'end'
     with pytest.raises(Exception) as error:
         train.main(_common(states_dir, tmp_path, '--parallel', '1', '--iterations', '1', '--run-id', 'bad',
-                           '--curriculum', str(tmp_path / 'missing'), '--events', str(events_path)))
+                           '--events', str(events_path)))
     events = read_jsonl(str(events_path))
     assert [e['event'] for e in events] == ['error', 'train_end']    # the caller owns 'end'
     assert str(error.value) in events[0]['message'] and 'Traceback' in events[0]['traceback']
@@ -543,9 +558,10 @@ def test_train_events_into_a_folder_without_a_plan_writes_one(states_dir, tmp_pa
     monkeypatch.setenv(jobs.JOB_ID_ENV, str(job))
     folder = tmp_path / 'somewhere'
     events_path = folder / 'mine.jsonl'
+    monkeypatch.setattr(train, 'EnvPool', _failing_pool)
     with pytest.raises(Exception):
         train.main(_common(states_dir, tmp_path, '--parallel', '1', '--iterations', '1', '--run-id', 'bad',
-                           '--curriculum', str(tmp_path / 'missing'), '--events', str(events_path)))
+                           '--events', str(events_path)))
     plan = json.loads((folder / 'training.json').read_text())
     assert plan['kind'] == 'train' and plan['status'] == 'failed' and plan['runs'][0]['events'] == 'mine.jsonl'
     assert plan['runs'][0]['status'] == 'error' and plan['checkout'] and 'branch' in plan
@@ -609,6 +625,8 @@ def test_training_into_an_existing_run_dir_sets_the_old_run_aside(states_dir, tm
     assert not (run_dir / 'act').exists() and not (run_dir / 'eval-sample.json').exists()
     assert (run_dir.with_name('x.prev-3') / 'eval-sample.json').is_file()
     assert registry.load_checkpoint(run_dir)['iterations'] == 2
+    # A same-dir continuation is the run itself: its first training's parent (none, from scratch) stays.
+    assert json.loads((run_dir / 'run.json').read_text())['parent'] is None
 
 
 def test_a_load_continuation_resumes_the_curriculum(states_dir, tmp_path):
@@ -694,7 +712,7 @@ def test_training_runs_on_cuda_unless_cpu_is_asked_for(states_dir, tmp_path, mon
     """--device defaults to cuda; without a GPU that is an error naming --device cpu, before anything is written."""
     assert train.parse_args(['--specialist', SPECIALIST]).device == 'cuda'
     monkeypatch.setattr(train.torch.cuda, 'is_available', lambda: False)
-    args = ['--specialist', SPECIALIST, '--states-dir', str(states_dir), '--models-dir', str(tmp_path),
+    args = ['--specialist', start_task(), '--states-dir', str(states_dir), '--models-dir', str(tmp_path),
             '--parallel', '2', '--run-id', 'nogpu']
     with pytest.raises(SystemExit, match='--device cpu'):
         train.main(args)
@@ -711,7 +729,7 @@ def test_target_steps_are_what_the_parallel_envs_train(states_dir, tmp_path, log
     start = next(e for e in events if e['event'] == 'start')
     assert start['target_steps'] == 60 == plan['runs'][0]['target_steps']
     assert registry.load_checkpoint(run_dir)['steps'] == 60
-    assert plan['command'][3:5] == ['--specialist', SPECIALIST]
+    assert plan['command'][3:5] == ['--specialist', start_task()]
 
 
 def test_round_driver_sets_unfinished_runs_aside_and_skips_finished_ones(tmp_path, monkeypatch):
@@ -758,9 +776,9 @@ def test_a_task_that_draws_harvested_states_refuses_to_train_without_them(states
     config.write_text("name: ow-start\nrooms: ['(0, 0x77)', '(0, 0x77, cave)', '(0, 0x39)']\n"
                       f"start_states: ['start']\nsuccess: [exit-correct]\nmax_steps: 4\n"
                       f"harvested_states: {empty}\nharvested_fraction: 0.5\n")
-    with pytest.raises(SystemExit) as stopped:
+    with pytest.raises(MissingInput) as stopped:
         train.main(['--specialist', str(config), '--states-dir', str(states_dir), '--parallel', '2',
                     '--steps-per-update', '16', '--iterations', '1', '--models-dir', str(tmp_path),
                     '--run-id', 'none', '--seed', '3', '--device', 'cpu'])
-    assert 'harvested states' in str(stopped.value) and str(empty) in str(stopped.value)
-    assert not (tmp_path / 'ow-start' / 'none' / 'run.json').exists()
+    assert 'harvested start states' in str(stopped.value) and str(empty) in str(stopped.value)
+    assert not (tmp_path / 'ow-start').exists()       # refused before the job waits: no run dir, no log

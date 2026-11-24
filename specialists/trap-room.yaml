@@ -8,7 +8,16 @@ obs: {objective: true, target: true}       # schema 2: direction/distance to the
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}   # chains arrive with partial hearts (round 5)
 items: {bombs: required}                   # their requires_bombs rooms (3:0x4c's and 4:0x11's walls; offered only in reach of the wall); else the 10th kill
 clips: true                                # round 21: the block clip under 1:0x22's blocks
-curriculum: {enabled: true}             # trajectories/trap-room (Go-Explore paths per start state)
+curriculum:                              # trajectories/trap-room (Go-Explore paths per start state)
+  enabled: true
+  untracked:                              # round 40: the seed states that train without a track (triforce.inputs)
+  - d3first_1_22c_[0-9]
+  - d3first_1_22e_[0-9]
+  - d3first_3_4cs_[0-9]
+  - d3first_3_5aw_[0-9]
+  - d3first_4_02w_[0-9]
+  - d3first_4_11s_[0-9]
+  - d3first_6_48s_[0-9]
 one_room: true
 max_steps: 600
 warm_start: null

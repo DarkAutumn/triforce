@@ -14,6 +14,7 @@ from triforce.model import ModelConfig, ZeldaPolicy
 from triforce.ppo import PPO, Collector, PPGStore, PPOConfig, joint_kl
 
 from . import synthetic
+from .conftest import start_task
 
 SMALL = ModelConfig(hidden_dim=64, entity_d_model=32, entity_ff_dim=64, entity_out_dim=32, grid_channels=(8, 8, 8),
                     grid_out_dim=32)
@@ -86,7 +87,7 @@ def test_store_copies_rows_out_of_the_reused_buffer():
 
 
 def test_train_with_ppg_logs_aux_phase(states_dir, tmp_path):
-    run = train.main(['--specialist', 'ow-start', '--states-dir', str(states_dir), '--models-dir', str(tmp_path),
+    run = train.main(['--specialist', start_task(), '--states-dir', str(states_dir), '--models-dir', str(tmp_path),
                       '--parallel', '2', '--steps-per-update', '32', '--iterations', '4', '--seed', '1',
                       '--no-curriculum', '--run-id', 'ppg', '--ppg', '--ppg-every', '2', '--ppg-aux-epochs', '2',
                       '--device', 'cpu'])

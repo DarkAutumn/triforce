@@ -35,7 +35,7 @@ from typing import Optional
 
 import torch
 
-from .. import nets, registry
+from .. import lineage, nets, registry
 from ..best_of_n import success_by_state
 from ..demos import load_demos
 from ..events import EventLog, logged_job
@@ -141,12 +141,13 @@ def teacher_coeff(args, iteration: int) -> float:
 
 
 def initial_network(args):
-    """(network, source)."""
+    """(network, source, parent): ``parent`` the loaded checkpoint's identity (``lineage.identity``), None from
+    scratch."""
     if args.load:
-        network, _ = registry.load_model(args.load)
-        return network, str(args.load)
+        network, checkpoint = registry.load_model(args.load)
+        return network, str(args.load), lineage.identity(checkpoint, args.load)
     spec = obs_spec_from_space(observation_space())
-    return nets.create(args.arch, spec, **json.loads(args.arch_config)), None
+    return nets.create(args.arch, spec, **json.loads(args.arch_config)), None, None
 
 
 def link_families(root: Path, name: str, run_id: str, keys: list[str]):
@@ -328,7 +329,8 @@ def main(argv=None) -> Path:
     run_id = args.run_id or registry.new_run_id()
     out_dir = registry.run_dir(args.name, run_id, root)
     shares = {k: float(w) for k, _, w in (s.partition('=') for s in args.shares)}
-    families = parse_families(args.families, args.parallel, shares, args.state_route)
+    families = parse_families(args.families, args.parallel, shares, args.state_route,
+                              curriculum=not args.no_curriculum, states_dir=args.states_dir)
     keys = [f.key for f in families]
     steps_per_env = max(1, args.steps_per_update // args.parallel)
     total = args.iterations * steps_per_env * args.parallel
@@ -338,7 +340,7 @@ def main(argv=None) -> Path:
                     mode=args.mode) as plan:
         log = RunLog(plan, keys, run_id)
         out_dir.mkdir(parents=True, exist_ok=True)
-        network, source = initial_network(args)
+        network, source, parent = initial_network(args)
         aux_losses = [AuxLoss.parse(text) for text in args.aux]
         tried = parse_try_others(args.try_others)
         recurrent = getattr(network, 'recurrent', False)
@@ -375,7 +377,8 @@ def main(argv=None) -> Path:
         curricula = {}
         for family in families:
             spec, _ = curriculum_spec(argparse.Namespace(no_curriculum=args.no_curriculum, curriculum=None,
-                                                         curriculum_fraction=None, curriculum_threshold=None),
+                                                         curriculum_fraction=None, curriculum_threshold=None,
+                                                         curriculum_unrecorded=None),
                                       family.config, out_dir / 'tasks' / family.key)
             curricula[family.key] = spec
         (out_dir / 'tasks').mkdir(exist_ok=True)
@@ -401,8 +404,9 @@ def main(argv=None) -> Path:
         run = {'args': vars(args), 'name': args.name, 'run_id': run_id, 'families': keys,
                'envs': collector.shares, 'arch': nets.arch_of(network.config.to_dict()),
                'parameters': network.parameter_count(), 'model_config': network.config.to_dict(),
-               'ppo_config': cfg.to_dict(), 'source': source,
-               'teachers': None if teachers is None else teachers.paths}
+               'ppo_config': cfg.to_dict(), 'source': source, 'parent': parent,
+               'teachers': None if teachers is None else teachers.paths,
+               'teacher_ids': None if teachers is None else teachers.identities}
         (out_dir / 'run.json').write_text(json.dumps(run, indent=2, default=str), encoding='utf-8')
         link_families(root, args.name, run_id, keys)
         print(f"[lab] {args.name} run={run_id} dir={out_dir} arch={run['arch']} "

@@ -3650,3 +3650,19 @@ from scratch, a family split off where its group can't learn it) are a means: ea
 teacher, none is promoted into a team of record, and no per-family team is assembled, raced or kept current beside
 the one network. The 51-against-one comparison ends with 2.0.0.x (its last table: One38d's ten segments of
 `d2b-all-w8` against the 2.0.0.13 team).
+
+## 2026-11-23 — 2.0.0.14: the engine plays `d3first`'s two whirlwinds as macros (the lead, the owner being away)
+
+Gen40eng's branch `r40-gen-eng` (the `Warp` enum, `macro_facing`, `run_warp`, routes.yaml `macros:`, run lineage in
+`run.json`; reviewed by the lead) measured the fresh generation's macros on TODAY's team, 1000 runs paired by seed
+with main: with `whirlwinds: [0x0b, 0x22]` the leg out of Dungeon 5 is 82.3% -> 89.3% (+7.0 ± 1.5) and 163 frames
+faster, the leg out of Dungeon 6 100% -> 100% and 48 frames faster; in 0:0x0b the networks' own recorder play left by
+the right exit in 88.8% of visits (they walked out N or back into Level 5 in 120 of 1073), the macro in all, at 0.024
+hits a visit against 0.151. With `unaided_docks: true` today's networks take the docks in 0 of 1000 runs (they were
+always handed the recorder as a forced choice), so the docks stay helped on today's team, as the owner ruled; the
+unaided dock is the fresh generation's, where ow-zora trains with it (the baseline to beat: 82.3% and 99.3%).
+
+The lead turned the whirlwind macros on for `d3first` as a `REV` (no network changed; `d2first` has no macro entry and
+plays as before), told the owner beforehand in the check-in file ("my plan unless you say no"), and landed it with
+the golden race and the 250 test. It is a change to how today's team plays that the owner had ruled on only for the
+fresh generation: his to overrule.

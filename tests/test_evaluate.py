@@ -107,8 +107,10 @@ def test_only_the_canonical_evaluation_is_written_to_eval_json(states_dir, tmp_p
     assert main('--act', registry.DEFAULT_ACT, '--seed', '2', '--episodes-per-state', '1') == 0
     assert main('--specialist', str(_short_config(tmp_path, 'ow-zora')), '--episodes-per-state', '1') == 0
     assert (run / 'eval.json').read_text() == canonical
-    assert sorted(p.name for p in run.glob('eval*.json')) == [
+    assert sorted(p.name for p in run.glob('eval*.json') if not p.name.endswith(('.stats.json', '.meta.json'))) == [
         'eval-argmax-e1.json', 'eval-e1-s2.json', 'eval-ow-zora-e1.json', 'eval.json']
+    assert (run / 'eval.json.stats.json').is_file()       # every evaluation leaves its statistics (run_stats)
+    assert json.loads((run / 'eval.json.meta.json').read_text())['manifest']['kind'] == 'evaluate'   # triforce.manifest
     assert json.loads((run / 'eval-argmax-e1.json').read_text())['act'] == 'argmax'
     # --act argmax on a model that acts by argmax is its canonical evaluation
     registry.set_act_mode(run, 'argmax')
@@ -128,7 +130,7 @@ def test_write_result_keeps_the_old_file_when_the_write_fails(tmp_path, monkeypa
     with pytest.raises(OSError):
         write_result({'episodes': 1}, path)
     assert json.loads(path.read_text()) == {'episodes': 3}
-    assert [p.name for p in path.parent.iterdir()] == ['eval.json']
+    assert sorted(p.name for p in path.parent.iterdir()) == ['eval.json', 'eval.json.stats.json']    # no temp file
 
 
 def test_read_evaluation_finds_the_evaluation_in_the_act_mode_of_the_current_weights(tmp_path):

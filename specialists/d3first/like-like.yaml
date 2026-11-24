@@ -58,6 +58,13 @@ clips:
   off_share: 0
 curriculum:
   enabled: true
+  untracked:                              # round 40: the seed states that train without a track (triforce.inputs)
+  - d3first_6_1dc_[0-9]
+  - d3first_9_03e_[0-9]
+  - d3first_9_14c_[0-9]
+  - d3first_9_41s_[0-9]
+  - d3first_9_51s_[0-9]
+  - d3first_9_56s_[0-9]
 one_room: true
 max_steps: 2000
 warm_start: null

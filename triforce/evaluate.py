@@ -81,6 +81,7 @@ merging several evaluations weight by visits.
 import argparse
 import json
 import os
+import sys
 import time
 import traceback
 from collections import Counter
@@ -88,9 +89,10 @@ from contextlib import nullcontext
 from pathlib import Path
 from typing import Callable, Optional
 
-from . import __version__, _native, registry, replay
+from . import __version__, _native, manifest, registry, replay
 from .clips import MODES as CLIPS_MODES, default_mode as default_clips_mode, episode_jobs, name as switch_name
 from .events import LOGS_DIR_ENV, EventLog, has_plan, logged_job, write_json_atomic
+from .inputs import MissingInput, check_start_states
 from .jobs import announce, work
 from .jobs import progress as job_progress
 from .metrics import heart_change_total
@@ -389,10 +391,14 @@ def _start_health_fraction(records: list[dict]) -> float:
 
 
 def write_result(result: dict, path) -> Path:
-    """Writes an evaluation result atomically (the file is the previous one or complete); returns the path."""
+    """Writes an evaluation result atomically (the file is the previous one or complete) and its statistics
+    (``run_stats.write_eval``: ``<path>.stats.json``, registered); returns the path."""
+    from .run_stats import write_eval  # pylint: disable=import-outside-toplevel
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    return write_json_atomic(path, result)
+    written = write_json_atomic(path, result)
+    write_eval(result, path)
+    return written
 
 
 def default_output(checkpoint, specialist: str, act: str, episodes_per_state: int, seed: int,
@@ -619,10 +625,22 @@ def main(argv=None):
 
     config = load_specialist(args.specialist)
     name = config.name
+    try:        # every seed state the task declares is played: a glob that matches nothing is an error (round 40)
+        check_start_states(config)
+    except MissingInput as error:
+        print(f"triforce evaluate: error: {error}", file=sys.stderr)
+        raise SystemExit(2) from None
     checkpoint = resolve_checkpoint(name, args.checkpoint, args.run_id, args.models_dir)
     run_id = checkpoint.parent.name
     episodes = episode_count(config, args.episodes_per_state, args.clips)
     announce('eval', work(eval_episodes=episodes), f'eval-{name}')
+    act = registry.act_override(args.act)
+    recipe = manifest.build('evaluate', arguments_=vars(args), seeds={'seed': args.seed},
+                            task=manifest.task(config, args.specialist),
+                            data={key: value for key, value in manifest.data(config).items()
+                                  if key in ('states_dir', 'start_states')},
+                            networks={name: manifest.network(checkpoint, act or registry.act_mode(checkpoint))},
+                            models=manifest.models(args.models_dir))
     # --events into a folder with a plan: its driver (e.g. triforce eval-batch) owns the stream and the final 'end';
     # into a folder without one: this evaluation writes a plan there, so the training GUI lists it.
     stream = Path(args.events) if args.events else None
@@ -650,6 +668,7 @@ def main(argv=None):
         output = (Path(args.output) if args.output else
                   default_output(checkpoint, name, args.act, args.episodes_per_state, args.seed, args.clips))
         write_result(result, output)
+        write_json_atomic(Path(f'{output}.meta.json'), {'manifest': recipe})       # triforce.manifest
         if events is not None:
             events.emit('eval', **eval_event(result), path=str(output))
         if plan is not None:

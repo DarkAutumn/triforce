@@ -768,7 +768,9 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 
 ## Versioning (the owner, Nov 11; the third number and model compatibility redefined Nov 23)
 
-- **One version, `MAJOR.MINOR.GEN.REV`, in the `VERSION` file** (now `2.0.0.13`: `d3first` crosses 2:0x3e (the
+- **One version, `MAJOR.MINOR.GEN.REV`, in the `VERSION` file** (now `2.0.0.14`: the engine plays `d3first`'s two
+  whirlwinds, 0:0x0b out of Level 5 and 0:0x22 out of Level 6, as macros (routes.yaml `macros:`; the leg out of
+  Dungeon 5 82.3% -> 89.3% of 1000 runs paired, round40.md "Engine macros"; no network changed); 2.0.0.13: `d3first` crosses 2:0x3e (the
   Moldorm left) and takes 9:0x56's key instead, moldorm `r39t-moldorm` through `promoted.d3first` and like-like
   `r39t-like` through `late.d3first` (Dungeon 9 6.7% -> 51.2% against 53.0% fighting the Moldorm, 1000 runs paired;
   round39.md "Moldorm crossed, 9:0x56's key: the two fine-tunes"); 2.0.0.12 was `ow-lynel`'s `late.d3first` run for the leg
@@ -864,7 +866,8 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   People read them with `tf replay
   targets FILE [--room L:RR] [--masks] [--decisions]`, `play-zelda.py --thoughts` and `create-video.py
   --thoughts`.
-  `tf replay info FILE`, `tf replay verify FILE...` (the emulator alone; exit 1 on a divergence). The golden path
+  `tf replay info FILE`, `tf replay verify FILE... [--jobs N]` (the emulator alone, the files side by side on every
+  core unless `--jobs`, reported in name order; exit 1 on a divergence). The golden path
   is a race, so which seed wins a segment can differ between two invocations; each saved replay is exact.
   `play-zelda.py` plays replays: of runs it simulates in the background and files into queues
   (`best`, `success`, `stuck`, `died`, `random`, `golden`; `crates/theater`), or of the files of a PATH. Its
@@ -925,15 +928,20 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 - Setup (README "Getting started"): `uv venv --python 3.12 .venv`, then `uv pip install --python .venv/bin/python -e
   '.[dev]'` (pytest, pytest-xdist, pyyaml, PySide6, pygame). Python 3.12; RTX 4090, 10 cores / 20 threads. ROM at
   `roms/zelda.nes` (or `$TRIFORCE_ROM`); `triforce job setup BRANCH` makes a worktree with all of it. After changing
-  any crate, rebuild the module: `triforce job build --agent A --task T` (`maturin develop --release`, niced).
+  any crate, rebuild the module: `triforce job build --agent A --task T` (`maturin develop --release`, niced). The
+  build stamps the module with the sources it was built from; the queued tools refuse a module without that stamp
+  or older than its sources (round 40, `triforce.build`): rebuild with `triforce job build`.
 - Tests: `triforce job test SUITE... --agent A --task T [--build] [--timeout 60m]`, the suites `python`
   (`pytest -q -n 8 --dist worksteal tests`: eight processes, pytest-xdist; about a minute on a quiet machine, 7
   minutes in one process: `-- -n 0`), `asm` (`pytest -q zelda-asm/tests`), `check` (`asm.py check`), `rust`
-  (`cargo test --release --workspace --features zelda/zcore`), `all` = the four; several run side by side as one
-  entry, each one's output shown whole at the end (`test python asm check` leaves Rust out). **Every test run
-  writes a timing log, not a printout** (the owner, Nov 23): `<yymmdd>_<NNN>_tests-<suite>[-<job>]/tests.jsonl` in
-  the main checkout's `logs/` (every pytest run of the repo through `pyproject.toml`'s `-p triforce.testlog`; the
-  Rust suite a line per test binary from cargo's output): a line per test (id, outcome, setup / call / teardown
+  (`cargo test --release --workspace --features zelda/zcore`, its test programs run 6 at a time, the longest first,
+  by `triforce.cargo_tests`: every program runs whatever another did, a failing one's output is shown whole and
+  named at the end with its rerun command; the job's progress is "Rust tests" done of the programs' `--list`), `all`
+  = the four; several run side by side as one entry, each one's output shown whole at the end (`test python asm
+  check` leaves Rust out). **Every test run writes a timing log, not a printout** (the owner, Nov 23):
+  `<yymmdd>_<NNN>_tests-<suite>[-<job>]/tests.jsonl` in the main checkout's `logs/` (every pytest run of the repo
+  through `pyproject.toml`'s `-p triforce.testlog`; the Rust suite a line per test program, `<package>
+  tests/cli.rs`): a line per test (id, outcome, setup / call / teardown
   seconds, worker) and a summary (suite, commit, branch, the job, wall seconds, counts, the load average at the
   start). `triforce test-times [--suite S] [--last N] [--json]` reads them together: the wall time run by run, each
   test's median and worst, the slowest, what grew. A test runs beside seven others: never a fixed port, a shared
@@ -995,10 +1003,10 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   - `triforce job golden --agent A --task T --timeout 10m [--subtask S] [-- racer options]`: a golden race
     (`zelda-headless.py --golden --power-on --clips on --act model --parallel 16`), at most `--timeout`, which is its
     estimate; running out of time is a result ("no golden path in 10 minutes", exit 0); its replays are archived.
-  - `triforce job build --agent A --task T` (`maturin develop --release`) and `triforce job test
-    python|rust|asm|all --agent A --task T [--build]` (`--build`: build, then test, as one entry): their own lane,
-    two at once on the machine, first come first served, never behind a training; nice 10 and `CARGO_BUILD_JOBS=4`.
-    Every build and every suite goes through them (`--timeout 60m` replaces `timeout 3600`).
+  - `triforce job build --agent A --task T` (`maturin develop --release`, then the module's stamp) and `triforce job
+    test python|rust|asm|all --agent A --task T [--build]` (`--build`: build, then test, as one entry): their own
+    lane, two at once on the machine, first come first served, never behind a training; nice 10 and
+    `CARGO_BUILD_JOBS=4`. Every build and every suite goes through them (`--timeout 60m` replaces `timeout 3600`).
   - `triforce job setup BRANCH [--from main]`: the worktree `../triforce-<branch>` with `roms` and `trajectories`
     linked (never `models`: a worktree's runs and pointers are its own), its venv and its build. `triforce job list
     [--calibration]`: what runs, what waits and in which order, what ended in the last hour; `--calibration`
@@ -1055,6 +1063,27 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   each route step over the runs that entered it in both arms, so a death counts up to its last room; "we are
   competing with speedrunners so time matters, and not walking back around to enemies matters"). They never redeem
   a worse rate: "it doesn't matter if we run faster and die quicker". Report them beside the rate for every arm.
+- **Read results with `triforce stats`, not a script of your own** (the owner, Nov 23: one standard set of
+  statistics for every agent's runs, in one place). Every chain, evaluation and training writes `<output>.stats.json`
+  (a run dir's `train.stats.json`) and registers it under its job (docs/architecture.md "Run statistics"):
+  `triforce stats list --agent A --since 24h`, `triforce stats show ID|PATH [--family F]`, and for an experiment
+  `triforce stats compare BASE ARM...` (paired by seed, in the order above: the rate, hearts, beams held, shots that
+  hit and kills from range, time to each step). An older output: `triforce stats ingest FILE --agent A --task T`
+  (a job). **Read its flags first**: a red flag (a step or family never played, a network that made no decision,
+  harvested states never drawn, runs short or ended in errors) voids the numbers until explained. A measure the
+  file lacks is added to `run_stats.py` for everyone, not computed on the side.
+- **An arm is "that run, except X", and the tool checks it** (the owner, Nov 23: two results were void because an
+  arm silently differed from its base). Every training, chain and evaluation records a manifest of everything it
+  consumed (`run.json` / `.meta.json` / the stats file: code and module, ROM, task with its `extends` chain, each
+  data set with its file count and content hash, every network with its checksum and whether it has a hit head,
+  arguments, seeds; docs/architecture.md "Manifests"). Start an experiment's arm with `triforce train ...
+  --same-recipe-as BASE_RUN --except KEY,...` (a chain: `eval-chain --same-team-as BASE.jsonl --except FAMILY`): it
+  refuses to start and prints every difference you did not name. Before reporting a comparison run `triforce
+  manifest diff BASE ARM` and put what it prints in the report. An experiment's task file is its family's file plus
+  the lines it changes (`extends: ../zol.yaml`), never a copy. `triforce job doctor [PATH]` says what is wrong with
+  a worktree (a stale module, missing data links, behind main; red when the MAIN checkout's tracked files are
+  edited). A job's **red flag** (in `triforce job list`, `history` and the GUI) means its numbers may not be what
+  they claim: explain it before using them.
 - **Every job is in the queue, shown with its progress** (the owner, Nov 13, Nov 18, Nov 23). The queue
   (`$XDG_STATE_HOME/triforce/queue.db`, else `~/.local/state/triforce/queue.db`; `triforce/jobqueue.py`) holds every
   job of every worktree: who (`Agent: A   Task: T   Sub-task: S`), the description, its state (`RUNNING regular 10m
@@ -1123,11 +1152,21 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   --specialist NAME --states ...`) whenever a family's rooms change; a trajectory that runs into another family's
   room crashes training. `--out` is the trajectories *root* (explore appends `<specialist>/<state>`; it refuses
   `--out <trajectories>/<specialist>`, prints each track it writes and exits 1 on an unsolved or mismatched state).
-  Check `run.json` `curriculum_tracks` (track names and trajectory.json times) lists the tracks you expect.
+  Every seed state of a task with the curriculum on has a track, or the task declares it in `curriculum.untracked`
+  (globs of state names): `triforce train` refuses otherwise and prints the declaration to add (round 40, the
+  owner: missing is an error, never "none"; `docs/architecture.md` "Missing is an error"). The same rule stops a run
+  whose start-state glob matches no file, a task drawing harvested states from an empty folder, a `--load` that names
+  nothing, a chain whose runs reach a family with no network, a `--checkpoint` that drops a team network's hit head
+  without `--headless KEY`, and a bare `eval-chain --harvest` (it takes a DIR).
 - `max_steps` sets how many episodes finish per iteration. A curriculum specialist whose failures are slow
   (fleeing, waiting) needs `max_steps` near its explored path length (Aquamentus: 2000 → 400 took it from 0% to 93%).
 - Continuing a trained model with `--stop-success 0.99` (`--train-args "--load <run dir> --stop-success 0.99"`)
   often fixes the weak room the 95% early stop left behind.
+- **After merging a main that has round 40's refusals, run `triforce job build` in the worktree before any tool.**
+  The tools refuse a module without a build stamp (`triforce/_native.build.json`, written by every building verb of
+  `triforce job`, `--detach` too) or one older than its sources. A chain that plays a bare policy in place of a team
+  network with a hit head (a continued or experimental checkpoint without its head) needs `--headless KEY` for that
+  network, or it is refused: two arms must differ only in the factor under test (round 40).
 - Training at a narrow low-hp range alone can collapse a model (round 5, r11); keep the full-health share.
 
 ## Running a round
