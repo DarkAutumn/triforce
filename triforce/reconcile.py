@@ -350,7 +350,8 @@ def table(report: dict) -> str:
     for area in report['areas']:
         if area['lacking']:
             lines += ['', f"Only in `{area['area']}` ({len(area['lacking'])}):"]
-            lines += [f"- `{item['path']}` {item['sha1'][:12]} {'(in backup)' if item['in_backup'] else '(NOT in backup)'}"
+            lines += [f"- `{item['path']}` {item['sha1'][:12]} "
+                      f"{'(in backup)' if item['in_backup'] else '(NOT in backup)'}"
                       for item in area['lacking'][:TABLE_LIMIT]]
             if len(area['lacking']) > TABLE_LIMIT:
                 lines.append(f"- ... {len(area['lacking']) - TABLE_LIMIT} more (the JSON report lists every one)")

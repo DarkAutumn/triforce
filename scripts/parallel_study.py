@@ -1,8 +1,8 @@
 """How many envs to train with: throughput and convergence against `--parallel`.
 
-    throughput: real `triforce.train` runs warm-started from each specialist's promoted model (CUDA, 4,096 steps
-                per update, seed 1), one at a time; settled steps/s = median of the per-iteration rate after the
-                first 5 iterations (as `scripts/train_bench.sh`).
+    throughput: real `triforce.train` runs warm-started from each specialist's run of the store's team (CUDA,
+                4,096 steps per update, seed 1), one at a time; settled steps/s = median of the per-iteration
+                rate after the first 5 iterations (as `scripts/train_bench.sh`).
     converge:   from-scratch runs until the start-state-balanced training success stays >= --target for
                 --patience iterations (`--stop-success`), or --max-iterations; records the steps and wall time
                 that took, per env count and seed.
@@ -29,7 +29,7 @@ import time
 from collections import defaultdict
 from pathlib import Path
 
-from triforce import jobs
+from triforce import jobs, paths, store
 
 ROOT = Path(__file__).resolve().parent.parent
 PYTHON = sys.executable
@@ -67,12 +67,12 @@ def run_throughput(out: Path, args) -> None:
     arms = [(specialist, parallel) for specialist in args.specialists for parallel in args.parallel]
     for index, (specialist, parallel) in enumerate(arms):
         jobs.progress(index, len(arms), 'arms')
-        promoted = (ROOT / 'models' / specialist / 'promoted').read_text().strip()
+        promoted = store.read_team(paths.CURRENT)['slots'][specialist]['run']      # FAMILY/RUN, a store run
         if (specialist, parallel, 1) in done:
             continue
         run = out / 'runs' / f'throughput-{specialist}-p{parallel}'
         train(run, specialist, parallel, 1,
-              ['--load', str(ROOT / 'models' / specialist / promoted), '--iterations', str(args.iterations)])
+              ['--load', promoted, '--iterations', str(args.iterations)])
         rates = progress_rates(run)[4:]     # rates[i] is iteration i + 2: skip the first 5 (train_bench.sh)
         row = {'specialist': specialist, 'parallel': parallel, 'seed': 1, 'iterations': args.iterations,
                'steps_per_second': statistics.median(rates), 'rates': len(rates)}

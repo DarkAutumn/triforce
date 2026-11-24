@@ -769,8 +769,8 @@ def _fields(args, verb: str, lane: str, kind: str, command: list, cwd: Path, nic
 
 def cmd_doctor(args) -> int:
     """``triforce job doctor [PATH]``: the checks every job start makes (``checkout_flags``, the module's stamp
-    included) for the checkout at PATH (default this one), each one's answer printed, then where each data kind
-    resolves for it (``data_lines``); exit 1 when one is red."""
+    included) for the checkout at PATH (default this one), each one's answer printed, then where the ROM and the
+    networks (``team_lines``) and each data kind (``data_lines``) resolve for it; exit 1 when one is red."""
     root = git_root(Path(args.path).resolve())
     if root is None:
         raise JobError(f"{args.path} is in no git checkout")
@@ -778,9 +778,34 @@ def cmd_doctor(args) -> int:
     print(f"{root}: {'clean' if not flags else f'{len(flags)} flag(s)'}")
     for entry in flags:
         print(f"  {'RED FLAG' if entry['level'] == 'red' else 'note'} {entry['code']}: {entry['text']}")
-    for line in data_lines(root):
+    for line in team_lines(root) + data_lines(root):
         print(f"  {line}")
     return 1 if any(entry['level'] == 'red' for entry in flags) else 0
+
+
+def team_lines(root: Path) -> list[str]:
+    """Where the ROM (``paths.rom_candidates``' rule) and the networks a tool plays without ``--models-dir`` or
+    ``--team`` (``registry.models_root``'s rule: ``$TRIFORCE_TEAM``, ``$TRIFORCE_MODELS_DIR``, the checkout's
+    ``models/``, the store's current team) resolve for the checkout ``root``."""
+    from . import paths  # pylint: disable=import-outside-toplevel
+    explicit = os.environ.get(paths.ROM_ENV, '').strip()
+    roms = [Path(explicit)] if explicit else [paths.shared_root() / paths.STORE_ROM, root / paths.CHECKOUT_ROM]
+    rom = next((path for path in roms if path.is_file()), None)
+    lines = [f"rom: {rom}" if rom else f"rom: missing: looked in {', '.join(map(str, roms))}"]
+    team, models = os.environ.get(TEAM_ENV, '').strip(), os.environ.get(MODELS_DIR_ENV, '').strip()
+    current = paths.current_team() if paths.store_exists() else None
+    if team:
+        lines.append(f"models: store team {team} (${TEAM_ENV})")
+    elif models:
+        lines.append(f"models: ${MODELS_DIR_ENV} {models} (the layout before the store)")
+    elif (root / 'models').exists():
+        lines.append(f"models: this checkout's folder {root / 'models'} (the layout before the store)")
+    elif current:
+        lines.append(f"models: store team {current} (current: {paths.teams_dir() / paths.CURRENT})")
+    else:
+        lines.append(f"models: missing: no {root / 'models'} and no current team in the store at "
+                     f"{paths.shared_root()}")
+    return lines
 
 
 def data_lines(root: Path) -> list[str]:

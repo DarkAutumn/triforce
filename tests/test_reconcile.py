@@ -1,5 +1,6 @@
 """The reconciliation of a checkout from before the store (``triforce.reconcile``): the comparison by content, the
 move aside with its refusals, and the way back.  Every root is the test's tmp_path."""
+# pylint: disable=redefined-outer-name
 
 import json
 import os
@@ -13,7 +14,7 @@ from .test_store import _checkpoint, _legacy_checkout, shared  # noqa: F401  pyl
 
 
 @pytest.fixture
-def checkout(shared, tmp_path, monkeypatch):  # pylint: disable=redefined-outer-name,unused-argument
+def checkout(shared, tmp_path, monkeypatch):  # pylint: disable=unused-argument
     """A checkout from before the store with every folder of ``reconcile.FOLDERS``, imported into the store, and an
     archive (``paths.BACKUP_DIR``) and hash cache of its own."""
     root = _legacy_checkout(tmp_path / 'checkout')
@@ -27,6 +28,8 @@ def checkout(shared, tmp_path, monkeypatch):  # pylint: disable=redefined-outer-
     lead.import_legacy(root, apply=True, manifests=None, out=lambda *_: None)
     monkeypatch.setattr(paths, 'BACKUP_DIR', tmp_path / 'backup')
     monkeypatch.setattr(paths, 'scratch', lambda *parts: tmp_path.joinpath('scratch', *parts))
+    monkeypatch.delenv('TRIFORCE_MODELS_DIR', raising=False)      # the suite's team view (tests/conftest.py)
+    monkeypatch.delenv('TRIFORCE_ROM', raising=False)
     return root
 
 
@@ -37,7 +40,7 @@ def _report(root, tmp_path):
     return report, path
 
 
-def test_a_checkout_just_imported_holds_nothing_the_store_lacks(checkout, tmp_path):  # pylint: disable=redefined-outer-name
+def test_a_checkout_just_imported_holds_nothing_the_store_lacks(checkout, tmp_path):
     report, _ = _report(checkout, tmp_path)
     areas = {area['area']: area for area in report['areas']}
     assert sorted(areas) == ['models', 'roms', 'target/demos', 'trajectories', 'trajectories.prev-r1',
@@ -50,7 +53,7 @@ def test_a_checkout_just_imported_holds_nothing_the_store_lacks(checkout, tmp_pa
     assert 'loop' in {link['state'] for link in lead.find_links(checkout / 'trajectories')}
 
 
-def test_what_only_the_checkout_holds_is_listed_with_its_backup(checkout, tmp_path):  # pylint: disable=redefined-outer-name
+def test_what_only_the_checkout_holds_is_listed_with_its_backup(checkout, tmp_path):
     (checkout / 'trajectories/zol/3_7cs_0/new.json').write_text('{"new": 1}')         # explored after the import
     (checkout / 'models/zol/r2/metrics.jsonl').write_text('{}\n{}\n')                  # still written in place
     _checkpoint(checkout / 'models/zol/r3/ckpt.pt', 'r3')                               # trained after the import
@@ -75,7 +78,7 @@ def test_what_only_the_checkout_holds_is_listed_with_its_backup(checkout, tmp_pa
     assert any('in no backup' in line for line in lines)
 
 
-def test_aside_moves_every_folder_and_back_puts_them_where_they_were(checkout, tmp_path):  # pylint: disable=redefined-outer-name
+def test_aside_moves_every_folder_and_back_puts_them_where_they_were(checkout, tmp_path):
     _, path = _report(checkout, tmp_path)
     into = tmp_path / 'checkout.aside'
     lines = []
@@ -85,6 +88,9 @@ def test_aside_moves_every_folder_and_back_puts_them_where_they_were(checkout, t
     assert reconcile.folders(checkout) == []
     assert (into / 'models/zol/r1/ckpt.pt').is_file() and (into / 'triforce/states/harvested/zol').is_dir()
     assert all('store snapshot' in line for line in job.data_lines(checkout))           # the checkout reads the store
+    assert job.team_lines(checkout) == [f"rom: {paths.shared_root() / 'rom/zelda.nes'}",
+                                        f"models: store team {lead.CURRENT_TEAM} (current: "
+                                        f"{paths.teams_dir() / 'current'})"]
     (checkout / 'trajectories').mkdir()                                                  # a place taken since
     assert reconcile.back(into, apply=True, out=lines.append) == 1
     (checkout / 'trajectories').rmdir()
@@ -93,7 +99,7 @@ def test_aside_moves_every_folder_and_back_puts_them_where_they_were(checkout, t
     assert len(reconcile.folders(checkout)) == 7
 
 
-def test_aside_refuses_a_report_older_than_the_folders_or_a_store_without_a_current_team(checkout, tmp_path):  # pylint: disable=redefined-outer-name
+def test_aside_refuses_a_report_older_than_the_folders_or_a_store_without_a_current_team(checkout, tmp_path):
     _, path = _report(checkout, tmp_path)
     later = time.time() + 60
     os.utime(checkout / 'target/demos/zol.npz', (later, later))

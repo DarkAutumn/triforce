@@ -1,6 +1,7 @@
 #!/bin/bash
-# Behaviour gate for emulator changes (plan step 18): evaluate every promoted specialist and run the six chain
-# segments of the route on the current build of triforce._native; compare two labels (before and after a change).
+# Behaviour gate for emulator changes (plan step 18): evaluate every specialist of the store's team ($TEAM, default
+# the current one) and run the six chain segments of the route on the current build of triforce._native; compare two
+# labels (before and after a change).
 #
 #   triforce job run --agent A --task T --subtask S --desc '...' --timeout 40m -- scripts/port_gate.sh LABEL [SEED]
 #
@@ -18,24 +19,28 @@ SEED=${2:-0}
 OUT=target/gate/$LABEL
 PY=.venv/bin/python
 RUNS=40
-export TRIFORCE_MODELS_DIR=$PWD/models
+TEAM=${TEAM:-$($PY -c 'from triforce import paths; print(paths.current_team() or "")')}
+[ -n "$TEAM" ] || { echo "port_gate: the store has no current team (set TEAM)" >&2; exit 1; }
 rm -rf "$OUT"
 mkdir -p "$OUT/eval" "$OUT/chains"
 
-# Every specialist with a promoted model.
-SPECIALISTS=$(for f in specialists/*.yaml; do s=$(basename "$f" .yaml); if [ -f "models/$s/promoted" ]; then echo "$s"; fi; done)
+# Every specialist with a slot of its own in the team (a family's default run).
+FAMILIES=$($PY -c 'import sys; from triforce import store
+print(" ".join(store.read_team(sys.argv[1])["slots"]))' "$TEAM")
+SPECIALISTS=$(for f in specialists/*.yaml; do s=$(basename "$f" .yaml)
+  if [[ " $FAMILIES " == *" $s "* ]]; then echo "$s"; fi; done)
 STEPS=$(( $(echo "$SPECIALISTS" | wc -w) + 6 ))
 DONE=0
 job_progress "$DONE" "$STEPS" steps
 for s in $SPECIALISTS; do
-  $PY -m triforce.evaluate --specialist "$s" --models-dir models --episodes-per-state 20 --parallel 16 \
+  $PY -m triforce.evaluate --specialist "$s" --team "$TEAM" --episodes-per-state 20 --parallel 16 \
     --threads 16 --seed "$SEED" --output "$OUT/eval/$s.json" > "$OUT/eval/$s.log" 2>&1
   DONE=$((DONE + 1)); job_progress "$DONE" "$STEPS" steps
 done
 
 chain() {
   local name=$1; shift
-  $PY -m triforce.cli eval-chain --runs "$RUNS" --parallel 20 --first-seed "$SEED" \
+  $PY -m triforce.cli eval-chain --team "$TEAM" --runs "$RUNS" --parallel 20 --first-seed "$SEED" \
     --output "$OUT/chains/$name.jsonl" "$@" > "$OUT/chains/$name.log" 2>&1
   DONE=$((DONE + 1)); job_progress "$DONE" "$STEPS" steps
 }

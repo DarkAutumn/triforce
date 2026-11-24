@@ -90,7 +90,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--attempts', type=int, default=golden.DEFAULT_ATTEMPTS, metavar='A',
                         help="with --golden: runs tried per segment before the path fails "
                              f"(default {golden.DEFAULT_ATTEMPTS})")
-    parser.add_argument('--models-dir', default=None, help="models root (default $TRIFORCE_MODELS_DIR or models/)")
+    parser.add_argument('--models-dir', default=None,
+                        help="models root (the layout before the store; default --team, else models/ while it exists, "
+                             "else the store's current team)")
     parser.add_argument('--team', default=None,
                         help="the store's team to play (NAME, current, NAME+SLOT=RUN...); default --models-dir, else "
                              "models/ while it exists, else the store's current team; with a store team the replays "
