@@ -768,7 +768,10 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 
 ## Versioning (the owner, Nov 11; the third number and model compatibility redefined Nov 23)
 
-- **One version, `MAJOR.MINOR.GEN.REV`, in the `VERSION` file** (now `2.0.0.14`: the engine plays `d3first`'s two
+- **One version, `MAJOR.MINOR.GEN.REV`, in the `VERSION` file** (now `2.0.0.15`: Manhandla's 3:0x4d and Dodongo's 2:0x0e are `bomb_weapon` rooms
+  (game.yaml): Link is never left without a bomb there, whatever the state of the room's walls (the owner, Nov 23;
+  round 24's "the need ends when the room's bomb walls are open" had given Manhandla's room no bomb since: Dungeon 3
+  39.2% -> 45.7% of 1000 runs paired, no network changed); 2.0.0.14: the engine plays `d3first`'s two
   whirlwinds, 0:0x0b out of Level 5 and 0:0x22 out of Level 6, as macros (routes.yaml `macros:`; the leg out of
   Dungeon 5 82.3% -> 89.3% of 1000 runs paired, round40.md "Engine macros"; no network changed); 2.0.0.13: `d3first` crosses 2:0x3e (the
   Moldorm left) and takes 9:0x56's key instead, moldorm `r39t-moldorm` through `promoted.d3first` and like-like

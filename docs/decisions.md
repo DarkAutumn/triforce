@@ -3666,3 +3666,28 @@ The lead turned the whirlwind macros on for `d3first` as a `REV` (no network cha
 plays as before), told the owner beforehand in the check-in file ("my plan unless you say no"), and landed it with
 the golden race and the 250 test. It is a change to how today's team plays that the owner had ruled on only for the
 fresh generation: his to overrule.
+
+## 2026-11-23 — 2.0.0.15: Manhandla and Dodongo are never fought without a bomb (the owner)
+
+The owner, watching Dungeon 3: "we always kill Manhandla with bombs [...] I don't ever want to fight them with a wood
+sword"; when Link runs out there he is to be handed a bomb, counted as cheated, as in Dodongo's room. He was not: the
+round 24 rule ("a room's bomb need ends when its bomb walls are open", decisions 2026-11-17 "A granted bomb opens the
+wall and does nothing else") read Manhandla's room 3:0x4d as a wall room, because Link comes into it through its own W
+bomb wall, already open. So the room's need was over before the fight began, and since round 24 no run was ever handed
+a bomb there: 0 cheated bombs in 638 visits of a 1000-run Dungeon 3 chain, 246 deaths. Dodongo's 2:0x0e has no bomb
+wall and was never affected.
+
+The rule now: game.yaml marks the two rooms `bomb_weapon: true` (`GameMap::bomb_weapon`). In a weapon room
+`cheats::bomb_need` is 1 whenever the bag is empty, whatever the walls' state, and `cheats::bomb_opens` is false, so
+the granted bomb is bound to no wall and BOMB is offered wherever the family's mode offers it. Every other
+`requires_bombs` room keeps the round 24 rule. Tests: `crates/env/tests/boss_bombs.rs` (both rooms on both routes:
+an empty bag is topped up on entering, three bombs laid in a row are each replaced and counted as cheated; the data
+names exactly these two rooms), the unit test `every_requires_bombs_room_but_the_weapon_rooms_has_something_to_open`,
+and one recorded legacy trace (`3_4dw_2`, which lays its last bomb at step 16) with its new hash.
+
+Measured on today's team, no network retrained (the owner: "fix and tests, no retrain"), Dungeon 3, 1000 runs paired
+by seed (`triforce stats compare`): 39.2% -> 45.7%, +6.5 ± 0.8 points; the runs are identical up to Manhandla's room.
+In the room: 638 visits both, deaths 246 -> 181, 307 bombs handed out in 122 visits, bombs used a visit 2.54 -> 3.02.
+Manhandla's network was trained without ever being topped up there (its training hands bombs through
+`ram_randomization`), so the fresh generation's will be the first to learn the room as the owner plays it. 181 deaths
+in 638 visits remain: the room is still the dungeon's largest single loss, with 3:0x69.
