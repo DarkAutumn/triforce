@@ -1637,4 +1637,67 @@ shield toward him) and is touched (`swing`); seed 13, frame 335: Link at ($9D, $
 ($A0, $62) facing S (`turned`). 3:0x59 at 8 bombs, seed 90 (`3_59n_1`), frame 159: Link at ($80, $73) lays a BOMB W
 with a Darknut at ($70, $6D) facing N beside him (`bomb`).
 
-(Proposals' numbers and the demonstrations below.)
+### The demonstrations
+
+`r40_darknut_fighter.py demos FILE --room R --bombs B [--hearts H] --per-state 50 --seed0 100000`: the fighter's
+decisions timed by a look-ahead of 3 decisions near a Darknut (a decision whose look-ahead is hit is replaced by the
+best unhit one), a backtracking search from the last safe decisions where the visit is still hit; a visit is kept
+only unhit and out by the right exit; a row per kept decision (masked decisions are not recorded: the way out waits
+for a shutter still opening, the fault 3:0x59's first build hit). Seeds 100000 and up (the measurements' 0-299 are
+not taught). Files in the worktree's `target/demos/` beside the store's two 3:0x69 files; all nine are listed in
+darknut@d3first's `demos:` (coefficient 0.05, unchanged).
+
+| file | room, bag, hearts | visits | kept | rows | sha256 (12) |
+|---|---|---:|---:|---:|---|
+| r40-darknut-5b-low.npz | 3:0x5b first pass, 0, 0.5-3.0 | 150 | 150 | 19,971 | fb08a3c6ffd6 |
+| r40-darknut-5b-full.npz | 3:0x5b first pass, 0, full | 150 | 150 | 19,922 | 68a481e91495 |
+| r40-darknut-59-b4.npz | 3:0x59 from N, 4 (none usable) | 150 | 146 (4 `no-damage`) | 56,595 | c06efd81475e |
+| r40-darknut-59-b8.npz | 3:0x59 from N, 8 | 150 | 148 (2 `no-damage`) | 49,285 | bbb97e9a3fb4 |
+| r40-darknut-garden-b0.npz | Olive Garden from E, 0 | 150 | 148 | 126,726 | 0beb7c464227 |
+| r40-darknut-garden-b8.npz, -p2.npz | Olive Garden from E, 8 (the first piece stopped at a masked push after 57) | 57 + 93 | 56 + 93 | 29,328 + 51,830 | 1af28b7012a4, 0788ae628b5c |
+
+376,088 rows in all with 3:0x69's 22,431: the Garden at 0 bombs alone is a third. `demos.load_demos` pools rows, so
+3:0x69's line goes from all of the clone loss to 6% of it at the same coefficient; per-file weights do not exist (the
+lead's call whether 3:0x69's line wants its own share).
+
+### The two proposals measured (today's network's replays, 300 visits a case)
+
+`scripts/experiments/r40_darknut_proposals.py` over the network evaluations' replays (the same predicates as the Rust,
+frame by frame): a chasing frame is one where `chasing` holds; a hit follows it if Link's hearts drop in the next 32
+frames; a bomb's catch is read on the frame it appears, its outcome from the Darknuts' hit points after the blast.
+
+| case | chasing frames a visit (fighter) | hit within 32 after a chasing frame / after any other | hits with a chasing frame in the 32 before | bombs laid | catch >= 2 read: hurt 2+ | catch < 2 read: hurt 2+ | Darknuts hurt a bomb |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Olive Garden, 0 | 347 (118) | 5.7% / 3.0% | 408 of 938 | 0 | - | - | - |
+| Olive Garden, 8 | 255 (92) | 3.3% / 1.9% | 181 of 570 | 2,411 | 259 of 490 (53%) | 176 of 1,921 (9%) | 0.88 |
+| 3:0x59, 4 | 106 (52) | 3.0% / 2.9% | 81 of 419 | 339 | 24 of 42 | 21 of 297 | 0.82 |
+| 3:0x59, 8 | 59 (36) | 1.7% / 1.9% | 26 of 244 | 1,255 | 117 of 203 (58%) | 173 of 1,052 (16%) | 0.99 |
+
+**(a) The chase.** The network chases three times as long as the fighter in the Garden and twice as long in 3:0x59.
+In the Garden a hit follows a chasing frame 1.7-1.9 times as often as any other frame and 43% of its hits at 0 bombs
+have one before them; in 3:0x59 chasing is not riskier than the rest (1.0 and 0.9 times). At 0.002 a frame the cost
+is 0.69 a Garden visit at 0 bombs, 0.51 at 8, 0.12-0.21 in 3:0x59: small beside a Darknut kill's reward. Only a
+training measures what the cost does; it is not measured here.
+
+**(b) Bombs for two or more**, measured with the mask (`items.bomb_catch: 2`, `experiments/r40-darknut/<room>-b8-catch2.yaml`)
+on today's network without training, 150 visits paired by seed against the same entries without it:
+
+| case | arm | out | hits a visit | bombs a visit | Darknuts hurt a bomb | hurt 2+ / 1 / 0 |
+|---|---|---:|---:|---:|---:|---|
+| Olive Garden, 8 | base (997) | 82.0% | 1.57 | 7.92 | 0.90 | |
+| | mask (1080) | 87.3% (+5.3 ± 3.2, within noise) | 1.41 (-0.16 ± 0.12) | 4.84 | 1.42-1.47 | 358 / 261 / 109 of 728 |
+| 3:0x59, 8 | base (1079) | 94.0% | 0.31 | 4.13 | 0.92 | |
+| | mask (1079) | 92.7% (-1.3 ± 2.7, within noise) | 0.36 | 2.53 | 1.40-1.43 | 167 / 148 / 69 of 384 |
+
+(`triforce stats compare`; the mask arm's Garden evaluation ran at 61a271f5, its base at 54be4867: `manifest diff`
+shows the code commit, the carrier merge, the demos list and the key; neither room's objective changed.) The mask
+cuts the bombs by 40%, a bomb hurts 1.6 times as many Darknuts, and neither room's rate or hits moves beyond
+noise. 70 of the Garden arm's 728 bombs read below 2 on the frame they appear: the Darknuts moved in the frames
+between the decision the mask read and the bomb. The reward key (`reward.bomb_catch_min`) needs a training to measure.
+
+**Recommendation.** Switch on (b)'s mask for darknut@d3first's training (`items.bomb_catch: 2`): no loss measured
+on today's network, 40% fewer bombs and the owner's "2+ with one bomb" by construction; the single-bomb cases stay
+open (`bomb_catch_in`: a target that wants bombs, a room that needs one, the 10th kill's drop, a boss). Keep (a)
+off for the first training: the demonstrations already show the shadowing that replaces the chase, and the Garden is
+the only room where chasing is measured to cost hits; switch it on (0.002) if the trained network still chases
+there.
