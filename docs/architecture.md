@@ -1127,7 +1127,27 @@ in columns 1, 6 and 8 at 41%; a Stalfos or Gibdo in slot 1 (the room item's carr
   magic sword); the dropped bombs are taken as under a floor (`Objective::bag_drops`: once no fight, the only
   targets while reachable). When the kill is made the cycle moves on (with a drop or without: a Red Darknut's
   table drop is a 41% draw), the window closes and the room is a plain crossing; a Zol split by the sword and its
-  child Gels move nothing, a Gel does. 3:0x69's two steps opt out (its line, no hit).
+  child Gels move nothing, a Gel does. 3:0x69's two steps opt out (its line, no hit). **Dungeon rooms only, on
+  purpose**: the overworld's carriers are group 2's Blue Octoroks, Blue Moblins and Blue Lynels; as targets they
+  would steer Link into fights the route never asks for, and before Dungeon 3 every such kill moves the drop cycle
+  off the 0 that 3:0x5b's first Darknut needs (the owner: no kill before 0x5b).
+- **Link's own bombs** (round 40, Carrier40b): every "is the bag full" test of the route's rules counts the bag
+  less the cheated bombs in it (`CheatLedger::outstanding`, told to `GameCompletion::set_cheated_bombs` before every
+  objective by the specialist env and the chain; `Objective::own_bombs`): the floor's decision on entering and its
+  `{if_bombs_below: max}`, the carrier window (`bomb_windows::carrier_window_possible`), the drops wanted and made
+  targets (`env::objective`), the critic's `penalty-left-drop`. Before, a cheated wall bomb in a bag of 7 read full
+  and closed the carrier window. The observation's `bombs` still reads the bag; a tool without a ledger (the
+  bindings' `observe`, replays) counts the bag as Link's own.
+- **The last pass's clear** (round 40, Carrier40b; routes.yaml `bomb_rules: {clear_wall_rooms: [3:0x5b]}` on
+  `d3first`; the owner's bomb plan: "We should leave 0x5b with 8 bombs if all goes well, hit manhandla with 7 due to
+  the 0x4c wall"): on a step that leaves such a room through its own bomb wall the room is cleared whatever Link
+  holds (`GameCompletion::clears_wall_room`: FIGHT while a monster lives) and the floor is judged on his own bombs
+  at every decision, not on entering. With a full bag of his own and the wall intact the wall comes first
+  (`GameCompletion::wall_first`): the room's bombs appear only once it is cleared, are no target at the maximum,
+  and one walked over then is lost (asm:Item_TryTake takes it). So in with 8: the wall, the fight, the bombs, out
+  with 8; in with 4: the fight, the bombs, the wall, out with 7; in with 0: the fight (no bomb in the bag), the
+  bombs, the wall by one of them, out with 3. Before (2.0.0.6's floor judged on entering) a full bag crossed the
+  room, left its four and came out with 7. `d2first` names no such room.
 
 ### Route goals (`crates/zelda/src/goals.rs`, `run_stats.py`; round 40)
 

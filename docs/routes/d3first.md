@@ -276,6 +276,13 @@ under its name switches them on there):
   `{level: 7, room: '0x1b', below: 2}` (the owner: "you have the ability to skip that fight for bombs if it kills
   too many runs"); measured both ways in round37.md (`d7` 12.6% with the floor, 12.7% crossing: the runs bring 0.21
   bombs, so nearly every visit fights either way) and left commented under `bomb_rules` for the lead.
+- `clear_wall_rooms: [3:0x5b]` (round 40, the fresh generation; the owner's bomb plan, decisions 2026-11-23: "We
+  should leave 0x5b with 8 bombs if all goes well, hit manhandla with 7 due to the 0x4c wall"). On the last pass (W
+  to E, through the room's own bomb wall) the room is always cleared, and the floor above is judged on Link's own
+  bombs at every decision instead of on entering. With a full bag the wall comes first, then the fight and the
+  room's four (in with 8, out with 8); with fewer the fight, the bombs, the wall (in with 4, out with 7). Every bag
+  test of these rules counts Link's own bombs, never a cheated wall bomb in the bag (docs/architecture.md "Link's own
+  bombs").
 - The 10th kill: every mode but `never` offers BOMB when the next kill is the 10th damage-free one (`$50` = 9; its
   bomb kill arms a forced drop of four), in a crossing, in 3:0x5b and on the overworld, below any reserve, as before
   (`never` is boss-gleeok's: only the sword hurts Gleeok; the `never` steps 0:0x07 and the state builders'). A
@@ -291,7 +298,7 @@ fewer. **Wall**: a crossing whose exit is a bomb wall (one bomb). **Owner's**: n
 
 | Level | Clear | Clear < 8 | Clear + wall | Wall | Owner's | Cross |
 |---|---|---|---|---|---|---|
-| 3 | 0x6b S→N (8); 0x4b S→W (10); 0x59 N→S (13); 0x4d W→N (22) | 0x4a E→W (11) | — | 0x4c S→E (21) | 0x5b S→N (9); 0x5b W→E (19, < 8, wall) | 0x7c S→W (6); 0x7b E→N (7); 0x49 E→S (12); 0x69 N→cave (14); 0x69 cave→N (16); 0x59 S→E (17); 0x5a W→E (18); 0x5c W→N (20); 0x3d S→triforce (23) |
+| 3 | 0x6b S→N (8); 0x4b S→W (10); 0x59 N→S (13); 0x4d W→N (22) | 0x4a E→W (11) | — | 0x4c S→E (21) | 0x5b S→N (9); 0x5b W→E (19, < 8, wall; round 40: always cleared, the wall first at 8, `clear_wall_rooms`) | 0x7c S→W (6); 0x7b E→N (7); 0x49 E→S (12); 0x69 N→cave (14); 0x69 cave→N (16); 0x59 S→E (17); 0x5a W→E (18); 0x5c W→N (20); 0x3d S→triforce (23) |
 | 4 | 0x31 W→E (37); 0x32 W→cave (38); 0x12 N→E (50); 0x13 W→N (51) | — | — | 0x21 S→N (42); 0x21 W→N (46); 0x11 S→N (47) | — | 0x71 S→N (31); 0x61 S→N (32); 0x51 S→W (33); 0x50 E→N (34); 0x40 S→N (35); 0x30 S→E (36); 0x32 cave→W (40); 0x31 E→N (41); 0x31 E→W (43); 0x30 E→N (44); 0x20 S→E (45); 0x01 S→E (48); 0x02 W→S (49); 0x03 S→triforce (52) |
 | 1 | 0x23 S→W (68); 0x44 W→E (75); 0x35 S→E (77) | — | 0x53 S→N (65) | — | — | 0x73 S→S (61); 0x73 S→N (63); 0x63 S→N (64); 0x43 S→N (66); 0x33 S→N (67); 0x22 E→cave (69); 0x22 cave→E (71); 0x23 W→S (72); 0x33 N→S (73); 0x43 N→E (74); 0x45 W→N (76); 0x36 W→triforce (78) |
 | 2 | 0x7e W→N (96); 0x4e S→N (99); 0x2e S→N (101); 0x0e S→W (103) | 0x1e S→N (102) | — | — | — | 0x7d S→E (95); 0x6e S→N (97); 0x5e S→N (98: crossed since round 37, the owner); 0x3e S→N (100: crossed since round 39, the owner); 0x0d E→triforce (104) |

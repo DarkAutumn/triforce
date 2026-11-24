@@ -627,13 +627,24 @@ d3first:
 # Round 40 (the fresh generation, 2.0.1.0; decisions 2026-11-23 "The fresh generation's Dungeon 3", backlog "A cheated
 # wall bomb appears only when the wall is the objective"; round40.md "Carriers, the wall's grant and the goals"):
 # `carrier_targets: true`: in a dungeon room the route crosses (its objective no fight, no treasure), every monster
-# the observation's `bomb_carrier` names (its death may drop bombs now: WorldKillCycle at 0, 5 or 7, the bag not full,
-# no forced drop due) is a target beside the exit, and its dropped bombs are taken as under the floor; once none is
-# left (the cycle moved on) the room is a plain crossing.  A step opts out with `carriers: false`.  3:0x5b's first
-# pass: at cycle 0 kill one Darknut, take its bombs (41% drop), leave; at 1 cross.
+# the observation's `bomb_carrier` names (its death may drop bombs now: WorldKillCycle at 0, 5 or 7, Link's own bombs
+# below the bag's size, no forced drop due) is a target beside the exit, and its dropped bombs are taken as under the
+# floor; once none is left (the cycle moved on) the room is a plain crossing.  A step opts out with `carriers: false`.
+# 3:0x5b's first pass: at cycle 0 kill one Darknut, take its bombs (41% drop), leave; at 1 cross.  Dungeon rooms
+# only, on purpose: on the overworld the carriers (group 2's Blue Octoroks, Blue Moblins, Blue Lynels) would steer
+# Link into fights the route never asks for, and before Dungeon 3 every such kill moves the drop cycle off the 0
+# that 3:0x5b's first Darknut needs (the owner: no kill before 0x5b).
 # `wall_grant: objective` (default `room`): a room's cheated wall bomb is given only while the objective's target is
 # the bomb wall or rock wall the route leaves through (not a fight, a treasure, a drop, another exit), and taken back
 # if the objective turns away before it is laid; the `bomb_weapon` rooms (2:0x0e, 3:0x4d) keep theirs for the fight.
+# Every "is the bag full" test of the rules (the floor, the carriers, the drops wanted) counts Link's own bombs, never
+# a cheated one in the bag.
+# `clear_wall_rooms: [{level, room}, ...]` (the owner's bomb plan, Nov 23: "We should leave 0x5b with 8 bombs if all
+# goes well, hit manhandla with 7 due to the 0x4c wall"): on a step leaving the room through its own bomb wall the
+# room is always cleared, and the floor is judged again whenever the bag changes in the room (not once on entering):
+# with a full bag of his own Link bombs the wall first (the room's bombs appear only once it is cleared, and walked
+# over at the maximum they are lost), then clears the room and its bombs fill the bag again.  3:0x5b's last pass
+# (W -> E): in with 8, the wall, the fight, the bombs, out with 8; in with 4, the fight, the bombs, the wall, out with 7.
 bomb_rules:
   d3first:
     fights_only: true
@@ -641,6 +652,7 @@ bomb_rules:
     treasure_below: 8
     carrier_targets: true
     wall_grant: objective
+    clear_wall_rooms: [{level: 3, room: '0x5b'}]
     # 7:0x1b both ways (round 37, d7 from 7_79s_0, 1000 runs, seeds 0-999; runs bring 0.21 bombs, so nearly every
     # visit is a fight either way): the blanket floor (as landed) 12.6% to the triforce, 701 of 733 entering 0x1b
     # lost per 1000, hearts 3.59 in, 1.30 out, 4.16 bombs out of it; with the line below 12.7%, 685, 3.59 / 1.29, 3.99;

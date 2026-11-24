@@ -18,6 +18,9 @@ step takes its treasure while Link holds fewer than 8 (``bomb_rules: treasure_be
 the route leaves through costs one, cheated when the bag is empty; the fights that use bombs as a weapon (the weapon
 rooms, a step's ``bomb_reserve: 0``) are listed with what Link brings and spend nothing here (what they spend is play).
 3:0x5b's first pass adds the first Red Darknut's drop where it falls (the cycle at 0: 41%, asm:Drop_GroupRates).
+A room of ``bomb_rules: clear_wall_rooms`` entered on its wall step with a full bag bombs the wall first and then
+takes its four (round 40: 3:0x5b's last pass in with 8, out with 8); the last table puts that case beside the run with
+no drop and beside 2.0.0.6's floor judged on entering (in with 8 the last pass crossed and left its four).
 
 ``check``/``patch`` read each state's keys (``$66E`` asm:InvKeys) and the kill counters (``$52A`` WorldKillCycle,
 ``$50`` HelpDropCount, ``$627`` WorldKillCount): a state at step N holds the count after step N - 1, and every state
@@ -106,10 +109,23 @@ WEAPON_FIGHTS = {(3, 0x59, 'N'): "0x59's five Darknuts (reserve 4)", (3, 0x4d, '
                  (7, 0x2a, 'W'): 'Aquamentus'}
 
 
-def bomb_events(steps, rooms, raw, darknut_drop=False, spend=False):
+def clear_wall_rooms():
+    """routes.yaml's ``bomb_rules: {clear_wall_rooms}`` of the route, as (level, room, in_cave) (round 40, Carrier40b)."""
+    import yaml  # pylint: disable=import-outside-toplevel
+    from triforce.paths import ROOT  # pylint: disable=import-outside-toplevel
+    with open(os.path.join(ROOT, 'triforce', 'routes.yaml'), encoding='utf-8') as f:
+        rules = (yaml.safe_load(f).get('bomb_rules') or {}).get(ROUTE) or {}
+    return {(r['level'], int(str(r['room']), 16), bool(r.get('in_cave'))) for r in rules.get('clear_wall_rooms') or ()}
+
+
+def bomb_events(steps, rooms, raw, darknut_drop=False, spend=False, clear=None):
     """[(index, room, what, bombs after, cheated so far, reserve)] on a run with no drop (`darknut_drop`: 3:0x5b's
     first Darknut drops its four). The fights that throw bombs (`WEAPON_FIGHTS`) spend nothing, or with `spend` every
-    bomb above their reserve (a weapon room, game.yaml `bomb_weapon`, whatever the reserve): the two bounds."""
+    bomb above their reserve (a weapon room, game.yaml `bomb_weapon`, whatever the reserve): the two bounds. `clear`:
+    the rooms the route clears on the step through their own bomb wall (``clear_wall_rooms``, the route's when None):
+    with a full bag the wall first, then the room's bombs (round 40, the owner's bomb plan: 3:0x5b's last pass in
+    with 8, out with 8); elsewhere, and before round 40 (an empty set), the bombs below 8, then the wall."""
+    clear = clear_wall_rooms() if clear is None else clear
     count, cheated, taken, opened, out = 0, 0, set(), set(), []
     reserve = 0
     for s in steps:
@@ -127,15 +143,22 @@ def bomb_events(steps, rooms, raw, darknut_drop=False, spend=False):
             what.append(f"{fight}: brought {count}" + (f", spends {max(count - keep, 0)}" if spend else ''))
             if spend:
                 count = min(count, keep)
-        if room['treasure'] == 'bombs' and takes_treasure(s) and at not in taken and count < BAG:
-            taken.add(at)
-            count = min(BAG, count + 4)
-            what.append('its 4 bombs')
         door = room['exits'].get(s['exit'])
         wall = bool(door and door['bomb_wall'])
         rock = s['exit'] == 'cave' and s['level'] == 0 and not s['in_cave'] and (
             (base.get('entrance') or {}).get('how') == 'bomb' or base.get('bomb_secret'))
-        if wall or rock:
+
+        def take():
+            nonlocal count
+            if room['treasure'] == 'bombs' and takes_treasure(s) and at not in taken and count < BAG:
+                taken.add(at)
+                count = min(BAG, count + 4)
+                what.append('its 4 bombs')
+
+        def open_wall():
+            nonlocal count, cheated
+            if not (wall or rock):
+                return
             ident = frozenset({(at, s['exit'])} | ({(tuple(door['to']), OPPOSITE[s['exit']])} if wall else set()))
             if ident not in opened:
                 opened.add(ident)
@@ -145,6 +168,14 @@ def bomb_events(steps, rooms, raw, darknut_drop=False, spend=False):
                 else:
                     count -= 1
                     what.append(f"{s['exit']} {'wall' if wall else 'rock wall'}")
+
+        if wall and at in clear and count >= BAG:
+            what.append('wall first')
+            open_wall()
+            take()
+        else:
+            take()
+            open_wall()
         if what:
             out.append((s['index'], name(*at), '; '.join(what), count, cheated, reserve))
     return out
@@ -197,6 +228,21 @@ def show_ledger():
         print('| Step | Room | Event | Bombs after | Cheated | Reserve |\n|---:|---|---|---:|---:|---:|')
         for i, room, what, count, cheated, reserve in bomb_events(steps, rooms, raw, darknut):
             print(f"| {i} | {room} | {what} | {count} | {cheated} | {reserve} |")
+    # Round 40 (Carrier40b): the cases side by side, bombs after each step with a bomb event (cheated so far): the
+    # wall-first case is the route's `clear_wall_rooms` (3:0x5b's last pass in with 8: the wall, then its four);
+    # "the floor on entering" is 2.0.0.6's rule (in with 8 the last pass crossed, its four left).
+    cases = {'no drop': bomb_events(steps, rooms, raw, False),
+             "the first Darknut's drop, the wall first": bomb_events(steps, rooms, raw, True),
+             "the first Darknut's drop, the floor on entering": bomb_events(steps, rooms, raw, True, clear=set())}
+    cells = {case: {i: f"{count} ({cheated})" for i, _, _, count, cheated, _ in events} for case, events in cases.items()}
+    named = {i: room for events in cases.values() for i, room, *_ in events}
+    print('\n## Bombs after each step, by case (cheated so far)\n')
+    print('| Step | Room | ' + ' | '.join(cases) + ' |\n|---:|---|' + '---:|' * len(cases))
+    last = dict.fromkeys(cases, '0 (0)')
+    for i in sorted(named):
+        for case in cases:
+            last[case] = cells[case].get(i, last[case])
+        print(f"| {i} | {named[i]} | " + ' | '.join(last[case] for case in cases) + ' |')
     return after, mismatch
 
 

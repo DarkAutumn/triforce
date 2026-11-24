@@ -14,7 +14,8 @@
 //! SETUP (RAM writes): Link's hearts are filled before every action (the walk proves the way, not the fights); in a
 //! room whose objective is a fight the monsters are removed every action (object slots 1-11 but the kept types), so
 //! the fights are skipped and nothing dies: every other room keeps its monsters alive and the walk kills nothing (it
-//! never swings the sword). Walker aid (controller input): a cave mouth is lined up a frame at a time.
+//! never swings the sword), and a crossing's bomb carriers are left alive: the walk aims at the exit alone. Walker
+//! aid (controller input): a cave mouth is lined up a frame at a time.
 #![cfg(feature = "zcore")]
 
 mod common;
@@ -24,10 +25,12 @@ use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use zelda::cheats::CheatLedger;
+use zelda::cheats::{CheatItem, CheatLedger};
 use zelda::clips::skip_available;
 use zelda::executor::direction_buttons;
-use zelda::objectives::{GameCompletion, Objective, ObjectiveKind, exit_is_correct, wraps_into_wrong_exits};
+use zelda::objectives::{
+    GameCompletion, Objective, ObjectiveKind, Role, exit_is_correct, route_bomb_targets, wraps_into_wrong_exits,
+};
 use zelda::room::Target;
 use zelda::{Action, ActionKind, Direction, GameMap, GameView, LoadOptions, MapLocation, Session, Var};
 
@@ -201,11 +204,26 @@ impl Walk {
         self.s.set_vetoed_wraps(&wraps);
     }
 
+    /// The objective of `state` as the env makes it (round 40, Carrier40b, after `r40-gen` met `r40-carrier`): the
+    /// route's bag tests told the cheated bombs in the bag, and the wall's cheated bomb following the objective
+    /// (`wall_grant: objective`, `CheatLedger::follow_objective`; the env's `wall_is_next` without its drops, which
+    /// the walk never takes). Without it the walk's ledger never handed a wall its bomb.
+    fn objective(&mut self, prev: Option<&GameView>, state: &GameView) -> Objective {
+        self.gc.set_cheated_bombs(self.ledger.outstanding(CheatItem::Bombs));
+        let objective = self.gc.objectives(prev, state);
+        let map = self.s.game_map().clone();
+        let wall_next = !route_bomb_targets(&map, state, &objective).is_empty()
+            && objective.labels.iter().any(|(_, role)| matches!(role, Role::BombWall { .. } | Role::Cave(_)));
+        self.ledger.follow_objective(&mut self.s, &self.gc, wall_next);
+        objective
+    }
+
     /// Plays the route's objective until `done`, judging every room change; the visits in order.
     fn run(&mut self, done: impl Fn(&S) -> bool, limit: usize) -> Vec<Visit> {
         let map = self.s.game_map().clone();
         let mut prev: Option<Arc<GameView>> = None;
-        let mut objective = self.gc.objectives(None, self.s.state());
+        let start = self.s.state().clone();
+        let mut objective = self.objective(None, &start);
         let mut visits = vec![self.visit()];
         let mut last = None;
         let mut still = 0u32;
@@ -214,7 +232,7 @@ impl Walk {
             let state = self.s.state().clone();
             let before = objective.clone();
             let entered = prev.as_ref().is_some_and(|p| p.full_location() != state.full_location());
-            objective = self.gc.objectives(prev.as_deref(), &state);
+            objective = self.objective(prev.as_deref(), &state);
             if entered {
                 let p = prev.as_ref().unwrap();
                 // The triforce's warp out of the dungeon is the step's own end, not an exit.
@@ -299,7 +317,15 @@ fn next_action(s: &S, objective: &Objective, nudge: u32) -> Action {
     if !matches!(state.mode(), 5 | 9 | 11) || state.link.status != 0 {
         return wait;
     }
-    let targets: Vec<Target> = objective.targets.iter().copied().collect();
+    // The walk kills nothing: a crossing's bomb carriers (the route's `carrier_targets`, `Objective::carriers`) stay
+    // alive and the exit is its way.
+    let carriers: Vec<Target> = objective
+        .labels
+        .iter()
+        .filter(|(_, role)| objective.kind == ObjectiveKind::Move && matches!(role, Role::Monster { .. }))
+        .map(|a| a.0)
+        .collect();
+    let targets: Vec<Target> = objective.targets.iter().copied().filter(|t| !carriers.contains(t)).collect();
     let room = state.room();
     // A locked door is a way through while Link holds a key in a dungeon, as the objective's own search counts it.
     let locked: Vec<Direction> = if state.keys() > 0 && state.level() > 0 && !state.full_location().in_cave {

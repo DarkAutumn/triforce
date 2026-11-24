@@ -267,6 +267,10 @@ pub struct Objective {
     /// maximum are shaping targets for every family and, once this is no fight, the targets while Link can reach
     /// them (`env::objective`).
     pub bag_drops: bool,
+    /// Link's own bombs in the state the objective was made for (round 40: the bag less the cheated bombs in it,
+    /// `GameCompletion::own_bombs`): what every "is the bag full" test of the route's rules reads (`env::objective`,
+    /// the observation's `bomb_carrier`, the critic's drops left), so a cheated wall bomb never fills the bag.
+    pub own_bombs: i32,
     /// What each target is (round 40, a replay's TARGETS): every tile or direction of `targets` and the route's
     /// `pbrs_targets` with its [`Role`], an entity's tiles each under the same role. No observation or reward reads it.
     pub labels: Vec<Aim>,
@@ -611,9 +615,13 @@ pub struct GameCompletion {
     bomb_rules: BombRules,
     /// The route's `macros:` (round 40; none for a route without them).
     macros: Macros,
-    /// The bombs Link held on entering his room (or at the episode's start): the route's floor for a room's bombs is
+    /// Link's own bombs on entering his room (or at the episode's start): the route's floor for a room's bombs is
     /// judged by them ([`GameCompletion::step_treasure`]).
     entry_bombs: i32,
+    /// The cheated bombs in Link's bag (round 40: the cheat ledger's outstanding grants, `crate::cheats::CheatLedger`,
+    /// told before every objective by the env that keeps it: [`GameCompletion::set_cheated_bombs`]): every "is the bag
+    /// full" test of the route's rules counts his own bombs only ([`GameCompletion::own_bombs`]).
+    cheated_bombs: i32,
     /// Remembered room treasure per visited room (`RoomMemory.item`).
     rooms: HashMap<MapLocation, Option<String>>,
     /// The last map objective, keyed by its route key and the room's shape then: the intact bomb walls' direction
@@ -707,6 +715,7 @@ impl GameCompletion {
             bomb_rules: map.bomb_rules.get(route).cloned().unwrap_or_default(),
             macros: map.macros.get(route).cloned().unwrap_or_default(),
             entry_bombs: 0,
+            cheated_bombs: 0,
             rooms: HashMap::new(),
             last_route: None,
             collected_key_rooms: BTreeSet::new(),
@@ -951,14 +960,18 @@ impl GameCompletion {
     /// The treasure lying in the room is wanted below the maximum whatever he came in with (5:0x65's in the open, a
     /// crossing's room cleared anyway).  With N or more and no treasure lying there he crosses (`skip`): a bomb he
     /// spends in the room (3:0x5b's E wall) turns no crossing into a fight beside the opened wall (round 23's
-    /// trouble with a live floor, decisions 2026-11-14).
+    /// trouble with a live floor, decisions 2026-11-14). On a step that clears its room on the way through its own
+    /// bomb wall ([`GameCompletion::clears_wall_room`], round 40) the floor is judged on the bag as it is now, not as
+    /// it came in: the decision is made again whenever the bag changes in the room. Bombs are always Link's own
+    /// ([`GameCompletion::own_bombs`]).
     fn step_treasure(&self, location: MapLocation, state: &GameView) -> Option<TreasureRule> {
         let step = self.current_step(location)?;
         let floor = self.bomb_rules.treasure_below_at(location);
         let bombs = self.map.get(location).is_some_and(|r| r.treasure.as_deref() == Some("bombs"));
+        let judged = if self.clears_wall_room(location) { self.own_bombs(state) } else { self.entry_bombs };
         Some(match (step.treasure, floor) {
             (TreasureRule::Take | TreasureRule::IfBombsBelow(_), Some(n)) if bombs => {
-                if self.entry_bombs < i32::from(n) || state.treasure().is_some() {
+                if judged < i32::from(n) || state.treasure().is_some() {
                     TreasureRule::IfBombsBelow(u8::try_from(state.bomb_max()).unwrap_or(u8::MAX))
                 } else {
                     TreasureRule::Skip
@@ -966,6 +979,43 @@ impl GameCompletion {
             }
             (rule, _) => rule,
         })
+    }
+
+    /// The current step clears `location` on its way out through one of the room's own bomb walls (round 40, the
+    /// route's `bomb_rules: {clear_wall_rooms}`: 3:0x5b's last pass W -> E on `d3first`): the room is fought whatever
+    /// Link holds ([`GameCompletion::dungeon_room_objective`]) and its floor judged on the bag as it is
+    /// ([`GameCompletion::step_treasure`]). With a full bag the wall comes first ([`GameCompletion::wall_first`]), then
+    /// the fight, and the room's bombs fill the bag again: in with 8, out with 8; in with 4, the bombs, the wall, out
+    /// with 7.
+    fn clears_wall_room(&self, location: MapLocation) -> bool {
+        self.bomb_rules.clear_wall_rooms.contains(&location)
+            && self
+                .current_step(location)
+                .is_some_and(|step| self.map.get(location).is_some_and(|r| r.bomb_walls.contains(&step.exit)))
+    }
+
+    /// On a step that clears its room ([`GameCompletion::clears_wall_room`]) Link's own bombs fill the bag and the
+    /// wall the step leaves through is still intact: the wall is bombed before the fight, so that the room's bombs,
+    /// which appear when it is cleared, are a pickup he can make (none is a target at the maximum, and one walked over
+    /// at the maximum is lost: asm:Item_TryTake takes it and the bag stays full).
+    fn wall_first(&self, state: &GameView) -> bool {
+        let here = state.full_location();
+        self.clears_wall_room(here)
+            && self.own_bombs(state) >= state.bomb_max()
+            && self.current_step(here).and_then(|s| Direction::from_exit(&s.exit)).is_some_and(|d| {
+                state.bomb_walls().iter().any(|w| w.wall_direction == d)
+            })
+    }
+
+    /// The cheated bombs in Link's bag now (the cheat ledger's outstanding grants, room's and route's), told by the
+    /// env before each objective: the route's bag tests count [`GameCompletion::own_bombs`].
+    pub fn set_cheated_bombs(&mut self, bombs: i32) {
+        self.cheated_bombs = bombs;
+    }
+
+    /// Link's own bombs in `state`: the bag less the cheated bombs ([`GameCompletion::set_cheated_bombs`]).
+    pub fn own_bombs(&self, state: &GameView) -> i32 {
+        (state.bombs() - self.cheated_bombs).max(0)
     }
 
     /// The room behind the current step's game.yaml exit `exit` (a direction or `cave`).
@@ -1256,7 +1306,7 @@ impl GameCompletion {
             self.entry = route_entry(prev.full_location(), here).map(str::to_owned);
         }
         if entered || prev.is_none() {
-            self.entry_bombs = state.bombs();
+            self.entry_bombs = self.own_bombs(state);
         }
         if entered || self.repick {
             self.pick_step(state);
@@ -1288,7 +1338,7 @@ impl GameCompletion {
         }
         if self.missed.is_some() {
             self.last_kind = ObjectiveKind::Move;
-            return self.no_objective();
+            return self.no_objective(state);
         }
         if let Some(objective) = self.whirlwind_objective(state) {
             self.last_kind = objective.kind;
@@ -1317,11 +1367,11 @@ impl GameCompletion {
         // Round 40 (`BombRules::carrier_targets`): a dungeon room the route crosses aims at every monster whose death
         // may drop bombs now as well as at the exit (the wavefront leads to the nearest of them); the observation's
         // `bomb_carrier` is the same list. No weapon bomb is the rule's in a crossing (`fights_only`), so a Vire is
-        // one only to the magic sword. Once the cycle moves on (the kill was made, with a drop or not) or the bag is
-        // full, none is left and the room is a plain crossing; the dropped bombs are taken as under a floor
-        // (`bag_drops`, below).
+        // one only to the magic sword. Once the cycle moves on (the kill was made, with a drop or not) or Link's own
+        // bombs fill the bag, none is left and the room is a plain crossing; the dropped bombs are taken as under a
+        // floor (`bag_drops`, below).
         if kind == ObjectiveKind::Move && self.carrier_targets(state) {
-            for e in crate::bomb_windows::bomb_carriers(state, state.bombs(), false, false) {
+            for e in crate::bomb_windows::bomb_carriers(state, self.own_bombs(state), false, false) {
                 let carrier: Vec<Aim> = aims(e.link_overlap_tiles(), Role::Monster { slot: e.index, kind: e.id }).collect();
                 pbrs.extend(carrier.iter().map(|a| a.0));
                 labels.extend(carrier);
@@ -1340,12 +1390,13 @@ impl GameCompletion {
                 .is_some_and(|s| s.treasure == crate::game_map::TreasureRule::Refuse),
             drops_first: self.current_step(state.full_location()).is_some_and(|s| s.drops_first),
             bag_drops: self.bomb_rules.fills_the_bag() || self.bomb_rules.carrier_targets,
+            own_bombs: self.own_bombs(state),
             labels,
         }
     }
 
     /// No target and no correct exit (the route is missed).
-    fn no_objective(&self) -> Objective {
+    fn no_objective(&self, state: &GameView) -> Objective {
         Objective {
             kind: ObjectiveKind::Move,
             targets: BTreeSet::new(),
@@ -1356,6 +1407,7 @@ impl GameCompletion {
             treasure_refused: false,
             drops_first: false,
             bag_drops: false,
+            own_bombs: self.own_bombs(state),
             labels: Vec::new(),
         }
     }
@@ -1371,7 +1423,7 @@ impl GameCompletion {
         let here = state.full_location();
         let (level, dock) = self.whirlwind_level_here(here)?;
         let landing = self.map.routes[&self.route][self.step? + 1].location();
-        let mut objective = self.no_objective();
+        let mut objective = self.no_objective(state);
         let tile = |x: i32, y: i32| Position::new(x, y).tile();
         match crate::whirlwind::plan(state, level) {
             Plan::Never => {
@@ -1792,7 +1844,7 @@ impl GameCompletion {
         if state.ram()[ROOM_FLAGS_OW as usize + (loc.value & 0x7F) as usize] & FLAG_ITEM_TAKEN != 0 {
             return None;
         }
-        if !self.step_treasure(loc, state).is_none_or(|rule| rule.wants(state.bombs())) {
+        if !self.step_treasure(loc, state).is_none_or(|rule| rule.wants(self.own_bombs(state))) {
             return None;
         }
         let role = Role::Treasure { item: treasure_index(room.treasure.as_deref()) };
@@ -1910,10 +1962,12 @@ impl GameCompletion {
             item = None;
         }
         // The step's `treasure:` rule (routes.yaml; round 37: the route's floor for a room's bombs, judged on entering
-        // and held for the visit), read against what Link holds now: 0x5b's bombs stop mattering once he holds 4.
+        // and held for the visit), read against Link's own bombs now: 0x5b's bombs stop mattering once he holds 4.
+        // Round 40: a room the step clears on its way through its own bomb wall is fought whatever he holds, but with a
+        // full bag the wall comes first (`wall_first`: the room's bombs can't be taken at the maximum).
         let rule = self.step_treasure(loc, state);
-        let wanted = rule.is_none_or(|r| r.wants(state.bombs()));
-        let clear = rule == Some(TreasureRule::Clear);
+        let wanted = rule.is_none_or(|r| r.wants(self.own_bombs(state)));
+        let clear = rule == Some(TreasureRule::Clear) || (self.clears_wall_room(loc) && !self.wall_first(state));
         let mut kind = ObjectiveKind::None;
         let mut tiles = Vec::new();
         if let Some(treasure) = state.treasure() {
@@ -2746,6 +2800,7 @@ mod tests {
             treasure_refused: false,
             drops_first: false,
             bag_drops: false,
+            own_bombs: 0,
             labels: Vec::new(),
         };
         for (row, correct) in [(3, true), (4, true), (15, false), (16, false)] {

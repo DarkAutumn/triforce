@@ -1090,6 +1090,8 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         self.clips_flipped = false;
         self.entry_flip = None;
         gc.set_clips_allowed(self.clips_allowed);
+        // The route's bag tests count Link's own bombs: the ledger's grants left out (round 40).
+        gc.set_cheated_bombs(self.cheats.outstanding(CheatItem::Bombs));
         let mut objective = gc.objectives(None, &state);
         if self.clips_flip_due(&gc, state.full_location()) {
             self.clips_flipped = true;
@@ -1179,6 +1181,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         if let Some(clips) = clips {
             gc.set_clips(clips);
         }
+        gc.set_cheated_bombs(self.cheats.outstanding(CheatItem::Bombs));
         let mut flip = self.pending_clips.take().filter(|&on| on != self.clips_allowed);
         if let Some(on) = flip {
             gc.set_clips_allowed(on);

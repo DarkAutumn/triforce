@@ -385,6 +385,12 @@ impl CheatLedger {
         self.held[item].route
     }
 
+    /// Every outstanding grant of `item`, the room's and the route's: the part of the count that is not Link's own
+    /// ([`CheatLedger::natural`]); what the route's bag tests leave out (`GameCompletion::set_cheated_bombs`).
+    pub fn outstanding(&self, item: CheatItem) -> i32 {
+        self.granted(item) + self.route_granted(item)
+    }
+
     /// Both kinds of outstanding grant of every item.
     pub fn grants(&self) -> Grants {
         let of = |part: fn(&Held) -> i32| ItemCounts::from_fn(|item| part(&self.held[item]).clamp(0, 255) as u8);

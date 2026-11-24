@@ -16,6 +16,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def _join(tmp_path, monkeypatch, **extra) -> int:
     monkeypatch.setenv(q.QUEUE_DIR_ENV, str(tmp_path / 'queue'))
+    # The wrapper names its job in its own process's environment (``$TRIFORCE_JOB_ID``): set here so the test's end
+    # gives the session's job 0 back. Left behind, it made the next test of the worker register its statistics under
+    # another job (test_run_stats' store tests failed on '1-theirs' after this file, depending on the order).
+    monkeypatch.setenv(jobs.JOB_ID_ENV, '0')
     wrapper = job.Wrapper(tmp_path / 'queue')
     fields = {'agent': 'Recipe40', 'task': 't', 'subtask': 's', 'description': 'd', 'verb': 'run', 'lane': q.JOBS_LANE,
               'kind': 'script', 'name': 'Recipe40-t-s', 'command': ['true'], **extra}

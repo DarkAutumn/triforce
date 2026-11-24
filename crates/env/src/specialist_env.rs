@@ -916,6 +916,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         self.pending_clips = None;
         // The cheated items (a bomb, a key, rupees the room needs) are in the state everything below starts from.
         let state = self.cheats.begin(&mut self.session, &gc);
+        gc.set_cheated_bombs(self.cheats.outstanding(CheatItem::Bombs));
         let attached = attach(
             &mut gc,
             None,
@@ -1083,6 +1084,8 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         self.hearts.follow(&HeartView::of(&state), &change);
         let prev = self.attached.take().expect("episode started");
         let route_step = self.objectives.as_ref().and_then(GameCompletion::step);
+        // The route's bag tests count Link's own bombs: the ledger's grants left out (round 40).
+        self.objectives.as_mut().expect("episode started").set_cheated_bombs(self.cheats.outstanding(CheatItem::Bombs));
         let curr = attach(
             self.objectives.as_mut().expect("episode started"),
             Some(&change.previous),
