@@ -1398,7 +1398,8 @@ over the batch's searched rows: `losses/search_ce`, `charts/search_agreement` (a
 `charts/search_rows` (their share of the batch). Off (default), the update is bit for bit the plain PPO one.
 `--plr` (`PPOConfig.plr`, prioritized level replay, Jiang et al. 2021; §5, `triforce/plr.py`) replaces the seed
 start-state draw of the start-state pool (`crates/env/src/start_states.rs`: each env's `ProbabilisticSelector`:
-round-robin from a random offset until every state has a result, then probability 0.15/N + 0.85·w/Σw, w = the
+every state once in a random order until every state has a result (round 42; before, round-robin from a random
+offset in file-name order), then probability 0.15/N + 0.85·w/Σw, w = the
 state's decayed mean badness: success 1, failure ×2, damage ×1.5, decay 0.9) with weights shared by the whole
 train pool: `StartWeights` (one
 `Arc<RwLock<…>>` handed to every env through `EnvOptions::start_weights`), set by `EnvPool.set_start_weights({state:
@@ -2381,9 +2382,16 @@ every step, so following an enemy that moves away pays again, and knockback rese
   (`harvested_states`, default `<states dir>/harvested/<name>`) reads, so a plain `--harvest` feeds training
   directly; elsewhere, point a config at `DIR/<name>` with `harvested_states:`. Training
   envs draw harvested states only when `harvested_fraction` > 0 (default 0: opt-in) or the specialist has no seed
-  states; then they mix them with seed states at that fraction (the pool rescans the dir every 64 resets, drops
-  it when empty and redraws once if a drawn file vanished; training warns and logs `harvested` when the folder
-  holds states), `state_entry` reads the `_h<seed>_<n>` names like seed states (route step from the entry side and
+  states; then (round 42) the seed draw picks the room entry and that fraction of its resets start from a harvested
+  state of the same entry (namespace, room, side, visit), each entry its own selector, so a room's share of the
+  episodes is the seed states' whatever the number of files harvested for it (an entry without harvested states
+  draws none; a harvested entry no seed state has is never drawn; without seed states the entries are drawn alike).
+  A harvested start whose triforce pieces and items are the route's at no step of its room
+  (`zelda::objectives::start_on_route`) is refused at reset, and a chain's harvest does not write one; `python -m
+  triforce.harvest_audit` checks a whole snapshot (the lead, before a retrain). The pool rescans the dir every 64
+  resets, a harvested file deleted under it is an error (training warns and logs `harvested` when the folder
+  holds states; training logs each room's `seed_episodes` and `harvested_episodes` apart), `state_entry` reads the
+  `_h<seed>_<n>` names like seed states (route step from the entry side and
   progress), and a harvested start skips `ram_randomization`: it keeps the true health, keys and bombs the upstream
   specialist handed over (positions too; enemies spawn as the entry draws them). Units granted in the previous room
   are taken out of the saved snapshot, as the game takes them back on leaving; entry-state builds do the same.

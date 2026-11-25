@@ -3920,3 +3920,298 @@ The control's chains are #1303 and #1304 (`r41-check-2015-r300-{full,d3}`). The 
 - `--submit`'s calls of `triforce job run` were used for real but have no test (the test checks the commands it
   prints).
 - A checkpoint run of a sealed parent (the link) is tested on fake stores only; every real run here was copied.
+
+## What the teachers train on: stale harvests and the start-state draw (Harvest42, branch `r42-harvest`)
+
+anthropic/claude-opus-5-5 (Harvest42), on `r40-int` at 5814f610. **The ask** (the lead, Nov 24 night): the walkers
+teacher (`gen1-walkers/s1`, stopped at iteration 950) learned nine families to 0.92-1.00 training success, but its
+Darknut family looked as if it collapsed. Find out exactly what happened, what every teacher is really trained on,
+and fix the draw.
+
+### 1. Why `d3first_5_64e_h6000..h6599_3` are never won: states of the route's first order
+
+- They were harvested on Nov 20 at 07:01 (file times in the store), by 500-run Dungeon 5 chains of round 32's
+  "darknut's round 2" (round32.md), on 2.0.0.0's `d3first`: Dungeon 5 **before** Dungeon 2, with 2.0.0.0-2.0.0.2's
+  bag of 8 at Level 5's entrance. 2.0.0.5 reordered the route (Dungeon 2 before Dungeon 5) and kept the files.
+- RAM against a passing `h370xxx` and the seed state (same spot, X 208, Y 141; same five Blue Darknuts; the block,
+  doors and 5x64's room flags equal): `$671` (InvTriforce) `$0D` = pieces 1, 3, 4 (no Dungeon 2 piece; the others
+  `$0F`), 7 containers (the route's 8), the blue candle (`$65B` = 1), 8 bombs, none of Dungeon 2's, ox0f's or ox3d's
+  room flags, 5x65's wall flag set. A state file holds only the machine and two executor flags: no clips switch,
+  no route step, no kills.
+- The env resolves the step by name (step 125, 5x64 E → stairs) but plays a room toward the exits of the route's
+  steps whose progress (`StepProgress`: pieces, sword, bow, raft, ladder, recorder, red ring, silver arrow) equals
+  Link's. An edge exit aims at the step's exit whatever Link holds (`map_objective`, `RouteKey::Step`); a stairs or
+  cave exit goes through `route_next_with_progress` (objectives.rs), which finds none: **the observation's target
+  is "none" (direction none, distance 1), no move earns shaping, every exit is wrong, the stairs too**. CLIP N is
+  offered at ($A0,$9D) as from the seed state.
+- Proof: the same file with only `$671` written to `$0F` (a raw machine restore, `Game.write`): checkpoint 912 wins
+  10 of 10 (sample); unpatched 0 of 10 (4 deaths, 6 wrong exits, one by the stairs into 5:0x07).
+- **The state is wrong, not hard**: no run of today's route holds it.
+
+### 2. The audit of every harvested state the generation's teachers draw
+
+`python -m triforce.harvest_audit audit` (store `harvested` 261124-gen1, 34 families of `triforce/groups.yaml`,
+55,489 `d3first_` states; jobs #1346/#1348, `r42-harvest/target/r42/audit-gen1.jsonl`, the list
+`target/r42/invalid-gen1.txt`). Checks (each state read raw before any load-time randomization, and reset once in its
+family's task):
+
+- **PROGRESS**: Link's pieces and items are the route's at no step of the room its name spells
+  (`zelda::objectives::start_on_route`). Where the step leaves by stairs or a cave the room is unwinnable (above);
+  where it leaves by an edge it is won with the first order's inventory; an entry the route never makes gets an
+  off-route objective (the first order's 0x0c from S is "won" in one step by stepping back out S).
+- **CONTAINERS** other than the route's at that step (`RouteIndex.hearts`); **ITEMS** the route can't hold there
+  (a candle before 7:0x4a, arrows before ox44's shop, food before ox34, a potion, the letter, more than 8 bombs);
+  **CLIPS-OFF** (the start fixes the clips switch off); **REFUSED** (the env's reset fails).
+- Flagged, valid: an entry the route never makes where a step of the room has Link's progress (a run back on the
+  route; 662 ow-tektite 0x2c-from-E states, which the first script counted invalid, are of this kind); no target in
+  the first observation (fights).
+- Checked on the 825 seed states of the same families: no false PROGRESS, CONTAINERS or ITEMS.
+
+**10,853 of 55,489 (20%) are invalid**, nearly all the first order's harvests (Nov 19-20, seeds 5000+, 6000+, 7000+,
+10000+): every Dungeon 5 and Dungeon 2 harvest before 2.0.0.5, and Dungeon 7's with 11 containers (the route's 9).
+
+| teacher | family (harvested_fraction) | states | invalid | why |
+|---|---|---:|---:|---|
+| walkers | darknut (0.33) | 8,388 | 2,045 | every Dungeon 5 entry's first-order block (5x64 E 650/1,036, 5x06 c 648/1,034, 5x05 c 247/429, 5x37 S 106/222, 5x64 c 244/425, **the Olive Garden from E 150/150**) |
+| walkers | gibdo (0.25) | 1,757 | 986 | Dungeon 5, first order |
+| walkers | goriya (0.25) | 2,841 | 1,323 | Dungeon 2 first order (400), Dungeon 7 with 11 containers (923) |
+| walkers | zol (0.25) | 3,396 | 7 | 5x57 first order |
+| walkers | d2-rope, moldorm, dodongo-crossing (0) | 1,271 / 390 / 334 | 600 / 199 / 158 | Dungeon 2 first order, 7x0c with 11 containers |
+| walkers | like-like, vire, stalfos-keese-gel | 1,325 / 1,326 / 3,803 | 0 | |
+| overworld | ow-moblin (0.25) | 1,814 | 941 | ox3d from E (366, an entry the route no longer makes), ox73 E second visit (574), 1 late re-entry |
+| overworld | ow-tektite (0.25) | 3,188 | 658 | ox0c from S (656, the blue candle's cave), 2 |
+| overworld | ow-leever (0.25) | 2,776 | 328 | ox0b from E, first order |
+| overworld | ow-start (0) | 976 | 654 | 653 ox1c states the env refuses (not ow-start's room) |
+| overworld | ow-lynel, ow-ghini (0) | 375 / 35 | 2 / 1 | late re-entries named as first visits |
+| others | wallmaster (0.3) | 707 | 501 | 7x0d with 11 containers |
+| others | pols-voice (0) | 300 | 10 | Dungeon 5 first order |
+| rooms | equipment-room (0) | 4,188 | 601 | Dungeon 5 cellars first order, Dungeon 7's with 11 containers |
+| bosses | boss-digdogger (0.5) | 1,710 | 1,309 | 5x24 first order (196), Dungeon 7 with 11 containers |
+| bosses | boss-aquamentus (0.3) / boss-dodongo (0) | 526 / 388 | 329 / 201 | Dungeon 7 with 11 containers / Dungeon 2 first order |
+| bosses | boss-gleeok (**1.0**), manhandla, gohma, ganon; others: wizzrobe, lanmola, patra; ow-zora, ow-octorok, ow-peahat, ow-boulder; trap-room | | 0 | |
+
+The per-room tables (states, invalid and why, harvest dates and seed blocks, the hearts the states start with
+against the 1000-run baseline chains' `health_in` at the same room entry) are in `target/r42/audit.md`. Dungeon 3's
+are valid but poorer than the baseline brings: 3x59 from N 1.72 hearts mean, 34% at a heart or less (baseline 2.30,
+9%), 3x5b's last pass 1.51 / 46% (1.87 / 32%), 3x69 out of its cellar 1.54 / 43% (1.90 / 31%).
+
+The lead installed `harvested` **261124-gen2** (gen1 minus the first list's 11,515 files, the 662 recovery states
+with them) and set it current before the next teachers; the audit finds 0 invalid in its 43,974 states (#1349).
+
+### What the invalid states did to the teachers already trained
+
+Measured with the runs' own networks (3 episodes a state): gibdo's five Dungeon 5 entries 15/15 won, goriya's
+2x1e, 2x5e, 7x38 9/9, ow-moblin ox3d from E won by walking into ox3d's cave, ox73 E v2 by exit N, ow-tektite ox0c
+from S won in one step back out S, ow-leever ox0b E by entering Level 5. So the first order's states are
+unwinnable only where the step leaves by stairs or a cave, which is why the other families' training success read
+0.97-1.00. Episodes (off-route starts are logged under entry `-`, exact; otherwise an upper estimate, fraction ×
+episodes × invalid share; every family but darknut and goriya drew its whole list):
+
+| family | episodes | from invalid states | what they trained |
+|---|---:|---:|---|
+| ow-tektite | 31,628 | 1,576 (5.0%) | ox0c from S: a one-step back-out rewarded |
+| ow-moblin | 70,089 | 3,751 (5.4%) + ≤5.3k | ox3d from E into its cave (off route); ox73 E v2 won normally |
+| ow-leever | 95,211 | ≤2.8k (3%) | ox0b E with the first order's inventory, won normally |
+| gibdo | 36,822 | ≤5.2k (14%) | Dungeon 5 with 7 containers and the blue candle, won normally |
+| goriya | 18,069 | ≤2.1k (12%) | Dungeon 2 first order, Dungeon 7 with 11 containers (easier fights) |
+| darknut | 13,954 | ≈1,530 | ≈150 Olive Garden E and ≈135 5x64 E unwinnable; the rest won normally |
+
+### 3. What the walkers' darknut really trained on
+
+The run's `metrics.jsonl` logs each iteration's episodes by start room and entry (curriculum starts apart:
+darknut's 6,922 curriculum episodes against 13,954 room starts). The harvested folder sorted by name and each env's
+selector walking it in that order (warm-up: round-robin until every state has a result; 8,388 files, about 2,300
+harvested draws an env, so the warm-up never ended) put each env in one room's block after another. The blocks show
+as steps in the room counts; the harvested part of a room is its count above the room's seed-start rate outside the
+block (`r42` analysis; the five blocks env B finished each came out at 92-102% of their file count, a check of the
+method):
+
+- **Env A**: 3x5b from S (the first pass), its. 0-728, ≈1,400-1,700 of 1,792; then 3x5b from W (the last pass), its.
+  728-950, ≈480 of 813. No invalid state.
+- **Env B**: the last ≈110 of 3x69 out of its cellar (its. 0-38); all of 5x05 from the cave (38-142; 247 first
+  order); **all 150 Olive Garden-from-E states (142-196), every one first order: no target, success 0.00**; all of
+  5x06 from the cave (196-730; 648 first order); all of 5x37 from S (730-793); all of 5x64 from the cave (793-893);
+  the first ≈135 of 5x64 from E (893-950), **the `h10xxx` first-order block: success 1.00 → 0.15, the
+  "collapse"**. ≈1,530 of its ≈2,480 harvested draws were the first order's.
+- **Drawn**: ≈4,570 distinct states of 8,388 (54%). **Never drawn**: all 1,464 of 3x59 from N (the hard room, at the
+  chains' hearts), 3x5b from N (5), 8x5e from S (145), ≈760 of 3x69 out of its cellar, the 386 valid `h370xxx`
+  states of 5x64 from E and the rest of that block.
+
+Episodes by room entry over the run (room starts; harvested ≈ estimated as above):
+
+| room entry | episodes | harvested ≈ | seed starts ≈ |
+|---|---:|---:|---:|
+| 3x59 from N | 787 | 0 | 787 |
+| 3x59 from S | 415 | 0 | 415 |
+| 3x5b from S (first pass) | 2,112 | 1,400-1,700 | 400-700 |
+| 3x5b from W (last pass) | 1,114 | 478 | 636 |
+| 3x5c from W | 447 | 0 | 447 |
+| 3x69 from N (going in) | 580 | 0 | 580 |
+| 3x69 out of its cellar | 507 | 110 | 397 |
+| the Olive Garden from E | 1,015 | 153 (all first order) | 862 |
+| the Olive Garden from its cellar | 795 | 395 | 400 |
+| 5x06 from W / from the cave | 372 / 1,420 | 0 / 1,012 | 372 / 408 |
+| 5x37 from S | 678 | 203 | 475 |
+| 5x64 from E | 558 | 135 (all first order) | 423 |
+| 5x64 from the cave | 895 | 402 | 493 |
+| 8x3e S, 8x3f W, 8x4e S, 8x5e S | 591 / 544 / 477 / 647 | 0 | all |
+| all | 13,954 | ≈4,570 (33%) | ≈9,380 |
+
+The other nine walkers (the run's whole log; "drew all": the round-robin passed the end of its list, so the
+selector then sampled by badness):
+
+| family | episodes | curriculum | fraction | harvested draws ≈ a env | states | invalid | drew all | success (last 50 its.) |
+|---|---:|---:|---:|---:|---:|---:|---|---:|
+| gibdo | 36,822 | 1,715 | 0.25 | 4,600 | 1,757 | 986 | yes | 0.97 |
+| stalfos-keese-gel | 43,170 | 0 | 0.25 | 5,400 | 3,803 | 0 | yes | 0.99 |
+| zol | 32,692 | 1,591 | 0.25 | 4,090 | 3,396 | 7 | yes | 0.98 |
+| like-like | 14,004 | 748 | 0.4 | 2,800 | 1,325 | 0 | yes | 0.95 |
+| vire | 27,787 | 1,834 | 0.4 | 5,560 | 1,326 | 0 | yes | 0.98 |
+| goriya | 18,069 | 4,765 | 0.25 | 2,260 | 2,841 | 1,323 | no (≈80%) | 0.95 |
+| d2-rope, dodongo-crossing, moldorm | 29,825 / 70,117 / 19,270 | 0 / 0 / 114 | 0 | 0 | | | | 1.00 / 1.00 / 0.98 |
+
+### The honest skill curve: darknut's seed states at every sealed checkpoint
+
+`triforce evaluate --specialist specialists/d3first/darknut.yaml --checkpoint .../s1-itNNNNNN/ckpt.pt --act sample
+--episodes-per-state 30` (the training environment: the task's RAM draws; 1,620 episodes a checkpoint, 90 a room
+entry, standard error up to 0.05; jobs #1335-#1339, #1351, #1352, outputs `r42-harvest/target/r42/seeds-itNNN.json`,
+912 the lead's `triforce-gen1/target/darknut-diag/seeds-it912.json`; tables by
+`scripts/experiments/r42_skill_curve.py`):
+
+**success**
+
+| room entry | it114 | it228 | it342 | it456 | it570 | it684 | it798 | it912 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 3x59 from N | 0.01 | 0.00 | 0.08 | 0.20 | 0.24 | 0.19 | 0.24 | 0.23 |
+| 3x59 from S | 0.90 | 0.87 | 0.89 | 0.90 | 0.89 | 0.96 | 0.97 | 0.98 |
+| 3x5b from S (first pass) | 0.47 | 0.69 | 0.72 | 0.82 | 0.62 | 0.72 | 0.68 | 0.73 |
+| 3x5b from W (last pass) | 0.01 | 0.04 | 0.14 | 0.17 | 0.17 | 0.31 | 0.31 | 0.36 |
+| 3x5c from W | 0.89 | 0.92 | 0.88 | 0.97 | 0.96 | 0.97 | 0.96 | 0.98 |
+| 3x69 out of its cellar | 0.99 | 1.00 | 1.00 | 0.98 | 1.00 | 1.00 | 0.98 | 1.00 |
+| 3x69 from N (going in) | 0.64 | 0.71 | 0.76 | 0.71 | 0.78 | 0.70 | 0.81 | 0.80 |
+| the Olive Garden from its cellar | 0.98 | 1.00 | 1.00 | 1.00 | 1.00 | 0.99 | 1.00 | 1.00 |
+| **the Olive Garden from E** | 0.00 | 0.00 | 0.00 | 0.00 | 0.01 | 0.01 | 0.01 | 0.08 |
+| 5x06 from the cave | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 |
+| 5x06 from W | 0.93 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 |
+| 5x37 from S | 0.90 | 0.98 | 0.97 | 0.97 | 0.96 | 0.93 | 0.91 | 0.97 |
+| 5x64 from the cave | 0.69 | 0.78 | 0.74 | 0.72 | 0.73 | 0.76 | 0.87 | 0.91 |
+| 5x64 from E | 0.81 | 0.82 | 0.99 | 0.97 | 0.91 | 0.93 | 0.96 | 0.98 |
+| 8x3e from S | 0.38 | 0.48 | 0.29 | 0.38 | 0.47 | 0.60 | 0.52 | 0.63 |
+| 8x3f from W | 0.74 | 0.78 | 0.86 | 0.86 | 0.87 | 0.84 | 0.83 | 0.84 |
+| 8x4e from S | 0.78 | 0.80 | 0.87 | 0.90 | 0.92 | 0.98 | 0.97 | 0.92 |
+| 8x5e from S | 0.34 | 0.40 | 0.46 | 0.52 | 0.61 | 0.69 | 0.69 | 0.70 |
+| all (1,620) | 0.64 | 0.68 | 0.70 | 0.73 | 0.73 | 0.75 | 0.76 | 0.78 |
+
+**deaths**
+
+| room entry | it114 | it228 | it342 | it456 | it570 | it684 | it798 | it912 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 3x59 from N | 0.88 | 0.64 | 0.76 | 0.78 | 0.67 | 0.50 | 0.71 | 0.68 |
+| 3x59 from S | 0.10 | 0.13 | 0.11 | 0.10 | 0.11 | 0.03 | 0.03 | 0.02 |
+| 3x5b from S (first pass) | 0.47 | 0.26 | 0.23 | 0.13 | 0.37 | 0.24 | 0.30 | 0.27 |
+| 3x5b from W (last pass) | 0.86 | 0.58 | 0.36 | 0.27 | 0.50 | 0.40 | 0.49 | 0.26 |
+| 3x5c from W | 0.11 | 0.08 | 0.12 | 0.03 | 0.04 | 0.03 | 0.04 | 0.00 |
+| 3x69 out of its cellar | 0.01 | 0.00 | 0.00 | 0.01 | 0.00 | 0.00 | 0.01 | 0.00 |
+| 3x69 from N (going in) | 0.34 | 0.29 | 0.23 | 0.29 | 0.22 | 0.30 | 0.19 | 0.20 |
+| the Olive Garden from its cellar | 0.02 | 0.00 | 0.00 | 0.00 | 0.00 | 0.01 | 0.00 | 0.00 |
+| **the Olive Garden from E** | 0.94 | 0.94 | 0.97 | 0.91 | 0.92 | 0.97 | 0.91 | 0.89 |
+| 5x06 from the cave | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 |
+| 5x06 from W | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 |
+| 5x37 from S | 0.10 | 0.01 | 0.03 | 0.03 | 0.04 | 0.07 | 0.09 | 0.03 |
+| 5x64 from the cave | 0.22 | 0.16 | 0.14 | 0.21 | 0.20 | 0.18 | 0.12 | 0.08 |
+| 5x64 from E | 0.14 | 0.17 | 0.01 | 0.03 | 0.08 | 0.07 | 0.04 | 0.02 |
+| 8x3e from S | 0.58 | 0.51 | 0.63 | 0.58 | 0.44 | 0.32 | 0.48 | 0.36 |
+| 8x3f from W | 0.26 | 0.18 | 0.11 | 0.12 | 0.12 | 0.13 | 0.08 | 0.08 |
+| 8x4e from S | 0.22 | 0.20 | 0.10 | 0.09 | 0.07 | 0.02 | 0.03 | 0.08 |
+| 8x5e from S | 0.61 | 0.59 | 0.47 | 0.42 | 0.38 | 0.29 | 0.31 | 0.28 |
+| all (1,620) | 0.33 | 0.26 | 0.24 | 0.22 | 0.23 | 0.20 | 0.21 | 0.18 |
+
+**hits a visit**
+
+| room entry | it114 | it228 | it342 | it456 | it570 | it684 | it798 | it912 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 3x59 from N | 2.22 | 1.56 | 2.02 | 2.27 | 1.89 | 1.56 | 2.01 | 2.02 |
+| 3x59 from S | 0.28 | 0.28 | 0.31 | 0.30 | 0.29 | 0.14 | 0.08 | 0.07 |
+| 3x5b from S (first pass) | 1.34 | 0.94 | 0.79 | 0.73 | 1.09 | 0.70 | 0.89 | 0.98 |
+| 3x5b from W (last pass) | 2.18 | 1.84 | 1.28 | 1.28 | 1.58 | 1.39 | 1.48 | 1.27 |
+| 3x5c from W | 0.46 | 0.41 | 0.53 | 0.30 | 0.31 | 0.24 | 0.33 | 0.12 |
+| 3x69 out of its cellar | 0.02 | 0.00 | 0.00 | 0.03 | 0.01 | 0.00 | 0.03 | 0.00 |
+| 3x69 from N (going in) | 1.41 | 1.24 | 1.19 | 1.20 | 1.07 | 1.13 | 0.86 | 0.92 |
+| the Olive Garden from its cellar | 0.03 | 0.08 | 0.00 | 0.06 | 0.08 | 0.02 | 0.00 | 0.00 |
+| **the Olive Garden from E** | 3.11 | 3.12 | 3.20 | 2.96 | 3.04 | 3.31 | 3.17 | 3.32 |
+| 5x06 from the cave | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 |
+| 5x06 from W | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 |
+| 5x37 from S | 0.94 | 0.57 | 0.58 | 0.50 | 0.76 | 0.48 | 0.93 | 0.66 |
+| 5x64 from the cave | 1.50 | 1.27 | 1.22 | 1.41 | 1.48 | 1.39 | 1.01 | 0.72 |
+| 5x64 from E | 0.61 | 0.54 | 0.16 | 0.19 | 0.29 | 0.18 | 0.14 | 0.22 |
+| 8x3e from S | 7.79 | 8.36 | 8.41 | 7.93 | 7.62 | 7.68 | 7.66 | 7.63 |
+| 8x3f from W | 2.90 | 2.76 | 2.51 | 2.12 | 2.44 | 1.87 | 1.60 | 2.10 |
+| 8x4e from S | 2.30 | 2.36 | 1.87 | 1.49 | 1.46 | 1.46 | 1.20 | 1.14 |
+| 8x5e from S | 8.14 | 8.46 | 7.82 | 8.69 | 7.74 | 6.34 | 7.81 | 7.30 |
+| all (1,620) | 1.96 | 1.88 | 1.77 | 1.75 | 1.73 | 1.55 | 1.62 | 1.58 |
+
+**Darknut did not collapse.** On a fixed set its success rises from 0.64 to 0.78 and its deaths fall from 0.33 to
+0.18 an episode. What fell at iteration 896 was the sampler's draw: env B walked into the first order's
+`5_64e_h10xxx` block, which no network can win. By room:
+
+- **improving**: 3x5b's last pass (0.01 → 0.36), 3x69 going in (0.64 → 0.80, hits a visit 1.41 → 0.92), 5x64 from E
+  (0.81 → 0.98), 5x64 from the cave (0.69 → 0.91), 8x5e (0.34 → 0.70), 8x3e, 8x4e, 3x59 from S;
+- **flat**: 3x59 from N rose 0.01 → 0.20 by it456 and has held 0.19-0.24 since, two of three visits dying (2 hits a
+  visit): the hard room the training never saw at the chains' hearts (its 1,464 harvested states were never drawn);
+  3x5b's first pass wanders (0.47, 0.69, 0.72, 0.82, 0.62, 0.72, 0.68, 0.73), flat within two standard errors after
+  it342;
+- **flat at the floor**: **the Olive Garden from E (0.00-0.08, 89-97% deaths, 3.1 hits a visit)**, the one room
+  the teacher has not learned; its 150 harvested states were all unwinnable and drawn only in iterations 142-196.
+
+### 4. The fix (`crates/env/src/start_states.rs`, `zelda::objectives`, `triforce/harvest_audit.py`)
+
+- **(a) A random warm-up.** `ProbabilisticSelector` draws each state once in a random order (the caller's RNG) until
+  every state has a result, instead of round-robin from one offset in file-name order; once every state is drawn,
+  the states with results are weighted (uniform while none has one). Tests: every state once in a random order; the
+  first 100 draws of a 1,000-name list sorted in 10 blocks reach at least 9 blocks; the old ones rewritten.
+- **(b) Harvested starts by room entry.** The pool groups harvested states by room entry (namespace, room, side,
+  visit). A reset draws the seed state (the seed selector, or PLR's shared weights): that picks the room entry; with
+  probability `harvested_fraction` a harvested state of the same entry stands in, drawn by that entry's own selector
+  (badness within the entry). **The shares that result**: every room entry keeps the seed states' share of the
+  family's episodes (the task's rooms, weighted by their seed states' badness); an entry with harvested states starts
+  `harvested_fraction` of its resets from them, one without none; a harvested entry no seed state has (an off-route
+  entry a chain wandered into) is never drawn; a pool without seed states draws its harvested entries alike. Test:
+  three entries with 90, 2 and 0 harvested files at 0.5: each entry a third of the resets, each harvested share
+  1/6, the 90 files each drawn once before any again, the no-seed entry never.
+- **(c) Stale harvests can't be drawn again**: `zelda::objectives::start_on_route` (Link's progress is the route's at
+  a step of the room; for an entry the route never makes, at any step of the room) is checked **at every training
+  reset from a harvested state** (refused with an error naming the file and the audit, as a removed file is), **in
+  the chains' harvest writer** (a state failing it is not written), and exposed as `_native.start_on_route`;
+  `python -m triforce.harvest_audit audit --snapshot NAME --out X.jsonl --invalid X.txt` is the lead's full check of
+  a snapshot before a retrain (also containers, items, clips, refusal; exit 1 on any invalid state) and `report` its
+  tables. The lead made the cleaned snapshot himself (gen2, above); no snapshot was made here.
+- **(d) Seed and harvested starts apart in training's log**: the terminal info carries `harvested`;
+  `RolloutMetrics` logs `room/<room>/<entry>/seed_episodes`, `seed_success_rate`, `harvested_episodes`,
+  `harvested_success_rate` beside the totals.
+- **What changes**: every training with `harvested_fraction` > 0 (the lab's and `triforce train`'s: one Rust pool):
+  the rooms' shares (no longer by file counts), the warm-up order, the RNG streams (no run reproduces a pre-round-42
+  run bit for bit), harvested entries without seed states no longer drawn, and a stale harvested state now stops the
+  training at its first draw. Seed-only trainings change only in the warm-up order. **What does not**: chains play
+  no start-state pool (their harvest writes nothing new but skips a state the route can't be in: a run off the
+  route's progress); `triforce evaluate` names its starts; rewards, routes, tasks.
+
+### The plain-way seed states (the lead's question; nothing changed)
+
+Nine Dungeon 4 seed states fix the clips switch off (`start_clips`: the route enters there on its plain way only):
+vire's `4_20s_[0-2]` and `4_30e_[0-2]` (steps 45, 44) and stalfos-keese-gel's `4_21w_[0-2]` (step 46). Under the
+owner's ruling (2.0.1.0 trains with clips on in every episode) a task with `off_share: 0` should not draw them. The
+proposal: `lab.collect.route_only` (the generation's tasks on one route) drops a seed state whose route steps (by
+its room, side and visit, `_native.route_steps`) are all on a plain way when the task's `clips.off_share` is 0, and
+says so in the run's log; the same rule could join `triforce train`. Rather than the three tasks' globs, because it
+follows the route data when a stretch changes. Chains: nothing (they play no seed states; the plain way stays in
+routes.yaml for the run-time switch).
+
+### Not done, not tested
+
+- The draw's change was not run in a training (a short lab run would show the per-room seed and harvested counts in
+  the log); the suites cover it (below).
+- The darknut reconstruction is an estimate from per-iteration room counts (no per-state log exists): the blocks and
+  their iterations are certain, the 3x5b first-pass split is ±300.
+- The other families' "from invalid states" are upper estimates except the off-route (`-`) counts.
+- `harvest_audit`'s CONTAINERS and ITEMS checks are Python (`RouteIndex.hearts`, the route's cave treasures); only
+  the progress check is shared with the env.

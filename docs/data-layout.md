@@ -261,6 +261,12 @@ Two facts frame everything below:
   elsewhere:** the Rust pool with seed states and an empty folder draws only seed states
   (`start_states.rs:321-325`), which is what the lab's trainings get; a harvested file deleted while a training
   runs sends its resets back to the seed states (F159, `start_states.rs:337-351`).
+- **Stale:** a name outlives the route that wrote it (round 42: 2.0.0.5's reorder left a fifth of `harvested`
+  261124-gen1 holding pieces and items of no step of today's `d3first`; `261124-gen2` is it without them). `python -m
+  triforce.harvest_audit audit --snapshot NAME --out X.jsonl --invalid X.txt` checks a snapshot against the route as
+  it stands (exit 1 on an invalid state); a training reset refuses a harvested start off the route's progress
+  (`zelda::objectives::start_on_route`) and a chain's harvest writes none. Run it on a snapshot before it is set
+  current and before a retrain.
 - **Nature:** shared data set. **Backup:** none for main's folder (783M); a removed worktree's harvests are under
   `/backup/triforce/worktree-data/<date>_<branch>/`.
 
