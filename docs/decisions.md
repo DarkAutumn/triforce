@@ -4011,3 +4011,46 @@ make it. Do what's best for the resulting speedruns", without regard to training
   of its episodes clips-off, 5% of ow-tektite's a step back out of the room) stay in the store as the record.
 - **Before a retrain** (with the clips rule of Nov 24): `python -m triforce.harvest_audit audit --snapshot NAME`
   must find nothing invalid.
+
+## 2026-11-25 — Only real starts: the spawn layouts the project served were mostly ones the game never shows (the owner's find)
+
+**The find is the owner's.** Playing rooms on `emu-zelda.py` he saw monster patterns he had never met in years of
+playing the game: "sometimes the patterns of the enemies aren't familiar at all [...] 5x47 [...] The fast path
+through this room is just hold north and never let go. 0-3 gibdos may path through your way in the room's topmost
+(door adjacent) row, and the one under that... never in the third tile from the top [...] That 4th replay above
+does NOT fit that pattern and I've never seen it before", and asked whether the seeds served in the emulator "and
+also for training!" are ever reachable by playing the game.
+
+- **They mostly were not** (Seeds43, round40.md "Real starts"). A dungeon room's monsters stand where the spawn
+  cycle `$524` puts them (nine spots walked from it, asm:Spawn_AssignPositions); the random numbers only decide how
+  they walk. The game zeroes `$524` at power on and reset and moves it by a fixed map at each room entry, so real
+  play brings one value to almost every door of the route (5x47 from S: 6 in 32 of 32 power-on runs). Every start
+  the project served, in `emu-zelda.py` and at every training reset, redrew it uniformly from nine: 78-89% of the
+  resets of 5x47, the Olive Garden, 3x59, 3x5b and 3x69 were in a layout real play does not bring to that door.
+  The owner's rule for 5x47 is exactly the real layout's: with it a Gibdo stands in Link's column on the third row
+  in 0.0% of the random phases, with the other served layouts in 55-68%. His odd take had `$524` = 7, which the
+  game gives only to a player who first clears 5x64's Blue Darknuts.
+- **What it reached:** 80% of the dungeon seed states, 86% of the dungeon curriculum tracks, most of the Darknut
+  fighter's demonstration visits, 31% of the harvested states, and every dungeon segment chain started from an
+  entrance (the drawn value lasts 13-16 rooms; the 1000-run baseline's dungeon segments: 42-83% of rooms off the
+  run's real value). Full runs from power on and the golden race were never affected.
+- **The owner's rule from here on** (his "north star", in spirit): one save state per door; the layout real, never
+  written; "We should never train on an un-real state. And the pool of states we train on should be pulled from
+  ALL possible VALID states, with none being a 'surprise' for the model"; `emu-zelda.py` "Never serve an unreal
+  room". **For 2.0.1.0, valid means "any game of zelda not just this route could reach them"**: the generic model
+  first ("Memorizing the rooms and route are for later"; a later retrain may train on the route's layouts alone).
+  The route's own layout may weigh more: the lead set it at one half of a door's resets, the rest spread evenly
+  over the door's other reachable values. Chase state 50/50 and the random phase uniform, as real play has them.
+  Hearts keep their range; harvested states are retired; failed states are still drawn more often in training and
+  evaluation uses the plain distribution. `emu-zelda.py` defaults to the route's layout.
+- **All training stopped** (Nov 25, 08:40) and **every teacher restarts from scratch** on the combined fixes (real
+  starts; the trainer's network served with CUDA graphs, Perf43; `carriers: fight` on 3x5b's first pass,
+  Carrier43), the Darknut teacher first in the queue (the owner: "if it doesn't go well, you can inspect and
+  retrain"). No trained weights are carried over. The route gets `clear: true|false` on every step (the owner:
+  "There's nothing sacred about the route file").
+- **Clips, settled the same morning:** on in every episode of every task, the overworld's screen wrap on every
+  overworld family (ow-ghini too), Patra's rooms included ("9x61 is VERY clippable with a patra in it"); the one
+  exception "I definitely don't want clipping in the equipment rooms".
+- **Power-on memory** (the owner's second question): no value a real console holds at power on in the bytes
+  asm:Reset_ClearRam skips can change the random sequence, the spawn cycle or anything a run sees
+  (asm:Reset_RunGame writes or hides each before use); zcore's all-zero power-on RAM is equivalent.
