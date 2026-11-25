@@ -2975,7 +2975,8 @@ fn a_lying_clock_is_walked_round_while_a_wallmaster_lives() {
 /// `ram_randomization` of specialists/d3first/darknut.yaml) on real resets. Into 3:0x5b from S (`d3first_3_5bs_*`)
 /// the game's drop cycle (`$52A`, asm:Drop_SetUpItem) is 0 or 1, about half each; into 3:0x59 from N
 /// (`d3first_3_59n_*`) Link holds exactly 4 or 8 bombs, about half each. The rooms' other passes keep the family's
-/// draws: 0x5b from W its state's own cycle, 0x59 from S the `bombs` range.
+/// draws: 0x5b from W the drop cycle `drop_state: real` draws (round 43: 0-9, no longer its state's own), 0x59 from S
+/// the `bombs` range.
 #[test]
 fn darknut_d3first_starts_hold_the_dungeon_3_plan() {
     let Some(nes) = open_core() else { return };
@@ -2999,9 +3000,9 @@ fn darknut_d3first_starts_hold_the_dungeon_3_plan() {
         let full = bombs.iter().filter(|&&(b, _)| b == 8).count();
         assert!((30..=70).contains(&full), "0x59 from N, chain {chain}: 8 bombs in {full} of 100");
 
-        let own = resets(&format!("d3first_3_5bw_{chain}"), &RamRandomization::default(), 1)[0].1;
         let last = resets(&format!("d3first_3_5bw_{chain}"), spec, 40);
-        assert!(last.iter().all(|&(_, c)| c == own), "0x5b from W keeps its state's cycle {own}: {last:?}");
+        let cycles: BTreeSet<u8> = last.iter().map(|&(_, c)| c).collect();
+        assert!(cycles.len() >= 5 && cycles.iter().all(|&c| c <= 9), "0x5b from W draws its cycle: {last:?}");
         let back = resets(&format!("d3first_3_59s_{chain}"), spec, 40);
         assert!(back.iter().any(|&(b, _)| b != 4 && b != 8), "0x59 from S draws `bombs`: {back:?}");
     }
