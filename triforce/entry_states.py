@@ -771,6 +771,8 @@ def walk(route: str, out: str, iterations: int, patience: int, attempts: int = 6
             record = json.load(file)
         if source is None:
             raise ValueError(f"{out} holds a walk already: resume it with --start-step and --source (a carried state)")
+        # A resumption at or after this one was on the abandoned branch.
+        record['resumed'] = [r for r in record.get('resumed', []) if r['start_step'] < start_step]
         record.setdefault('resumed', []).append({'start_step': start_step, 'source': os.path.basename(source),
                                                  **_git_commit(), 'command': command})
         # The doors after the resumption point belong to the abandoned branch: they go (file, carried state, manifest
