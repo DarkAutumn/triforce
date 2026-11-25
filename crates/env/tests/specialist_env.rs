@@ -1257,10 +1257,10 @@ fn d3first_crosses_dungeon_2s_goriya_room() {
 fn the_link_block_reads_the_routes_rupee_reserve() {
     let Some(mut nes) = open_core() else { return };
     let read = |name: &str| std::fs::read_to_string(common::repo().join("triforce").join(name)).unwrap();
-    let step = "- {level: 1, room: '0x44', specialist: goriya, entry: W, exit: E}";
+    let step = "- {level: 1, room: '0x44', specialist: goriya, entry: W, exit: E, clear: true}";
     let routes = read("routes.yaml");
     assert_eq!(routes.matches(step).count(), 1, "the route's step of 1:0x44 from W");
-    let routes = routes.replace(step, &step.replace("exit: E}", "exit: E, rupee_reserve: 2}"));
+    let routes = routes.replace(step, &step.replace("exit: E,", "exit: E, rupee_reserve: 2,"));
     let mut with_reserve = (**data()).clone();
     with_reserve.map = Arc::new(zelda::GameMap::from_yaml(&read("game.yaml"), &routes).unwrap());
     let with_reserve = Arc::new(with_reserve);

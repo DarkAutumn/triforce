@@ -592,8 +592,8 @@ pub struct RouteStep {
     pub carrier_fight: bool,
     /// `clear:` (round 44, the owner: "Add it if you need it. There's nothing sacred about the route file"): what the
     /// route's plan leaves alive in the room ([`StepClear`]). Data for the state builder (`entry_states walk`, which
-    /// plays each step's kills) and the audit; nothing that plays reads it. A route with its own start states
-    /// (`states:`) has it on every step; None elsewhere.
+    /// plays each step's kills) and the audit; nothing that plays reads it. `d3first` has it on every step (the walk
+    /// refuses a route without it); None elsewhere.
     pub clear: Option<StepClear>,
     /// The way of a `stretch:` this step belongs to (None: a step both ways share).
     pub way: Option<Way>,
@@ -1910,18 +1910,6 @@ impl GameMap {
         }
         for (route, steps) in &routes {
             check_ends(route, steps)?;
-        }
-        // Round 44: a route with its own start states has `clear:` on every step (its states are built by playing
-        // each step's kills, `entry_states walk`).
-        for (route, steps) in routes.iter().filter(|(name, _)| checked(name) && tables.namespaces.contains_key(name.as_str())) {
-            if let Some((i, step)) = steps.iter().enumerate().find(|(_, s)| s.clear.is_none()) {
-                return err(format!(
-                    "routes.yaml: {route}: step {i} {} from {}: needs `clear:` (true, false or a kill count): the \
-                     route has its own start states, built by playing what each step kills",
-                    step.location(),
-                    step.entry
-                ));
-            }
         }
         // A room whose wall the route bombs before the room's bombs holds bombs and is left through its own bomb wall.
         for (route, rules) in tables.bomb_rules.iter().filter(|(name, _)| checked(name)) {
@@ -3603,7 +3591,7 @@ mod tests {
         assert!(e.contains("parts at") && e.contains("d4-island"), "{e}");
         let e = broken("rejoins: {level: 4, room: '0x11', entry: S}", "rejoins: {level: 4, room: '0x12', entry: W}");
         assert!(e.contains("rejoins at"), "{e}");
-        let e = broken("    - {level: 4, room: '0x20', specialist: vire, entry: S, exit: E}\n", "");
+        let e = broken("    - {level: 4, room: '0x20', specialist: vire, entry: S, exit: E, clear: false}\n", "");
         assert!(e.contains("the plain way") && e.contains("leaves by"), "{e}");
         let e = broken("    parts: {level: 4", "    part: x\n    parts: {level: 4");
         assert!(e.contains("part"), "{e}");
@@ -3611,7 +3599,10 @@ mod tests {
         // `ring-07`: the plain way's 0x07 keeps the kills of its fight), not when they are the same step.
         let ring = map.stretches[DEFAULT_ROUTE].iter().find(|s| s.name == "ring-07").expect("ring-07");
         assert_eq!((steps[ring.clips.start].banked_kills, steps[ring.plain.start].banked_kills), (None, Some(5)));
-        let e = broken("room: '0x07', specialist: wizzrobe, entry: cave, exit: S, banked_kills: 5}", "room: '0x07', specialist: wizzrobe, entry: cave, exit: S}");
+        let e = broken(
+            "room: '0x07', specialist: wizzrobe, entry: cave, exit: S, banked_kills: 5, clear: true}",
+            "room: '0x07', specialist: wizzrobe, entry: cave, exit: S, clear: false}",
+        );
         assert!(e.contains("ring-07") && e.contains("as the same step"), "{e}");
     }
 
@@ -3973,13 +3964,13 @@ mod tests {
             assert!(ROUTES_YAML.contains(old), "{old}");
             load(GAME_YAML, &ROUTES_YAML.replacen(old, new, 1)).unwrap_err()
         };
-        let e = swap("entry: S, exit: end}", "entry: S, exit: end}\n  - {level: 9, room: '0x42', specialist: ganon, entry: S, exit: N}");
+        let e = swap("entry: S, exit: end, clear: true}", "entry: S, exit: end, clear: true}\n  - {level: 9, room: '0x42', specialist: ganon, entry: S, exit: N}");
         assert!(e.contains("exit end is the route's last step"), "{e}");
-        let e = swap("entry: E, exit: cave, bomb_reserve: 3}", "entry: E, exit: cave, bomb_reserve: 3, banked_kills: 2}");
+        let e = swap("entry: E, exit: cave, bomb_reserve: 3, clear: false}", "entry: E, exit: cave, bomb_reserve: 3, banked_kills: 2, clear: false}");
         assert!(e.contains("no earlier step of the route is in this room"), "{e}");
-        let e = swap("exit: S, banked_kills: 5}", "exit: S, banked_kills: 16}");
+        let e = swap("exit: S, banked_kills: 5, clear: true}", "exit: S, banked_kills: 16, clear: true}");
         assert!(e.contains("banked_kills must be 1-15"), "{e}");
-        let e = swap("exit: N, waypoint: ring}", "exit: N, waypoint: silver-arrow}");
+        let e = swap("exit: N, waypoint: ring, clear: true}", "exit: N, waypoint: silver-arrow, clear: true}");
         assert!(e.contains("waypoint silver-arrow takes silver-arrow in the cellar"), "{e}");
         let e = swap("exit: W, sword: false", "exit: W, sword: no thanks");
         assert!(e.contains("sword must be true or false"), "{e}");
@@ -4039,9 +4030,9 @@ mod tests {
         assert!(e.contains("entry recorder needs the step before it to exit recorder"), "{e}");
         let e = d7("exit: S, waypoint: arrows", "exit: S, waypoint: food");
         assert!(e.contains("waypoint food buys food"), "{e}");
-        let e = d7("exit: N, waypoint: candle}", "exit: N, waypoint: arrows}");
+        let e = d7("exit: N, waypoint: candle, clear: true}", "exit: N, waypoint: arrows, clear: true}");
         assert!(e.contains("waypoint arrows buys wood-arrow in an overworld cave"), "{e}");
-        let e = d7("exit: N, waypoint: candle}", "exit: N, waypoint: candle, rupee_reserve: 300}");
+        let e = d7("exit: N, waypoint: candle, clear: true}", "exit: N, waypoint: candle, rupee_reserve: 300, clear: true}");
         assert!(e.contains("rupee_reserve"), "{e}");
     }
 
@@ -4199,7 +4190,6 @@ mod tests {
         assert!(ROUTES_YAML.contains(first_pass) && ROUTES_YAML.contains(shutter));
         let load = |from: &str, to: &str| GameMap::from_yaml(GAME_YAML, &ROUTES_YAML.replacen(from, to, 1)).map_err(|e| e.0);
         for (from, to, error) in [
-            (shutter, "entry: N, exit: S, bomb_reserve: 5}", "needs `clear:`"),
             (shutter, "entry: N, exit: S, bomb_reserve: 5, clear: false}", "it leaves through a shutter"),
             (first_pass, "entry: S, exit: N, treasure: skip, carriers: fight, clear: true}", "carriers: fight"),
             (first_pass, "entry: S, exit: N, treasure: skip, carriers: fight, clear: 3}", "the room makes 3"),

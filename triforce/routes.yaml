@@ -45,8 +45,8 @@
 # that makes none is `true`: the game saves it as all dead); `false`: none dies; N: a partial fight, N killed and the
 # rest left (3:0x5b's first pass, `carriers: fight`: one Darknut of three).  The game's own room memory follows from
 # the monsters' types (a Zol or Vire split by the wood sword dies as uncounted Gels or Red Keese, so its room is saved
-# short and refills; zelda::game_map::StepClear).  A route with its own start states (`states:`) has it on every step:
-# `entry_states walk` plays each step's kills from power on.  Checked against the route data (a shutter exit,
+# short and refills; zelda::game_map::StepClear).  `d3first` has it on every step (`entry_states walk`, which plays
+# each step's kills from power on, refuses a route without it).  Checked against the route data (a shutter exit,
 # `treasure: clear`, a room without monsters: true; N below the room's monsters; `carriers: fight` not true); nothing
 # that plays reads it.  A step both ways of a stretch share, which the ways play differently (9:0x07 from S, 5:0x64
 # from E), holds the clip way's.

@@ -97,7 +97,7 @@ fn a_routes_states_without_their_tables_stop_only_the_draws() {
 #[test]
 fn a_table_prices_the_routes_its_own_extends() {
     let tmp = copy_data();
-    let end = "- {level: 9, room: '0x32', specialist: ganon, entry: S, exit: end}\n";
+    let end = "- {level: 9, room: '0x32', specialist: ganon, entry: S, exit: end, clear: true}\n";
     edit(tmp.path(), "triforce/routes.yaml", end, "");
     let scout = format!("\nscout:\n  extends: d2first\n  steps:\n  {end}clips-gauntlet:\n");
     edit(tmp.path(), "triforce/routes.yaml", "\nclips-gauntlet:\n", &scout);
