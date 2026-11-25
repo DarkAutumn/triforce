@@ -459,6 +459,162 @@ def cmd_draws(args):
     print(f"{len(doors)} doors, {sum(len(v) for v in doors.values())} entries of {len(runs)} runs -> {args.output}")
 
 
+def plan_clears(route: str) -> dict:
+    """Route step index -> True when the route's plan leaves the room with every monster dead (a fight to the end): it
+    leaves by a shutter, or the room's treasure comes from killing them all (game.yaml `trigger: kill-all`,
+    `kill-all-item`) and the step takes it, or `treasure: clear`.  Every other step crosses (monsters left alive)."""
+    rooms = _native.game_rooms()
+    out = {}
+    for step in _native.route_steps(route):
+        room = rooms.get((step['level'], step['room'], step['in_cave'])) or {}
+        exit_ = (room.get('exits') or {}).get(step['exit']) or {}
+        takes = step['treasure'] not in ('skip', 'refuse')
+        out[step['index']] = bool(exit_.get('shutter') or step['treasure'] == 'clear'
+                                  or (room.get('trigger') in ('kill-all', 'kill-all-item') and takes))
+    return out
+
+
+def plan_cycles(steps: dict, clears: dict, flips=frozenset(), start: int = 0, anchors=None) -> dict:
+    """$524 on the pre-entry frame of every route step, composing the game's maps (`route_maps`) from power on (0) in
+    route order along each step's `from` step: a room the plan cleared earlier in the same level and still among the
+    last six rooms entered (asm:RoomHistory_ModifyObjCountUW, the history zeroed at a level load) makes no monsters
+    and leaves the value alone.  `flips`: steps whose clear the run does the other way (a deviation).  `anchors`: step
+    -> the value measured on its pre-entry frame, used instead of the composed one (the overworld's maps depend on
+    where Link crosses each screen edge, which varies run by run)."""
+    value_in, value_out = {}, {}
+    history, cleared, level = [], set(), None
+    for index in sorted(steps):
+        s = steps[index]
+        before = s['from']
+        value = value_out.get(before, start) if before is not None else start
+        value = (anchors or {}).get(index, value)
+        value_in[index] = value
+        lv, room = s['door'][0], s['door'][1]
+        if lv != level:
+            history, cleared, level = [], set(), lv
+        key = (lv, room, s['cave'])
+        empty = s['monsters'] == 0 or (key in cleared and key in history)
+        value_out[index] = value if empty or s['cave'] else s['f'][value]
+        if key not in history:
+            history = (history + [key])[-6:]
+        if clears.get(index, False) != (index in flips):
+            cleared.add(key)
+    return value_in
+
+
+def cmd_plan(args):
+    """The plan's table: `$524` at every door of the route composed from power on, each door marked fixed or
+    plan-dependent (the values one deviation from the plan gives instead), checked against the scanned runs."""
+    steps = route_maps(args.route)
+    clears = plan_clears(args.route)
+    real = {}
+    for _, e in real_entries(args.scans, args.route, args.min_version):
+        real.setdefault((e['level'], e['room'], e['link'][2]), []).append(e['spawn_cycle'])
+    # --from-dungeon-doors: each dungeon's entrance (a step coming in from another level) at the runs' commonest value.
+    anchors = {}
+    if args.from_dungeon_doors:
+        for index, s in steps.items():
+            before = steps.get(s['from'])
+            seen = real.get(tuple(s['door']), [])
+            if s['door'][0] and seen and (before is None or before['door'][0] != s['door'][0]):
+                anchors[index] = max(set(seen), key=seen.count)
+    planned = plan_cycles(steps, clears, anchors=anchors)
+    deviations = {}
+    for index in sorted(steps):
+        if steps[index]['monsters'] == 0 and not steps[index]['cave']:
+            continue
+        other = plan_cycles(steps, clears, frozenset([index]), anchors=anchors)
+        for later, value in other.items():
+            if value != planned[later]:
+                deviations.setdefault(later, []).append(
+                    {'value': value, 'step': index, 'room': '%dx%02x' % steps[index]['door'][:2],
+                     'deviation': 'left alive' if clears.get(index) else 'cleared'})
+    rows = []
+    for index in sorted(steps):
+        s = steps[index]
+        door = s['door']
+        seen = real.get(tuple(door), [])
+        counts = {v: seen.count(v) for v in sorted(set(seen))}
+        rows.append({'step': index, 'door': '%sx%02x' % ('o' if door[0] == 0 else door[0], door[1]), 'facing': door[2],
+                     'cave': s['cave'], 'monsters': s['monsters'], 'planned': planned[index],
+                     'plan_cleared': clears.get(index, False), 'dependent': deviations.get(index, []),
+                     'real': counts, 'agrees': (planned[index] in counts) if counts else None})
+    out = Path(args.out) / args.name
+    out.write_text('\n'.join(json.dumps(r) for r in rows) + '\n')
+    judged = [r for r in rows if r['agrees'] is not None and r['monsters'] and not r['cave']]
+    print(f"{len(rows)} steps; doors with monsters and real data {len(judged)}: the plan's value among the runs' at "
+          f"{sum(r['agrees'] for r in judged)}; plan-dependent doors {sum(bool(r['dependent']) for r in rows)} -> {out}")
+
+
+# room_entry::EDGE_SPAWN_CELLS: the 41 values the uniform draw writes to $525.
+EDGE_SPAWN_CELLS = (0x40, 0x41, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D, 0x4E, 0x60, 0x6F, 0x70,
+                    0x7F, 0x80, 0x8F, 0x90, 0x9F, 0xA0, 0xAF, 0xB0, 0xBF, 0xC0, 0xCF, 0xE1, 0xE3, 0xE4, 0xE5, 0xE6,
+                    0xE7, 0xE8, 0xE9, 0xEA, 0xEB, 0xEC, 0xED, 0xEE)
+
+
+def first_edge_spawn(game, state, cell: int, frames: int = 300):
+    """Where the first monster comes in from the edge (x, y) when the game enters `state` with edge cell `cell` and
+    Link stands still (asm:EdgeSpawn_FindNextCell walks the ring from the cell), or None."""
+    game.load(state, randomize_rng=False, controllable=True)
+    game.write(EDGE_CELL, cell)
+    room = None
+    for _ in range(frames):
+        game.press(0, 1)
+        ram = game.ram()
+        if room is None and ram[MODE] == PLAY_MODE:
+            room = int(ram[ROOM])
+        if room is not None and ram[ROOM] != room:
+            return None
+        for s in range(1, 9):
+            if ram[OBJ_TYPE + s] and ram[OBJ_UNINIT + s] == 0 and room is not None:
+                return int(ram[OBJ_X + s]), int(ram[OBJ_Y + s])
+    return None
+
+
+def cmd_overworld(args):
+    """The route's overworld doors: what real play brings ($524 for a room with spawn spots, the first edge cell a
+    monster comes in by for an edge room) against the uniform draw's 9 and 41 values, by the game entering each
+    door's chain-0 seed state with every value (Link standing still)."""
+    steps = route_maps(args.route)
+    real = {}
+    for _, e in real_entries(args.scans, args.route, args.min_version):
+        if e['level'] == 0:
+            real.setdefault((0, e['room'], e['link'][2]), []).append(e)
+    game = _native.Game()
+    rows, done = [], set()
+    for index in sorted(steps):
+        s = steps[index]
+        door = tuple(s['door'])
+        if door[0] != 0 or s['cave'] or door in done:
+            continue
+        done.add(door)
+        entries = real.get(door, [])
+        layouts = []
+        for sc in range(9):
+            placed, _, _, _ = enter(game, s['state'], None, sc, 0)
+            layouts.append(json.dumps(placed))
+        spots = len(set(layouts)) > 1
+        row = {'step': index, 'door': 'ox%02x' % door[1], 'facing': door[2], 'runs': len(entries)}
+        if spots:
+            real_layouts = {layouts[e['spawn_cycle']] for e in entries}
+            row.update(kind='spots', served_layouts=len(set(layouts)), real_values=sorted({e['spawn_cycle'] for e in entries}),
+                       real_layouts=len(real_layouts),
+                       served_outside=sum(lay not in real_layouts for lay in layouts) / 9 if entries else None)
+        else:
+            first = [first_edge_spawn(game, s['state'], cell) for cell in EDGE_SPAWN_CELLS]
+            if not any(first):
+                row.update(kind='none' if s['monsters'] == 0 else 'other')
+            else:
+                cells = {e['edge_cell'] for e in entries}
+                real_first = {first_edge_spawn(game, s['state'], c) for c in cells}
+                row.update(kind='edge', served_first_cells=len(set(first)), real_cells=sorted(cells),
+                           real_first_cells=len(real_first),
+                           served_outside=sum(f not in real_first for f in first) / len(first) if entries else None)
+        rows.append(row)
+        print(row, flush=True)
+    (Path(args.out) / args.name).write_text('\n'.join(json.dumps(r) for r in rows) + '\n')
+
+
 def cmd_served(args):
     """What served starts place: each pre-entry start state entered with spawn cycle 0-8 (the draw's nine values,
     equally likely: `room_entry::randomize_spawn`), its own random bytes kept (placement reads none)."""
@@ -509,6 +665,20 @@ def main(argv=None):
     p.add_argument('states', nargs='+')
     p.add_argument('--name', default='served.json')
     p.set_defaults(func=cmd_served)
+    p = sub.add_parser('overworld')
+    p.add_argument('scans', nargs='*')
+    p.add_argument('--route', default='d3first')
+    p.add_argument('--min-version', default='0')
+    p.add_argument('--name', default='overworld_d3first.jsonl')
+    p.set_defaults(func=cmd_overworld)
+    p = sub.add_parser('plan')
+    p.add_argument('scans', nargs='*')
+    p.add_argument('--route', default='d3first')
+    p.add_argument('--min-version', default='0')
+    p.add_argument('--name', default='plan_d3first.jsonl')
+    p.add_argument('--from-dungeon-doors', action='store_true',
+                   help="each dungeon's entrance at the runs' commonest value (the overworld's maps move with Link)")
+    p.set_defaults(func=cmd_plan)
     p = sub.add_parser('draws')
     p.add_argument('scans', nargs='+')
     p.add_argument('--route', default='d3first')
