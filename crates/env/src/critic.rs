@@ -5,7 +5,7 @@
 //! rewards and PBRS on the previous state's wavefront.
 
 use crate::config::{ConfigError, SpecialistConfig};
-use crate::end_conditions::RETREAT;
+use crate::end_conditions::{DROPS_LEFT, RETREAT};
 use crate::rewards::{
     NEUTRAL, Outcome, REWARD_LARGE, REWARD_MAXIMUM, REWARD_MEDIUM, REWARD_MINIMUM, REWARD_SMALL,
     REWARD_TINY, StepRewards,
@@ -195,6 +195,9 @@ pub struct GameplayCritic {
     /// The `retreat` ending is neutral (the default; `endings: {retreat: ...}` can make it a failure): leaving through
     /// a route step's `retreat` exit then costs no `penalty-wrong-location` either.
     pub neutral_retreat: bool,
+    /// The task names `drops-left` in its `endings` (round 43, Manhandla and Dodongo): an exit leaving wanted bombs
+    /// lying pays no exit reward, as that ending ends it ([`crate::rewards::drops_left`]).
+    pub drops_left_ends: bool,
     correct_locations: HashSet<MapLocation>,
     /// The maze steps (room, `MazeStep` after the loop) correct maze loops reached, rewarded like new rooms.
     correct_loops: HashSet<(MapLocation, u8)>,
@@ -221,6 +224,7 @@ impl GameplayCritic {
             beam_unfired_penalty: crate::config::BEAM_UNFIRED_PENALTY,
             bomb_catch_min: 0,
             neutral_retreat: true,
+            drops_left_ends: false,
             correct_locations: HashSet::new(),
             correct_loops: HashSet::new(),
             room_combat_counts: HashMap::new(),
@@ -253,6 +257,7 @@ impl GameplayCritic {
         critic.beam_unfired_penalty = config.reward.beam_unfired_penalty;
         critic.bomb_catch_min = config.reward.bomb_catch_min;
         critic.neutral_retreat = config.endings.get(RETREAT).is_none_or(|outcome| outcome == NEUTRAL);
+        critic.drops_left_ends = config.endings.contains_key(DROPS_LEFT);
         Ok(critic)
     }
 
@@ -729,8 +734,13 @@ impl GameplayCritic {
                 rewards.add(Outcome::penalty("penalty-left-drop", -self.left_drop_penalty * left as f64));
             }
         }
-        // Round 43: leaving a carrier alive where the step's carriers come first pays no exit (`carrier-left`).
-        if exit_is_correct(c.map, &change.previous, c.prev_objective, curr) && !c.prev_objective.carriers_first() {
+        // Round 43: leaving a carrier alive where the step's carriers come first pays no exit (`carrier-left`), nor
+        // leaving wanted bombs lying where the task ends that (`drops-left`).
+        let left_behind = self.drops_left_ends && crate::rewards::drops_left(c);
+        if exit_is_correct(c.map, &change.previous, c.prev_objective, curr)
+            && !c.prev_objective.carriers_first()
+            && !left_behind
+        {
             if self.correct_locations.contains(&curr) {
                 rewards.add(Outcome::reward("reward-revisit-location", REWARD_TINY));
             } else {

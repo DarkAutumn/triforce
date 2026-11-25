@@ -2087,6 +2087,53 @@ fn locked_door_reward_fires_once() {
     assert!(infos[hits[0]..].iter().any(|i| i.room == (6, 0x78, false)));
 }
 
+/// Round 43 (`endings: {drops-left: soft-failure}`, Manhandla's and Dodongo's tasks; the owner: never leave bombs
+/// behind): the same walk out of 6_79s with a dropped bomb pack written lying in the E part of the room (slot $B, type
+/// $60, item $00, its timer full; SETUP: RAM, after the reset, continued with `restore`). With the ending named and
+/// room in the bag the exit ends `drops-left`, a soft failure with no exit reward; with a full bag (nothing to take)
+/// or without the ending named it is `exit-correct` as before.
+#[test]
+fn leaving_wanted_bombs_behind_ends_drops_left_where_the_task_names_it() {
+    use zelda::Nes;
+    let Some(nes) = open_core() else { return };
+    let mut nes = Some(nes);
+    for (named, full, want) in [(true, false, "drops-left"), (true, true, "exit-correct"), (false, false, "exit-correct")] {
+        let mut env = make_env(nes.take().unwrap(), "stalfos-keese-gel", Some("6_79s_0"), |c| {
+            c.reward.item_targets = false;
+            c.reward.drops_first = false;
+            if named {
+                c.endings.insert("drops-left".into(), "soft-failure".into());
+            }
+        });
+        env.reset(Some(0), None).unwrap();
+        let max = env.session().state().bomb_max() as u8;
+        let mut snap = env.session().snapshot();
+        let slot = 0xB;
+        for (table, value) in [
+            (tables::OBJ_ID, 0x60),
+            (tables::OBJ_STATUS, item::BOMBS as u8),
+            (tables::ITEM_TIMER, 0xFF),
+            (tables::OBJ_POS_X, 0xC0),
+            (tables::OBJ_POS_Y, 0x80),
+        ] {
+            <ZCore as Nes>::poke_state(&mut snap.machine, (table.0 + slot) as u16, value);
+        }
+        <ZCore as Nes>::poke_state(&mut snap.machine, Var::Bombs.addr(), if full { max } else { 2 });
+        env.restore(&snap, "6_79s_0+bombs").unwrap();
+        assert!(env.session().state().items.iter().any(|it| it.id == item::BOMBS), "the bombs lie in the room");
+        let infos = walk(&mut env, 60);
+        let last = infos.last().unwrap();
+        assert_eq!(last.room, (6, 0x78, false), "named {named} full {full}");
+        assert_eq!(last.ending, want, "named {named} full {full}");
+        assert_eq!(has_term(last, "reward-new-location"), want == "exit-correct", "{:?}", last.rewards);
+        if want == "drops-left" {
+            assert_eq!(last.outcome, "soft-failure");
+            assert_eq!(term(last, PENALTY_TERMINAL_FAILURE), Some(-TERMINAL_FAILURE_PENALTY_VALUE));
+        }
+        nes = Some(release(env));
+    }
+}
+
 /// Same start, same RNG, same actions: PBRS on adds pbrs-movement outcomes, PBRS off has none, and every other
 /// outcome is identical.
 #[test]

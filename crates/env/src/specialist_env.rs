@@ -781,8 +781,23 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
                 };
             let mut values = ram_randomization_values(spec, state.max_health(), &mut self.rng, chain);
             // The room's own values (round 40: by the side the start enters from, its route entry: a curriculum
-            // start's is its track's seed state's).
-            apply_room_values(spec, state.full_location(), state_entry(seed_name), &mut self.rng, &mut values);
+            // start's is its track's seed state's), then the forced-drop counters and the drop cycle where the room
+            // states no cycle (round 43, `drop_state: real`): a seed start draws them as real play brings them to a
+            // door; a track start keeps its own (mid-room: the counters and the cycle are part of its play so far).
+            let (at, entry) = (state.full_location(), state_entry(seed_name));
+            apply_room_values(spec, at, entry, &mut self.rng, &mut values);
+            if self.curriculum_tag.is_some() {
+                crate::start_states::keep_track_drop_state(spec, at, entry, &mut values);
+            } else if spec.drop_state.is_some() {
+                let table = self.data.drop_states.as_deref().ok_or_else(|| {
+                    EnvError::Config(crate::config::ConfigError(format!(
+                        "{}: ram_randomization.drop_state needs {} (scripts/experiments/r43_drop_state.py build)",
+                        self.config.name,
+                        crate::config::DROP_STATE_FILE
+                    )))
+                })?;
+                crate::start_states::apply_drop_state(spec, table, at, entry, &mut self.rng, &mut values);
+            }
             values
         };
         if !values.is_empty() {
