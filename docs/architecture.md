@@ -3047,12 +3047,22 @@ only has to be a real game, not a typical one"); the replay of the path from the
 pre-entry frame.
 Each door is kept as `<out>/carry/<name>` (the next step's source) and written as `<out>/<name>` with Link's hearts
 filled to his containers (the one write: the walk arrives hurt as runs do, the file holds the valid upper end, and a
-reset draws hp anyway). A stretch's plain way is a branch walked from the door where the ways part. `<out>/walk.json`
-records the power-on, the commit, the command and per door `door_facts` (the spawn cycle, edge cell, chase state,
-dividers, drop cycle, help-drop counters, kills since the last hit, room history, banked kills, hearts carried,
-inventory) and the file's sha256; `install` puts it at `triforce/states/<ns>_walk.json` (the start rule takes each
-door's `spawn_cycle` as the route's planned value, round 43) and removes the namespace's other states. The audit's
-UNWALKED flags a namespaced state its record does not list with these bytes; `build` and `path` refuse the route.
+reset draws hp anyway). A stretch's plain way is a branch walked from the door where the ways part. After Dungeon 1
+(the power-on walk covers Dungeons 3, 4 and 1) the route is walked in segments side by side (the lead, Nov 25: what a
+door's state gives training past a reset's draws is the progress, the overworld's flags and the walked dungeon's
+memory, and none of a dungeon's memory reaches
+the next): each leg and the dungeon after it from the dungeon exit before it (0_37c_v2, 0_3cc, 0_0bc, 0_42c, 0_22c,
+0_6dc), its first machine that door's earlier state checked against the route and set to it
+(`scripts/experiments/r44_segments.py start`: containers, triforce, items, maps, compasses, the key ledger, the
+overworld's taken, secret and kill bits, the next dungeon's room flags 0, and `$524`/`$525`/`$52A`/`$50`/`$627`/
+`$621-$626` from the real runs' next arrival at that screen) and `walk --segment <its checks>`. `<out>/walk.json`
+records each walk (`walks[<id>]`: the power-on or the segment's start and checks, the commit, the command, each
+resumption) and per door its walk, `door_facts` (the spawn cycle, edge cell, chase state, dividers, drop cycle,
+help-drop counters, kills since the last hit, room history, banked kills, hearts carried, inventory) and the file's
+sha256; `install` merges it into `triforce/states/<ns>_walk.json` (the start rule takes each door's `spawn_cycle` as
+the route's planned value, round 43) and, unless `--partial`, removes the namespace's states no walk in it made. The
+audit's UNWALKED flags a namespaced state its record does not list with these bytes, WALK-RECORD a walk with no
+commit or start; `build` and `path` refuse the route.
 What the walk holds that a real run would not: full hearts in each file (a run is hurt); the explorer's way through
 each room (the spot and frame Link leaves by, hence the random phase, the chase state and the overworld's edge cells
 and `$524`, which depend on where Link crosses each screen edge); bombs used only where a room needs them
