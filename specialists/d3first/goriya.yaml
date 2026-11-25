@@ -84,7 +84,6 @@ curriculum:
   enabled: true
   untracked:                              # round 40: the seed states that train without a track (triforce.inputs);
   - d3first_7_49s_[0-9]                   # 1:0x23, 2:0x1e explored, 7:0x1b the rule goriya-1b's (Tracks41)
-harvested_fraction: 0.25
 one_room: true
 max_steps: 2000
 warm_start: null

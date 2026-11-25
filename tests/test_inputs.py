@@ -28,9 +28,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 @pytest.fixture
 def zol():
-    """zol@d3first's task (ten start-state globs, harvested states at 0.25, a curriculum)."""
+    """zol@d3first's task (ten start-state globs, a curriculum) with harvested states at 0.25 (the generation draws
+    none since round 43, the reset rule; the machinery stands for a task that sets a share)."""
     require_rom()
-    return load_specialist(str(ROOT / 'specialists' / 'd3first' / 'zol.yaml'))
+    return load_specialist(str(ROOT / 'specialists' / 'd3first' / 'zol.yaml')).replace(harvested_fraction=0.25)
 
 
 def _harvested(directory: Path, names) -> Path:
@@ -337,7 +338,8 @@ def test_the_lab_refuses_missing_harvested_states(tmp_path):
     # zol@d3first's task plus the one line (round 40: the task extends `_generation.yaml` beside it, so a copy of its
     # text elsewhere no longer loads; the test's task extends it instead, as an experiment's file does).
     task = tmp_path / 'zol.yaml'
-    task.write_text(f"extends: {ROOT / 'specialists' / 'd3first' / 'zol.yaml'}\nharvested_states: {tmp_path / 'none'}\n")
+    task.write_text(f"extends: {ROOT / 'specialists' / 'd3first' / 'zol.yaml'}\nharvested_fraction: 0.25\n"
+                    f"harvested_states: {tmp_path / 'none'}\n")
     with pytest.raises(SystemExit, match='holds none'):
         parse_families([f'zol@d3first={task}'], 1, curriculum=False, states_dir=REPO_STATES_DIR)
 

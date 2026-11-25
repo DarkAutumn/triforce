@@ -74,7 +74,7 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, 
                                QMainWindow, QMenu, QPlainTextEdit, QPushButton, QScrollArea, QSplitter,
                                QStackedWidget, QTabWidget, QVBoxLayout, QWidget)
 
-from triforce import jobqueue
+from triforce import jobqueue, jobspeed
 
 PLAN_FILE = 'training.json'
 LOGS_DIR_ENV = 'TRIFORCE_LOGS_DIR'
@@ -1405,15 +1405,27 @@ def job_counters(job: dict, now: float, has_plan: bool = False) -> list[dict]:
     return counters
 
 
+def job_speed(job: dict) -> list[tuple[str, QColor]]:
+    """A running training's steps a second, one line under its counters (``jobspeed``, round40.md "Steps a second on
+    record"): ``jobspeed.speed_line`` (its mean, last iteration, rollout, shape, normal and state), and while its
+    mark is SLOW also ``jobspeed.slow_line`` (how far below, since when, what runs beside it) in the warning colour;
+    [] for a job that is not running or reports no speed."""
+    line = jobspeed.speed_line(job) if job.get('status') == 'running' else None
+    if line is None:
+        return []
+    slow = jobspeed.slow_line(None, job)
+    return [(line, C.muted)] + ([(slow, C.warn)] if slow else [])
+
+
 def job_view(job: dict, now: float, place: int | None = None, has_plan: bool = False) -> dict:
     """A job's card, as the window draws it with its widgets (``JobCard``) and the web view with its elements (the
     ASCII bar is ``triforce job list``'s alone): 'headline' (agent, task, sub-task), 'description', 'state'
     (``jobqueue.tags`` without the running step, which the steps' list shows) in 'color' (``job_color``),
-    'counters' (``job_counters``), 'steps' (a build's and a test's: [{'name', 'status'}], status pending, running,
-    completed or failed), 'note' (a running job that reports nothing and has no plan: 'no progress reported' and its
-    time against its estimate; a waiting job: what it waits for, ``read_queue``'s 'waits'), 'flags' (``jobs.flag``:
-    [{'level', 'code', 'text', 'color'}], red ones in the bad colour, notes in the in-between one) and 'command' (its
-    verb and kind, where it runs, its command)."""
+    'counters' (``job_counters``), 'speed' (``job_speed``: [(line, colour)] under the counters), 'steps' (a build's
+    and a test's: [{'name', 'status'}], status pending, running, completed or failed), 'note' (a running job that
+    reports nothing and has no plan: 'no progress reported' and its time against its estimate; a waiting job: what
+    it waits for, ``read_queue``'s 'waits'), 'flags' (``jobs.flag``: [{'level', 'code', 'text', 'color'}], red ones
+    in the bad colour, notes in the in-between one) and 'command' (its verb and kind, where it runs, its command)."""
     steps = [{'name': str(step.get('name') or '?'), 'status': str(step.get('status') or 'pending')}
              for step in job.get('steps') or []]
     note = (job.get('waits') or '') if job.get('status') == 'queued' else ''
@@ -1425,8 +1437,8 @@ def job_view(job: dict, now: float, place: int | None = None, has_plan: bool = F
              for flag in job.get('flags') or []]
     return {'headline': jobqueue.headline(job), 'description': job.get('description') or '',
             'state': jobqueue.tags({**job, 'steps': None}, now, place), 'color': job_color(job, now),
-            'counters': job_counters(job, now, has_plan), 'steps': steps, 'note': note, 'flags': flags,
-            'command': job_command(job)}
+            'counters': job_counters(job, now, has_plan), 'speed': job_speed(job), 'steps': steps, 'note': note,
+            'flags': flags, 'command': job_command(job)}
 
 
 def job_command(job: dict) -> str:
@@ -1463,14 +1475,16 @@ def move_job(job_id: int, undo: bool = False) -> dict:
 
 
 def job_sections(view: dict) -> list:
-    """The detail pane's sections of a job without a log folder (``job_view``): its counters as bars, its steps,
-    then who, what and where."""
+    """The detail pane's sections of a job without a log folder (``job_view``): its counters as bars, its speed (a
+    running training's, ``job_speed``), its steps, then who, what and where."""
     sections = []
     if view['counters']:
         sections.append(('bars', 'Progress', [
             (counter['label'] or counter['unit'], counter['fraction'],
              ' · '.join(part for part in (counter['numbers'], counter['speed'], counter['time']) if part),
              view['color']) for counter in view['counters']]))
+    if view['speed']:
+        sections.append(('text', 'Speed', view['speed']))
     if view['steps']:
         sections.append(('text', 'Steps', [(f"{step['name']}: {STATUS[step['status']][1]}", STATUS[step['status']][0])
                                            for step in view['steps'] if step['status'] in STATUS]))
@@ -1558,7 +1572,8 @@ def job_box(job: dict, model: Training, now: float, place: int | None = None) ->
     still going, a step of the job that no row of its plan shows: the 250 test's ``bomb metrics`` over its replays
     once its runs are done; the owner, Nov 24: the job read RUNNING for ten minutes under a finished chain with
     nothing saying what it was doing.  A counter named for its unit, ``runs`` or ``steps``, is the plan's rows'
-    progress and is not drawn twice)."""
+    progress and is not drawn twice), then 'speed' (``job_speed``: [(line, colour)], a running training's steps a
+    second under the counters, SLOW in the warning colour)."""
     status = job.get('status')
     color = job_color(job, now)
     state = (f"QUEUED #{place}" if place else 'QUEUED') if status == 'queued' else (
@@ -1576,7 +1591,7 @@ def job_box(job: dict, model: Training, now: float, place: int | None = None) ->
     counters = [counter for counter in job_counters(job, now, has_plan=True) if counter['label']]
     return {'headline': jobqueue.headline(job), 'pills': [(text, pill) for text, pill in pills if text],
             'description': job.get('description') or '', 'facts': facts, 'flags': flags, 'bar': len(model.runs) > 1,
-            'counters': counters, 'command': job_command(job)}
+            'counters': counters, 'speed': job_speed(job), 'command': job_command(job)}
 
 
 def row_fraction(run: Run, status: str, now: float) -> float:
@@ -1896,6 +1911,18 @@ def startup_skip(run: Run, status: str, skip_startup: bool) -> tuple[int, str]:
     return skip, overlay
 
 
+def wasted_series(run: Run, skip: int) -> list[tuple[float, float]]:
+    """The health chart's ``total (+wasted)`` points: from the run's first iteration whose total differs from its
+    real change on (every later one kept, even where the two agree again); [] for a run whose total never differs
+    (the chart then shows 'real' alone)."""
+    real = dict(run.series('health_change'))
+    first = next((iteration for iteration, total in run.series('health_change_total')
+                  if iteration not in real or not math.isclose(total, real[iteration], abs_tol=1e-9)), None)
+    if first is None:
+        return []
+    return [point for point in run.series('health_change_total', skip) if point[0] >= first]
+
+
 def run_chart_data(run: Run, skip: int) -> dict[str, tuple[list[dict], list[tuple]]]:
     """Each training chart's (series, horizontal lines) for a run, leaving out its first ``skip`` iterations."""
     stop = (run.start or {}).get('stop_success')
@@ -1911,6 +1938,7 @@ def run_chart_data(run: Run, skip: int) -> dict[str, tuple[list[dict], list[tupl
                                                               ('off', 'clips off', C.text))
                    ] if clips_split_matters(episodes['on'], episodes['off']) else []
     earned, cost, net = bomb_reward_series(run, skip)
+    wasted = wasted_series(run, skip)
     return {
         # Curriculum first: the legend drops entries from the left when the chart is small, so 'success' stays (the
         # owner, Nov 24, saw only 'curriculum').
@@ -1924,11 +1952,11 @@ def run_chart_data(run: Run, skip: int) -> dict[str, tuple[list[dict], list[tupl
         ], hlines),
         'reward': ([{'label': 'total', 'color': C.accent, 'points': run.series('reward/total', skip), 'area': True}],
                    []),
-        # hearts at exit - entry; total adds the dropped hearts picked up at full health (absent in older logs).
+        # hearts at exit - entry; total adds the dropped hearts picked up at full health (absent in older logs), drawn
+        # only from the run's first iteration where it differs from real (``wasted_series``).
         # Total first: the legend drops entries from the left when the title leaves no room, so 'real' stays.
         'health': ([
-            {'label': 'total (+wasted)', 'color': C.accent, 'points': run.series('health_change_total', skip),
-             'width': 1.4},
+            *([{'label': 'total (+wasted)', 'color': C.accent, 'points': wasted, 'width': 1.4}] if wasted else []),
             {'label': 'real', 'color': C.ok, 'points': run.series('health_change', skip), 'area': True},
         ], [(0.0, C.faint, 'no change (exit = entry)')]),
         'length': ([{'label': 'steps', 'color': C.warn, 'points': run.series('episode_steps', skip), 'area': True}],
@@ -2282,14 +2310,15 @@ class Header(Clickable):
         return job_box(view.job, view.model, now, view.place)
 
     def refresh(self):
-        """Reads the box and fits the header to it (its description, its counters and its plan's bar come and go)."""
+        """Reads the box and fits the header to it (its description, its counters, its speed and its plan's bar come
+        and go)."""
         self.box = self.read_box(time.time())
         box = self.box
         if box is None:
             self.setFixedHeight(self.HEIGHT)
         else:
             self.setFixedHeight(self.BOX_TOP + self.BOX_ROW + self.BOX_LINE * (2 + bool(box['description'])
-                                                                               + len(box['flags']))
+                                                                               + len(box['flags']) + len(box['speed']))
                                 + self.BOX_COUNTER * len(box['counters'])
                                 + (self.BOX_BAR if box['bar'] else 0) + self.BOX_BOTTOM)
         self.update()
@@ -2434,6 +2463,11 @@ class Header(Clickable):
             paint_counter(p, QRectF(left, y + 2, right - left, CounterBar.HEIGHT), counter,
                           job_color(self.view.job, now))
             y += self.BOX_COUNTER
+        p.setFont(font(9))
+        for text, color in box['speed']:
+            p.setPen(color)
+            p.drawText(QPointF(left, y + 14), p.fontMetrics().elidedText(text, Qt.TextElideMode.ElideRight, width))
+            y += self.BOX_LINE
         if box['bar']:
             self._paint_bar(p, QRectF(left, y + 6, right - left, 22), model, now, t)
             y += self.BOX_BAR
@@ -2554,8 +2588,8 @@ class StepList(QWidget):
 
 class JobCard(Clickable):
     """A queue job's card (``job_view``), drawn with widgets: who asked for it, its description and its state, a
-    progress bar a counter (``CounterBar``), its steps (``StepList``), then what it is and where it runs; above its
-    log folder's header and rows when it has one."""
+    progress bar a counter (``CounterBar``), a running training's speed (``job_speed``), its steps (``StepList``), then
+    what it is and where it runs; above its log folder's header and rows when it has one."""
 
     MARGIN, SPACING = 10, 3
 
@@ -2570,10 +2604,12 @@ class JobCard(Clickable):
         self.head = TextLines()
         self.counters = QVBoxLayout()
         self.counters.setSpacing(self.SPACING)
+        self.speed = TextLines()
         self.steps = StepList(view)
         self.foot = TextLines()
         layout.addWidget(self.head)
         layout.addLayout(self.counters)
+        layout.addWidget(self.speed)
         layout.addWidget(self.steps)
         layout.addWidget(self.foot)
         self.bars: list[CounterBar] = []
@@ -2601,10 +2637,11 @@ class JobCard(Clickable):
             (shown['state'], shown['color'], font(9.5, QFont.Weight.Bold)),
             *[(line, flag['color'], font(9.5, QFont.Weight.Bold) if index == 0 else font(9))
               for flag in shown.get('flags') or [] for index, line in enumerate(flag_lines(flag))]])
+        self.speed.set_lines([(text, color, font(9)) for text, color in shown.get('speed') or []])
         self.steps.set_steps(shown.get('steps') or [])
         self.foot.set_lines([] if not shown else [(shown['note'], C.muted, font(9)),
                                                   (shown['command'], C.faint, font(8.5, mono=True))])
-        parts = [widget.minimumHeight() for widget in (self.head, *self.bars, self.steps, self.foot)
+        parts = [widget.minimumHeight() for widget in (self.head, *self.bars, self.speed, self.steps, self.foot)
                  if not widget.isHidden()]
         self.setFixedHeight(2 * self.MARGIN + sum(parts) + self.SPACING * max(0, len(parts) - 1))
         self.update()
@@ -4300,10 +4337,10 @@ def css_color(color: QColor) -> str:
 def web_job(job: dict, place: int | None, now: float, model: Training | None = None) -> dict:
     """A queue job as the page lists it, as the window draws it: {'id': its key, 'status', 'color', 'place' (in line,
     while queued), 'ended', 'folder': its log folder ('' without one), 'plan': its folder's plan line while it runs
-    (``WebState``), else None, 'box': the one box of a job whose plan is read (``model``: ``job_box``, its pills and
-    facts as [text, colour]), else None; and its card (``job_view``), which the page draws for a job without a box:
-    'headline', 'description', 'state', 'counters' (``job_counters``: the page draws each one's bar), 'steps'
-    ([{'name', 'status', 'label', 'color'}]), 'note', 'command'}."""
+    (``WebState``), else None, 'box': the one box of a job whose plan is read (``model``: ``job_box``, its pills,
+    facts, flags and speed as [text, colour]), else None; and its card (``job_view``), which the page draws for a job
+    without a box: 'headline', 'description', 'state', 'counters' (``job_counters``: the page draws each one's bar),
+    'speed' ([text, colour], ``job_speed``), 'steps' ([{'name', 'status', 'label', 'color'}]), 'note', 'command'}."""
     folder = job_folder(job)
     view = job_view(job, now, place, has_plan=folder is not None)
     box = None
@@ -4311,10 +4348,12 @@ def web_job(job: dict, place: int | None, now: float, model: Training | None = N
         box = job_box(job, model, now, place)
         box = {**box, 'pills': [[text, color.name()] for text, color in box['pills']],
                'facts': [[text, color.name()] for text, color in box['facts']],
-               'flags': [[text, color.name()] for text, color in box['flags']]}
+               'flags': [[text, color.name()] for text, color in box['flags']],
+               'speed': [[text, color.name()] for text, color in box['speed']]}
     return {'id': job_key(job), 'status': job.get('status') or '', 'color': view['color'].name(),
             'place': place, 'ended': job.get('status') in jobqueue.ENDED, 'headline': view['headline'],
             'description': view['description'], 'state': view['state'], 'counters': view['counters'],
+            'speed': [[text, color.name()] for text, color in view['speed']],
             'steps': [{**step, 'label': STATUS.get(step['status'], (C.muted, step['status']))[1],
                        'color': STATUS.get(step['status'], (C.muted, ''))[0].name()} for step in view['steps']],
             'note': view['note'], 'command': view['command'], 'folder': str(folder) if folder else '', 'plan': None,
@@ -5026,6 +5065,11 @@ function flagsHtml(job) {
     `<div class="jflagt">${esc(flag.text)}</div></div>`).join('');
 }
 
+// A running training's steps a second under its counters (``job_speed``), SLOW in the warning colour.
+function speedHtml(lines) {
+  return lines.map(([text, color]) => `<div class="jnote" style="color:${color}">${esc(text)}</div>`).join('');
+}
+
 // A job with a plan, as the window draws its one box (``job_box``): who with the state and the plan's badges, the
 // description, one line of facts, the plan's bar when it has several runs (its line's share done and counts), the
 // command. Its runs' cards follow below with every other card.
@@ -5038,14 +5082,14 @@ function boxHtml(job) {
     '<div class="jfacts">' + box.facts.map(([text, color]) => `<span style="color:${color}">${esc(text)}</span>`)
       .join('<i>·</i>') + '</div>' + flagsHtml(job) +
     (box.counters.length ? '<div class="ctrs">' + box.counters.map(counter => counterHtml(counter, job.color))
-      .join('') + '</div>' : '') +
+      .join('') + '</div>' : '') + speedHtml(box.speed) +
     (box.bar && plan ? '<div class="ctr">' + barHtml(plan.fraction, job.color, `${Math.floor(pct(plan.fraction))}%`) +
       `<span class="cr">${esc(plan.counts.join('  ·  '))}</span></div>` : '') +
     `<div class="jcmd">${esc(box.command)}</div></div>`;
 }
 
 // A job of the queue: its one box when it has a plan, else its card as the window draws it (``job_view``): who, its
-// description and state, a bar a counter, its steps, its command.
+// description and state, a bar a counter, a running training's speed, its steps, its command.
 function jobHtml(job) {
   if (job.box) return boxHtml(job);
   const steps = job.steps.map(step => `<span class="step ${esc(step.status)}" style="--s:${step.color}">` +
@@ -5056,7 +5100,7 @@ function jobHtml(job) {
     `<div class="jstate">${esc(job.state)}</div>` +
     flagsHtml(job) +
     (job.counters.length ? '<div class="ctrs">' + job.counters.map(counter => counterHtml(counter, job.color))
-      .join('') + '</div>' : '') +
+      .join('') + '</div>' : '') + speedHtml(job.speed) +
     (steps ? `<div class="steps">${steps}</div>` : '') +
     (job.note ? `<div class="jnote">${esc(job.note)}</div>` : '') +
     `<div class="jcmd">${esc(job.command)}</div>` + (job.plan ? planHtml(job.plan, true) : '') + '</div>';

@@ -282,6 +282,21 @@ impl ZCore {
         }
     }
 
+    /// The console's RESET button, pressed between two frames (a soft reset, `ResetKind::Soft`, nesdev "CPU
+    /// power up state" and "PPU power up state"): the CPU keeps A, X and Y, sets I, lowers SP by 3 and takes the
+    /// reset vector (7 cycles, counted); the PPU's control and mask registers are written 0 and its write latch
+    /// and fine X cleared (VRAM address, status flags, VRAM, palette RAM and OAM kept), its scanline and dot
+    /// restart at 0; the APU's channels are silenced (the triangle's length counter kept); the MMC1's shift
+    /// register is cleared and its PRG mode set to "last bank fixed"; **CPU RAM and the battery RAM keep every
+    /// byte**.  The frame count goes on.  Not modelled: the NES PPU ignoring $2000/$2001/$2005/$2006 writes until
+    /// the first vertical blank after a reset.  What a reset clears in RAM is the game's own reset code's doing,
+    /// as on the console (for Zelda `asm:Reset_Handler`, which waits two vertical blanks before it writes the PPU,
+    /// then `asm:Reset_ClearRam`).
+    pub fn reset(&mut self) {
+        self.bus.reset(ResetKind::Soft);
+        self.cycles += u64::from(self.bus.cpu.cycle);
+    }
+
     /// A complete copy of the machine state.
     pub fn snapshot(&self) -> MachineState {
         MachineState {

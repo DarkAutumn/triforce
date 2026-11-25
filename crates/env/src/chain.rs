@@ -966,6 +966,11 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             randomize_rng: true,
             fresh_room: true,
             banked_kills,
+            // Round 43, the reset rule (as a training reset's, drawn from the run's seed alone): the first room gets
+            // only values some play can bring to its door; the game carries `$524` on from there.
+            entry: self.data.entry_rule(self.data.map.namespace(&self.route.name)).map(|rule| {
+                zelda::room_entry::EntryDraw::new(rule, zelda::room_entry::Layout::Valid)
+            }),
             ..Default::default()
         };
         self.session.load(&machine, &opts, rng)?;

@@ -855,7 +855,8 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 - Tag releases `vX.Y.Z.R` on `main`. **Models are not checked in** (too large; kept in `/backup/triforce`, "Backups").
 - **Replays are `TFREPLAY` files** (`crates/replay`, `triforce/replay.py`) with their own integer `REPLAY_VERSION`,
   independent of the repo version. Every format change bumps it (the owner, Nov 23: replays never need to be
-  readable by older readers; version 2 added TARGETS, MASKS and the always-on DECISIONS); a reader refuses a newer
+  readable by older readers; version 2 added TARGETS, MASKS and the always-on DECISIONS, version 3 (Nov 25) the RESET
+  event, the console's RESET button `zcore::ZCore::reset` pressed by `emu-zelda.py --reset`); a reader refuses a newer
   replay by name and
   keeps reading every earlier version it can. `corpus/replays/` must keep verifying (`tf replay verify`, a cargo
   test): a deliberate break moves those files to `corpus/replays/retired/`, bumps `REPLAY_VERSION` and records new
@@ -950,7 +951,7 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   (`triforce/states/power_on/idle_<frames>.state`, one every 2000 frames); the run is the same with or without
   them. **Regenerate them with `python -m triforce.entry_states idle` whenever the state format or the emulator's
   behaviour changes** (`cargo test -p env --test power_on_idle` fails until then). The name is 1 to 8 of A–Z, 0–9
-  and space; `ZELDA` is refused (it starts the second quest).
+  and space; a run refuses `ZELDA` (it starts the second quest; `emu-zelda.py --name ZELDA` plays it).
 
 ## Environment
 
@@ -1061,6 +1062,24 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
     the jobs that ran in a queue with a `max-job-length` (express) longer than it, those in another that took that
     long or less, and the kinds of job always out of the queue within 2 minutes of joining it. Numbers to look at;
     nothing acts on them.
+  - **Every training's steps a second is on record, and SLOW is reported at once** (the owner, Nov 25: "I want the
+    resulting steps per second to be visible to the agent that started the training and waits on it [...] you
+    should immediately know if something is outside of bounds from the output of training"; round40.md "Steps a
+    second on record"). A training (`triforce train`, `triforce.lab.train`) reports its steps, the last
+    iteration's, the run's mean and the rollout's steps a second and its shape (network and width, games, look-ahead)
+    to its job; the wrapper keeps a sample every 2 minutes (time, steps, rates, load average, the jobs running
+    beside it) in the queue's db. Its **normal**: the median steps a second a game of the ended trainings of the same
+    shape beside as many other trainings (3 of them or more, 10 minutes each), else Perf43's reference
+    (`jobspeed.REFERENCE`), else none ("NO NORMAL"). **SLOW**: more than a quarter below its normal for more than ten
+    minutes; `triforce job wait` (a report every 5 minutes) and `triforce job list` print a `SLOW:` line (how far
+    below, since when, what runs beside it), the GUI's card shows it in the warning colour, the job's log gets a
+    notice (the job goes on). The **last line** of every training (the wrapper's, and again `triforce job wait`'s)
+    is its verdict: mean steps a second (a game), normal, IN BOUNDS or OUT OF BOUNDS (how far below, for how long,
+    what ran beside it), for a completed, failed or interrupted run alike. `triforce job speed [JOB...] [--last N]
+    [--since 24h]` answers from the db alone for any training past or running (`--series JOB`: its samples;
+    `--backfill`: trainings of older code, from their run folders). **The lead's standing instruction: an agent that
+    waits on a training and sees SLOW or OUT OF BOUNDS reports it to the lead at once, with the line; the lead
+    starts an investigation agent.** Don't kill or restart the training for it.
   - **`--detach` on `run`, `golden`, `build`, `test`, and `triforce job wait UNIT...`** (Nov 23): a job can wait in
     line for hours, and a wrapper started from a shell call or an agent's background job dies when that call's own
     time limit or the agent ends (it happened to the lead twice and to two agents in one afternoon: a chain cut

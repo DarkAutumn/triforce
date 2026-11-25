@@ -3,7 +3,8 @@
 
 use crate::format::{
     Cheat, Context, Cursor, Decision, Dist, ENDINGS, ENTRY_LEN, EVENT_CONTROL, EVENT_EPISODE, EVENT_OUTCOME,
-    EVENT_ROOM, EVENT_SEGMENT, EVENT_VISIT, Edit, Event, EventRecord, Foresight, HEADER_LEN, MAGIC, Mask, NO_POLICY,
+    EVENT_RESET, EVENT_ROOM, EVENT_SEGMENT, EVENT_VISIT, Edit, Event, EventRecord, Foresight, HEADER_LEN, MAGIC, Mask,
+    NO_POLICY,
     NO_STEP, REPLAY_VERSION, ReplayError, Reward, SOURCE_EMBEDDED, SOURCE_FILE, SOURCE_POWER_ON, Source, State,
     StateKind, Targets, format_error, section,
 };
@@ -314,6 +315,7 @@ impl Replay {
                 }
                 EVENT_SEGMENT => Event::Segment,
                 EVENT_VISIT => Event::Visit(c.text()?),
+                EVENT_RESET => Event::Reset,
                 _ => return c.error("an unknown event"),
             };
             Ok(EventRecord { frame, event })

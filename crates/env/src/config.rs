@@ -23,6 +23,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use zelda::enums::ActionKind;
+use zelda::room_entry::{DoorRule, EntryRule};
 use zelda::{GameMap, MapLocation};
 
 /// A config, game data or state-file problem (`ConfigError(ValueError)` in Python).
@@ -1510,6 +1511,10 @@ pub struct GameData {
     pub chain_specialists: HashMap<String, IndexMap<String, ChainConfigs>>,
     pub states_dir: PathBuf,
     pub trajectories_dir: PathBuf,
+    /// Round 43: per route state namespace ("" for bare names) the reset rule of its doors
+    /// (`triforce/entry_rule.<ns>.json`, written by `scripts/experiments/r43_seeds.py rule`): what a reset of a
+    /// pre-entry start state may write there, values some play of the game can bring to the door and nothing else.
+    pub entry_rules: HashMap<String, Arc<EntryRule>>,
 }
 
 /// The repo root of this checkout (`crates/env/../..`).
@@ -1625,6 +1630,54 @@ fn chain_specialists(
     Ok(out)
 }
 
+/// `triforce/entry_rule.<ns>.json`: `{"doors": [{"level", "room", "facing", "inside", "planned", "others": [...],
+/// "edge_cells": [...], "chase_targets": [[x, y], ...], "chase_timers": [...]}, ...]}` (`inside`: up a stair or out of
+/// a cave, `zelda::room_entry::enters_inside`; other keys say where each value came from).
+fn parse_entry_rule(text: &str, rel: &str) -> Result<EntryRule, ConfigError> {
+    let bad = |what: &str| ConfigError(format!("{rel}: {what}"));
+    let value: serde_json::Value = serde_json::from_str(text).map_err(|e| bad(&e.to_string()))?;
+    let byte = |v: &serde_json::Value, what: &str| -> Result<u8, ConfigError> {
+        v.as_u64().and_then(|n| u8::try_from(n).ok()).ok_or_else(|| bad(&format!("{what}: not a byte: {v}")))
+    };
+    let bytes = |v: &serde_json::Value, what: &str| -> Result<Vec<u8>, ConfigError> {
+        v.as_array().map_or(Ok(Vec::new()), |a| a.iter().map(|b| byte(b, what)).collect())
+    };
+    let mut out = Vec::new();
+    for door in value.get("doors").and_then(|d| d.as_array()).ok_or_else(|| bad("no doors list"))? {
+        let key = (
+            byte(&door["level"], "level")?,
+            byte(&door["room"], "room")?,
+            byte(&door["facing"], "facing")?,
+            door["inside"].as_bool().unwrap_or(false),
+        );
+        let rule = DoorRule {
+            planned: byte(&door["planned"], "planned")?,
+            others: bytes(&door["others"], "others")?,
+            edge_cells: bytes(&door["edge_cells"], "edge_cells")?,
+            chase_targets: door["chase_targets"]
+                .as_array()
+                .map_or(Ok(Vec::new()), |a| {
+                    a.iter()
+                        .map(|t| match bytes(t, "chase_targets")?.as_slice() {
+                            &[x, y] => Ok((x, y)),
+                            _ => Err(bad(&format!("a chase target is [x, y]: {t}"))),
+                        })
+                        .collect()
+                })?,
+            chase_timers: bytes(&door["chase_timers"], "chase_timers")?,
+        };
+        let cycles: Vec<u8> = std::iter::once(rule.planned).chain(rule.others.iter().copied()).collect();
+        if cycles.iter().any(|&c| c >= zelda::room_entry::SPAWN_CYCLE_LENGTH)
+            || rule.others.contains(&rule.planned)
+            || rule.chase_timers.iter().any(|&t| t > 7)
+        {
+            return Err(bad(&format!("not a value the game holds at {key:?}: {door}")));
+        }
+        out.push((key, rule));
+    }
+    Ok(EntryRule::new(out))
+}
+
 impl GameData {
     /// Loads everything under `root` and validates it.
     pub fn load(root: &Path) -> Result<Arc<GameData>, ConfigError> {
@@ -1693,6 +1746,13 @@ impl GameData {
             specialists.insert(name, Arc::new(config));
         }
         let chain_specialists = chain_specialists(root, &map, &specialists)?;
+        let mut entry_rules = HashMap::new();
+        for ns in std::iter::once(None).chain(namespaces.iter().copied().map(Some)) {
+            let rel = namespace_file("entry_rule", ns);
+            if root.join(&rel).exists() {
+                entry_rules.insert(ns.unwrap_or("").to_owned(), Arc::new(parse_entry_rule(&read(&rel)?, &rel)?));
+            }
+        }
         let data = GameData {
             root: root.to_path_buf(),
             map: Arc::new(map),
@@ -1704,6 +1764,7 @@ impl GameData {
             chain_specialists,
             states_dir: root.join(STATES_DIR),
             trajectories_dir: paths::data_dir("trajectories", &root.join("trajectories")),
+            entry_rules,
         };
         data.cross_check()?;
         Ok(Arc::new(data))
@@ -1814,6 +1875,12 @@ impl GameData {
     /// when unknown).
     pub fn chain_profile(&self, ns: Option<&str>, location: MapLocation) -> Option<&[f64]> {
         self.chain_hp.get(&chain_key(ns, location)).map(Vec::as_slice)
+    }
+
+    /// The reset rule of starts in namespace `ns` (None: bare names; None when the namespace has no `entry_rule`
+    /// file: its starts keep the uniform spawn draw).
+    pub fn entry_rule(&self, ns: Option<&str>) -> Option<Arc<EntryRule>> {
+        self.entry_rules.get(ns.unwrap_or("")).cloned()
     }
 
     /// The route a start state in namespace `ns` plays for `config` (phase X): the family's `route:` when its states

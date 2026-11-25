@@ -4304,6 +4304,234 @@ two solo runs 20 a state, 60 a room entry; `triforce-gen2/target/darknut-curve/*
 - Open: the first-pass kill the owner's Dungeon 3 plan wants (nothing in the task pays for the bombs against the
   risk); the Olive Garden's ceiling (0.43 at 9.3M; the fighter script 0.95).
 
+## Where a teacher's time goes (Perf43, branches `r43-serve` and `r43-perf`)
+
+anthropic/claude-opus-5-5 (Perf43), on `r40-int` at f8da9361. **The ask** (the owner, Nov 25): "we are back down to
+the 300-400 steps per second in training while the load average is 22 [...] Under this load we expect 1000 sps+. Or
+at least 750+ at worst [...] make sure there wasn't a perf regression", and the steps a second on record and in
+front of whoever waits on a training. His ruling on the first finding: "Lookahead cost is fine, that's just the
+price of our design. Definitely fix the other perf problem though."
+
+### The answer in short
+
+- **No regression** (the same work did not get slower). Every stage-1 teacher made 36-67 steps a second a game; the
+  300-400 the owner saw are the 8- and 10-game teachers (8 x 45 = 360). The teachers on last night's draw
+  (`3e085d3d`) were not slower than those before it: `gen1-darknut/s1` 48 a game against the old draw's
+  `gen1x-darknut/solo-seeds-s1` 37 over the same hours.
+- **The price was the way the generation's network acts, not its size.** The generation's `hitnet` is no network
+  the Rust actor knows: it is served by torch on the GPU from a Python thread inside the training process (docs/lab.md
+  "How an experimental network acts"), and in a training it was served **eagerly with a 5 ms batch window**: CUDA
+  graphs had been switched off in every training process on Nov 23 (f8def785) after a capture on the server thread
+  and the learner's GPU work failed each other. The games slept half their time waiting for the network's answer:
+  `gen1-darknut/s1`'s 20 game threads ran 31% of the time, waited for a CPU 13% and **slept 56%** (07:58, load 25;
+  rooms 54%, others 50%). Width is not it: the 256-wide `hitnet` runs of Nov 24 (`r40-zol-gen`, `t41-rooms`) made
+  37-60 a game like the 768-wide; the Rust actor's 256-wide `zelda` trainings made 80-225 a game (Nov 20-24).
+- **The look-ahead's price**, as the owner ruled, stays: `--try-others 4:0.25` emulates as many frames again as the
+  decisions themselves (`gen1-darknut/s1`: 11.6 frames a decision played, 11.4 tried).
+- **The fix** (`r43-serve`, 14f4e87c): the lab trainer serves with CUDA graphs again, captured where nothing else
+  uses the GPU. Measured below: x1.7-2.2 steps a second for an 8-game teacher, the games' sleep from 38-46% to 18-22%.
+- The learner is never the bottleneck: every stage-1 run's learner idled 7-17 s an iteration waiting for its next
+  rollout (`charts/rollout_wait_seconds`), and the rollout's steps a second equals the whole iteration's within 1-2%.
+
+### What the record says (stage 1, by the other trainings running beside each iteration)
+
+From each run's `metrics.jsonl` (an iteration's rows over the time since the one before) against the queue's db (the
+jobs running at that iteration's end); `/tmp/perf43_hist.py`, not kept. Steps a second a game, the median over the
+iterations of that kind:
+
+| run | games | beside 1 training | beside 2 | beside 3 (Perf43's measurements running too) |
+|---|---:|---:|---:|---:|
+| gen1-boss-aquamentus/s1 | 8 | 66.9 | 57.4 | |
+| gen1-boss-digdogger/s1 | 8 | 67.1 | 57.0 | |
+| gen1-boss-dodongo/s1 | 8 | 46.5 | 55.7 | 43.9 |
+| gen1-boss-gleeok/s1 | 8 | | 47.2 | 36.6 |
+| gen1-boss-gohma/s1 | 8 | | 65.5 | 48.6 |
+| gen1-boss-manhandla/s1 | 8 | | 50.0 | |
+| gen1-ganon/s1 | 8 | | 43.9 | |
+| gen1-rooms/s1 | 8 | | 47.5 | 26.4 |
+| gen1-others/s1 | 10 | | 41.2 | 23.1 |
+| gen1-darknut/s1 | 20 | 57.6 | 47.6 | 27.7 |
+| gen1-overworld/s1 | 20 | 44.9 | | |
+| gen1-walkers/s1 | 20 | 41.1 | 36.3 | |
+| gen1x-darknut/solo-seeds-s1 (old draw, `7c730e1c`) | 20 | | 36.9 | |
+
+The machine was CPU-bound throughout (`vmstat`: 88-94% user at load 25; at load 50-80 this morning, with Carrier43's
+and Emu43's suites at nice 10 and my measurements, the game threads waited for a CPU 30-65% of their time). A
+training's games get the CPU by thread, so a 20-game teacher takes more of a full machine than an 8-game one.
+**My measurements cost the teachers**: from 08:08, beside my express jobs, `gen1-darknut/s1` fell from 48 to 28 a
+game and others and rooms to 23 and 26 (the third column).
+
+### Inside a training (read only from /proc, no ptrace; `scripts/experiments/r43_perf_sleep.py`)
+
+- `perf record -e cpu-clock:u` on `gen1-darknut/s1` (20 s): the emulator 85% of its CPU (`zcore`, 28 points of it
+  the headless PPU), `libgomp` spin 4%, CUDA and torch 2.5%, Python 1%, the env and the pool 0.4%. The process used
+  7.1 cores of 20 threads.
+- Its threads (`/proc/<tid>/schedstat`, 10 s, load 25): the 20 game threads 31% running, 13% waiting for a CPU, 56%
+  asleep; the network server thread 42% running, 27% waiting for a CPU; 9 OpenMP threads 6.5% each spinning (0.6
+  cores).
+
+### The fix (`r43-serve` 14f4e87c; `triforce/nets/serve.py`, `triforce/lab/train.py`)
+
+- **Why f8def785 turned graphs off, and why that no longer bites.** A CUDA graph is captured on the server thread;
+  a capture fails (and fails the other thread) when another thread launches GPU work meanwhile, and in a training
+  the learner recomputes and updates on its main thread while the next rollout runs. The graphs were captured
+  lazily, one batch size at a time, whenever a size first came up, so in a training's second rollout beside the
+  learner. Now the lab trainer (`serve.learner_process(graphs=True)`) has its server capture **every** batch size
+  (1, 2, 4, ..., 64 rows) of a network **at its first batch**: the training's first rollout, during which the learner
+  only waits for it (nothing else in the process uses the GPU then). Nothing is captured later; a batch of a size
+  with no graph is served eagerly. Each later rollout **copies the learner's weights into the same served copy**
+  (`Server.serve_copy`, `load_state_dict` into the kept module) instead of a new deep copy, so the graphs, which
+  read the weights where they lie, stay valid. A rollout starts only once the one before ended, so the copy never
+  lands under a running rollout. The batch window is 1 ms with graphs (5 ms eager).
+- A capture or replay that fails, or one of a graph's first three replays that differs from the eager forward,
+  serves that network eagerly from then on with one line (`triforce: warning: served network N runs without CUDA
+  graphs from now on (served eagerly, the run goes on): ...`); the run goes on. The log says at its start how it
+  serves (`[lab] serving: CUDA graphs on cuda, each batch size captured at the first rollout (1 ms batch window;
+  TRIFORCE_SERVE_GRAPHS=0 serves eagerly)`). `TRIFORCE_SERVE_GRAPHS=0` serves eagerly as before; the manifest records
+  the mode (`training.serve`: forward, device, window, precision).
+- Untouched: `triforce train` (the Rust actor plays its network) and `lab.record` serve as before (eager).
+- Measurement switches, kept for the next time: `TRIFORCE_SERVE_ALTERNATE=1` (a run's rollouts alternate graphs and
+  eager, the first with graphs, so both meet the same load), `TRIFORCE_SERVE_AUDIT=1` (every graphed answer is
+  checked against the eager forward on the same rows: the largest difference and the decisions whose pick would
+  change), and the metrics `charts/serve_rows_per_batch`, `charts/serve_busy` (the server thread's share of the
+  rollout spent answering), `charts/serve_graphs`, `charts/cpu_seconds` (the process's CPU an iteration).
+
+### The gain (`scripts/experiments/r43_perf.sh`, `r43_perf_read.py`)
+
+The darknut teacher's recipe from scratch (seed 4101, models in the worktree, never the store), its rollouts
+alternating graphs and eager in one run (`TRIFORCE_SERVE_ALTERNATE=1`) so both meet the same load; the first
+iteration left out; medians over each mode's iterations; the game threads' shares from `r43_perf_sleep.py` (10 s
+windows inside those rollouts). The load average is the 1-minute one during the run. No row is "alone": the lead
+keeps the teachers' machine; at 08:41 the three teachers were stopped, and the other agents' jobs (Carrier43's and
+Emu43's suites at nice 10, Seeds43's scans) ran throughout.
+
+| run (beside) | load | serving | steps/s | a game | game threads asleep | waiting for a CPU | CPU ms a decision | rows a batch | server busy |
+|---|---:|---|---:|---:|---:|---:|---:|---:|---:|
+| 8 games, `g8-alt/r1` (the 3 teachers, 2 suites) | 65-69 | eager | 86 | 10.7 | 41% | 52% | 19.3 | 3.2 | 0.60 |
+| | | graphs | 185 | 23.1 | 18% | 65% | 13.6 | 2.1 | 0.22 |
+| 8 games, `g8-alt/r2` (Seeds43's 3 scans, 1 suite) | 61-63 | eager | 84 | 10.5 | 41% | 53% | 19.1 | 3.2 | 0.63 |
+| | | graphs | 183 | 22.8 | 16% | 67% | 13.1 | 2.0 | 0.20 |
+| 20 games, `alt/r1` (1 training of mine, 2 suites) | 51-53 | eager | 431 | 21.6 | 54% | 34% | 14.2 | 9.4 | 0.66 |
+| | | graphs | 483 | 24.1 | 32% | 47% | 7.9 | 5.2 | 0.41 |
+| 20 games, `alt/r2` (Seeds43's scans) | 25-26 | eager | 747 | 37.3 | 57% | 13% | 14.1 | 10.3 | 0.57 |
+| | | graphs | 1,047 | 52.3 | 33% | 22% | 6.6 | 5.1 | 0.50 |
+
+- **8 games: x2.2 at any load measured; 20 games: x1.4 at load 25, x1.1 at load 51.** The games stop sleeping on the
+  network (41% to 16-18% asleep for 8 games, 54-57% to 32-33% for 20), and where the machine is full the time they
+  gain goes to waiting for a CPU instead: at load 50-70 the CPU, not the serving, is the limit.
+- **Half the CPU a decision** (6.6-7.9 ms against 14.1-14.2 for 20 games, 13 against 19 for 8): the eager forward's
+  Python and kernel launches and the OpenMP spin beside them cost as much CPU as the emulator. On a full machine that
+  is what lets every training go faster together.
+- Fixed-seed pairs without alternation (4 iterations each, same seed): 20 games `base/r2` graphs 710 against
+  `eager/r3` 446 (both load 46), `base/r3` graphs 584 against `eager/r2` 281 (load 52-62).
+- The server's time a batch: eager 6-40 ms (it swings with the load: Python, the GIL beside the learner, the GPU
+  shared by the trainings), graphs 2.2-5.3 ms, of which the replay itself is about 1 ms (docs/lab.md: 0.67-1.36 ms
+  on a quiet machine).
+
+### The same actions
+
+- **No run is the same run twice, eager or not.** Two fixed-seed runs of the old serving (`eager/r2`, `eager/r3`;
+  darknut, 20 games, seed 4101) played the same first rollout (16,380 decisions: episodes, frames and rewards equal)
+  and differed from the second on (rollout 2's frames 248,391 against 248,237): the eager forward's floats depend on
+  how many rows the 5 ms window gathered, which depends on thread timing; and the learner's GPU update is not
+  bit-reproducible either (every loss differs at the last digits from the first update on, in every pair). So exact
+  identity is impossible for any change of the serving, and was before it.
+- **Graphs against eager, same seed:** the first rollout identical (`base/r0` eager against `graphs/r0`: 130
+  episodes, 251,862 frames, reward -25.739533 in both), and the second too (84 episodes, 248,391 frames) in that
+  pair; from there they differ as two eager runs do.
+- **The action distributions** (`audit/r1`, `TRIFORCE_SERVE_AUDIT=1`, darknut 20 games, 5 iterations): **81,937
+  decisions served by the graphs, each against the eager forward on the same rows: the largest difference of any
+  logit or value 8.1e-6, and 0 decisions whose pick would change** (kind, then direction and duration, the legal
+  logits plus one Gumbel draw shared by both, as the Rust code picks).
+
+### A run started on the old code resumes on the fix
+
+- A store run of my own on `3e085d3d` (the code the stage-1 teachers ran, worktree `triforce-r43-perf-gen2`):
+  `r43-perf-resume/s1`, the `others` teacher's recipe at 10 games, 8,192 steps an update, 20 iterations, seed 4101,
+  stopped by its job's time limit at iteration 7 (57,330 steps; "stays open").
+- Resumed from `r43-serve` (449ca437) with the same command line and `--resume`: the recipe check refuses it and
+  names 8 keys, `code.branch`, `code.commit`, `code.describe`, `code.module.sha1` (another checkout) and
+  `training.serve.device`, `.forward`, `.gather`, `.half` (the fix's record; null in the old run). With
+  `--except code,training.serve` it continued: `[lab] resuming r43-perf-resume/s1 at iteration 7 of 20 (57330
+  steps)`, its tasks' curricula resumed (`curriculum resumes .../tasks/wallmaster@d3first/curriculum.json`), the
+  weights, optimizer and counters from its checkpoint as any resume, `run.json` `resumes` naming the job and commit,
+  `[lab] serving: CUDA graphs on cuda, ...`, and it ended completed and sealed at iteration 20.
+- Its rollouts: iterations 2-7 on the old code 277-383 steps a second (median 341, load 9-25, Seeds43's scans
+  beside it), iterations 8-20 on the fix 429-755 (median 486, load 22-25, the same beside it): x1.4 for this
+  10-game teacher.
+- **For `gen1-others/s1`** (stopped at 08:41), from a worktree of the merged code, its own command with `--resume`
+  and the two keys:
+  `.venv/bin/triforce job run --agent lead --task gen1 --subtask others-s1 --desc "Stage 1 of the retrain: the
+  others teacher from scratch, run s1, resumed on the served-graphs fix." --detach -- .venv/bin/python -m
+  triforce.lab.train --name gen1-others --run-id s1 --resume gen1-others/s1 --group others --parallel 10
+  --steps-per-update 8192 --iterations 1831 --checkpoint-every 114 --seed 4101 --except code,training.serve`
+  (the same for `gen1-darknut/s1` and `gen1-rooms/s1` with their own arguments).
+
+### What is next, with graphs on
+
+The game threads of a 20-game teacher still sleep a third of their time (8 games: a sixth). Not the weight copy
+(one copy of the 5M parameters on the GPU a rollout, about a millisecond in 20-40 s), not the GPU (a replay is about
+1 ms; the GPU ran 40-80% busy with the learners). It is the **server thread itself**: one Python thread answers all
+20 games, 2.2-5.3 ms a batch where the replay is 1 ms, busy 41-50% of a 20-game rollout, and it competes for a CPU
+with the 20+ game threads of the same niceness (the eager server of `gen1-darknut/s1` waited for a CPU 27% of its
+time at load 25; not measured with graphs). Cheap steps, none built or measured (each leaves every action the same):
+- give the server thread the CPU first: raise the game threads' niceness a few steps within the job (allowed without
+  privileges), so the one thread all 20 games wait on is not queued behind them;
+- one host-to-device copy a batch instead of one per observation array (12 of them), from a pinned staging buffer;
+- leave out of a training's answers the hit head's 352 logits a row, which a training never reads (the replays'
+  danger records do).
+Past that the emulator is the floor: 85% of a teacher's CPU, twice the frames a decision with the look-ahead.
+
+### Steps a second on record (`r43-perf`: `triforce/jobspeed.py`, `triforce/jobs.py`, `triforce/job.py`)
+
+The owner: "I want the resulting steps per second to be visible to the agent that started the training and waits on
+it [...] total sps should also go into the logs/records", and later "you should immediately know if something is
+outside of bounds from the output of training when it returns from a background task. Also you should be able to
+just tell me from the db if I ask."
+
+- **The report.** `triforce train` and `triforce.lab.train` report after each iteration (`jobs.Speed`): steps so
+  far, the last iteration's steps a second, the run's mean, the rollout's alone, and the shape (network and width,
+  for a served network how it is served, games, look-ahead: `hitnet-768 graphs, 20 games, look-ahead 4:0.25`; the
+  same teacher made twice the steps a second with graphs, so eager and graphs are two shapes), into the job's row
+  (`speed`). `train_summary.json` records the mean (`steps_per_second`; the lab's also `rollout_steps_per_second`).
+- **The time series.** The job's wrapper takes a sample every 2 minutes (`speed_samples` in the queue's db): time,
+  steps, the rate since the sample before, the iteration's and the mean rates, the load average, and the jobs running
+  then (their ids; how many were trainings). About 30 rows an hour a training.
+- **Normal.** A shape's normal beside k other trainings (0, 1, 2, 3 or more): the median steps a second a game of
+  the ended trainings of that shape with at least 10 minutes of samples beside k trainings, once 3 such exist; until
+  then `jobspeed.REFERENCE` (the stage-1 medians above: 8 games 66.9 a game beside 1 training, 52.9 beside 2; 20
+  games 44.9 and 36.9; nothing measured alone), else none ("NO NORMAL": nothing is judged).
+- **SLOW.** A running training whose samples are more than a quarter below their normal for more than ten minutes
+  in a row. The wrapper writes the mark into the row (`speed_mark`) and a notice into the job's log (`triforce job:
+  #N SLOW: 31% below its normal (700 steps/s against 1,000) for 12 minutes since 09:12, beside #1376
+  lead-gen1-others-s1 (train) and 1 other job (#1398 eval); load 27.1 (a notice: the job goes on)`), and when it
+  recovers, `speed back within bounds`. `triforce job wait` prints the job's progress and speed every 5 minutes and
+  the SLOW line while it holds; `triforce job list` shows both; the GUI's card draws the speed line under the
+  counters and the SLOW line in the warning colour.
+- **The last line.** Every training's wrapper ends on its verdict, and `triforce job wait` prints it again as its
+  own last line (completed, failed and interrupted alike): `triforce job: #1262 lead-gen1-boss-gohma-s1 (train)
+  completed speed: 432 steps/s mean (54.0 a game) [hitnet-768 eager, 8 games, look-ahead 4:0.25], normal 393 (49.2 a
+  game): IN BOUNDS; beside it: ...` or `... OUT OF BOUNDS: 36% below its normal for 46 minutes (23:58-00:45; 46
+  minutes slow in all), beside #1342 ..., #1371 ...`. OUT OF BOUNDS: SLOW at some time, or the mean more than a
+  quarter below the normal over the same intervals.
+- **From the db alone:** `triforce job speed [JOB...] [--last N] [--since 24h]` (shape, start, end, steps, mean
+  and a game, normal, the verdict, the jobs beside), `--series JOB` (its samples), `--backfill` (trainings of
+  older code: their run folders' `metrics.jsonl`, found through the detached logs' `[lab|train] ... dir=` line; no
+  load average for those). Backfilled at 08:30 into the live db: 43 trainings since Nov 23, the stage-1 teachers
+  among them. What it says of them, for example: `gen1-boss-gleeok/s1` OUT OF BOUNDS (36% below its normal for 46
+  minutes, 23:58-00:45, beside the two darknut runs and 2 evaluations), `gen1-overworld/s1` and `gen1-walkers/s1`
+  OUT OF BOUNDS 53-57% below for 14-20 minutes at 17:03 beside Store41's and the lead's test suites, the other
+  bosses IN BOUNDS.
+- **The lead's standing instruction** (AGENTS.md "The job queue"): an agent that waits on a training and sees SLOW
+  or OUT OF BOUNDS reports it to the lead at once, with the line; the lead starts an investigation agent.
+- **The hearts chart** (`training-gui.py` `run_chart_data`): `total (+wasted)` is drawn only from the first
+  iteration where it differs from `real`, and kept from there; a run that never wastes hearts shows `real` alone.
+- Tests: `tests/test_jobspeed.py` (the normal by the record, the bucket's ten minutes, the reference, none; SLOW
+  only past ten minutes, since when and what ran beside, and back; the last line IN, OUT by a stretch, OUT by the
+  mean, NO NORMAL; the wrapper's watch and its one notice each way; `jobs.Speed`'s row; the backfill and its rerun;
+  a real wrapper run ending on its speed line and `triforce job speed` reading it), `tests/test_training_gui.py`
+  (the card's lines and colours, the hearts series).
+
 ## Why the Darknut teacher walks past 3x5b's bomb carriers, and the forced kill (Carrier43, branch `r43-carrier`)
 
 anthropic/claude-opus-5-5 (Carrier43), on `r40-int` at f8da9361. **The ask** (the owner, Nov 25: "Yes it should force

@@ -15,19 +15,21 @@ use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict};
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
-use replay::{Context, ENDINGS, Ending, Event, RecordOptions};
+use replay::{Context, ENDINGS, Ending, Event, RecordOptions, Source};
 use std::path::PathBuf;
 use std::sync::Arc;
 use theater::Speaker;
 use zcore::ZCore;
 use zcore::tracks::{Mix, Tracks};
-use zelda::{LoadOptions, Session};
+use zelda::{LoadOptions, Session, power_on};
 
 struct Inner {
     session: Session<PoolNes<ZCore>>,
     store: PoolStore<TfzStore>,
     loaded: bool,
     seed: u64,
+    /// Round 43, the reset rule of the route's doors (None: no route, or a route without an `entry_rule` file).
+    entry_rule: Option<Arc<zelda::room_entry::EntryRule>>,
     /// The sound device, opened the first time sound is turned on (None: never, or it failed: `sound_error`).
     speaker: Option<Speaker>,
     sound_error: Option<String>,
@@ -110,12 +112,14 @@ impl PyLiveGame {
         let mut session = Session::new(PoolNes::new(ZCore::power_on(rom.clone()), Some(control)), map);
         session.set_render(true);
         session.look_ahead = zelda::LookAhead::Off;
+        let entry_rule = route.and_then(|route| data.entry_rule(data.map.namespace(route)));
         Ok(PyLiveGame {
             inner: Mutex::new(Inner {
                 session,
                 store: PoolStore(TfzStore::new(&data, rom)),
                 loaded: false,
                 seed: 0,
+                entry_rule,
                 speaker: None,
                 sound_error: None,
                 hear: false,
@@ -131,8 +135,11 @@ impl PyLiveGame {
     /// (`Game.set_value` names) are its frame-0 edits, the frames until Link is controllable its first inputs.
     /// `banked_kills` ((level, room), kills): the kills the game keeps for the room about to be entered
     /// (`LoadOptions::banked_kills`, as a staged training reset banks them), so it makes that many monsters fewer.
-    /// The previous recording is dropped.
-    #[pyo3(signature = (state, seed, ram_overrides=None, banked_kills=Vec::new()))]
+    /// `layout` (round 43, the reset rule of the route's doors): 'route' (default) the layout the route's plan
+    /// brings to the door, 'valid' any layout some play of the game can bring there (the route's own on half the
+    /// seeds, as training draws them); the chase state, `$4A`, the divider and the edge cell as the rule draws them,
+    /// all from `seed`.  The previous recording is dropped.
+    #[pyo3(signature = (state, seed, ram_overrides=None, banked_kills=Vec::new(), layout="route"))]
     fn load(
         &self,
         py: Python<'_>,
@@ -140,13 +147,20 @@ impl PyLiveGame {
         seed: u64,
         ram_overrides: Option<&Bound<'_, PyDict>>,
         banked_kills: Vec<((u8, u8), u8)>,
+        layout: &str,
     ) -> PyResult<PyGameState> {
+        let layout = match layout {
+            "route" => zelda::room_entry::Layout::Route,
+            "valid" => zelda::room_entry::Layout::Valid,
+            other => return Err(PyValueError::new_err(format!("layout {other:?}: 'route' or 'valid'"))),
+        };
         let opts = LoadOptions {
             randomize_rng: true,
             fresh_room: false,
             controllable: false,
             overrides: overrides(ram_overrides)?,
             banked_kills,
+            entry: self.inner.lock().entry_rule.clone().map(|rule| zelda::room_entry::EntryDraw::new(rule, layout)),
         };
         let (name, bytes) = if let Ok(b) = state.cast::<PyBytes>() {
             (None, b.as_bytes().to_vec())
@@ -187,6 +201,84 @@ impl PyLiveGame {
         g.seed = seed;
         g.restart_sound();
         g.view()
+    }
+
+    /// Starts a new recording at console power on (TFREPLAY source `power-on`, every frame an input): the title
+    /// screen, the file-select screen, `name` registered in slot 1 with no idle and the game started, to its first
+    /// gameplay frame in overworld 0x77 (`zelda::power_on::to_file_select`, `register_and_start`; unrendered:
+    /// the next `step` draws the picture).  `name`: 1 to 8 of A-Z, 0-9 and space (`power_on::board_cells`),
+    /// `ZELDA` too (the second quest).  The previous recording is dropped; `hand_over()` marks where the player
+    /// takes over.
+    fn power_on(&self, py: Python<'_>, name: &str) -> PyResult<PyGameState> {
+        power_on::board_cells(name).map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let name = name.to_ascii_uppercase();
+        let mut g = self.inner.lock();
+        let g = &mut *g;
+        let machine = g.store.power_on().map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let nes = g.session.nes_mut();
+        nes.take_recorder();
+        nes.set_recording(Some(Arc::new(RecordOptions {
+            embed_start: false,
+            rewards: false,
+            keyframe_frames: 0,
+            meta: serde_json::Value::Null,
+        })));
+        zelda::Nes::restore(nes, &machine);
+        py.detach(|| {
+            power_on::to_file_select(nes)?;
+            power_on::register_and_start(nes, &name)
+        })
+        .map_err(zelda_err)?;
+        nes.recorder_mut()
+            .expect("a power-on restore records")
+            .set_source(Source::PowerOn { name: name.clone(), delay: 0 });
+        let live = zelda::Nes::snapshot(g.session.nes());
+        let opts = LoadOptions { controllable: true, ..LoadOptions::default() };
+        g.session.load(&live, &opts, &mut ChaCha8Rng::seed_from_u64(0)).map_err(zelda_err)?;
+        g.loaded = true;
+        g.seed = 0;
+        g.restart_sound();
+        g.view()
+    }
+
+    /// Presses the console's RESET button before the next frame (`zcore::ZCore::reset`: CPU RAM and the battery
+    /// RAM kept, the game's own reset code runs from the next frame), recorded as a RESET event.
+    fn reset_console(&self) -> PyResult<PyGameState> {
+        let mut g = self.inner.lock();
+        if !g.loaded {
+            return Err(PyRuntimeError::new_err("call load() or power_on() first"));
+        }
+        let nes = g.session.nes_mut();
+        nes.inner_mut().reset();
+        if let Some(rec) = nes.recorder_mut() {
+            rec.event(Event::Reset);
+        }
+        g.session.apply_ram(&[]);
+        g.view()
+    }
+
+    /// Records the CONTROL event at this frame: the player takes over here (`power_on` leaves it to the caller,
+    /// who may run a scripted stretch first).
+    fn hand_over(&self) -> PyResult<()> {
+        let mut g = self.inner.lock();
+        if !g.loaded {
+            return Err(PyRuntimeError::new_err("call load() or power_on() first"));
+        }
+        if let Some(rec) = g.session.nes_mut().recorder_mut() {
+            rec.event(Event::Control);
+        }
+        Ok(())
+    }
+
+    /// The machine as it stands as a `TFZSTATE` file (with the session's flags), as `Game.load` and
+    /// `LiveGame.load` read it.
+    fn state_file<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
+        let g = self.inner.lock();
+        if !g.loaded {
+            return Err(PyRuntimeError::new_err("call load() or power_on() first"));
+        }
+        let bytes = g.store.encode(&g.session.snapshot()).map_err(|e| PyValueError::new_err(e.to_string()))?;
+        Ok(PyBytes::new(py, &bytes))
     }
 
     /// Runs one frame with the controller byte `buttons` (A 0x01, B 0x02, SELECT 0x04, START 0x08, UP 0x10, DOWN
