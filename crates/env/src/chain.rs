@@ -917,16 +917,17 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         let seed = self.result.as_ref().and_then(|r| r.seed).unwrap_or(0);
         let visit = self.objectives.as_ref().and_then(|gc| Some(self.data.map.visits[gc.route()][gc.step()?]));
         let visit = visit.unwrap_or(1);
-        let Some(file) = harvest_filename(
-            change.previous.full_location(),
-            change.state.full_location(),
-            visit,
-            seed,
-            n,
-            self.data.map.namespace(&self.route.name),
-        ) else {
+        let (prev, curr) = (change.previous.full_location(), change.state.full_location());
+        let Some(file) = harvest_filename(prev, curr, visit, seed, n, self.data.map.namespace(&self.route.name)) else {
             return Ok(());
         };
+        // Round 42: only a state the route can be in is written, the test a training reset applies to a harvested
+        // start (`zelda::objectives::start_on_route`: Link's pieces and items the route's at a step of the room).
+        if let Some(entry) = zelda::objectives::route_entry(prev, curr)
+            && !zelda::objectives::start_on_route(&self.data.map, curr, entry, visit, &self.route.name, &change.state)
+        {
+            return Ok(());
+        }
         let dir = dir.join(name);
         let path = dir.join(file);
         let mut snapshot = pre_entry.clone();

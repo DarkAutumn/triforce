@@ -51,7 +51,9 @@
 - ``hits``: steps that lost health per completed episode (``info['hits']``), and per start room and entry
   ``room/<level>:0x<room>[:cave]/<entry>/episodes``, ``.../success_rate`` and ``.../hits`` (round 40: a room's own
   hits a visit and exit rate in training's log; the start room is ``info['linger_room']``, the entry the route
-  step's, ``info['entry']``).
+  step's, ``info['entry']``); round 42: ``.../seed_episodes``, ``.../seed_success_rate``, ``.../harvested_episodes``
+  and ``.../harvested_success_rate`` split them by the start (``info['harvested']``: one of the pool's harvested
+  states), each where the rollout has such episodes.
 - ``linger/max_steps``, ``linger/max_frames``, ``linger/tail_steps``, ``linger/tail_frames``: means of the
   longest quiet streak and time since last progress; ``linger/worst_steps`` / ``linger/worst_frames`` are
   maxima across measured episodes. Curriculum starts use ``curriculum/linger/*``; absent data stays absent.
@@ -215,6 +217,10 @@ class RolloutMetrics:
             self.rooms[(*room, 'episodes')] += 1
             self.rooms[(*room, 'successes')] += info.get('outcome') == 'success'
             self.rooms[(*room, 'hits')] += int(info.get('hits', 0))
+            if 'harvested' in info:
+                kind = 'harvested' if info['harvested'] else 'seed'
+                self.rooms[(*room, f'{kind}_episodes')] += 1
+                self.rooms[(*room, f'{kind}_successes')] += info.get('outcome') == 'success'
 
     def record_linger(self, linger: dict, curriculum: bool, room=None):
         """Folds one measured episode into its room-entry or curriculum accumulator."""
@@ -287,6 +293,11 @@ class RolloutMetrics:
                 result[f'room/{room}/{entry}/episodes'] = float(count)
                 result[f'room/{room}/{entry}/success_rate'] = self.rooms[(room, entry, 'successes')] / count
                 result[f'room/{room}/{entry}/hits'] = self.rooms[(room, entry, 'hits')] / count
+            elif field in ('seed_episodes', 'harvested_episodes') and count:
+                kind = field.split('_')[0]
+                result[f'room/{room}/{entry}/{kind}_episodes'] = float(count)
+                successes = self.rooms[(room, entry, f'{kind}_successes')]
+                result[f'room/{room}/{entry}/{kind}_success_rate'] = successes / count
         if self.curriculum_episodes:
             eps = float(self.curriculum_episodes)
             result['curriculum/episodes'] = eps

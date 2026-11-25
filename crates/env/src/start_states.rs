@@ -1,12 +1,15 @@
 //! Start states for specialist episodes.
 //!
 //! - Seed states: the config's savestate globs; the room is verified from RAM after loading.
-//! - [`ProbabilisticSelector`]: round-robin from a random offset until every state has a result, then sampling
-//!   by each state's decayed mean badness (recency decay 0.9, failures ×2, damage ×1.5) over a 15% uniform floor.
+//! - [`ProbabilisticSelector`]: every state once in a random order (never the file names' order) until every state has
+//!   a result, then sampling by each state's decayed mean badness (recency decay 0.9, failures ×2, damage ×1.5) over a
+//!   15% uniform floor.
 //! - [`StartWeights`]: a training pool's shared seed-state weights (prioritized level replay); while set, seed draws
 //!   follow them instead of the selector's own weights.
-//! - Harvested states (`<harvested dir>/*.state` of the family's start-state namespaces, `state_routes:`) mix with
-//!   seed states at `harvested_fraction`.
+//! - Harvested states (`<harvested dir>/*.state` of the family's start-state namespaces, `state_routes:`) stand in for
+//!   the seed draw's room entry at `harvested_fraction` (round 42): the seed draw picks the room entry, and that share
+//!   of its resets start from a harvested state of the same entry (its own selector), so a room's share of the episodes
+//!   is the seed states' whatever the number of files harvested for it.
 //! - [`ram_randomization_values`]: reset-time hp/bombs/keys; [`apply_room_values`]: a listed room's own bombs and
 //!   drop cycle, by the side the start enters from.
 //!
@@ -17,7 +20,7 @@ use crate::config::{SpecialistConfig, format_room, glob};
 use crate::error::EnvError;
 use parking_lot::RwLock;
 use rand::{Rng, RngExt};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use zelda::objectives::route_entry;
@@ -90,17 +93,21 @@ struct StateResults {
     mass: f64,
     last: u64,
     seen: bool,
+    /// Drawn at least once (the warm-up draws each state once before any again).
+    drawn: bool,
 }
 
 /// Picks start states, favouring states that recently failed or lost health.
 ///
-/// - Warm-up: round-robin over the states, from an offset drawn from the caller's RNG on the first draw (so envs
-///   don't move in lockstep), until every state has a recorded result.
+/// - Warm-up: each state once, in a random order drawn from the caller's RNG (round 42: the order of the file names put
+///   a harvested room's whole block of files before the next room's, so an env spent most of a run in one room), until
+///   every state has a recorded result; a state drawn and still without a result leaves the warm-up's draws to the
+///   weighted ones below.
 /// - Then each state's weight is its decayed mean badness Σ(decay·term) / Σ(decay) over its own results (term: 1 for a
 ///   success, [`FAILURE_WEIGHT`] for a failure, × [`DAMAGE_WEIGHT`] when health was lost; decay [`DECAY_FACTOR`] per
 ///   result recorded since, for any state), and a draw picks a state with probability
-///   `UNIFORM_FLOOR / N + (1 - UNIFORM_FLOOR) · weight / Σ weights`.  A rate, not a count: drawing a state often
-///   doesn't raise its weight.
+///   `UNIFORM_FLOOR / N + (1 - UNIFORM_FLOOR) · weight / Σ weights` (uniform while no state has a result).  A rate,
+///   not a count: drawing a state often doesn't raise its weight.
 #[derive(Clone, Debug)]
 pub struct ProbabilisticSelector {
     states: Vec<String>,
@@ -108,8 +115,8 @@ pub struct ProbabilisticSelector {
     results: Vec<StateResults>,
     unseen: usize,
     clock: u64,
-    /// The next round-robin index; None until the first draw picks the offset.
-    next_round_robin: Option<usize>,
+    /// The states never drawn (the warm-up draws among them).
+    undrawn: Vec<usize>,
     /// The draw probabilities (reused across draws).
     drawn: Vec<f64>,
 }
@@ -127,7 +134,7 @@ impl ProbabilisticSelector {
             results: Vec::new(),
             unseen: 0,
             clock: 0,
-            next_round_robin: None,
+            undrawn: Vec::new(),
             drawn: Vec::new(),
         };
         selector.set_states(states);
@@ -156,20 +163,22 @@ impl ProbabilisticSelector {
             .map(|s| old.get(s).copied().unwrap_or_default())
             .collect();
         self.unseen = self.results.iter().filter(|r| !r.seen).count();
+        self.undrawn = (0..states.len()).filter(|&i| !self.results[i].drawn).collect();
         self.states = states;
     }
 
     /// The next start state.
     pub fn next<R: Rng + ?Sized>(&mut self, rng: &mut R) -> String {
         let n = self.states.len();
-        if self.unseen > 0 {
-            let i = *self
-                .next_round_robin
-                .get_or_insert_with(|| rng.random_range(0..n));
-            self.next_round_robin = Some(i + 1);
-            return self.states[i % n].clone();
+        if self.unseen > 0 && !self.undrawn.is_empty() {
+            let i = self.undrawn.swap_remove(rng.random_range(0..self.undrawn.len()));
+            self.results[i].drawn = true;
+            return self.states[i].clone();
         }
         let total: f64 = self.results.iter().map(StateResults::weight).sum();
+        if total <= 0.0 {
+            return self.states[rng.random_range(0..n)].clone();
+        }
         let floor = UNIFORM_FLOOR / n as f64;
         self.drawn.clear();
         self.drawn.extend(
@@ -249,7 +258,25 @@ impl StartWeights {
     }
 }
 
+/// A start state's room entry: its namespace, room, entry side and visit ([`StateName`]); None for a name that isn't
+/// an entry state's. Harvested states are grouped by it.
+type EntryKey = Option<(Option<String>, u8, u8, bool, &'static str, u32)>;
+
+fn entry_key(name: &str) -> EntryKey {
+    let named = StateName::parse(name)?;
+    let at = named.location;
+    Some((zelda::game_map::state_namespace(name).map(str::to_owned), at.level, at.value, at.in_cave, named.entry, named.visit))
+}
+
 /// Seed + harvested start states for one specialist.
+///
+/// A reset draws a seed state (the seed selector, or the shared weights while set): that picks the room entry. With
+/// probability `harvested_fraction` a harvested state of the same room entry stands in for it, drawn by that entry's
+/// own selector (round 42: one selector over every harvested file gave each room a share by its number of files, and
+/// its warm-up walked them in file-name order). So every room keeps the seed states' share of the episodes; an entry
+/// with harvested states starts `harvested_fraction` of its resets from them, one without none; a harvested entry no
+/// seed state has (an off-route entry a chain wandered into) is never drawn. A pool without seed states draws its
+/// harvested room entries alike.
 #[derive(Clone, Debug)]
 pub struct StartStatePool {
     harvested_dir: PathBuf,
@@ -257,7 +284,8 @@ pub struct StartStatePool {
     namespaces: Vec<Option<String>>,
     harvested_fraction: f64,
     pub seed: Option<ProbabilisticSelector>,
-    pub harvested: Option<ProbabilisticSelector>,
+    /// The harvested states by room entry, each entry its own selector.
+    pub harvested: BTreeMap<EntryKey, ProbabilisticSelector>,
     /// Shared seed-state weights (training pools); None or unset = the seed selector's own weights.
     pub weights: Option<StartWeights>,
     /// The seed draw's weights under `weights` (reused across resets).
@@ -284,7 +312,7 @@ impl StartStatePool {
             } else {
                 Some(ProbabilisticSelector::new(seeds)?)
             },
-            harvested: None,
+            harvested: BTreeMap::new(),
             weights: None,
             drawn: Vec::new(),
             resets: 0,
@@ -337,9 +365,18 @@ impl StartStatePool {
                 if self.seed.is_none() { ", no seed states" } else { "" }
             )));
         }
-        match &mut self.harvested {
-            None => self.harvested = Some(ProbabilisticSelector::new(paths).expect("non-empty")),
-            Some(h) => h.set_states(paths),
+        let mut groups: BTreeMap<EntryKey, Vec<String>> = BTreeMap::new();
+        for path in paths {
+            groups.entry(entry_key(&path)).or_default().push(path);
+        }
+        self.harvested.retain(|key, _| groups.contains_key(key));
+        for (key, paths) in groups {
+            match self.harvested.get_mut(&key) {
+                Some(h) => h.set_states(paths),
+                None => {
+                    self.harvested.insert(key, ProbabilisticSelector::new(paths).expect("non-empty"));
+                }
+            }
         }
         Ok(())
     }
@@ -351,31 +388,45 @@ impl StartStatePool {
         if self.draws_harvested() && self.resets.is_multiple_of(HARVEST_RESCAN_RESETS) {
             self.scan_harvested()?;
         }
-        if let Some(h) = &mut self.harvested
-            && (self.seed.is_none() || rng.random::<f64>() < self.harvested_fraction)
+        let Some(seed) = self.seed.as_mut() else {
+            let entry = rng.random_range(0..self.harvested.len());
+            let path = self.harvested.values_mut().nth(entry).expect("scanned").next(rng);
+            return self.existing(path);
+        };
+        let state = match &self.weights {
+            Some(weights) if weights.fill(&seed.states, &mut self.drawn) => {
+                seed.states[weighted_index(rng, &self.drawn)].clone()
+            }
+            _ => seed.next(rng),
+        };
+        if self.harvested_fraction > 0.0
+            && let Some(h) = self.harvested.get_mut(&entry_key(&state))
+            && rng.random::<f64>() < self.harvested_fraction
         {
             let path = h.next(rng);
-            if Path::new(&path).exists() {
-                return Ok(path);
-            }
-            return Err(EnvError::StartState(format!(
-                "harvested start state {path} was removed while this pool draws from {}",
-                self.harvested_dir.display()
-            )));
+            return self.existing(path);
         }
-        let seed = self.seed.as_mut().expect("seed states");
-        if let Some(weights) = &self.weights
-            && weights.fill(&seed.states, &mut self.drawn)
-        {
-            return Ok(seed.states[weighted_index(rng, &self.drawn)].clone());
+        Ok(state)
+    }
+
+    /// `path`, a harvested state just drawn, while its file is there.
+    fn existing(&self, path: String) -> Result<String, EnvError> {
+        if Path::new(&path).exists() {
+            return Ok(path);
         }
-        Ok(seed.next(rng))
+        Err(EnvError::StartState(format!(
+            "harvested start state {path} was removed while this pool draws from {}",
+            self.harvested_dir.display()
+        )))
     }
 
     /// Feeds an episode result back to whichever selector owns the state.
     pub fn record(&mut self, state: &str, success: bool, health_lost: bool) {
-        for selector in [&mut self.seed, &mut self.harvested].into_iter().flatten() {
-            selector.record(state, success, health_lost);
+        if let Some(seed) = &mut self.seed {
+            seed.record(state, success, health_lost);
+        }
+        if let Some(h) = self.harvested.get_mut(&entry_key(state)) {
+            h.record(state, success, health_lost);
         }
     }
 
@@ -654,26 +705,42 @@ mod tests {
             .collect()
     }
 
+    /// Round 42: the warm-up draws each state once, in a random order (not the names' order), before any again; once
+    /// every state is drawn, the states with results are weighted (an unseen one by the uniform floor alone).
     #[test]
-    fn selector_round_robins_from_an_offset_until_every_state_has_a_result() {
+    fn selector_warm_up_draws_every_state_once_in_a_random_order() {
         let mut r = rng();
-        let mut s = ProbabilisticSelector::new(vec!["a".into(), "b".into(), "c".into()]).unwrap();
-        let picks: Vec<String> = (0..4).map(|_| s.next(&mut r)).collect();
-        let first = s.states().iter().position(|x| *x == picks[0]).unwrap();
-        let expected: Vec<String> = (first..first + 4).map(|i| s.states()[i % 3].clone()).collect();
-        assert_eq!(picks, expected);
-        for _ in 0..6 {
-            s.record("a", true, false);
+        let mut s = ProbabilisticSelector::new(names(12)).unwrap();
+        let picks: Vec<String> = (0..12).map(|_| s.next(&mut r)).collect();
+        let unique: std::collections::HashSet<&String> = picks.iter().collect();
+        assert_eq!(unique.len(), 12, "{picks:?}");
+        let indices: Vec<usize> = picks.iter().map(|p| s.states().iter().position(|x| x == p).unwrap()).collect();
+        assert!(indices.windows(2).any(|w| w[1] != (w[0] + 1) % 12), "round-robin order {indices:?}");
+        for name in &picks[..11] {
+            s.record(name, true, false);
         }
-        s.record("b", true, false);
-        assert_eq!(s.next(&mut r), expected[1]);
-        assert!(s.weights().len() == 2);
+        // Every state drawn, one without a result: weighted draws (no state is drawn twice before that one).
+        let next = s.next(&mut r);
+        assert!(s.states().contains(&next));
+        assert_eq!(s.weights().len(), 11);
+    }
+
+    /// A harvested folder sorted by name holds one room's files after another's: the first draws of the warm-up spread
+    /// over the rooms instead of walking one room's block.
+    #[test]
+    fn selector_warm_up_spreads_over_blocks_of_names() {
+        let states: Vec<String> = (0..1000).map(|i| format!("room{}_{i:03}", i / 100)).collect();
+        let mut s = ProbabilisticSelector::new(states).unwrap();
+        let mut r = rng();
+        let rooms: std::collections::HashSet<String> =
+            (0..100).map(|_| s.next(&mut r)[..5].to_owned()).collect();
+        assert!(rooms.len() >= 9, "{rooms:?}");
     }
 
     /// Two envs (different RNG seeds) start on different states; a 200-state pool (more than the old 128-result
     /// memory) draws every state once during the warm-up and then leaves it.
     #[test]
-    fn selector_offsets_differ_by_seed_and_large_pools_leave_the_warm_up() {
+    fn selector_orders_differ_by_seed_and_large_pools_leave_the_warm_up() {
         let firsts: std::collections::HashSet<String> = (0..16)
             .map(|seed| {
                 let mut s = ProbabilisticSelector::new(names(3)).unwrap();
@@ -771,7 +838,7 @@ mod tests {
         std::fs::create_dir_all(&seeds).unwrap();
         std::fs::create_dir_all(&harvested).unwrap();
         std::fs::write(seeds.join("1_73s_0.state"), b"x").unwrap();
-        std::fs::write(harvested.join("h1.state"), b"x").unwrap();
+        std::fs::write(harvested.join("1_73s_h1_0.state"), b"x").unwrap();
         let text = format!(
             "name: t\nrooms: ['(1, 0x73)']\nsuccess: exit-correct\nstart_states: ['1_73*_[0-9]']\n\
              harvested_states: {}\n",
@@ -781,29 +848,29 @@ mod tests {
         // Opt-in (F069): the default fraction 0 never draws the harvested files.
         let mut pool = StartStatePool::new(&config, &seeds).unwrap();
         let mut r = rng();
-        assert!(pool.harvested.is_none());
+        assert!(pool.harvested.is_empty());
         assert!((0..200).all(|_| pool.next(&mut r).unwrap().ends_with("1_73s_0.state")));
         let mut half = config.clone();
         half.harvested_fraction = 0.5;
         let mut pool = StartStatePool::new(&half, &seeds).unwrap();
         let picks: Vec<String> = (0..400).map(|_| pool.next(&mut r).unwrap()).collect();
-        let n = picks.iter().filter(|p| p.ends_with("h1.state")).count();
+        let n = picks.iter().filter(|p| p.ends_with("1_73s_h1_0.state")).count();
         assert!((150..250).contains(&n), "{n}");
         // Round 40 (F159 reversed): a harvested file deleted under a running pool is an error, never a quiet return to
         // the seed states; a pool that draws harvested states from an empty dir is refused when it is built.
-        std::fs::remove_file(harvested.join("h1.state")).unwrap();
+        std::fs::remove_file(harvested.join("1_73s_h1_0.state")).unwrap();
         assert!((0..84).any(|_| matches!(pool.next(&mut r), Err(EnvError::StartState(_)))));
         assert!(matches!(StartStatePool::new(&half, &seeds), Err(EnvError::StartState(_))));
-        std::fs::write(harvested.join("h1.state"), b"x").unwrap();
+        std::fs::write(harvested.join("1_73s_h1_0.state"), b"x").unwrap();
         let mut only = config.clone();
         only.harvested_fraction = 1.0;
         let mut pool = StartStatePool::new(&only, &seeds).unwrap();
-        assert!((0..20).all(|_| pool.next(&mut r).unwrap().ends_with("h1.state")));
+        assert!((0..20).all(|_| pool.next(&mut r).unwrap().ends_with("1_73s_h1_0.state")));
         // Without seed states the harvested files are drawn at any fraction.
         let mut harvest_only = config.clone();
         harvest_only.start_states.clear();
         let mut pool = StartStatePool::new(&harvest_only, &seeds).unwrap();
-        assert!((0..5).all(|_| pool.next(&mut r).unwrap().ends_with("h1.state")));
+        assert!((0..5).all(|_| pool.next(&mut r).unwrap().ends_with("1_73s_h1_0.state")));
         let mut none = config.clone();
         none.start_states.clear();
         none.harvested_states = Some(dir.path().join("empty").display().to_string());
@@ -823,10 +890,11 @@ mod tests {
         std::fs::create_dir_all(&seeds).unwrap();
         std::fs::create_dir_all(&harvested).unwrap();
         std::fs::write(seeds.join("d3first_1_73s_0.state"), b"x").unwrap();
+        std::fs::write(seeds.join("1_73s_0.state"), b"x").unwrap();
         std::fs::write(harvested.join("d3first_1_73s_h1_0.state"), b"x").unwrap();
         std::fs::write(harvested.join("1_73s_h1_0.state"), b"x").unwrap();
         let text = format!(
-            "name: t\nrooms: ['(1, 0x73)']\nsuccess: exit-correct\nstart_states: ['d3first_1_73*_[0-9]']\n\
+            "name: t\nrooms: ['(1, 0x73)']\nsuccess: exit-correct\nstart_states: ['1_73*_[0-9]']\n\
              harvested_states: {}\nharvested_fraction: 1.0\n",
             harvested.display()
         );
@@ -840,6 +908,59 @@ mod tests {
         let picks: Vec<String> = (0..100).map(|_| pool.next(&mut r).unwrap()).collect();
         assert!(picks.iter().any(|p| p.ends_with("/1_73s_h1_0.state")));
         assert!(picks.iter().any(|p| p.ends_with("/d3first_1_73s_h1_0.state")));
+    }
+
+    /// Round 42: the seed draw picks the room entry and `harvested_fraction` of an entry's resets start from its own
+    /// harvested states, so the entries share the resets as their seed states do (not 90 files against 2), the harvest
+    /// stands in for half of each, and an entry without harvested files or without seed states keeps to its own.
+    #[test]
+    fn pool_draws_harvested_states_by_the_seed_draws_room_entry() {
+        let dir = tempfile::tempdir().unwrap();
+        let seeds = dir.path().join("seeds");
+        let harvested = dir.path().join("harvested");
+        std::fs::create_dir_all(&seeds).unwrap();
+        std::fs::create_dir_all(&harvested).unwrap();
+        for name in ["1_73s_0", "1_73e_0", "1_73w_0"] {
+            std::fs::write(seeds.join(format!("{name}.state")), b"x").unwrap();
+        }
+        for i in 0..90 {
+            std::fs::write(harvested.join(format!("1_73s_h{i}_3.state")), b"x").unwrap();
+        }
+        for i in 0..2 {
+            std::fs::write(harvested.join(format!("1_73e_h{i}_3.state")), b"x").unwrap();
+        }
+        // An entry no seed state has (a chain wandered in from N): never drawn while there are seed states.
+        std::fs::write(harvested.join("1_73n_h0_3.state"), b"x").unwrap();
+        let text = format!(
+            "name: t\nrooms: ['(1, 0x73)']\nsuccess: exit-correct\nstart_states: ['1_73*_[0-9]']\n\
+             harvested_states: {}\nharvested_fraction: 0.5\n",
+            harvested.display()
+        );
+        let config = SpecialistConfig::from_yaml(&text, "t.yaml", None).unwrap();
+        let mut pool = StartStatePool::new(&config, &seeds).unwrap();
+        assert_eq!(pool.harvested.len(), 3);
+        let mut r = rng();
+        let picks: Vec<String> = (0..6000).map(|_| pool.next(&mut r).unwrap()).collect();
+        let count = |f: &dyn Fn(&str) -> bool| picks.iter().filter(|p| f(state_label(p))).count() as f64 / 6000.0;
+        for side in ["s", "e", "w"] {
+            let entry = count(&|l| l.starts_with(&format!("1_73{side}_")));
+            assert!((entry - 1.0 / 3.0).abs() < 0.03, "1_73{side}: {entry}");
+        }
+        let harvested_s = count(&|l| l.starts_with("1_73s_h"));
+        let harvested_e = count(&|l| l.starts_with("1_73e_h"));
+        assert!((harvested_s - 1.0 / 6.0).abs() < 0.03, "{harvested_s}");
+        assert!((harvested_e - 1.0 / 6.0).abs() < 0.03, "{harvested_e}");
+        assert_eq!(count(&|l| l.starts_with("1_73w_h") || l.starts_with("1_73n_")), 0.0);
+        // Within an entry, every file once before any again.
+        let first: Vec<&String> = picks.iter().filter(|p| state_label(p).starts_with("1_73s_h")).take(90).collect();
+        assert_eq!(first.iter().collect::<std::collections::HashSet<_>>().len(), 90);
+        // Without seed states, the harvested entries share the resets alike, whatever their files.
+        let mut harvest_only = config.clone();
+        harvest_only.start_states.clear();
+        let mut pool = StartStatePool::new(&harvest_only, &seeds).unwrap();
+        let picks: Vec<String> = (0..3000).map(|_| pool.next(&mut r).unwrap()).collect();
+        let north = picks.iter().filter(|p| state_label(p).starts_with("1_73n_")).count() as f64 / 3000.0;
+        assert!((north - 1.0 / 3.0).abs() < 0.04, "{north}");
     }
 
     /// Unset shared weights draw exactly what the selector draws (same RNG, same sequence); set weights decide every

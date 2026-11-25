@@ -2798,6 +2798,32 @@ pub fn start_route<R: Rng + ?Sized>(
     (chosen.0.to_owned(), Some(chosen.1))
 }
 
+/// Whether a start in `location` entered from `entry`, on the `visit` its state's name spells, is a state the route can
+/// be in (round 42): Link's progress ([`StepProgress`]: the triforce pieces, sword, bow, raft, ladder, recorder, red
+/// ring and silver arrow he holds) is the route's on entering a step of `route` there from `entry` on that visit, or,
+/// where the route never enters the room that way on that visit (a chain that wandered in; its harvest names such an
+/// entry visit 1), on entering any step of the room (a run back on the route's way). A chain handoff harvested on
+/// another order of the route fails (2.0.0.0's Dungeon 5 before Dungeon 2: no Dungeon 2 piece): no step there is
+/// played with what he holds, so a step leaving by stairs or a cave has no target and no correct exit
+/// (`route_next_with_progress`), and one leaving by an edge trains the room with what the route never brings.
+pub fn start_on_route(
+    map: &GameMap,
+    location: MapLocation,
+    entry: &str,
+    visit: u32,
+    route: &str,
+    state: &GameView,
+) -> bool {
+    let (Some(steps), Some(visits)) = (map.routes.get(route), map.visits.get(route)) else {
+        return false;
+    };
+    let progress = route_progress(map, steps);
+    let here: Vec<usize> = (0..steps.len()).filter(|&i| steps[i].location() == location).collect();
+    let named: Vec<usize> = here.iter().copied().filter(|&i| steps[i].entry == entry && visits[i] == visit).collect();
+    let steps_held = if named.is_empty() { &here } else { &named };
+    steps_held.iter().any(|&i| progress[i].matches(state))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2827,6 +2853,42 @@ mod tests {
                 "row {row}"
             );
         }
+    }
+
+    /// Round 42: a d3first start in 5:0x64 from E holding the route's progress there is on the route; the same
+    /// without Dungeon 2's piece (the first order's handoffs, Dungeon 5 before Dungeon 2) is not; an entry the route
+    /// never makes (from W) is judged by the room's steps, and passes with the progress of one of them.
+    #[test]
+    fn start_on_route_needs_the_routes_progress() {
+        use crate::vars::Var;
+        let map = Arc::new(GameMap::builtin());
+        let steps = &map.routes["d3first"];
+        let progress = route_progress(&map, steps);
+        let at = MapLocation::new(5, 0x64, false);
+        let i = steps.iter().position(|s| s.location() == at && s.entry == "E").unwrap();
+        let p = progress[i];
+        assert_eq!(p.triforces, 0b1111);
+        let view = |triforces: u8| {
+            let mut ram = crate::executor::tests::playable();
+            for (var, value) in [
+                (Var::Triforce, triforces),
+                (Var::Sword, p.sword as u8),
+                (Var::Bow, u8::from(p.bow)),
+                (Var::Raft, u8::from(p.raft)),
+                (Var::StepLadder, u8::from(p.ladder)),
+                (Var::Whistle, u8::from(p.recorder)),
+            ] {
+                ram[var.addr() as usize] = value;
+            }
+            let mut image = [0u8; crate::tables::RAM_SIZE];
+            image[..0x800].copy_from_slice(&ram);
+            GameView::new(&image, 0, false, map.clone())
+        };
+        assert!(start_on_route(&map, at, "E", 1, "d3first", &view(0b1111)));
+        assert!(!start_on_route(&map, at, "E", 1, "d3first", &view(0b1101)));
+        assert!(start_on_route(&map, at, "W", 1, "d3first", &view(0b1111)));
+        assert!(!start_on_route(&map, at, "W", 1, "d3first", &view(0b1101)));
+        assert!(!start_on_route(&map, at, "E", 1, "no-such-route", &view(0b1111)));
     }
 
     /// d2first: no sword before the 0x77 cave, the wood sword through the white-sword cave, the D2 triforce from the

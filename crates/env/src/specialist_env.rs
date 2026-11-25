@@ -61,6 +61,9 @@ pub struct TerminalInfo {
     pub outcome: &'static str,
     /// Label of the episode's start state.
     pub start_state: String,
+    /// The start state is one of the pool's harvested states (round 42: training logs each room's seed and
+    /// harvested starts apart, `triforce.metrics`).
+    pub harvested: bool,
     pub start_health: f64,
     pub hearts: HeartSummary,
     pub linger: LingerSummary,
@@ -234,6 +237,7 @@ impl StepInfo {
             o.insert("ending".into(), json!(t.ending));
             o.insert("outcome".into(), json!(t.outcome));
             o.insert("start_state".into(), json!(t.start_state));
+            o.insert("harvested".into(), json!(t.harvested));
             o.insert("start_health".into(), json!(t.start_health));
             o.insert("hearts".into(), hearts_json(&t.hearts));
             o.insert("linger".into(), linger_json(&t.linger));
@@ -797,6 +801,20 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             &state,
             self.clips_allowed,
         );
+        // Round 42: a harvested start is a state the route can be in (`zelda::objectives::start_on_route`: Link's
+        // pieces and items are the route's at a step of the room). A handoff harvested on another order of the route
+        // is refused, as a removed file is: it trains a room with no correct exit, or with what the route never brings.
+        if self.pool.as_ref().is_some_and(|p| p.is_harvested(&name))
+            && let (Some(r), Some(named)) = (state_route.as_deref(), crate::start_states::StateName::parse(&name))
+            && !zelda::objectives::start_on_route(&self.data.map, named.location, named.entry, named.visit, r, &state)
+        {
+            return Err(EnvError::StartState(format!(
+                "harvested start state {name} is no state of route {r} as it stands: Link's triforce pieces and items \
+                 are the route's at no step of {} (a harvest of another order of the route; audit the snapshot with \
+                 `python -m triforce.harvest_audit`)",
+                named.location
+            )));
+        }
         self.route = route;
         self.route_step = step;
         self.begin_episode(name)
@@ -1216,6 +1234,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
                 ending,
                 outcome,
                 start_state: state_label(&self.episode_state).to_owned(),
+                harvested: self.pool.as_ref().is_some_and(|p| p.is_harvested(&self.episode_state)),
                 start_health: self.start_health,
                 hearts: self.hearts.summary(),
                 linger: self.linger.summary(),

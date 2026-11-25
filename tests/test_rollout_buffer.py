@@ -316,6 +316,24 @@ def test_room_metrics_count_hits_and_exits_by_start_room_and_entry():
     assert (summary['room/3:0x69/cave/episodes'], summary['room/3:0x69/cave/hits']) == (1, 1.0)
 
 
+def test_room_metrics_split_seed_and_harvested_starts():
+    """Round 42: a room's episodes and exit rate by start, seed state or harvested one (``info['harvested']``), so its
+    curve reads apart from what the sampler drew; an info without the flag (an older env) adds neither."""
+    metrics = RolloutMetrics()
+    for outcome, harvested in (('success', False), ('success', False), ('failure', True), ('success', True),
+                               ('failure', True)):
+        metrics.add_episode({'outcome': outcome, 'entry': 'E', 'linger_room': [5, 0x64, False],
+                             'harvested': harvested})
+    metrics.add_episode({'outcome': 'success', 'entry': 'S', 'linger_room': [5, 0x76, False]})
+    summary = metrics.summary()
+    assert summary['room/5:0x64/E/episodes'] == 5
+    assert (summary['room/5:0x64/E/seed_episodes'], summary['room/5:0x64/E/seed_success_rate']) == (2, 1.0)
+    assert summary['room/5:0x64/E/harvested_episodes'] == 3
+    assert abs(summary['room/5:0x64/E/harvested_success_rate'] - 1 / 3) < 1e-12
+    assert summary['room/5:0x76/S/episodes'] == 1
+    assert not any(k.startswith('room/5:0x76/S/') and ('seed' in k or 'harvested' in k) for k in summary)
+
+
 def test_linger_metrics_keep_historical_absence_and_measured_zero_distinct():
     metrics = RolloutMetrics()
     old = {'outcome': 'success'}

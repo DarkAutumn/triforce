@@ -306,6 +306,19 @@ fn paths(py: Python<'_>) -> PyResult<Bound<'_, pyo3::types::PyDict>> {
     Ok(d)
 }
 
+/// Whether the start state `name` (a name or path, harvested `..._h<seed>_<n>` alike), whose machine holds `state`, is
+/// a state `route` can be in (`zelda::objectives::start_on_route`, round 42: Link's triforce pieces and items the
+/// route's on entering a step of the room the name spells; the test a training reset applies to a harvested start).
+/// False for a name that isn't an entry state's.
+#[pyfunction]
+fn start_on_route(py: Python<'_>, route: &str, name: &str, state: &game::PyGameState) -> PyResult<bool> {
+    let data = context::data(py, None)?;
+    let data = known_route(&data, route)?;
+    Ok(env::start_states::StateName::parse(name).is_some_and(|n| {
+        zelda::objectives::start_on_route(&data.map, n.location, n.entry, n.visit, route, &state.view)
+    }))
+}
+
 #[pymodule]
 mod _native {
     use super::*;
@@ -314,7 +327,7 @@ mod _native {
     #[pymodule_export]
     use super::{
         families, game_rooms, own_models_until, paths, route_alternates, route_namespace, route_state, route_steps,
-        route_stretches, routes, specialist_for, state_name, state_namespace, step_policy,
+        route_stretches, routes, specialist_for, start_on_route, state_name, state_namespace, step_policy,
     };
     #[pymodule_export]
     use crate::config::PySpecialistConfig;
