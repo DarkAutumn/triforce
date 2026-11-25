@@ -20,7 +20,8 @@ from typing import Optional
 import torch
 
 from .. import _native, lineage, paths, registry
-from ..inputs import MissingInput, check_curriculum, check_harvested, check_start_states, declaration, untracked
+from ..inputs import (MissingInput, check_curriculum, check_harvested, check_start_states, declaration,
+                      small_harvested_entries, untracked)
 from ..paths import SPECIALISTS_DIR
 from ..metrics import RolloutMetrics
 from ..ppo import Collector
@@ -64,12 +65,22 @@ def route_only(config: SpecialistConfig, route: str, states_dir=None, tracks_dir
     kept = [g for g in config.start_states if fnmatch.filter(names, g)]
     if not kept:
         raise SystemExit(f"{config.name}: no start state of route {route} matches {config.start_states}")
+    left_out = plain_way_only(config, route, names)
+    if left_out:
+        # A glob that matched a plain-way-only state becomes the names it keeps.
+        kept = [n for g in kept for n in ([g] if not set(fnmatch.filter(names, g)) & set(left_out)
+                                          else sorted(set(fnmatch.filter(names, g)) - set(left_out)))]
+        print(f"[lab] {config.name}: clips on in every episode (clips.off_share 0): {len(left_out)} seed states the "
+              f"route enters only on its plain way are left out: {', '.join(left_out)}", flush=True)
+        if not kept:
+            raise SystemExit(f"{config.name}: every start state of route {route} is on a plain way: {left_out}")
     config = config.replace(state_routes=[route], start_states=kept)
     if not config.curriculum.enabled:
         return config
     source = Path(config.curriculum.trajectories or paths.data_dir('trajectories') / config.name)
     tracks = sorted(p.parent for p in source.glob('*/trajectory.json')
-                    if json.loads(p.read_text(encoding='utf-8')).get('start_state', '').startswith(prefix))
+                    if (start := Path(json.loads(p.read_text(encoding='utf-8')).get('start_state', '')).stem)
+                    .startswith(prefix) and start[len(prefix):] not in left_out)
     if not tracks:
         # No track of the route: a curriculum of none only when the task declares every one of its states untracked.
         seeds = [Path(p).stem for p in config.resolve_start_states(states_dir)]
@@ -97,6 +108,21 @@ def route_only(config: SpecialistConfig, route: str, states_dir=None, tracks_dir
     return config.replace(curriculum={**config.to_dict()['curriculum'], 'enabled': True, 'trajectories': str(out)})
 
 
+def plain_way_only(config: SpecialistConfig, route: str, names: list[str]) -> list[str]:
+    """The seed states of ``names`` (the route's, without its namespace) a task with clips on in every episode
+    (``clips.off_share`` 0: the owner, Nov 24, 2.0.1.0 trains with clips on) never trains: those whose route steps
+    (by room, side and visit) are all on a stretch's plain way, so the start fixes the clips switch off (4:0x20 from S,
+    4:0x30 from E, 4:0x21 from W). Only of the task's own globs; none for a task that trains clips off."""
+    if config.clips.off_share > 0:
+        return []
+    ways = {}
+    for step in _native.route_steps(route):
+        key = (step['level'], step['room'], step['in_cave'], step['entry'], step['visit'])
+        ways.setdefault(key, set()).add(step['way'])
+    matched = sorted({n for g in config.start_states for n in fnmatch.filter(names, g)})
+    return [n for n in matched if ways.get(_native.state_name(n)) == {'plain'}]
+
+
 def parse_families(items, parallel: int, shares: Optional[dict] = None, state_route: Optional[str] = None,
                    curriculum: bool = True, states_dir=None, tracks_dir=None) -> list[Family]:
     """``key[=yaml]`` items (a key's task: the given yaml, else ``task_yaml``) with ``parallel`` envs split by
@@ -112,7 +138,10 @@ def parse_families(items, parallel: int, shares: Optional[dict] = None, state_ro
             check_start_states(config, states_dir)
             if state_route:
                 config = route_only(config, state_route, states_dir, tracks_dir)
-            check_harvested(config, states_dir)
+            small = small_harvested_entries(check_harvested(config, states_dir))
+            if small:
+                print(f"[lab] {key}: harvested room entries under {_native.MIN_HARVESTED_ENTRY} states are not drawn: "
+                      + ', '.join(f'{stem} ({n})' for stem, n in small.items()), flush=True)
             if curriculum and config.curriculum.enabled:
                 check_curriculum(config, config.curriculum.trajectories or paths.data_dir('trajectories') / config.name,
                                  states_dir)

@@ -23,6 +23,7 @@ Locations come from the config and ``triforce.paths`` only."""
 import fnmatch
 import json
 import re
+from collections import Counter
 from pathlib import Path
 from typing import Optional
 
@@ -74,6 +75,23 @@ def check_harvested(config, states_dir=None) -> list[str]:
         raise MissingInput(f"{config.name} draws {config.harvested_fraction:.0%} of its resets from harvested start "
                            f"states and {folder} holds none ({_routes(config)}){_where('harvested', folder)}")
     return found
+
+
+def small_harvested_entries(found: list[str]) -> dict[str, int]:
+    """The harvested room entries of ``found`` the pool leaves out (``env::start_states::MIN_HARVESTED_ENTRY``, round
+    42: every entry gets an equal share of the harvested resets, so a handful of recovery states would take as much as
+    a thousand): entry stem -> its count, while some entry has at least that many."""
+    counts = Counter((_native.state_namespace(path), _native.state_name(path)) for path in found)
+    if not any(n >= _native.MIN_HARVESTED_ENTRY for n in counts.values()):
+        return {}
+    stems = {}
+    for (ns, name), n in sorted(counts.items(), key=str):
+        if n < _native.MIN_HARVESTED_ENTRY:
+            stem = 'unnamed' if name is None else (
+                f"{name[0]}_{name[1]:02x}{'cave' if name[2] else name[3][0].lower()}"
+                + (f'_v{name[4]}' if name[4] > 1 else ''))
+            stems[(f'{ns}_' if ns else '') + stem] = n
+    return stems
 
 
 def untracked(config) -> list[str]:

@@ -35,6 +35,10 @@ pub const HARVEST_RESCAN_RESETS: u64 = 64;
 /// Rooms with fewer chain visits keep the `hp` draw; a config with `chain_hp` and no room this well profiled is
 /// refused (`GameData::check_chain_hp`).
 pub const MIN_CHAIN_SAMPLES: usize = 5;
+/// A harvested room entry with fewer states is not drawn while the pool has one with at least this many (round 42):
+/// every entry gets an equal share of the harvested resets, so five recovery states of 3:0x5b from N would take 3% of
+/// Darknut's resets. (A pool whose every entry is this small draws them all: nothing larger to protect.)
+pub const MIN_HARVESTED_ENTRY: usize = 20;
 
 /// Loads named or path savestates and writes captured ones.  Names are bare state names (`'1_44w_0'`, `'start'`)
 /// or paths; the store owns the file format.  The provided methods are what recording (`crates/replay`) and
@@ -368,6 +372,9 @@ impl StartStatePool {
         let mut groups: BTreeMap<EntryKey, Vec<String>> = BTreeMap::new();
         for path in paths {
             groups.entry(entry_key(&path)).or_default().push(path);
+        }
+        if groups.values().any(|g| g.len() >= MIN_HARVESTED_ENTRY) {
+            groups.retain(|_, g| g.len() >= MIN_HARVESTED_ENTRY);
         }
         self.harvested.retain(|key, _| groups.contains_key(key));
         for (key, paths) in groups {
@@ -904,8 +911,9 @@ mod tests {
     }
 
     /// Round 42: harvested draws are stratified by room entry: at 0.5, half the resets are harvested, split alike over
-    /// the harvested entries whatever their files (90, 2 and 1), an entry no seed state has included; the seed states
-    /// keep the other half; within an entry every file once before any again.
+    /// the harvested entries whatever their files (90, 25 and 20), an entry no seed state has included; an entry under
+    /// `MIN_HARVESTED_ENTRY` (5 files) is not drawn; the seed states keep the other half; within an entry every file
+    /// once before any again.
     #[test]
     fn pool_stratifies_harvested_draws_by_room_entry() {
         let dir = tempfile::tempdir().unwrap();
@@ -916,14 +924,12 @@ mod tests {
         for name in ["1_73s_0", "1_73e_0", "1_73w_0"] {
             std::fs::write(seeds.join(format!("{name}.state")), b"x").unwrap();
         }
-        for i in 0..90 {
-            std::fs::write(harvested.join(format!("1_73s_h{i}_3.state")), b"x").unwrap();
+        // Side, files: an entry no seed state has (N: a room only chains bring, as 8:0x3c's Gleeok), a tiny one (W).
+        for (side, files) in [("s", 90), ("e", 25), ("n", 20), ("w", 5)] {
+            for i in 0..files {
+                std::fs::write(harvested.join(format!("1_73{side}_h{i}_3.state")), b"x").unwrap();
+            }
         }
-        for i in 0..2 {
-            std::fs::write(harvested.join(format!("1_73e_h{i}_3.state")), b"x").unwrap();
-        }
-        // An entry no seed state has (a room only chains bring, as 8:0x3c's Gleeok).
-        std::fs::write(harvested.join("1_73n_h0_3.state"), b"x").unwrap();
         let text = format!(
             "name: t\nrooms: ['(1, 0x73)']\nsuccess: exit-correct\nstart_states: ['1_73*_[0-9]']\n\
              harvested_states: {}\nharvested_fraction: 0.5\n",
@@ -941,6 +947,7 @@ mod tests {
         for seed in ["1_73s_0", "1_73e_0", "1_73w_0"] {
             assert!((count(seed) - 1.0 / 6.0).abs() < 0.03, "{seed}: {}", count(seed));
         }
+        assert_eq!(count("1_73w_h"), 0.0);
         // Within an entry, every file once before any again.
         let first: Vec<&String> = picks.iter().filter(|p| state_label(p).starts_with("1_73s_h")).take(90).collect();
         assert_eq!(first.iter().collect::<std::collections::HashSet<_>>().len(), 90);
