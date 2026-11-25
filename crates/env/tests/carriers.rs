@@ -36,10 +36,14 @@ const ROOM: MapLocation = MapLocation::new(3, 0x5b, false);
 /// step's `carriers: fight` (round 43) set to `fight` whatever routes.yaml ships.
 fn first_pass(nes: ZCore, dir: &Path, cycle: u8, bombs: Option<u8>, fight: bool) -> (C, Box<Observation>) {
     let mut data = (*common::game_data()).clone();
-    let mut map = (*data.map).clone();
-    let step = map.routes.get_mut("d3first").unwrap().iter_mut().find(|s| s.location() == ROOM && s.exit == "N");
-    step.expect("0x5b's first pass").carrier_fight = fight;
-    data.map = Arc::new(map);
+    let line = zelda::game_map::ROUTES_YAML
+        .lines()
+        .find(|l| l.contains("{level: 3, room: '0x5b'") && l.contains("entry: S") && l.contains("exit: N"))
+        .expect("0x5b's first pass");
+    let bare = line.replacen(", carriers: fight", "", 1);
+    let set = if fight { bare.replacen('}', ", carriers: fight}", 1) } else { bare };
+    let routes = zelda::game_map::ROUTES_YAML.replacen(line, &set, 1);
+    data.map = Arc::new(zelda::game_map::GameMap::from_yaml(zelda::game_map::GAME_YAML, &routes).unwrap());
     let data = Arc::new(data);
     let mut source = common::read_state_file(&common::state_path("d3first_3_5bs_0")).unwrap();
     source.machine.poke(CYCLE, cycle);
