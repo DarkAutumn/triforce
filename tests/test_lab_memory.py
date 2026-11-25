@@ -130,8 +130,8 @@ def test_harvested_starts_are_drawn_in_a_multi_family_run(states_dir, tmp_path):
     seed = require_state('0_5bw_0')
     harvested = tmp_path / 'harvested'
     harvested.mkdir()
-    for i in range(2):
-        shutil.copy(seed, harvested / f'd3first_0_5bw_h{i}_0.state')
+    for i in range(2):     # round 42: a harvested state stands in for its own room entry's seed draw (bare 0x5b W)
+        shutil.copy(seed, harvested / f'0_5bw_h{i}_0.state')
     states = tmp_path / 'states'
     states.mkdir()
     shutil.copy(seed, states / '0_5bw_0.state')
