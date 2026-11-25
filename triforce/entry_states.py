@@ -768,19 +768,33 @@ def _stretch_parts(route: str) -> dict:
     return {s['clips'][0]: (list(s['plain']), s['rejoin']) for s in route_stretches(route)}
 
 
+def walk_record_v2(record: dict) -> dict:
+    """A walk record in its current form (``walks`` by id, each door naming its walk): the first form (one walk,
+    its power-on, commit, command and resumptions at the top level) moved into ``walks``."""
+    if 'walks' in record:
+        return record
+    walk_id = record.pop('walk')
+    this = {key: record.pop(key) for key in ('boot', 'commit', 'dirty', 'command', 'resumed') if key in record}
+    for door in record['doors'].values():
+        door.setdefault('walk', walk_id)
+    return {'route': record.pop('route'), 'current': walk_id, **record, 'walks': {walk_id: this}}
+
+
 def walk(route: str, out: str, iterations: int, patience: int, attempts: int = 6, start_step: int = 0,
          source: Optional[str] = None, last_step: Optional[int] = None, boot: tuple = WALK_BOOT,
          states_dir: str = STATES_DIR, command: Optional[str] = None, log: Callable = print,
-         parallel: int = 3) -> tuple:
-    """Walks ``route`` once from console power on (``walk_boot``) or from ``source`` (a carried state of
-    ``start_step`` from an earlier walk's ``<out>/carry``), carrying the machine from door to door with no redraw,
-    no fresh room and no refill: at every door of the clip way (and of each stretch's plain way, walked as a branch
-    from the door where the ways part) it saves the pre-entry frame as the game holds it (``<out>/carry/<name>``) and
-    the state file ``<out>/<name>``, the same bytes with Link's hearts filled to his containers (the one write: a
-    run arrives hurt, this is the valid upper end, and a training load draws them anyway).  Every room is played by
-    ``walk_crossing`` (the step's ``clear:`` kills, ``parallel`` attempts at a time).  ``<out>/walk.json`` records the
-    power-on, the commit, the command and every door's facts (``door_facts``) and file hash, and each resumption
-    (``resumed``: the step, commit and command it went on from a carried state with);
+         parallel: int = 3, segment: Optional[dict] = None) -> tuple:
+    """Walks ``route`` once from console power on (``walk_boot``), or from ``source``: a carried state of
+    ``start_step`` from an earlier walk's ``<out>/carry`` (a resumption), or, with ``segment``, a segment's first
+    machine (the lead, Nov 25: the legs and dungeons after the first walked in parallel, each from its start door's
+    state checked against the route and set to it, ``segment`` saying what was checked and set), carrying the
+    machine from door to door with no redraw, no fresh room and no refill: at every door of the clip way (and of each
+    stretch's plain way, walked as a branch from the door where the ways part) it saves the pre-entry frame as the
+    game holds it (``<out>/carry/<name>``) and the state file ``<out>/<name>``, the same bytes with Link's hearts
+    filled to his containers (the one write: a run arrives hurt, this is the valid upper end, and a training load
+    draws them anyway).  Every room is played by ``walk_crossing`` (the step's ``clear:`` kills, ``parallel``
+    attempts at a time).  ``<out>/walk.json`` records the walk (``walks[<id>]``: the power-on or the segment's start,
+    the commit, the command, each resumption) and every door's facts (``door_facts``), file hash and walk id;
     ``<out>/entry_states.json`` the manifest entries.  Returns (manifest entries, the first file not built or None)."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals, too-many-statements
     rooms, steps = route_rooms(route), route_steps(route)
@@ -790,13 +804,14 @@ def walk(route: str, out: str, iterations: int, patience: int, attempts: int = 6
     record_path = os.path.join(out, WALK_RECORD)
     if os.path.exists(record_path):
         with open(record_path, encoding='utf-8') as file:
-            record = json.load(file)
-        if source is None:
+            record = walk_record_v2(json.load(file))
+        if source is None or segment is not None:
             raise ValueError(f"{out} holds a walk already: resume it with --start-step and --source (a carried state)")
+        this = record['walks'][record['current']]
         # A resumption at or after this one was on the abandoned branch.
-        record['resumed'] = [r for r in record.get('resumed', []) if r['start_step'] < start_step]
-        record.setdefault('resumed', []).append({'start_step': start_step, 'source': os.path.basename(source),
-                                                 **_git_commit(), 'command': command})
+        this['resumed'] = [r for r in this.get('resumed', []) if r['start_step'] < start_step]
+        this['resumed'].append({'start_step': start_step, 'source': os.path.basename(source), **_git_commit(),
+                                'command': command})
         # The doors after the resumption point belong to the abandoned branch: they go (file, carried state, manifest
         # entry), so the record holds one walk, every door descending from the next.
         stale = [name for name, door in record['doors'].items() if door['route_step'] > start_step]
@@ -812,11 +827,14 @@ def walk(route: str, out: str, iterations: int, patience: int, attempts: int = 6
             write_json_atomic(manifest_path, entries, indent=1)
         write_json_atomic(record_path, record, indent=1)
     else:
-        if source is not None:
+        if source is not None and segment is None:
             raise ValueError("a walk starts at power on: --source resumes an earlier walk's --out (its walk.json)")
-        record = {'route': route, 'walk': time.strftime('%y%m%d-%H%M%S'), 'boot': {'name': boot[0], 'delay': boot[1]},
-                  **_git_commit(), 'command': command, 'hearts': 'filled to the containers in each state file only',
-                  'doors': {}}
+        walk_id = time.strftime('%y%m%d-%H%M%S') + (f"-s{start_step}" if segment is not None else '')
+        start = {'segment': {**segment, 'start_step': start_step, 'source': os.path.basename(source),
+                             'sha256': _sha256(source)}} if segment is not None else \
+            {'boot': {'name': boot[0], 'delay': boot[1]}}
+        record = {'route': route, 'current': walk_id, 'hearts': 'filled to the containers in each state file only',
+                  'walks': {walk_id: {**start, **_git_commit(), 'command': command}}, 'doors': {}}
     if source is None:
         source = walk_boot(out, *boot, route=route)
     game = Game(seed=0, states_dir=str(states_dir), route=route)
@@ -848,11 +866,11 @@ def walk(route: str, out: str, iterations: int, patience: int, attempts: int = 6
         entry = {'file': name, 'chain': WALK_CHAIN, 'route': route, 'route_step': target.index,
                  'from_step': step.index, 'specialist': target.specialist, 'level': target.level,
                  'room': f"0x{target.room:02x}", 'in_cave': target.in_cave, 'entry': target.entry,
-                 'exit': target.exit, 'way': target.way, 'walk': record['walk'], **stats}
+                 'exit': target.exit, 'way': target.way, 'walk': record['current'], **stats}
         _merge_manifest(out, [entry], command)
         manifest.append(entry)
         record['doors'][name] = {'route_step': target.index, 'from_step': step.index, 'how': stats['how'],
-                                 'clear': step.clear, 'sha256': _sha256(path), **facts}
+                                 'walk': record['current'], 'clear': step.clear, 'sha256': _sha256(path), **facts}
         write_json_atomic(record_path, record, indent=1)
         log(f"{label} -> {name}: {stats['how']}, {stats['steps']} steps, {stats['env_steps']} env steps, "
             f"$524 {facts['spawn_cycle']}, drop cycle {facts['drop_cycle']}, hearts {facts['hearts']}, "
@@ -1074,17 +1092,24 @@ def read_walk_record(namespace: str, states_dir: str = STATES_DIR) -> Optional[d
 
 
 def _install_walk(staged: str, states_dir: str, partial: bool):
-    """``install``'s part for a walk (round 44): the record, and the route's other states removed."""
+    """``install``'s part for a walk (round 44): its record merged into ``<ns>_walk.json`` (a door from this build
+    replaces the door of that name; a walk no door names any more is dropped) and, unless ``partial``, the route's
+    other states removed: what remains is one state per door, each from a walk the record names."""
     with open(os.path.join(staged, WALK_RECORD), encoding='utf-8') as file:
-        walked = json.load(file)
+        walked = walk_record_v2(json.load(file))
     namespace = route_namespace(walked['route'])
     old = read_walk_record(namespace, states_dir)
-    if partial and old is not None and old.get('walk') == walked['walk']:
-        walked['doors'] = {**old['doors'], **walked['doors']}
-    write_json_atomic(walk_record_path(namespace, states_dir), walked, indent=1)
+    merged = walk_record_v2(old) if old is not None else {'route': walked['route'], 'walks': {}, 'doors': {}}
+    merged['doors'].update(walked['doors'])
+    merged['walks'].update(walked['walks'])
+    used = {door['walk'] for door in merged['doors'].values()}
+    merged['walks'] = {key: value for key, value in merged['walks'].items() if key in used}
+    merged.pop('current', None)
+    merged['hearts'] = walked.get('hearts', merged.get('hearts'))
+    write_json_atomic(walk_record_path(namespace, states_dir), merged, indent=1)
     if partial:
         return
-    keep = set(walked['doors'])
+    keep = set(merged['doors'])
     stale = sorted(p for p in glob.glob(os.path.join(states_dir, f'{namespace}_*.state'))
                    if os.path.basename(p) not in keep and state_namespace(state_label(p)) == namespace)
     for path in stale:
@@ -1365,9 +1390,11 @@ def directory_problems(states_dir: str, route=DEFAULT_ROUTE) -> List[str]:
         namespace = route_namespace(name) if name in native_routes() else None
         if namespace:
             record = read_walk_record(namespace, states_dir)
-            if record is None or not record.get('commit') or 'delay' not in record.get('boot', {}):
+            walks = walk_record_v2(record)['walks'] if record is not None else {}
+            if not walks or any(not w.get('commit') or ('delay' not in w.get('boot', {}) and 'segment' not in w)
+                                for w in walks.values()):
                 records.append(f"WALK-RECORD {namespace}: {walk_record_path(namespace, states_dir)} is missing or "
-                               "names no commit or power-on")
+                               "names a walk with no commit or no start (power-on or segment)")
     configured = {os.path.basename(p) for name in list_specialists()
                   for p in load_specialist(name).resolve_start_states(str(states_dir))}
     return (records + [f"MISSING {name}" for name in wanted if name not in present]
@@ -1456,7 +1483,12 @@ def build_parser() -> argparse.ArgumentParser:
                                   "golden-d3first-51-networks)")
     walk_parser.add_argument('--start-step', type=int, default=0,
                              help="resume: the route step --source is the carried pre-entry state of")
-    walk_parser.add_argument('--source', default=None, help="resume: a state of an earlier walk's --out/carry")
+    walk_parser.add_argument('--source', default=None,
+                             help="resume: a state of an earlier walk's --out/carry; with --segment: the segment's "
+                                  "first machine")
+    walk_parser.add_argument('--segment', default=None,
+                             help="a new walk from --source at --start-step: the JSON of its start's checks "
+                                  "(scripts/experiments/r44_segments.py start), kept in the record")
     walk_parser.add_argument('--last-step', type=int, default=None,
                              help="the last route step whose entry state is written (default: the route's end)")
     install_parser = sub.add_parser('install', help="copy a finished staged build into the states dir")
@@ -1508,9 +1540,14 @@ def main(argv=None):
 
     if args.command == 'walk':
         out = args.out or default_out()
+        segment = None
+        if args.segment:
+            with open(args.segment, encoding='utf-8') as file:
+                segment = json.load(file)
         manifest, failed = walk(args.route, out, args.iterations, args.patience, args.attempts, args.start_step,
                                 args.source, args.last_step, (WALK_BOOT[0], args.delay), states_dir=states_dir,
-                                command=command, log=lambda text: print(text, flush=True), parallel=args.parallel)
+                                command=command, log=lambda text: print(text, flush=True), parallel=args.parallel,
+                                segment=segment)
         _write_build_record(out, command, manifest, [failed] if failed else [])
         print(f"{len(manifest)} walked states in {out}")
         if failed:
