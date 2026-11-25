@@ -5278,6 +5278,16 @@ So the fighter is still 98-100% in Dungeon 3's Darknut rooms, in the route's lay
   reach the track's end from the last decision. A 6-iteration lab training of the darknut group on the staged
   folders (express, 8 games, 4,096 steps an update): completed, 809 steps a second, its log carrying each room's
   seed starts by layout and its curriculum starts.
+- **The fighter's own rates in the Olive Garden** (`r40_darknut_fighter.py measure --room garden`, look 0, seeds
+  0-299 on the walked `d3first_5_05e_0`, the task's hp draw):
+
+  | bag | in the route's layout | under the training draw (route / others) | Darknut40 on the old starts |
+  |---|---|---|---|
+  | 0 bombs | 285 of 300 (95.0%), 14 deaths, 0.86 hearts lost a visit | 285 of 300 (96.7% / 93.3%) | 94.7% |
+  | 8 bombs | 286 of 300 (95.3%), 11 deaths, 0.76 hearts lost a visit | 290 of 300 (96.0% / 97.3%) | 97.7% |
+
+  The fighter is as good in the walked Garden as it was on the old starts, and as good in the other layouts as in
+  the route's.
 
 ### 6. Every other family's tracks on the walked route
 
