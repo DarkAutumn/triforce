@@ -4021,19 +4021,27 @@ through this room is just hold north and never let go. 0-3 gibdos may path throu
 does NOT fit that pattern and I've never seen it before", and asked whether the seeds served in the emulator "and
 also for training!" are ever reachable by playing the game.
 
-- **They mostly were not** (Seeds43, round40.md "Real starts"). A dungeon room's monsters stand where the spawn
-  cycle `$524` puts them (nine spots walked from it, asm:Spawn_AssignPositions); the random numbers only decide how
-  they walk. The game zeroes `$524` at power on and reset and moves it by a fixed map at each room entry, so real
-  play brings one value to almost every door of the route (5x47 from S: 6 in 32 of 32 power-on runs). Every start
-  the project served, in `emu-zelda.py` and at every training reset, redrew it uniformly from nine: 78-89% of the
-  resets of 5x47, the Olive Garden, 3x59, 3x5b and 3x69 were in a layout real play does not bring to that door.
-  The owner's rule for 5x47 is exactly the real layout's: with it a Gibdo stands in Link's column on the third row
-  in 0.0% of the random phases, with the other served layouts in 55-68%. His odd take had `$524` = 7, which the
-  game gives only to a player who first clears 5x64's Blue Darknuts.
-- **What it reached:** 80% of the dungeon seed states, 86% of the dungeon curriculum tracks, most of the Darknut
-  fighter's demonstration visits, 31% of the harvested states, and every dungeon segment chain started from an
-  entrance (the drawn value lasts 13-16 rooms; the 1000-run baseline's dungeon segments: 42-83% of rooms off the
-  run's real value). Full runs from power on and the golden race were never affected.
+- **What was served** (Seeds43, round40.md "Real starts"). A dungeon room's monsters stand where the spawn cycle
+  `$524` puts them (nine spots walked from it, asm:Spawn_AssignPositions); the random numbers only decide how they
+  walk. The game zeroes `$524` at power on and reset and moves it by a fixed map at each room entry, so real play
+  on the route brings one value to almost every door (5x47 from S: 6 in 331 of 331 power-on runs). Every start the
+  project served, in `emu-zelda.py` and at every training reset, redrew it uniformly from nine. **Two measures,
+  kept apart:** against "what this route brings to that door", 78-89% of the resets of 5x47, the Olive Garden,
+  3x59, 3x5b and 3x69 were in another layout: the route's own layout got a ninth of the practice. Against "any game
+  of Zelda could reach it" (the owner's definition for 2.0.1.0, below; proven by searching the game's door maps
+  over every order of rooms and every clear pattern), 97% of the uniform draws were reachable and 3.0% were not:
+  of 140 dungeon doors with monsters 132 have four or more reachable layouts. The owner's rule for 5x47 is exactly
+  the route's layout's: with it a Gibdo stands in Link's column on the third row in 0.0% of the random phases, with
+  the other served layouts in 55-68%. His odd take had `$524` = 7, which the game gives a player who first clears
+  5x64's Blue Darknuts: reachable, by a play nobody makes.
+- **What it reached:** the seed states (each built from loads with a drawn value: 80% of the dungeon ones hold a
+  `$524` that is not the route's, and each one fixed chase state where real play has both), the `d3first` dungeon
+  curriculum tracks (172: 25 in the route's layout, 132 in another reachable one, 15 in an unreachable one), the
+  Darknut fighter's demonstrations (the route's layout in 16-34 of 150 visits a case), the harvested states, and
+  every dungeon segment chain started from an entrance (a drawn value lasts 13-16 rooms; the 1000-run baseline's
+  entrance draws were outside the values power-on runs hold there in 44-89% of runs). Full runs from power on and
+  the golden race were never affected. zcore against Mesen over the golden run's 153,136 frames: identical game
+  state on 152,988, one 15-frame stretch at frame 120,480 a frame-interrupt ahead, nothing near 5x47.
 - **The owner's rule from here on** (his "north star", in spirit): one save state per door; the layout real, never
   written; "We should never train on an un-real state. And the pool of states we train on should be pulled from
   ALL possible VALID states, with none being a 'surprise' for the model"; `emu-zelda.py` "Never serve an unreal
