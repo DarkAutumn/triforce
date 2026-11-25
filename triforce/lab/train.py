@@ -52,6 +52,8 @@ from ..inputs import MissingInput, task_demos
 from ..events import EventLog, logged_job, write_json_atomic
 from ..jobs import announce, work
 from ..jobs import progress as job_progress
+from ..nets.base import LabNet
+from ..nets.serve import learner_process, serve_mode
 from ..metrics import MetricsLogger, format_summary
 from ..ppo import PPO, IterationResult, PPOConfig, joint_kl, minibatch_forward
 from ..train import (CONFIRM_EPISODES, EXIT_INTERRUPTED, EarlyStop, curriculum_spec, interrupt_on_sigterm,
@@ -518,7 +520,22 @@ def training_settings(args, cfg: PPOConfig, tried, steps_per_env: int, recurrent
             'bptt': args.bptt if recurrent else None, 'teacher': teacher, 'sampling': sampling, 'rehearse': rehearse,
             'stop': None if args.stop_success is None else {'success': args.stop_success,
                                                             'patience': args.stop_patience},
-            'curriculum': not args.no_curriculum}
+            'curriculum': not args.no_curriculum,
+            # How the rollouts' network is served (``nets.serve.serve_mode``: CUDA graphs since Nov 25, round40.md
+            # "Where a teacher's time goes"): the same actions within float tolerance; a manifest without it is an
+            # older run, served eagerly (a resume only notes it: unknown there).
+            'serve': serve_mode()}
+
+
+def serving_text(network, served: dict) -> str:
+    """How the run's rollouts get their actions, for its log's start (``[lab] serving: ...``)."""
+    if not isinstance(network, LabNet):
+        return "the Rust actor plays the network (nothing served)"
+    window = f"{served['gather'] * 1000:g} ms batch window"
+    if served['forward'] == 'graphs':
+        return (f"CUDA graphs on {served['device']}, each batch size captured at the first rollout ({window}; "
+                f"TRIFORCE_SERVE_GRAPHS=0 serves eagerly)")
+    return f"the eager forward on {served['device']} ({window})"
 
 
 def cli(argv=None) -> int:
@@ -541,8 +558,9 @@ def main(argv=None) -> Path:
     # pylint: disable=too-many-locals, too-many-statements, too-many-branches
     argv = sys.argv[1:] if argv is None else list(argv)
     args = parse_args(argv)
-    from ..nets.serve import learner_process  # pylint: disable=import-outside-toplevel
-    learner_process()           # its learner uses the GPU beside the rollouts' server: no CUDA graphs there
+    # Its learner uses the GPU beside the rollouts' server: the server captures its CUDA graphs only during the first
+    # rollout, while the learner waits for it (``nets.serve.learner_process``).
+    learner_process(graphs=True)
     if args.mode == 'imitate' and args.teacher_coeff <= 0:
         args.teacher_coeff = 1.0
     if args.actor == 'teacher' and args.mode != 'imitate':
@@ -728,6 +746,7 @@ def main(argv=None) -> Path:
         arch = nets.arch_of(network.config.to_dict())
         print(f"[lab] {args.name} run={run_id} dir={out_dir} arch={arch} "
               f"parameters={network.parameter_count():,} envs={collector.shares} mode={args.mode}", flush=True)
+        print(f"[lab] serving: {serving_text(network, recipe['training']['serve'])}", flush=True)
         logger = MetricsLogger(str(out_dir))
         state = {'iteration': start_iteration, 'steps': start_steps, 'metrics': {}, 'stopped_early': False}
 
@@ -741,7 +760,8 @@ def main(argv=None) -> Path:
         def on_iteration(result: IterationResult):
             iteration = start_iteration + result.iteration
             state['iteration'], state['steps'] = iteration, result.total_steps
-            metrics = {**result.rollout.summary(), **result.stats, **collector.family_metrics()}
+            metrics = {**result.rollout.summary(), **result.stats, **collector.serve_stats,
+                       **collector.family_metrics()}
             stop = stopper is not None and stopper.update(network, iteration, metrics)
             state['metrics'] = metrics
             with interrupts_held():             # TensorBoard's queue: a SIGTERM waits for the scalars
