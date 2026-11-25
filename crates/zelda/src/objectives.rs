@@ -294,6 +294,15 @@ impl Objective {
             })
             .collect()
     }
+
+    /// The carriers come before the door (round 43, a step's `carriers: fight`): the objective names bomb carriers and
+    /// aims at nothing that leads out (only them and the items lying in the room), so leaving now is leaving a carrier
+    /// alive while its death may drop bombs. The exit stays a correct room; training ends such an exit as
+    /// `carrier-left` (`env::end_conditions`), a chain goes on.
+    pub fn carriers_first(&self) -> bool {
+        !self.carriers().is_empty()
+            && self.labels.iter().all(|(_, role)| matches!(role, Role::Monster { .. } | Role::Item { .. }))
+    }
 }
 
 /// What Link holds on entering a route step: the triforce pieces earlier steps took (bit `level - 1`), the sword
@@ -1372,28 +1381,36 @@ impl GameCompletion {
         for item in &state.items {
             labels.extend(aims(item.take_tiles(bounds), Role::Item { slot: item.index as u8, item: item.id as u8 }));
         }
-        if !matches!(
-            kind,
-            ObjectiveKind::Fight | ObjectiveKind::Treasure | ObjectiveKind::Cave
-        ) {
-            let (exit_aims, rooms) = self.map_objective(state);
-            pbrs.extend(exit_aims.iter().map(|a| a.0));
-            labels.extend(exit_aims);
-            next_rooms.extend(rooms);
-        }
         // Round 40 (`BombRules::carrier_targets`): a dungeon room the route crosses aims at every monster whose death
         // may drop bombs now as well as at the exit (the wavefront leads to the nearest of them); the observation's
         // `bomb_carrier` is the same list. No weapon bomb is the rule's in a crossing (`fights_only`), so a Vire is
         // one only to the magic sword. Once the cycle moves on (the kill was made, with a drop or not) or Link's own
         // bombs fill the bag, none is left and the room is a plain crossing; the dropped bombs are taken as under a
-        // floor (`bag_drops`, below).
+        // floor (`bag_drops`, below). Round 43 (`carriers: fight` on the step, 3:0x5b's first pass): while a carrier
+        // is named the exit is no target (no aim, no PBRS), so the kill comes before the door. The exit stays a
+        // correct room (`next_rooms`): a chain that leaves with a carrier alive goes on along the route, only a
+        // training episode ends there (`Objective::carriers_first`, the env's `carrier-left` ending).
+        let mut carriers: Vec<Aim> = Vec::new();
         if kind == ObjectiveKind::Move && self.carrier_targets(state) {
             for e in crate::bomb_windows::bomb_carriers(state, self.own_bombs(state), false, false) {
-                let carrier: Vec<Aim> = aims(e.link_overlap_tiles(), Role::Monster { slot: e.index, kind: e.id }).collect();
-                pbrs.extend(carrier.iter().map(|a| a.0));
-                labels.extend(carrier);
+                carriers.extend(aims(e.link_overlap_tiles(), Role::Monster { slot: e.index, kind: e.id }));
             }
         }
+        let carriers_first =
+            !carriers.is_empty() && self.current_step(here).is_some_and(|step| step.carrier_fight);
+        if !matches!(
+            kind,
+            ObjectiveKind::Fight | ObjectiveKind::Treasure | ObjectiveKind::Cave
+        ) {
+            let (exit_aims, rooms) = self.map_objective(state);
+            if !carriers_first {
+                pbrs.extend(exit_aims.iter().map(|a| a.0));
+                labels.extend(exit_aims);
+            }
+            next_rooms.extend(rooms);
+        }
+        pbrs.extend(carriers.iter().map(|a| a.0));
+        labels.extend(carriers);
         self.last_kind = kind;
         Objective {
             kind,

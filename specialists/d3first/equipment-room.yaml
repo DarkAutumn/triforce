@@ -4,3 +4,4 @@
 # f"{family}@d3first" (lab.collect.task_yaml).
 extends: [../equipment-room.yaml, _generation.yaml]
 state_routes: [d3first]
+clips: false                             # the owner, Nov 25: no clipping in the equipment rooms (the one exception)

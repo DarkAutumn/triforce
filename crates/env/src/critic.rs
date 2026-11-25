@@ -729,7 +729,8 @@ impl GameplayCritic {
                 rewards.add(Outcome::penalty("penalty-left-drop", -self.left_drop_penalty * left as f64));
             }
         }
-        if exit_is_correct(c.map, &change.previous, c.prev_objective, curr) {
+        // Round 43: leaving a carrier alive where the step's carriers come first pays no exit (`carrier-left`).
+        if exit_is_correct(c.map, &change.previous, c.prev_objective, curr) && !c.prev_objective.carriers_first() {
             if self.correct_locations.contains(&curr) {
                 rewards.add(Outcome::reward("reward-revisit-location", REWARD_TINY));
             } else {

@@ -612,12 +612,16 @@ pub fn ram_randomization_values<R: Rng + ?Sized>(
     if let Some((lo, hi)) = spec.keys {
         values.push((Var::Keys, rng.random_range(lo..=hi) as u8));
     }
-    if let Some((lo, hi)) = spec.help_count {
-        // A damage-free streak of `n` kills: the forced-drop count, no drop armed yet, the kill count with it.
-        let n = rng.random_range(lo..=hi) as u8;
-        values.extend([(Var::HelpDropCount, n), (Var::HelpDropValue, 0), (Var::KillStreak, n)]);
-    }
+    values.extend(help_count_values(spec, rng));
     values
+}
+
+/// The `help_count` draw (a damage-free streak of `n` kills: the forced-drop count, no drop armed yet, the kill count
+/// with it), or nothing without one.
+pub fn help_count_values<R: Rng + ?Sized>(spec: &crate::config::RamRandomization, rng: &mut R) -> Vec<(Var, u8)> {
+    let Some((lo, hi)) = spec.help_count else { return Vec::new() };
+    let n = rng.random_range(lo..=hi) as u8;
+    vec![(Var::HelpDropCount, n), (Var::HelpDropValue, 0), (Var::KillStreak, n)]
 }
 
 /// A listed room's own values at a reset into `at`, entered from `entry` (the start state's route entry; a key naming
@@ -627,7 +631,8 @@ pub fn ram_randomization_values<R: Rng + ?Sized>(
 /// - `room_kill_cycle` (round 40): the game's drop cycle (`$52A`, asm:Drop_SetUpItem), one of the listed values
 ///   (3:0x5b from S: 0, the first Darknut's death drops bombs 41% of the time, or 1, it drops none).
 ///
-/// A room not listed draws nothing (the random stream stays the family's).
+/// A room not listed draws nothing (the random stream stays the family's). The values are statements of how the route
+/// arrives, so they hold for a harvested start of the entry too ([`harvested_room_values`]).
 pub fn apply_room_values<R: Rng + ?Sized>(
     spec: &crate::config::RamRandomization,
     at: MapLocation,
@@ -650,6 +655,24 @@ pub fn apply_room_values<R: Rng + ?Sized>(
     if let Some(cycles) = spec.room_kill_cycle_at(at, entry) {
         set(Var::WorldKillCycle, cycles[rng.random_range(0..cycles.len())]);
     }
+}
+
+/// A harvested start's values (round 43, Carrier43): it keeps the hearts, items and room its run handed over, but a
+/// room entry the task lists ([`apply_room_values`]) gets the room's values as a seed start does, or the state is not
+/// that room as the route arrives there (3:0x5b's first pass harvested on chains that killed on the way in: drop cycle
+/// 4 and a forced drop armed in every state, so the cycle-0 carriers the task draws for half its seed starts never
+/// showed). Where the entry lists `room_kill_cycle` the kill counters go with the cycle: the task's `help_count` draw
+/// (the streak a seed start of the room draws) replaces the run's. Nothing for an entry not listed.
+pub fn harvested_room_values<R: Rng + ?Sized>(
+    spec: &crate::config::RamRandomization,
+    at: MapLocation,
+    entry: Option<&str>,
+    rng: &mut R,
+) -> Vec<(Var, u8)> {
+    let mut values =
+        if spec.room_kill_cycle_at(at, entry).is_some() { help_count_values(spec, rng) } else { Vec::new() };
+    apply_room_values(spec, at, entry, rng, &mut values);
+    values
 }
 
 /// A chain handoff's harvested start-state file name, `[<ns>_]<stem>_h<seed>_<n>.state` (`n`: the run's room index;
@@ -1249,5 +1272,35 @@ mod tests {
             assert_eq!(one(&values, Var::WorldKillCycle), None, "{at} {entry:?}");
             assert!(one(&values, Var::Bombs).is_none_or(|b| b <= 8));
         }
+    }
+
+    /// Round 43: a harvested start of a listed entry gets the room's values and nothing else of the family's draws
+    /// (no hearts, no bag); where the entry lists `room_kill_cycle`, the kill counters come with the cycle from the
+    /// `help_count` draw; an entry not listed draws nothing at all.
+    #[test]
+    fn a_harvested_start_holds_its_listed_rooms_values() {
+        let spec = RamRandomization {
+            hp: Some((HpBound::Fraction(0.15), HpBound::Max)),
+            bombs: Some((0, 8)),
+            help_count: Some((0, 9)),
+            room_bomb_counts: [("(3, 0x59, N)".to_owned(), vec![4, 8])].into(),
+            room_kill_cycle: [("(3, 0x5b, S)".to_owned(), vec![0, 1])].into(),
+            ..Default::default()
+        };
+        let (r59, r5b) = (MapLocation::new(3, 0x59, false), MapLocation::new(3, 0x5b, false));
+        let mut r = rng();
+        let vars = |values: &[(Var, u8)]| values.iter().map(|p| p.0).collect::<Vec<_>>();
+        for _ in 0..50 {
+            let values = harvested_room_values(&spec, r5b, Some("S"), &mut r);
+            assert_eq!(vars(&values), [Var::HelpDropCount, Var::HelpDropValue, Var::KillStreak, Var::WorldKillCycle]);
+            assert!(values[0].1 <= 9 && values[1].1 == 0 && values[2].1 == values[0].1 && values[3].1 <= 1, "{values:?}");
+            let values = harvested_room_values(&spec, r59, Some("N"), &mut r);
+            assert!(vars(&values) == [Var::Bombs] && matches!(values[0].1, 4 | 8), "{values:?}");
+        }
+        let mut b = r.clone();
+        for (at, entry) in [(r5b, Some("W")), (r59, Some("S"))] {
+            assert!(harvested_room_values(&spec, at, entry, &mut r).is_empty(), "{at} {entry:?}");
+        }
+        assert_eq!(r.random::<u64>(), b.random::<u64>(), "no draw for an entry not listed");
     }
 }
