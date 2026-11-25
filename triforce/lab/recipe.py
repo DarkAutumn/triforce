@@ -7,6 +7,9 @@ The refusals (``Refused``, each naming what to change):
   included (the generation plays ``d3first`` alone); ``--all-routes`` lets it.
 - ``check_warm_start``: a task's ``warm_start`` is never loaded by the lab (one network for every task; ``--load`` names
   its start), and the generation trains from scratch; ``--allow-warm-start`` lets the run start without it.
+- ``check_clips_off``: a task plays a share of its episodes with ``CLIP`` masked (``clips.off_share`` above 0; a bare
+  ``clips: true`` is half): whether a retrain trains clips off is the owner's decision before it starts (Nov 24; the
+  default is clips on for every task); ``--allow-clips-off`` when he asked for it.
 - ``check_obs_agree``: the tasks of one run set an ``obs.`` switch differently (one network reads one observation).
 - ``check_network_reads``: the network reads an opt-in block (``SWITCH_KEYS``: ``obs.threat``'s ``entity_threat``,
   ``obs.chase``'s ``chase`` and ``entity_chase``) whose switch is off in the tasks (it would read zeros), or the tasks
@@ -68,6 +71,21 @@ def check_warm_start(families, allow: bool):
                       f"every task: --load names its start) and the generation trains from scratch; set the task's "
                       f"warm_start to null, or pass --allow-warm-start to train without it")
 
+
+
+def check_clips_off(families, allow: bool):
+    """A task that plays a share of its episodes with ``CLIP`` masked.  The owner, Nov 24: clips on is the default for
+    every model; training with clips off is decided before a retrain starts, never inherited (2.0.1.0's first
+    teachers inherited round 22's ``clips: true``, half the episodes off, from five families' old task files)."""
+    if allow:
+        return
+    off = [f'{f.key} ({f.config.clips.off_share:.0%})' for f in families
+           if getattr(f.config, 'clips', None) is not None and f.config.clips.enabled and f.config.clips.off_share > 0]
+    if off:
+        raise Refused(f"{', '.join(off)}: the task plays that share of its episodes with CLIP masked (clips.off_share; "
+                      f"a bare `clips: true` is half). Clips on is the default for every model, and training with "
+                      f"clips off is the owner's decision before a retrain starts; set `clips: {{enabled: true, "
+                      f"off_share: 0}}`, or pass --allow-clips-off if he asked for clips-off training")
 
 def check_obs_agree(families):
     """Every task of the run sets every ``obs.`` switch alike."""

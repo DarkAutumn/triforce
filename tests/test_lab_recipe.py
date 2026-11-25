@@ -18,7 +18,7 @@ from triforce.lab.groups import Group
 from triforce.metrics import MetricsLogger
 from triforce.specialist import load_specialist
 
-from .conftest import start_task
+from .conftest import lab_start_task as start_task
 from .networks import native_spec
 
 
@@ -126,6 +126,12 @@ def test_the_refusals_say_what_to_change(tmp_path):
     with pytest.raises(recipe.Refused, match=r'warm_start.*set the task.s warm_start to null.*--allow-warm-start'):
         train.main(['--name', 'r', *_common(tmp_path, f'ow-start@d3first={warm}')])
     recipe.check_warm_start(parse_families([f'ow-start={warm}'], 1), allow=True)
+    # a task that plays some episodes with CLIP masked (a bare `clips: true` is half): the owner's decision
+    half = _task(tmp_path, 'clips-half', clips=True)
+    with pytest.raises(recipe.Refused, match=r'ow-start@d3first \(50%\).*CLIP masked.*--allow-clips-off'):
+        train.main(['--name', 'r', *_common(tmp_path, f'ow-start@d3first={half}')])
+    recipe.check_clips_off(parse_families([f'ow-start={half}'], 1), allow=True)
+    recipe.check_clips_off(parse_families([f'ow-start={start_task()}'], 1), allow=False)     # clips on throughout
     # tasks that disagree on a switch
     off = _task(tmp_path, 'target-off', obs={'target': False})
     with pytest.raises(recipe.Refused, match=r'obs\.target: True in ow-start; False in ow-start@d3first'):

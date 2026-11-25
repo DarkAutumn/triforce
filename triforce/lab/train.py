@@ -59,8 +59,8 @@ from ..train import (CONFIRM_EPISODES, EXIT_INTERRUPTED, EarlyStop, curriculum_s
 from . import groups
 from .auxiliary import AuxLoss, aux_loss, held_out
 from .collect import MultiCollector, NeedSampler, Teachers, parse_families, teacher_paths
-from .recipe import (Refused, build as build_recipe, check_demos, check_network_reads, check_obs_agree, check_routes,
-                     check_same, check_warm_start, create_network, read_reference)
+from .recipe import (Refused, build as build_recipe, check_clips_off, check_demos, check_network_reads,
+                     check_obs_agree, check_routes, check_same, check_warm_start, create_network, read_reference)
 from .rehearse import Rehearsal
 
 REFERENCE = Path(__file__).with_name('reference.json')
@@ -83,6 +83,9 @@ def parse_args(argv=None):
                              "--state-route)")
     parser.add_argument('--allow-warm-start', action='store_true',
                         help="train although a task names a warm_start (the lab never loads it)")
+    parser.add_argument('--allow-clips-off', action='store_true',
+                        help="train although a task plays some episodes with CLIP masked (clips.off_share above 0; "
+                             "the owner's decision before a retrain, clips on by default)")
     parser.add_argument('--resume', default=None, metavar='NAME/RUN',
                         help="continue an interrupted run (the same command line): weights, optimizer, counters, "
                              "each task's curriculum progress and the need sampler restored, to the same total")
@@ -559,6 +562,7 @@ def main(argv=None) -> Path:
     keys = [f.key for f in families]
     check_routes(families, args.state_route, args.all_routes)
     check_warm_start(families, args.allow_warm_start)
+    check_clips_off(families, args.allow_clips_off)
     check_obs_agree(families)
     try:
         declared = [] if args.no_task_demos else [task_demos(family.config) for family in families]

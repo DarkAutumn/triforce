@@ -12,7 +12,7 @@ from triforce.evaluate import evaluate_specialist
 from triforce.lab import train
 from triforce.lab.auxiliary import matched_precision
 
-from .conftest import start_task
+from .conftest import lab_start_task as start_task
 from .networks import native_spec
 
 SMALL = {'d_model': 32, 'layers': 1, 'link_out': 32, 'hidden_dim': 32, 'depth': 1, 'hit_dim': 32, 'hit_depth': 1}

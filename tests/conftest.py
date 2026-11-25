@@ -206,9 +206,12 @@ def pytest_sessionstart(session):
     game.save_state_file(str(_session['states_dir'] / 'start.state'))
     task = load_specialist('ow-start').replace(start_states=['start'])
     (_session['states_dir'] / START_TASK).write_text(task.to_json(), encoding='utf-8')
+    lab_task = task.replace(clips={'enabled': True, 'off_share': 0})
+    (_session['states_dir'] / LAB_START_TASK).write_text(lab_task.to_json(), encoding='utf-8')
 
 
 START_TASK = 'ow-start-from-start.yaml'
+LAB_START_TASK = 'ow-start-from-start-clips-on.yaml'
 
 
 def start_task() -> str:
@@ -217,6 +220,12 @@ def start_task() -> str:
     and a training refuses a glob that matches nothing; before, they were dropped and these tests trained on
     ``start`` alone, as they still do."""
     return str(_session['states_dir'] / START_TASK)
+
+
+def lab_start_task() -> str:
+    """``start_task`` with the clips switch on in every episode: the lab trainer refuses a task that plays some with
+    CLIP masked unless told (``lab.recipe.check_clips_off``; the owner, Nov 24)."""
+    return str(_session['states_dir'] / LAB_START_TASK)
 
 
 def pytest_unconfigure(config):  # pylint: disable=unused-argument

@@ -14,7 +14,7 @@ from triforce.lab import train
 from triforce.lab.auxiliary import AuxLoss, aux_loss, held_out, joint_index
 from triforce.rollout_buffer import RolloutBuffer
 
-from .conftest import REPO_STATES_DIR, require_state, start_task
+from .conftest import REPO_STATES_DIR, require_state, lab_start_task as start_task
 from .networks import native_spec, random_network
 
 

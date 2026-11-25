@@ -14,7 +14,7 @@ from triforce.lab.collect import Teachers, task_yaml
 from triforce.specialist import load_specialist, task_files
 from triforce.runner import Policies
 
-from .conftest import ROOT, start_task
+from .conftest import ROOT, lab_start_task as start_task
 from .networks import native_spec, random_network
 
 YAML = str(ROOT / 'specialists' / 'ow-start.yaml')

@@ -15,7 +15,7 @@ from triforce.lab.collect import Family, MultiCollector, NeedSampler
 from triforce.metrics import RolloutMetrics
 from triforce.rollout_buffer import RolloutBuffer
 
-from .conftest import REPO_STATES_DIR, ROOT, require_state, start_task
+from .conftest import REPO_STATES_DIR, ROOT, require_state, lab_start_task as start_task
 from .networks import native_spec
 
 
