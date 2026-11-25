@@ -44,24 +44,27 @@ MAX_TRAININGS = 3           # 3 or more other trainings are one bucket
 
 # Steps a second a game before the record has ``NORMAL_RUNS`` ended trainings of a shape, by shape and the other
 # trainings beside it (Perf43, Nov 25: round40.md "Where a teacher's time goes", the medians of the generation's
-# stage-1 teachers, gen1-* s1 jobs #1258-#1377, each beside 1 or 2 other trainings; nothing was measured alone).
-REFERENCE = {
-    'hitnet-768, 8 games, look-ahead 4:0.25': {1: 66.9, 2: 52.9},
-    'hitnet-768, 20 games, look-ahead 4:0.25': {1: 44.9, 2: 36.9},
-}
+# stage-1 teachers, gen1-* s1 jobs #1258-#1377, served eagerly, each beside 1 or 2 other trainings; nothing was
+# measured alone). The graphs' shapes take the same numbers as a floor (they measured x1.7-2.2 the eager speed) until
+# 3 of their own ended.
+REFERENCE = {f'hitnet-768 {served}, {games} games, look-ahead 4:0.25': by_trainings
+             for served in ('eager', 'graphs')
+             for games, by_trainings in ((8, {1: 66.9, 2: 52.9}), (20, {1: 44.9, 2: 36.9}))}
 
 
 # ------------------------------------------------------------------------------------------------ the shape
 
-def network_name(config: Optional[dict]) -> str:
-    """``hitnet-768``, ``zelda-256``: the architecture and its width (``model_config``)."""
+def network_name(config: Optional[dict], served: Optional[str] = None) -> str:
+    """``hitnet-768 graphs``, ``hitnet-768 eager``, ``zelda-256``: the architecture, its width (``model_config``) and
+    for a served network how it is served (``nets.serve.serve_mode``'s ``forward``: the same network made twice the
+    steps a second with graphs, so the two are two shapes)."""
     config = config or {}
     width = config.get('hidden_dim')
-    return f"{config.get('arch') or 'zelda'}{'' if width is None else f'-{width}'}"
+    return f"{config.get('arch') or 'zelda'}{'' if width is None else f'-{width}'}{f' {served}' if served else ''}"
 
 
 def shape(network: Optional[str], games: Optional[int], lookahead: Optional[str]) -> str:
-    """A training's shape: ``hitnet-768, 20 games, look-ahead 4:0.25`` (``look-ahead off`` without one)."""
+    """A training's shape: ``hitnet-768 graphs, 20 games, look-ahead 4:0.25`` (``look-ahead off`` without one)."""
     return f"{network or '?'}, {games or '?'} games, look-ahead {lookahead or 'off'}"
 
 
@@ -366,7 +369,7 @@ def slow_line(con, job: dict) -> Optional[str]:
 
 def final_line(con, job: dict) -> Optional[str]:
     """The one line a training's end prints last (the wrapper, ``triforce job wait``): ``#1371 lead-gen1-darknut-s1
-    (train) speed: 957 steps/s mean (47.9 a game) [hitnet-768, 20 games, look-ahead 4:0.25], normal 1,150 (57.5 a
+    (train) speed: 957 steps/s mean (47.9 a game) [hitnet-768 eager, 20 games, look-ahead 4:0.25], normal 1,150 (57.5 a
     game): IN BOUNDS`` or ``... OUT OF BOUNDS: 31% below for 42 minutes (09:12-09:54) beside ...``; None for a
     job that reports no speed."""
     found = verdict(con, job)
@@ -467,14 +470,20 @@ def run_dir_of(log: Path) -> Optional[Path]:
 
 
 def run_shape(run: dict) -> tuple[str, int, Optional[str]]:
-    """(network, games, look-ahead) of a run's ``run.json`` (the lab's or ``triforce train``'s)."""
+    """(network, games, look-ahead) of a run's ``run.json`` (the lab's or ``triforce train``'s).  A lab run's network
+    other than ``zelda`` was served: as its manifest's ``training.serve`` says, eagerly before that was recorded."""
     envs = run.get('envs')
     games = sum(envs.values()) if isinstance(envs, dict) else (run.get('args') or {}).get('parallel')
-    tried = ((run.get('manifest') or {}).get('training') or {}).get('try_others')
+    training = (run.get('manifest') or {}).get('training') or {}
+    tried = training.get('try_others')
     if tried is None:
         text = (run.get('args') or {}).get('try_others')
         tried = None if not text else {'candidates': text.split(':')[0], 'share': text.split(':')[1] or 1}
-    return network_name(run.get('model_config')), games, lookahead_text(tried)
+    config = run.get('model_config') or {}
+    served = None
+    if isinstance(envs, dict) and (config.get('arch') or 'zelda') != 'zelda':
+        served = (training.get('serve') or {}).get('forward', 'eager')
+    return network_name(config, served), games, lookahead_text(tried)
 
 
 def logs_of(job: dict, directory: Path) -> list[Path]:

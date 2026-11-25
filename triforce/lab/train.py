@@ -695,8 +695,9 @@ def main(argv=None) -> Path:
                     args.logs_dir, work=work(train_steps=total), families=keys, run_dir=str(out_dir),
                     mode=args.mode) as plan:
         interrupt_on_sigterm()  # SIGTERM waits out a TensorBoard write (interrupts_held); logged_job restores it
-        log = RunLog(plan, keys, run_id, (network_name(network.config.to_dict()), sum(f.envs for f in families),
-                                          lookahead_text(tried)))
+        served = recipe['training']['serve']['forward'] if isinstance(network, LabNet) else None
+        log = RunLog(plan, keys, run_id, (network_name(network.config.to_dict(), served),
+                                          sum(f.envs for f in families), lookahead_text(tried)))
         aux_losses = [AuxLoss.parse(text) for text in args.aux]
         sampler = None
         if args.sampling == 'need':

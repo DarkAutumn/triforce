@@ -16,7 +16,7 @@ import pytest
 from triforce import jobqueue as q
 from triforce import jobs, jobspeed
 
-SHAPE = jobspeed.shape('hitnet-768', 20, '4:0.25')
+SHAPE = jobspeed.shape('hitnet-768 eager', 20, '4:0.25')
 T0 = 1_800_000_000.0
 
 
@@ -71,10 +71,12 @@ def job(con, job_id: int) -> dict:
 
 def test_the_shape_and_the_lookahead_spelling():
     assert jobspeed.network_name({'arch': 'hitnet', 'hidden_dim': 768}) == 'hitnet-768'
+    assert jobspeed.network_name({'arch': 'hitnet', 'hidden_dim': 768}, 'graphs') == 'hitnet-768 graphs'
     assert jobspeed.network_name({'hidden_dim': 256}) == 'zelda-256'
     assert jobspeed.lookahead_text({'candidates': 4, 'share': 0.25}) == '4:0.25'
     assert jobspeed.lookahead_text(None) is None
-    assert SHAPE == 'hitnet-768, 20 games, look-ahead 4:0.25'
+    assert SHAPE == 'hitnet-768 eager, 20 games, look-ahead 4:0.25'
+    assert jobspeed.REFERENCE[SHAPE] == jobspeed.REFERENCE[SHAPE.replace('eager', 'graphs')]
     assert jobspeed.shape('zelda-256', 8, None) == 'zelda-256, 8 games, look-ahead off'
 
 
@@ -172,7 +174,7 @@ def test_the_watch_samples_judges_and_says_slow_once_then_back(con, tmp_path):
 def test_jobs_speed_writes_the_report_of_the_job_it_runs_in(con, tmp_path, monkeypatch):
     running = add_job(con, 'reporting', T0)
     monkeypatch.setenv(jobs.JOB_ID_ENV, str(running))
-    speed = jobs.Speed('hitnet-768', 20, '4:0.25', total=1000.0, began=T0)
+    speed = jobs.Speed('hitnet-768 eager', 20, '4:0.25', total=1000.0, began=T0)
     monkeypatch.setattr(jobs.time, 'time', lambda: T0 + 10.0)
     speed.update(5000.0, rollout=520.0)
     monkeypatch.setattr(jobs.time, 'time', lambda: T0 + 20.0)
@@ -220,7 +222,7 @@ sys.exit(job.main(sys.argv[1:]))
 TRAINING = r'''
 import time
 from triforce import jobs
-speed = jobs.Speed('hitnet-768', 20, '4:0.25')
+speed = jobs.Speed('hitnet-768 eager', 20, '4:0.25')
 for i in range(1, 9):
     time.sleep(0.25)
     speed.update(1000.0 * i, rollout=4100.0)

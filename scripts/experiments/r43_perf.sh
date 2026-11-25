@@ -32,6 +32,8 @@ for config in "$@"; do
             w256) args+=(--arch-config '{"hidden_dim": 256}') ;;
             notry) args=(--families darknut@d3first --state-route d3first --arch hitnet --arch-config "$gen"
                          --aux hit=hit:0.5) ;;
+            fam) args=(--families darknut@d3first --state-route d3first --arch hitnet --arch-config "$gen"
+                       --aux hit=hit:0.5 --try-others 4:0.25) ;;
             noobs) args=(--families "darknut@d3first=specialists/experiments/r43-perf/darknut-noobs.yaml"
                          --state-route d3first --arch hitnet --arch-config "$bare" --aux hit=hit:0.5
                          --try-others 4:0.25) ;;

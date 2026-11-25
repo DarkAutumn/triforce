@@ -250,6 +250,8 @@ def test_a_served_batch_comes_back_in_one_copy_and_half_precision_only_on_the_gp
 def test_cuda_graphs_answer_as_the_eager_forward_and_fall_back_when_they_disagree(observations, monkeypatch, capsys):
     """A graphed answer is the eager forward's for every batch size (rows padded to the bucket), a replaced network
     drops its graphs, and a graph that disagrees with the eager forward turns the network eager for good."""
+    # A chain's server: no learner in this process (a lab training test before this one in the worker marks it one).
+    monkeypatch.setattr(serve_module, '_LEARNER', {'on': False, 'graphs': False})
     torch.manual_seed(5)
     networks = [nets.create('wide', native_spec(), hidden_dim=64, depth=2) for _ in range(2)]
     answered = []
@@ -292,7 +294,7 @@ def test_a_learner_process_serves_eagerly_beside_its_own_gpu_work(observations, 
     capture on the server thread and the learner's forwards failed each other, in every capture mode): a learner
     process (``serve.learner_process``) serves eagerly, and both threads finish."""
     import threading
-    monkeypatch.setitem(serve_module._LEARNER, 'on', False)
+    monkeypatch.setattr(serve_module, '_LEARNER', {'on': False, 'graphs': False})
     assert Server(device='cuda').graphs
     serve_module.learner_process()
     torch.manual_seed(7)
