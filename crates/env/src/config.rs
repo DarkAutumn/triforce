@@ -792,9 +792,10 @@ pub struct RamRandomization {
     pub drop_bombs: Option<f64>,
     /// `room_bombs: {'(3, 0x5b)': [8, 8]}` (round 39, 3:0x5b with a full bag): a reset into a listed room draws its
     /// bombs from that room's range instead of `bombs`, with probability `room_bombs_share` (absent: every such
-    /// reset; the rest keep the `bombs` draw). Wherever `bombs` applies (not a harvested start); a reset into a room
-    /// not listed draws nothing more, so the family's random stream is unchanged there. A key with a side (round 40,
-    /// [`parse_room_key`]) draws only for the starts entering the room from it.
+    /// reset; the rest keep the `bombs` draw). Every start into the room, a harvested one too (round 43,
+    /// `start_states::harvested_room_values`); a reset into a room not listed draws nothing more, so the family's
+    /// random stream is unchanged there. A key with a side (round 40, [`parse_room_key`]) draws only for the starts
+    /// entering the room from it.
     #[serde(default)]
     pub room_bombs: std::collections::BTreeMap<String, (i64, i64)>,
     /// Share of resets into a `room_bombs` room that draw its range; absent = every one.
@@ -803,8 +804,8 @@ pub struct RamRandomization {
     /// `room_bomb_counts: {'(3, 0x59, N)': [4, 8]}` (round 40, the owner, Nov 23: "when we transition from 0x49 ->
     /// 0x59 we should literally train with 4 or 8 bombs in 0x59 because those are the exact states we will have"):
     /// every reset into the listed room (from its side, if the key names one: [`parse_room_key`]) holds one of the
-    /// listed counts, each as likely, in place of the `bombs` and `room_bombs` draws: a set, not a range. Wherever
-    /// `bombs` applies (not a harvested start); a reset into a room not listed draws nothing more.
+    /// listed counts, each as likely, in place of the `bombs` and `room_bombs` draws: a set, not a range. Every start
+    /// into the room, a harvested one too (round 43); a reset into a room not listed draws nothing more.
     #[serde(default)]
     pub room_bomb_counts: std::collections::BTreeMap<String, Vec<i64>>,
     /// `room_kill_cycle: {'(3, 0x5b, S)': [0, 1]}` (round 40, the owner, Nov 23: "a 50-50 split training the 0x5b
@@ -812,7 +813,8 @@ pub struct RamRandomization {
     /// listed room (from its side, if the key names one) holds the game's drop cycle (`$52A` WorldKillCycle, 0-9,
     /// asm:Drop_SetUpItem: the column of the drop table the next death reads) at one of the listed values, each as
     /// likely. At 0 the first Red Darknut's death reads drop group 2's column 1, bombs; at 1 column 2, no bombs.
-    /// Wherever `bombs` applies (not a harvested start, which keeps the cycle its run left).
+    /// Every start into the room, a harvested one too (round 43: the chains that harvested 3:0x5b's first pass had
+    /// killed on the way in, cycle 4 in all 1,792 states), whose kill counters then come from the `help_count` draw.
     #[serde(default)]
     pub room_kill_cycle: std::collections::BTreeMap<String, Vec<i64>>,
 }

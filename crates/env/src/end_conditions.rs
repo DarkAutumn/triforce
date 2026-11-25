@@ -34,12 +34,17 @@ pub const MAX_STEPS: &str = "max-steps";
 pub const NO_DAMAGE: &str = "no-damage";
 pub const RETREAT: &str = "retreat";
 pub const ENTER_ROOM_PREFIX: &str = "enter-room:";
+/// Round 43: leaving by a correct exit while the step's carriers come first (`carriers: fight`,
+/// `zelda::objectives::Objective::carriers_first`): a bomb carrier left alive while its death may drop bombs. Training
+/// only; a chain goes on along the route (the exit is correct there).
+pub const CARRIER_LEFT: &str = "carrier-left";
 
 pub const SUCCESS_KINDS: [&str; 4] = [EXIT_CORRECT, TRIFORCE_COLLECTED, BOSS_DEAD_AND_HEART, GAME_COMPLETED];
 
 /// Central table of the other endings; successes come only from each specialist's `success` list.
-pub const DEFAULT_ENDINGS: [(&str, &str); 9] = [
+pub const DEFAULT_ENDINGS: [(&str, &str); 10] = [
     (EXIT_WRONG, SOFT_FAILURE),
+    (CARRIER_LEFT, SOFT_FAILURE),
     (MAX_STEPS, SOFT_FAILURE),
     (NO_ROOM_PROGRESS, SOFT_FAILURE),
     (NO_DAMAGE, SOFT_FAILURE),
@@ -257,6 +262,9 @@ impl EndCondition {
                         return Some(RETREAT.to_owned());
                     }
                     return Some(EXIT_WRONG.to_owned());
+                }
+                if v.prev_objective.carriers_first() {
+                    return Some(CARRIER_LEFT.to_owned());
                 }
                 if enter_rooms.contains(&location) {
                     return Some(enter_room_name(location));

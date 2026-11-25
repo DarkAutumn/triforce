@@ -1,0 +1,10 @@
+# Round 43 (Carrier43): 3:0x5b's first pass (from S) alone, the drop cycle fixed at 1 (the task draws 0 or 1, half
+# each). darknut@d3first's task otherwise (its hearts, bag and help-count draws). Measurement only.
+extends: ../../d3first/darknut.yaml
+start_states:
+- 3_5bs_[0-9]
+ram_randomization:
+  room_kill_cycle:
+    (3, 0x5b, S):
+    - 1
+    - 1

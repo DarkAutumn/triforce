@@ -754,9 +754,12 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             )?;
             self.verified.insert(name.clone());
         }
-        // A harvested start (a real chain handoff) keeps the health and items the upstream specialist handed over.
-        if !self.pool.as_ref().is_some_and(|p| p.is_harvested(&name)) {
-            let spec = &self.config.ram_randomization;
+        // A harvested start (a real chain handoff) keeps the health and items the upstream specialist handed over, but
+        // for the room values a listed entry states (round 43: how the route arrives there, `harvested_room_values`).
+        let spec = &self.config.ram_randomization;
+        let values = if self.pool.as_ref().is_some_and(|p| p.is_harvested(&name)) {
+            crate::start_states::harvested_room_values(spec, state.full_location(), state_entry(&name), &mut self.rng)
+        } else {
             let chain =
                 if spec.chain_hp.is_some_and(|p| p != 0.0) && self.curriculum_tag.is_none() {
                     self.data.chain_profile(ns.as_deref(), state.full_location())
@@ -767,9 +770,10 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             // The room's own values (round 40: by the side the start enters from, its route entry: a curriculum
             // start's is its track's seed state's).
             apply_room_values(spec, state.full_location(), state_entry(seed_name), &mut self.rng, &mut values);
-            if !values.is_empty() {
-                state = self.session.apply_ram(&values).clone();
-            }
+            values
+        };
+        if !values.is_empty() {
+            state = self.session.apply_ram(&values).clone();
         }
         // A forced bomb drop (training only): the help drop armed as bombs from the start.
         let spec = &self.config.ram_randomization;
