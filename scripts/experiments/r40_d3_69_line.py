@@ -672,8 +672,8 @@ def demos(out: Path, which: str, seed0: int, runs: int, depth: int = 4, progress
     demos`: a MOVE or WAIT without its duration, a strike `REPEAT` times); `log`: each visit's record as a JSON line;
     `workers` processes share the visits one at a time; `skip`: seeds left out (a set of visits recorded again, as
     the first build's: round40.md "The generation's tasks").  The file is written as the visits end (at most every
-    `SAVE_EVERY` seconds, and at the end, through a temporary file), so a job stopped at its time limit keeps what
-    it found."""
+    `SAVE_EVERY` seconds, and at the end, through a temporary file), and the log's records with it (round 45), so a
+    job stopped at its time limit keeps what it found and the log names exactly the visits the file holds."""
     from triforce.demos import save_demos
 
     def save():
@@ -681,18 +681,20 @@ def demos(out: Path, which: str, seed0: int, runs: int, depth: int = 4, progress
             part = out.with_name(out.name + '.part')
             save_demos(part, [obs for obs, _ in rows], [action for _, action in rows])
             part.replace(out)
+        if log is not None and pending:
+            with open(log, 'a', encoding='utf-8') as file:
+                file.write(''.join(json.dumps(record) + '\n' for record in pending))
+        pending.clear()
 
     visits = [visit for visit in starts(which, seed0, runs) if visit[0] not in skip]
     tasks = [(which, [visit], depth) for visit in visits]
-    records, rows = [], []
+    records, rows, pending = [], [], []
     saved = time.time()
     with multiprocessing.get_context('spawn').Pool(workers) as pool:
         for part, kept in pool.imap_unordered(_taught, tasks):
             records += part
             rows += kept
-            if log is not None:
-                with open(log, 'a', encoding='utf-8') as file:
-                    file.write(''.join(json.dumps(record) + '\n' for record in part))
+            pending += part
             if time.time() - saved > SAVE_EVERY:
                 save()
                 saved = time.time()
