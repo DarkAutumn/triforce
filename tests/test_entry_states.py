@@ -649,4 +649,30 @@ def test_installing_a_walk_replaces_the_routes_states(tmp_path):
     assert files == ['0_05e_0.state', 'd3first_3_7cs_0.state', 'd3first_walk.json', MANIFEST]
     with open(states / MANIFEST, encoding='utf-8') as file:
         assert sorted(e['file'] for e in json.load(file)) == ['0_05e_0.state', 'd3first_3_7cs_0.state']
-    assert entry_states.read_walk_record('d3first', str(states))['doors'] == record['doors']
+    installed = entry_states.read_walk_record('d3first', str(states))
+    assert installed['doors'] == {'d3first_3_7cs_0.state': {'sha256': 'x', 'walk': 'w'}}
+    assert installed['walks'] == {'w': {'commit': 'abc', 'boot': {'name': 'LINK', 'delay': 1}}}
+
+
+def test_a_segment_walk_merges_into_the_record(tmp_path):
+    """A segment (walked from its start door's checked state) installs beside the first walk: each door names its
+    walk, a walk no door names is dropped, and the audit asks each walk for a commit and a start."""
+    states = tmp_path / 'states'
+    states.mkdir()
+    first = {'route': 'd3first', 'current': 'a', 'walks': {'a': {'commit': 'c', 'boot': {'name': 'LINK', 'delay': 1}},
+                                                            'old': {'commit': 'c', 'boot': {'delay': 1}}},
+             'doors': {'d3first_3_7cs_0.state': {'sha256': 'x', 'walk': 'a'},
+                       'd3first_0_37c_v2_0.state': {'sha256': 'y', 'walk': 'a'}}}
+    (states / 'd3first_walk.json').write_text(json.dumps(first))
+    staged = tmp_path / 'staged'
+    staged.mkdir()
+    (staged / entry_states.BUILD_RECORD).write_text(json.dumps({'command': None, 'files': [], 'failed': []}))
+    second = {'route': 'd3first', 'current': 'b', 'walks': {'b': {'commit': 'c', 'segment': {'start_step': 79}}},
+              'doors': {'d3first_2_7ds_0.state': {'sha256': 'z', 'walk': 'b'}}}
+    (staged / entry_states.WALK_RECORD).write_text(json.dumps(second))
+    install(str(staged), str(states), partial=True)
+    merged = entry_states.read_walk_record('d3first', str(states))
+    assert sorted(merged['walks']) == ['a', 'b'] and 'current' not in merged
+    assert {name: door['walk'] for name, door in merged['doors'].items()} == {
+        'd3first_3_7cs_0.state': 'a', 'd3first_0_37c_v2_0.state': 'a', 'd3first_2_7ds_0.state': 'b'}
+    assert not any(p.startswith('WALK-RECORD') for p in entry_states.directory_problems(str(states), 'd3first'))

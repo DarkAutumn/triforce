@@ -605,9 +605,11 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   Nov 25: "We should only need 1 save state per 'door/entry' to a room to do all of our work", "The layout that
   spawns should be real, not fake", "We should never train on an un-real state"): chain 0 only, every state from
   `python -m triforce.entry_states walk --route d3first` (power on by controller inputs, the machine carried from door
-  to door with no redraw, no fresh room, no refill; each room's kills by routes.yaml `clear:`), its record
-  `triforce/states/d3first_walk.json` (the commit, the power-on, every door's bytes and the file's sha256). A state
-  no walk made, or a walked file edited afterwards, is UNWALKED to the audit; `build` and `path` refuse the route.
+  to door with no redraw, no fresh room, no refill; each room's kills by routes.yaml `clear:`; after Dungeon 1 each
+  leg and dungeon walked as its own segment from the dungeon exit's checked state, `walk --segment`), its record
+  `triforce/states/d3first_walk.json` (each walk's commit and start, every door's walk, bytes and file sha256). A
+  state no walk made, or a walked file edited afterwards, is UNWALKED to the audit; `build` and `path` refuse the
+  route.
   Its rooms hold the memory real play leaves (3x5b's last pass makes 2 Darknuts; 3x59 from S, 1x23 from W, the
   Olive Garden out of its cellar make none). `d2first` keeps chains 0–2 built by `entry_states build|path`
   (staged under `target/entry-states/<ts>`, then `entry_states install <dir>`). Check every state with `...
