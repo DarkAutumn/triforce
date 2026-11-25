@@ -3963,3 +3963,24 @@ not edit it.
   load 15 or less, tools; more places buy nothing.
 - **Main moves onto the store** (yes): round40.md "The removal plan".
 - The agents' request budget of 600 is saved for good.
+
+## 2026-11-24 — 2.0.1.0 trains with clips on only; clips are decided before a retrain (the owner)
+
+The owner: "Turn off no clips for the rest of the training runs from here on. We always want to train with clips on
+for 2.0.1.0. Mark down somewhere that this is a decision to make before starting a retrain, and we shouldn't go
+forward without knowing [...] We may still train noclips models in the future, but the default choice is going to
+be clips=yes for all for 99% of the models unless I specify otherwise."
+
+- **What happened:** his Nov 18 decision ("drop the no-clip runs") set `off_share: 0` for each clip family "from the
+  next round that trains it". The generation trains every family again, but five `d3first` task files kept round
+  22's bare `clips: true` (half the episodes with CLIP masked): ow-start, ow-tektite, ow-octorok, ow-peahat
+  (inherited from `specialists/ow-peahat.yaml`) and trap-room (from `specialists/trap-room.yaml`). The lead missed
+  it in review; it was never put to the owner as a choice. The overworld teacher trained about 24% of its episodes
+  with clips off until iteration 986 (16.2 million steps).
+- **Done:** the five files `clips: {enabled: true, off_share: 0}` (`254a34a4`, also in the stage 1 worktree); the
+  overworld teacher stopped at iteration 986 and resumed with them (`--except code,clips,effective_sha256,
+  yaml_sha256`; job #1324); the rooms teacher starts with them; the lab trainer refuses a task with `off_share` above
+  0 unless `--allow-clips-off` (`40a7ca8d`); AGENTS.md "Clips only" says clips are confirmed for every task before
+  a retrain's first training.
+- **Left as it is:** start states that the route enters only on its plain way still fix the switch off (a stray 2
+  of 370 walkers' episodes); the GUI shows the on/off split only when clips off is 10% or more of a run's episodes.
