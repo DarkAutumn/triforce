@@ -126,20 +126,21 @@ def test_teams_overrides_and_views(shared):
 def test_a_group_puts_one_run_in_every_slot_of_its_families_on_its_route(shared):
     """``+@GROUP=FAMILY/RUN`` (round 40): every member family's route slot and late slot (added where the base has
     none), the bare slots (``d2first``) and a family in no group left as the base has them."""
-    old, late, melee = _sealed('darknut', 'r1'), _sealed('darknut', 'r2'), _sealed('d1-melee', 'r1')
+    old, late, melee = _sealed('goriya', 'r1'), _sealed('goriya', 'r2'), _sealed('d1-melee', 'r1')
     zol, teacher = _sealed('zol', 'r1'), _sealed('walkers', 'r9')
-    base = {'darknut': store.slot_of(old), 'darknut@d3first': store.slot_of(old),
-            'darknut@d3first:late': store.slot_of(late), 'zol': store.slot_of(zol), 'd1-melee': store.slot_of(melee)}
+    base = {'goriya': store.slot_of(old), 'goriya@d3first': store.slot_of(old),
+            'goriya@d3first:late': store.slot_of(late), 'zol': store.slot_of(zol), 'd1-melee': store.slot_of(melee)}
     store.create_team('t1', base, 'test')
     route, walkers = store.groups()['walkers']
-    assert route == 'd3first' and {'darknut', 'zol', 'goriya', 'moldorm'} <= set(walkers)
+    assert route == 'd3first' and {'gibdo', 'zol', 'goriya', 'moldorm'} <= set(walkers)
+    assert store.groups()['darknut'] == ('d3first', ('darknut',))       # Darknuts their own teacher (Nov 25)
     team = store.effective_team('t1+@walkers=walkers/r9')
     assert team['name'] == 't1+@walkers=walkers/r9' and team['groups'] == {'walkers': 'walkers/r9'}
     expected = {f'{family}@d3first{late}' for family in walkers for late in ('', ':late')}
     assert set(team['overrides']) == expected and set(team['overrides'].values()) == {'walkers/r9'}
-    assert team['slots']['darknut@d3first:late']['run'] == 'walkers/r9'       # the base's late slot replaced
+    assert team['slots']['goriya@d3first:late']['run'] == 'walkers/r9'        # the base's late slot replaced
     assert team['slots']['zol@d3first:late']['run'] == 'walkers/r9'           # one added where the base had none
-    assert (team['slots']['darknut']['run'], team['slots']['zol']['run']) == ('darknut/r1', 'zol/r1')
+    assert (team['slots']['goriya']['run'], team['slots']['zol']['run']) == ('goriya/r1', 'zol/r1')
     assert team['slots']['d1-melee']['run'] == 'd1-melee/r1'                   # a family in no group
     view = store.write_view(team, shared.parent / 'view')
     assert (view / 'zol' / 'promoted').read_text().strip() == 'r1'
