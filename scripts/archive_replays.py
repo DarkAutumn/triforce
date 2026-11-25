@@ -24,6 +24,9 @@ files (checked in, uncompressed so they play as they are: the owner, Nov 23). Ev
     <version>/<KIND>/<name>.tfreplay.bz2        with --kind (e.g. runs-250 and --label best): backup only
     <version>/chain/<group>.7z                  segments, one 7z per directory they were found in
 
+``--keep-names`` names each replay by its own file name instead (the owner's takes: ``--kind owner --keep-names``,
+from ``scripts/owner_takes.py sync``, so a take is found in the backup under the name it has in ``replays/owner/``).
+
 Identical files are kept once (by SHA-1); ``index.jsonl`` in the backup records each replay's name, SHA-1, META
 summary, where it is kept (``path``, and ``member`` inside a 7z) and every path it was found at. Run it again at
 any time: what is already kept is skipped. ``bunzip2 -k FILE`` or ``7z x ARCHIVE`` restores a replay that
@@ -135,6 +138,8 @@ def main(argv=None) -> int:
     parser.add_argument('--kind', help="keep these replays under <version>/KIND/ in the backup only, one bzip2 file "
                                        "each, whatever their META says (e.g. runs-250: the 250-run test's picks)")
     parser.add_argument('--label', help="appended to each name (e.g. best, worst, stuck-0x35)")
+    parser.add_argument('--keep-names', action='store_true',
+                        help="name each replay by its own file name, not its META (the owner's takes)")
     parser.add_argument('--repo', default=str(ROOT / 'replays'), help="where golden and single runs are checked in")
     parser.add_argument('--backup', default='/backup/triforce/replays', help="where every replay is kept")
     args = parser.parse_args(argv)
@@ -174,7 +179,7 @@ def main(argv=None) -> int:
         except Exception as error:  # pylint: disable=broad-exception-caught
             print(f"skip {where}: {type(error).__name__}: {error}", file=sys.stderr)
             continue
-        name = name_of(info, args.label)
+        name = Path(where).stem if args.keep_names and not where.startswith('git:') else name_of(info, args.label)
         if name in names:
             name = f'{name}_{sha[:8]}'
         names.add(name)

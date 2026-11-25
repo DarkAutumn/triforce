@@ -718,6 +718,20 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   the model [...] Best is defined as 'fewest cheated items, completed in the fewest frames' in that order." Other
   replays (deaths included) may be kept to peek at later, within reason. Near the 2 TB floor: **ask the owner what
   to trim; never trim without asking.**
+- **The owner's takes are kept, every one** (the owner, Nov 25: "Place these somewhere durable (along with the other
+  replays I make for you, this may be an ongoing thing)"): what he plays on `emu-zelda.py` is saved into
+  `~/triforce-review/played/` (his; read and copy, never move, rename or delete there); `scripts/owner_takes.py
+  sync` (a queue job) copies every new one, under his file name, into `replays/owner/<room>/` (a whole game:
+  `replays/owner/game/`), checks it verifies, archives it (`archive_replays.py --kind owner --keep-names`) and
+  rewrites `replays/owner/INDEX.md`. Run it whenever he says he played something, and commit what it brought in.
+- **Solved rooms are recorded and compared, never trained on** (the owner, Nov 25: "We aren't going to change the
+  trainers or this run. However, we are going to compare at the end of this full retraining if the agents learned
+  the 'Solved' route or not."): a room he calls solved (a human-perfect way through that works every time) is an
+  entry of `triforce/solved_rooms.yaml` (the way in the lead's words beside his, the takes, the conditions, the
+  phase test's rates, the criteria; `docs/owner/solved-rooms.md`). **No cellar is ever solved** (the Keese move).
+  At the end of a retrain `triforce solved compare` reads the new team's chain replays beside the last team's and
+  the table goes into the round's document. Nothing in the file reaches a reward, a task, a demonstration or the
+  route unless he says so.
 - **Check-ins are a document** (the owner, Nov 23): the lead keeps `target/owner-review/CHECKIN.md` as the check-in
   itself, written as it goes (decisions owed, results, golden and single runs with their paths, newest first). When
   the owner asks for a check-in the lead opens it in the editor without asking (`code-insiders

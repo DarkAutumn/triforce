@@ -1,0 +1,432 @@
+# Solved rooms: the owner's human-perfect ways through rooms of the route (the owner, Nov 25: "a human-perfect way
+# through that works every time"; "There aren't a ton of solved rooms, but there definitely are plenty").
+#
+# What this file is for (the owner, Nov 25): "We aren't going to change the trainers or this run. However, we are
+# going to compare at the end of this full retraining if the agents learned the 'Solved' route or not." It is read
+# by the comparison (`triforce solved compare`, triforce/solved_rooms.py) and by nothing that trains: no reward,
+# task, demonstration or route step reads it unless the owner says so. docs/owner/solved-rooms.md is the page for
+# him; AGENTS.md "The owner's standing rules" has the rule.
+#
+# Rules of the file:
+# - **No cellar is ever solved** (the owner, Nov 25: "no cellar is solved because the bats move around"): a cellar
+#   or cave is never an entry (the loader refuses one), and the comparison never scores one.
+# - An entry is a room and the side it is entered by (`key`: `<room>-<side>`, the owner's notation, `5x47-S`;
+#   `cave` is up a stair or out of a cave), on a route step that crosses it that way (`route`, `step`; a test checks
+#   it).
+# - `description` is the lead's account, from the owner's words (`owner`, quoted whole with their date) and from his
+#   takes read frame by frame. Positions are Link's (`$70`, `$84`: the top-left pixel of his 16x16 sprite); a tile
+#   is 8 pixels; a dungeon room's floor rows, from the top, are at Y $5D, $6D, $7D, $8D, $9D, $AD, $BD.
+# - `conditions.layout`: the spawn cycle `$524` the room is entered with (where its monsters stand,
+#   asm:Spawn_AssignPositions; docs/decisions.md 2026-11-25 "Only real starts"). `route` is the value the route
+#   brings to the door (triforce/entry_rule.d3first.json `planned`); `claimed_for` says whether the solved way is
+#   claimed for that layout (`route`) or for any (`all`). Each take says its own.
+# - `phases`: the game's answer to "does it hold every time": scripted inputs over 3000 random phases in the route's
+#   layout, both chase states (`$60`, drawn 50/50), loaded by the round-43 load rule (`LiveGame.load(...,
+#   layout='route')`, on r40-int); `scripts/solved_phases.py ROOM` repeats it. "clean" = out by the solved exit
+#   with no hit.
+# - `criteria`: what a pass must do to count as the solved way (triforce/solved_rooms.py "the criteria"); the
+#   owner's takes must meet them (tests/test_solved_rooms.py).
+# - `takes`: paths relative to the repository (replays/owner/, scripts/owner_takes.py).
+
+rooms:
+- key: 5x47-S
+  level: 5
+  room: '0x47'
+  entry: S
+  exit: N
+  route: d3first
+  step: 138
+  source: the owner, Nov 25
+  solved: S to N, holding north the whole way, past five Gibdos, with the sword once or twice.
+  owner:
+  - date: 2026-11-25
+    words: >-
+      The fast path through this room is just hold north and never let go. 0-3 gibdos may path through your way in
+      the room's topmost (door adjacent) row, and the one under that... never in the third tile from the top. You
+      can sword once to hit then move through them like the darknut in 3x69. It's a very constant and consistent
+      room.
+  - date: 2026-11-25
+    words: That 4th replay above does NOT fit that pattern and I've never seen it before
+  - date: 2026-11-25
+    words: Never let go of N, possible sword swing or not.
+  description: >-
+    Link comes in at the S door at X $78 and holds Up until he is through the N door, never leaving X $78: 144 pixels
+    of floor (Y $CD to $3D) in 110 frames when nothing stops him. The room is a ring of water with a bar of water
+    across its middle (tile rows 10-11, Y $8D); holding Up into the bar lays the ladder under him and he walks over
+    it without a pause (zelda-asm levels/level-5.md, "Ladder"). In the route's layout ($524 = 6) the five Gibdos
+    spawn at (80, 93) and (160, 93) on the top row, (96, 125) on the third row, and (80, 157) and (160, 157) on the
+    fifth. They walk as red Darknuts do (asm:Gibdo_Update: half a pixel a frame, a turn at each 16-pixel grid point,
+    toward the chase target when it is within 8 pixels of the Gibdo's row or column), and the chase target sits on
+    Link's column or its mirror (asm:Mode5Play_UpdateWorld@CheckChaseTarget), so the two top-row Gibdos walk in
+    toward X $70-$80 and reach his column in the top two rows just as he climbs there: the owner's "0-3 gibdos may
+    path through your way in the room's topmost row, and the one under that". The way through is the sword at
+    them, not a dodge: a Gibdo has no shield, a hit knocks it back and makes it flash for about 32 frames, and
+    while it flashes the game tests neither Link's weapons nor its touch on Link
+    (asm:Collision_CheckMonsterVsWeaponsAndLink), so Link walks on through it, Up still held. In his three takes in
+    the route's layout he swings once, at Y $76-$7E (Link level with the third row, the Gibdos one and two rows
+    above coming in), and leaves in 121-124 frames, unhurt. The phases add one thing his takes never met: every
+    take of his was in chase state 0, and in chase state 1 the third-row Gibdo (spawned at (96, 125)) walks east
+    along its row into his column as he steps off the ladder, so "never in the third tile from the top" holds for
+    chase 0 only; a second swing made on the ladder (Y $91) meets it. Holding Up with two swings, on the ladder at Y
+    $91 and at the second row (Y $71), is clean in every phase of both chase states, in 123 frames (the swing on the
+    ladder costs no frame; the one at the second row stops Link for 13).
+  conditions:
+    layout:
+      route: 6
+      claimed_for: route
+    items: the ladder (the middle bar of water) and a sword (wood is enough)
+    hearts: any; the solved way takes no hit
+  cost:
+    frames: [121, 124]
+    hits: 0
+    note: >-
+      frames from Link's first frame in play to the first frame of the scroll north, his takes in the route's
+      layout; all six clean takes of his 111-124; held straight with no swing 110, with the two swings 123.
+  takes:
+  - path: replays/owner/5x47/5x47_S_seed886385_261125-101220.tfreplay
+    layout: 6
+    what: the route's layout; one swing at Y $7E; 121 frames
+  - path: replays/owner/5x47/5x47_S_seed270195_261125-075515.tfreplay
+    layout: 6
+    what: the route's layout; one swing at Y $76 into a Gibdo; 124 frames
+  - path: replays/owner/5x47/5x47_S_seed546985_261125-075456.tfreplay
+    layout: 6
+    what: the route's layout; one swing at Y $77 into a Gibdo; 124 frames
+  - path: replays/owner/5x47/5x47_S_seed204077_261125-101240.tfreplay
+    layout: 3
+    what: another layout; one swing at Y $74; 124 frames
+  - path: replays/owner/5x47/5x47_S_seed719457_261125-075506.tfreplay
+    layout: 0
+    what: another layout; a swing at Y $77 and one more at Y $4E by the door; 124 frames
+  - path: replays/owner/5x47/5x47_S_seed846236_261125-101232.tfreplay
+    layout: 5
+    what: another layout; one swing at Y $8C, on the ladder; 111 frames
+  evidence:
+  - path: replays/owner/5x47/5x47_S_seed775262_261125-075942.tfreplay
+    layout: 7
+    what: >-
+      the layout he had never seen ("does NOT fit that pattern"): $524 = 7, which the game gives a player who first
+      clears 5x64's Blue Darknuts (decisions 2026-11-25); two swings, hit once, 129 frames. Not the solved way.
+  phases:
+    layout: 6
+    seeds: [0, 2999]
+    results:
+    - script: hold N alone
+      clean: [1210, 3000]
+      chase0: [550, 1498]
+      chase1: [660, 1502]
+      frames: 110
+    - script: hold N, a swing whenever a Gibdo is in the blade's reach (6-24 pixels ahead, 10 aside), at most 2
+      clean: [1811, 3000]
+      chase0: [726, 1498]
+      chase1: [1085, 1502]
+      frames: [110, 123]
+    - script: hold N, one swing at Y $71
+      clean: [2893, 3000]
+      chase0: [1498, 1498]
+      chase1: [1395, 1502]
+      frames: 123
+    - script: hold N, swings at Y $91 (on the ladder) and Y $71
+      clean: [3000, 3000]
+      chase0: [1498, 1498]
+      chase1: [1502, 1502]
+      frames: 123
+    sweep: >-
+      one swing at Y $8D: 121 of 300; $85: 46; $81-$79: 251-257; $75: 221; $73-$6D: 572 of 600 (chase 0 all, chase
+      1 268 of 296); $6B-$61: 55-163 of 600. Two swings, the second at Y $71 and the first at Y $95 or $8D: 593 of
+      600; at Y $91: 600 of 600; at Y $89: 452 of 600.
+  open: >-
+    His own single swing (Y $76-$7E in his takes, all three in chase 0) is clean in 251-257 of 300 phases when a
+    script makes it at Y $81-$79 (85%; at $7D chase 0 137 of 152, chase 1 120 of 148); made a little higher, as Link
+    reaches the second row ($73-$6D), 95%; two swings, 100%. He times his swing by the Gibdos he sees, which a fixed
+    height does not and a swing whenever a Gibdo is in the blade's reach does worse (60%): how often his own timing
+    is clean is not measured. Only the route's layout is claimed; in the other layouts three of his four takes are
+    clean (the fourth is the layout he had never seen), with no phase test there.
+  criteria:
+    exit: N
+    hits: 0
+    hold: N
+    gap: 1
+    grace: 2
+    directions: [N]
+    swings:
+      max: 2
+    frames: 136
+- key: 5x37-S
+  level: 5
+  room: '0x37'
+  entry: S
+  exit: N
+  route: d3first
+  step: 139
+  source: the owner, Nov 25
+  solved: S to N up the half-tile column X $70, a swing on the ladder if a Darknut steps into the way, past three Red
+    Darknuts in the dark.
+  owner:
+  - date: 2026-11-25
+    words: >-
+      N out of doorway, W half a tile to align to the tile (not on the half-tile), N to the wall, the E/N through
+      the door. If the darknut steps in your way, a sword swing on the ladder passes through. This save has the
+      darknut not in the way (and it may just be elsewhere): 5x37_S_seed729758_261125-101350. This save has the
+      darknut in the way: 5x37_S_seed96045_261125-101501. 5x37 always moves to the full tile because it times
+      perfectly with the darknut reaching you if you step there. I'm not sure if holding pure north is possible
+      with every possible rng it might make it a little faster if it is, but the human-perfect route is this.
+  description: >-
+    The room is dark (only the picture: walls, water and monsters are the same, zelda-asm level-5.md "Dark rooms")
+    and is a maze of water. Link comes in at the S door at X $78. He walks N out of the doorway (Y $BD), steps W half
+    a tile to X $70 (tile columns 14-15, a whole tile; the door's X $78 is a half-tile) and goes N up that column to
+    the top row (Y $5D, "the wall"), then E back to X $78 and N out. Up X $70 he crosses the water once, on the
+    ladder at tile rows 12-13 (Y $9D-$A5); straight up X $78 he would cross it twice (rows 8-9 and 12-13): game.yaml's
+    note on 0x37 (round 25) and its path_costs say the same. The three Red Darknuts include one that spawns in the
+    middle at (128, 141), X $80, in every layout seen; it walks W along Y $8D toward the centre column or S down
+    X $80. At X $78 Link shares 8 pixels with X $80 and walks straight into it, and a Darknut walking S at him faces
+    him: his sword meets its shield (asm:Damage_HandleWeaponHit@CheckDarknut). At X $70 he is out of its column,
+    and if it steps W into his it reaches him while he is on the ladder over the water, from the side: a swing
+    there lands, the Darknut flashes (about 32 frames, asm:Shove_Begin) and Link walks on through it (the owner's
+    "a sword swing on the ladder passes through", the same pass-through as 3x69's). That is his "it times
+    perfectly with the darknut reaching you if you step there". His takes: 729758 (layout 0) no Darknut comes, no
+    swing, 125 frames; 96045 (layout 4) the middle Darknut walks W into his column, he swings on the ladder at Y
+    $9F and walks through it, 126 frames; 761531 (layout 3, not named by him) the same swing at Y $A4, then the
+    Darknut turns N up his column ahead of him and back S, and he goes E to X $80 at Y $65 around it, N to the
+    wall and W to X $78 and out, 144 frames, unhurt; 886279 (layout 4, not named) is pure north: he holds Up at
+    X $78, the middle Darknut walks S down X $80 at him, his swing at Y $A9 meets its shield, he is hit at Y $A6
+    and again at Y $9F after letting go, and the take was saved before he left (unhurt never; the answer to his
+    own question, below). In the route's layout ($524 = 2) the phases agree: the owner's way with one swing as
+    Link steps onto the ladder is clean in every phase; without the swing a quarter; pure north never.
+  conditions:
+    layout:
+      route: 2
+      claimed_for: route
+    items: the ladder (the water across his column) and a sword (wood is enough)
+    hearts: any; the solved way takes no hit
+  cost:
+    frames: [125, 126]
+    hits: 0
+    note: >-
+      frames from Link's first frame in play to the first frame of the scroll north, his two named takes (layouts 0
+      and 4); 761531's detour 144; the scripted way in the route's layout 121 with or without the swing.
+  takes:
+  - path: replays/owner/5x37/5x37_S_seed729758_261125-101350.tfreplay
+    layout: 0
+    what: '"the darknut not in the way": no swing; W at Y $AD; 125 frames'
+  - path: replays/owner/5x37/5x37_S_seed96045_261125-101501.tfreplay
+    layout: 4
+    what: '"the darknut in the way": the middle Darknut walks W into X $70; a swing on the ladder at Y $9F; 126 frames'
+  - path: replays/owner/5x37/5x37_S_seed761531_261125-101448.tfreplay
+    layout: 3
+    what: >-
+      not named by him: the swing on the ladder at Y $A4, then a step E to X $80 at Y $65 around the same Darknut
+      walking back S, N to the wall, W to X $78 and out; 144 frames, unhurt
+  evidence:
+  - path: replays/owner/5x37/5x37_S_seed886279_261125-101333.tfreplay
+    layout: 4
+    what: >-
+      not named by him: pure north at X $78. The middle Darknut walks S down X $80 at him, his swing at Y $A9 hits
+      its shield, he is hit twice and the take is saved in the room. Not the solved way.
+  phases:
+    layout: 2
+    seeds: [0, 2999]
+    results:
+    - script: the owner's way, no swing
+      clean: [752, 3000]
+      chase0: [588, 1498]
+      chase1: [164, 1502]
+      frames: 121
+    - script: the owner's way, one swing as Link reaches Y $A5 (onto the ladder)
+      clean: [3000, 3000]
+      chase0: [1498, 1498]
+      chase1: [1502, 1502]
+      frames: 121
+    - script: the owner's way, a swing whenever a Darknut not facing him is in the blade's reach, at most 2
+      clean: [3000, 3000]
+      chase0: [1498, 1498]
+      chase1: [1502, 1502]
+      frames: 121
+      swings_a_run: 1.2
+    - script: pure north at X $78, no swing
+      clean: [0, 3000]
+      chase0: [0, 1498]
+      chase1: [0, 1502]
+    - script: pure north, one swing at Y $A5
+      clean: [1373, 3000]
+      chase0: [646, 1498]
+      chase1: [727, 1502]
+      frames: 111
+    - script: pure north, a swing whenever a Darknut not facing him is in reach, at most 2
+      clean: [1373, 3000]
+      chase0: [646, 1498]
+      chase1: [727, 1502]
+      frames: 111
+    sweep: >-
+      the owner's way with one swing at Y $A5 or $A1: 600 of 600; at Y $9D: 192; $99 or $95: 149. Leaving the
+      doorway at Y $AD or $B5 (not $BD) with the in-reach swing: 600 of 600.
+  open: >-
+    His question, "I'm not sure if holding pure north is possible with every possible rng": no. In the route's
+    layout pure north (X $78) is never clean without the sword and clean in 1373 of 3000 phases (46%) with a swing
+    on the ladder; it would save 10 frames (111 against 121). His way with the swing on the ladder is clean in
+    3000 of 3000. None of his takes is in the route's layout (0, 3, 4, 4): the claim for the route's layout rests
+    on the phases.
+  criteria:
+    exit: N
+    hits: 0
+    directions: [N, W, E]
+    bands:
+    - when_y: [109, 165]
+      x: [110, 114]
+    swings:
+      max: 2
+      when: in_the_way
+      ahead: 24
+      aside: 10
+    frames: 150
+- key: 3x69-N
+  level: 3
+  room: '0x69'
+  name: raft room
+  entry: N
+  exit: cave
+  route: d3first
+  step: 14
+  source: the owner, Nov 23 (the line) and Nov 25 (solved); the earlier lesson, no take of his
+  solved: N door to the stairs down to the raft's cellar, past eight Red Darknuts on a fixed line, the sword making
+    the one in the way pass-through.
+  owner:
+  - date: 2026-11-22
+    words: >-
+      in 0x69 it needs to slide past the darknuts to get the raft, then out of the room (I use sword-hit an enemy to
+      make them pass-through in this room, not kills with bombs).
+  - date: 2026-11-23
+    words: >-
+      0x69 is traversed with a sword. There's actually a golden route through the room. Going in the door,
+      immediate east until you can't, south to line up the stairs, then east to stairs. The one catch is that
+      sometimes the darknut paths in your way and sometimes it doesn't. If you time it right, you can sword the
+      darknut to safely pass through him. No matter which way the room plays out, a speedrunner will NEVER take
+      damage there, ever.
+  - date: 2026-11-25
+    words: >-
+      The d3 raft room is also solved (the first part) so add those replays and room to the agent. Note it's only
+      solved outside of the cellar, no cellar is solved because the bats move around. Leaving is always safe if
+      you head right out. I don't think I created a replay for this, but it's still a solved room and the solution
+      description should be in the yaml.
+  description: >-
+    Link comes in at the N door ($78, $4D) and steps onto the top floor row (Y $5D), then goes E along it to the
+    block wall at X $90 ("immediate east until you can't"), S down X $90 to the stairs' row (Y $8D, "south to line
+    up the stairs") and E along it onto the stairs at X $D0 (tiles 26-27, 10-11). The Darknuts stand on fixed
+    spawn spots, and one spawns every time at ($A0, $7D) in the pocket E of that column: it walks W across X $90 or
+    S into the stairs' corridor just as Link comes down, the Darknut "in the way". A Darknut's shield refuses a
+    blade from its front (asm:Damage_HandleWeaponHit@CheckDarknut); from its side or back the hit lands, knocks it
+    $40 pixels along its own axis and makes it flash about 32 frames, and while it flashes the game tests neither
+    weapons nor its touch on Link (asm:Collision_CheckMonsterVsWeaponsAndLink), so Link walks through it. The
+    timing is the whole skill: strike it while it is side-on and in reach (the wood sword: 6-24 pixels ahead, 10
+    aside), then walk on along the line. No bomb is used (the owner's bomb rules, routes.yaml bomb_rules).
+    round40.md "3:0x69 crossed by a line" planned the line in the emulator and gave it to the objective as the
+    room's path (game.yaml path_costs).
+  conditions:
+    layout:
+      route: 4
+      claimed_for: all
+    items: a sword (wood is enough)
+    hearts: any; the solved way takes no hit
+  cost:
+    note: >-
+      no take of the owner's. The line walked with no stop is 152 pixels; the round-40 rule's clean passes and the
+      networks' (2.0.0.15's golden race, 139 frames) are in evidence.
+  takes: []
+  evidence:
+  - what: >-
+      round40.md "3:0x69 crossed by a line": a beam search over the env's actions found a zero-hit in-pass for each
+      of 4 seeds tried, 30-31 actions, two strikes at the Darknuts crossing the line, no waiting.
+  - what: >-
+      round 40's scripted rule (scripts/experiments/r40_d3_69_line.py on r40-int: the line while no way on is
+      predicted touched within 48 frames, a strike at a Darknut side-on in the blade's box, else wait or step
+      aside), in the layouts training draws: alone 172 of 300 visits clean; timed by a 4-decision look-ahead
+      (training only) 814 of 1000 (round40.md). Measured again by the lead on r40-int's load rule (seeds 0-999 from
+      the step's entry states, the rule alone, split by the layout the reset drew): in the route's layout 262 of
+      514 visits clean, 397 out by the stairs, 380 hits; in the other layouts 287 of 486 clean. Every visit
+      strikes or waits (none is "clear"): the pocket Darknut is in the way every time.
+  phases:
+    layout: 4
+    seeds: [0, 2999]
+    results:
+    - script: the line, no swing
+      clean: [0, 3000]
+      chase0: [0, 1498]
+      chase1: [0, 1502]
+      deaths: 141
+    - script: the line, a swing whenever a Darknut not facing him is in the blade's reach, at most 4
+      clean: [587, 3000]
+      chase0: [298, 1498]
+      chase1: [289, 1502]
+      frames: [136, 177]
+      deaths: 536
+  open: >-
+    The owner's "NEVER take damage there" is a player's timing, and nothing scripted reaches it yet: the line held
+    with no sword is hit in every phase, the line with a swing whenever a Darknut is in reach is clean in a fifth,
+    and round 40's rule, which predicts each Darknut's walk, in half the route-layout visits (262 of 514). The claim
+    stands on his word and on the search's zero-hit passes (round40.md); the networks are measured against the line
+    and the hits, not against a script. A take of his would show the timing.
+  criteria:
+    exit: cave
+    hits: 0
+    directions: [S, E]
+    line: [[120, 77], [120, 93], [144, 93], [144, 141], [208, 141]]
+    tolerance: 8
+    grace: 2
+- key: 3x69-cave
+  level: 3
+  room: '0x69'
+  name: raft room
+  entry: cave
+  exit: N
+  route: d3first
+  step: 16
+  source: the owner, Nov 25; no take of his
+  solved: up from the raft's cellar to the N door, straight out, past the eight Red Darknuts.
+  owner:
+  - date: 2026-11-25
+    words: >-
+      Note it's only solved outside of the cellar, no cellar is solved because the bats move around. Leaving is
+      always safe if you head right out.
+  description: >-
+    Up the cellar's left ladder the game puts Link back in the room at ($60, $8D) facing S (the cellar's exit spot,
+    its attribute C, asm:Warp_CheckSubroomExit), with every Darknut he did not kill back on its spawn spot. Heading
+    right out is N up X $60 to the top row (Y $5D), E to the door's X $78 and N out, or E to X $78 first and N up
+    it: either is clean in every phase. The Darknuts of this entry spawn away from ($60, $8D) and the top row, and
+    a Darknut walks half a pixel a frame while Link walks about a pixel and a third, so none reaches the line
+    before he is past: the danger is only in stopping. 77-100 frames.
+  conditions:
+    layout:
+      route: 6
+      claimed_for: all
+    items: none
+    hearts: any; the solved way takes no hit
+  cost:
+    frames: [77, 100]
+    hits: 0
+    note: the scripted ways in the route's layout (no take of the owner's)
+  takes: []
+  evidence:
+  - what: >-
+      round 40's scripted rule in the layouts training draws: no hit in 300 visits alone, none in 1000 with the
+      look-ahead (its waits are for Darknuts crossing X $60 or the door's column). Measured again by the lead on
+      r40-int's load rule, the rule alone: 206 of 206 visits clean in the route's layout, 186 of 186 in the others.
+  phases:
+    layout: 6
+    seeds: [0, 2999]
+    results:
+    - script: N to the top row, E to X $78, N out
+      clean: [3000, 3000]
+      chase0: [1498, 1498]
+      chase1: [1502, 1502]
+      frames: [77, 94]
+    - script: E to X $78, N out
+      clean: [3000, 3000]
+      chase0: [1498, 1498]
+      chase1: [1502, 1502]
+      frames: [78, 100]
+  open: none in the route's layout.
+  criteria:
+    exit: N
+    hits: 0
+    directions: [N, E]
+    frames: 110
