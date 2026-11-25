@@ -1912,11 +1912,13 @@ def run_chart_data(run: Run, skip: int) -> dict[str, tuple[list[dict], list[tupl
                    ] if clips_split_matters(episodes['on'], episodes['off']) else []
     earned, cost, net = bomb_reward_series(run, skip)
     return {
+        # Curriculum first: the legend drops entries from the left when the chart is small, so 'success' stays (the
+        # owner, Nov 24, saw only 'curriculum').
         'success': ([
-            {'label': 'success', 'color': C.accent, 'points': run.series('success_rate', skip), 'width': 1.4,
-             'alpha': 150},
             {'label': 'curriculum', 'color': C.warn, 'points': run.series('curriculum/success_rate', skip),
              'width': 1.4},
+            {'label': 'success', 'color': C.accent, 'points': run.series('success_rate', skip), 'width': 1.4,
+             'alpha': 150},
             *[series for series in clip_series if series['points']],
             {'label': 'balanced', 'color': C.ok, 'points': run.series('balanced_success_rate', skip), 'width': 2.4},
         ], hlines),
