@@ -84,7 +84,7 @@ def real_doors(scans, route: str, min_version: str) -> dict:
     return doors
 
 
-def enter(game, machine, spawn_cycle=None, register=None, frames=400) -> tuple:
+def enter(game, machine, spawn_cycle=None, register=None, frames=400, kills=None) -> tuple:
     """Loads a pre-entry ``machine`` as saved, writes ``spawn_cycle`` and the 13-byte random ``register`` when given,
     and runs with no input to the frame the game places the room's monsters.  Returns (placement, $524 after, the
     entered room's banked kills, the room)."""
@@ -95,6 +95,8 @@ def enter(game, machine, spawn_cycle=None, register=None, frames=400) -> tuple:
     if spawn_cycle is not None:
         game.write(SPAWN_CYCLE, spawn_cycle)
     room = game.read(ROOM)
+    if kills is not None:                   # the other run's banked kills for the entered room (its memory)
+        game.write(LEVEL_KILLS + (room & 0x7F), kills)
     kills = game.read(LEVEL_KILLS + (room & 0x7F)) if game.read(LEVEL) else None
     for _ in range(frames):
         game.press('NONE', 1)
@@ -264,9 +266,17 @@ def cmd_placement(args):
             mine, _, my_kills, _ = enter(game, machines[table[key]['file']], spawn_cycle=cycle, register=register)
             row.update(found=True, spawn_cycle=cycle, theirs=theirs, mine=mine, identical=theirs == mine,
                        their_kills=their_kills, my_kills=my_kills)
+            if not row['identical'] and their_kills is not None and their_kills != my_kills:
+                # The rooms remember different kills (the plan's against the run's): with the run's memory written
+                # into the walked machine, the placement must be the run's.
+                same, _, _, _ = enter(game, machines[table[key]['file']], spawn_cycle=cycle, register=register,
+                                      kills=their_kills)
+                row['identical_with_their_kills'] = same == theirs
             results.append(row)
             print(f"{row['replay']} {key}: $524 {cycle}, {'identical' if row['identical'] else 'DIFFERENT'} "
-                  f"({len(theirs)} monsters; kills banked {their_kills} / {my_kills})", flush=True)
+                  f"({len(theirs)} monsters against {len(mine)}; kills banked {their_kills} / {my_kills}"
+                  + (f"; with the run's kills: {'identical' if row['identical_with_their_kills'] else 'DIFFERENT'}"
+                     if 'identical_with_their_kills' in row else '') + ')', flush=True)
     Path(args.out).write_text(json.dumps(results, indent=1) + '\n')
     same = sum(1 for r in results if r.get('identical'))
     print(f"{same} of {sum(1 for r in results if r.get('found'))} entries identical")
