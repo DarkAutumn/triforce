@@ -395,6 +395,13 @@ From the first walks (`d3first-walks-a.md`, `-b.md`), still standing:
 
 ## For the agents that build its states
 
+**Round 44 (the owner, Nov 25): one state per door, from one real walk.** Every `d3first` state is now chain 0 and
+comes from `python -m triforce.entry_states walk --route d3first` (power on, the machine carried door to door, no
+redraw, no fresh room, no refill; each room's kills by the step's routes.yaml `clear:`; `docs/architecture.md`
+"Entry states", "The real walk"), recorded in `triforce/states/d3first_walk.json`. Everything below this paragraph
+describes the three-chain states it replaced (chains 1 and 2 are gone; `build` and `path` refuse the route), kept
+for the history of the fights the explorer could not end.
+
 Numbers of 2.0.0.7 (round 38: 290 steps). Steps 0-88 and 215-289 are the first order's states (round 32, below; the
 to-level-8 visits of 0x4c from N and 0x4d from W renamed `_v2`, the corrected order visiting both first on the way to
 Level 2; 0x2d's step 88 now leaves S). Steps 89-153 were rebuilt in round 38 by the explorer from
@@ -430,6 +437,12 @@ Also skipped in round 36: 2:0x1e (104), Dodongo 2:0x0e (105), 5:0x66 from W (137
 Gohma 6:0x1c (213). The explorer needed 8 attempts at 5:0x65 from E (chains 0, 2) and 2:0x3e (chain 1).
 
 ## The states as built
+
+**Round 44** (the real walk): `walk --route d3first` from commit `d1cdfdd8` (the record names it, the power-on `LINK`
+with 16610 idle frames, the corpus golden's), one state per door of both ways (the d4-island plain way walked as a
+branch from 4x31's E door); `install` replaced the 855 three-chain states. Each door's bytes against real power-on
+runs: `scripts/experiments/r44_states_proof.py table`; the placement check: `... placement` (round40.md, "The real
+walk").
 
 **Round 38** (2.0.0.7, 0x2d's cave dropped): steps 89-153 (`0_3dn` to `0_44c`) rebuilt by `python -m
 triforce.entry_states build --route d3first --start-step 88 --source 'd3first_0_2dw_{chain}' --last-step 153

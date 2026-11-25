@@ -23,11 +23,12 @@ def test_d2first_is_its_golden_list():
     assert len(steps) == len(golden)
     for step, want in zip(steps, golden):
         # Round 40 adds two keys the golden list predates: a step's `carriers:` and what it expects of a visit
-        # (crates/zelda/src/goals.rs), round 43 `carriers: fight` (`carrier_fight`). Every field the list has is
+        # (crates/zelda/src/goals.rs), round 43 `carriers: fight` (`carrier_fight`), round 44 `clear:` (the plan's
+        # kills, set on the shared blocks' steps by d3first and read by no play). Every field the list has is
         # unchanged; the new ones change no play on d2first (no `carrier_targets` in its bomb rules: no step of it
         # expects carriers, none fights for them).
         assert {k: step[k] for k in want} == want, step['index']
-        assert set(step) - set(want) == {'carriers', 'carrier_fight', 'goals'}, step['index']
+        assert set(step) - set(want) == {'carriers', 'carrier_fight', 'goals', 'clear'}, step['index']
         assert 'carriers' not in step['goals'] and not step['carrier_fight'], step['index']
 
 

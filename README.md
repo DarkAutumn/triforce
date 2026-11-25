@@ -180,7 +180,8 @@ uv run emu-zelda.py --reset 120 --invincible --bombs infinite   # the whole game
 .venv/bin/python zelda-headless.py runs/golden 1 --golden --power-on   # the golden path on d3first: games race triforce to triforce from each winner's state, stitched into one replay (--route d2first for the other)
 .venv/bin/python zelda-map.py                                   # room map + per-room stats by scope: full run, segment, room only; clips both/on/off (--stats FILE, --route d2first, --rerender)
 .venv/bin/python -m triforce.run --seed 1                      # --render (window) or --video out.mp4 (ffmpeg)
-.venv/bin/python -m triforce.entry_states build --chains 0,1,2  # regenerate start states into target/entry-states/<ts> (start/build/path/install/audit)
+.venv/bin/python -m triforce.entry_states build --chains 0,1,2  # regenerate d2first's start states into target/entry-states/<ts> (start/build/path/install/audit)
+.venv/bin/python -m triforce.entry_states walk --route d3first  # d3first's: one state per door, one real walk from power on (round 44; the record triforce/states/d3first_walk.json)
 .venv/bin/python -m triforce.entry_states install target/entry-states/<ts>   # then copy the finished build into triforce/states
 .venv/bin/python -m triforce.entry_states idle                  # regenerate the power-on idle states (triforce/states/power_on) after a state-format or emulator change
 triforce promote <specialist> <run-id>

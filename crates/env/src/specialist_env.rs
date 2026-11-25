@@ -361,6 +361,8 @@ pub struct SpecialistEnv<N: Nes, St: StateStore<N::State>> {
     /// Kills every reset banks, whatever the config draws ([`SpecialistEnv::set_banked_kills`]: exploring a staged
     /// start).
     fixed_kills: Option<Vec<((u8, u8), u8)>>,
+    /// Round 44: resets load the start state's machine exactly (`EnvOptions::exact_starts`).
+    exact_starts: bool,
     pool: Option<StartStatePool>,
     curriculum: Option<SharedCurriculum>,
     critic: GameplayCritic,
@@ -449,6 +451,10 @@ pub struct EnvOptions {
     /// A training env: resets draw the family's `ram_randomization.drop_bombs` (round 25, the room's next drop forced
     /// to bombs). Off for evaluation, chains, exploration, state builds and play: they meet the game's own drops.
     pub forced_drops: bool,
+    /// Round 44 (the real walk, `entry_states walk`): every reset loads its start state's machine exactly as saved:
+    /// no RNG, spawn-cycle or edge-cell redraw, no fresh room, no banked kills (`Session::load` with
+    /// `randomize_rng` and `fresh_room` off). Off everywhere else.
+    pub exact_starts: bool,
 }
 
 impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
@@ -507,6 +513,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             visits: opts.track_visits.then(VisitTracker::default),
             decision: None,
             staged_kills: opts.staged_kills,
+            exact_starts: opts.exact_starts,
             banked_kills: 0,
             entry_decks: Default::default(),
             forced_drops: opts.forced_drops,
@@ -739,9 +746,14 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
                 banked_kills.insert(0, ((at.level, at.value), kills));
             }
         }
+        // Round 44 (`EnvOptions::exact_starts`, the real walk's builds): the machine as the file holds it, no draw
+        // and no write: no RNG or spawn redraw, no fresh room, no banked kills.
+        if self.exact_starts {
+            banked_kills.clear();
+        }
         let opts = LoadOptions {
-            randomize_rng: true,
-            fresh_room: self.config.fresh_rooms,
+            randomize_rng: !self.exact_starts,
+            fresh_room: self.config.fresh_rooms && !self.exact_starts,
             controllable: self.curriculum_tag.is_some(),
             overrides: Vec::new(),
             banked_kills,
@@ -860,6 +872,11 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
     /// starts (`python -m triforce.explore --room-kills`, round 24): a curriculum track from a partly cleared room.
     pub fn set_banked_kills(&mut self, kills: Option<Vec<((u8, u8), u8)>>) {
         self.fixed_kills = kills;
+    }
+
+    /// Every later reset loads its start state exactly ([`EnvOptions::exact_starts`]; the explorer of the real walk).
+    pub fn set_exact_starts(&mut self, exact: bool) {
+        self.exact_starts = exact;
     }
 
     /// A reset's staged kills (`ram_randomization.room_kills`, training only, not for a curriculum start): with

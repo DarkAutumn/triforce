@@ -59,7 +59,10 @@ def test_rooms_and_levels_in_the_owners_notation():
 
 def test_the_route_start_its_entries_visits_and_chains():
     assert find_start(Spec(3, 0x59)) == emu.Start('d3first_3_59n_0', 'N')        # the route's first entry
-    assert find_start(Spec(3, 0x59, entry='S', chain=2)) == emu.Start('d3first_3_59s_2', 'S')
+    # round 44: d3first has one state per door (chain 0)
+    assert find_start(Spec(3, 0x59, entry='S')) == emu.Start('d3first_3_59s_0', 'S')
+    with pytest.raises(emu.StartError, match='visit 1 chain 2 in .*there: visit 1 chain 0'):
+        find_start(Spec(3, 0x59, chain=2))
     assert find_start(Spec(3, 0x69, entry='cave')) == emu.Start('d3first_3_69c_0', 'cave')
     assert find_start(Spec(3, 0x0f)) == emu.Start('d3first_3_0fcave_0', 'S')      # the raft's cellar
     assert find_start(Spec(5, 0x05)) == emu.Start('d3first_5_05e_0', 'E')         # the Olive Garden, from E

@@ -56,6 +56,36 @@ impl AcceptSpec {
     }
 }
 
+/// The failure name of a path that killed what its [`KillSpec`] forbids (or not what it asks).
+pub const KILLS_FAILURE: &str = "kills";
+
+/// What a path may kill in its start room (round 44, the real walk: a step plays its plan's kills and no more; the
+/// game's own count `RoomKills`, `$34F`, asm:Obj_EndMetastate: child Gels, Red Keese and Zoras are not counted).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct KillSpec {
+    /// The room's kill count is never above this while Link is in it (0: a crossing kills nothing).
+    pub max: Option<u8>,
+    /// On the last frame in the room the count is exactly this (a partial fight: 3:0x5b's first pass, one).
+    pub exact: Option<u8>,
+    /// On the last frame in the room no monster lives (a fight to the end, whatever the game counts: a Zol split
+    /// by the wood sword makes two child Gels, whose deaths it does not count).
+    pub clear: bool,
+}
+
+impl KillSpec {
+    /// The path has killed more than it may.
+    pub fn too_many(&self, state: &GameView) -> bool {
+        self.max.is_some_and(|m| state.room_kills() > i32::from(m))
+    }
+
+    /// `last`, the last frame in the room, holds what the path had to kill.
+    pub fn met(&self, last: &GameView) -> bool {
+        !self.too_many(last)
+            && self.exact.is_none_or(|n| last.room_kills() == i32::from(n))
+            && (!self.clear || last.enemies.iter().all(|e| e.is_dying()))
+    }
+}
+
 /// Coarse state summary: (level, room, cave, tile x/2, tile y/2, whole hearts, living enemies, their total health,
 /// keys, boomerang, the room's push block still unpushed, (the room's item taken, the maze step)).  Enemy health
 /// keeps multi-hit enemies leaving a trail of cells toward the kill.  The push block: a pushed block changes what the
@@ -236,6 +266,8 @@ pub struct Explorer<N: Nes, St: StateStore<N::State>> {
     root: Option<EnvSnapshot<N::State>>,
     /// Set from another thread (Ctrl-C on the caller's): `explore` stops at its next iteration.
     stop: Option<Arc<AtomicBool>>,
+    /// The kills a path may make in its room ([`KillSpec`]; None: any).
+    kills: Option<KillSpec>,
 }
 
 impl<N: Nes, St: StateStore<N::State>> Explorer<N, St> {
@@ -261,6 +293,7 @@ impl<N: Nes, St: StateStore<N::State>> Explorer<N, St> {
             rng: ChaCha8Rng::seed_from_u64(seed),
             root: None,
             stop: None,
+            kills: None,
         })
     }
 
@@ -280,6 +313,17 @@ impl<N: Nes, St: StateStore<N::State>> Explorer<N, St> {
     /// error (the caller's thread handles the signal; the search runs elsewhere).
     pub fn set_stop(&mut self, stop: Option<Arc<AtomicBool>>) {
         self.stop = stop;
+    }
+
+    /// Every later `explore` starts from its state's machine exactly (no redraw, no fresh room, no banked kills:
+    /// [`crate::specialist_env::EnvOptions::exact_starts`]; round 44, the real walk).
+    pub fn set_exact_starts(&mut self, exact: bool) {
+        self.env.set_exact_starts(exact);
+    }
+
+    /// The kills every later `explore`'s paths may make in their start room (round 44; None: any).
+    pub fn set_kills(&mut self, kills: Option<KillSpec>) {
+        self.kills = kills;
     }
 
     /// Searches for a successful path from `start_state`; returns the best (most health, then fewest steps).
@@ -339,10 +383,13 @@ impl<N: Nes, St: StateStore<N::State>> Explorer<N, St> {
                 env_steps += 1;
                 actions.push(action.to_indices());
                 if step.terminated || step.truncated {
-                    let success = match accept {
+                    let reached = match accept {
                         Some(spec) => spec.accepts(self.env.session().state()),
                         None => step.info.outcome() == Some(SUCCESS),
                     };
+                    // The kills are judged on the last frame in the room (`before`): the room's count resets on entry.
+                    let killed_right = self.kills.is_none_or(|k| k.met(&before));
+                    let success = reached && killed_right;
                     if success {
                         let candidate = (step.info.health, -(actions.len() as i64));
                         if best.as_ref().is_none_or(|b| candidate > (b.0, b.1)) {
@@ -355,16 +402,20 @@ impl<N: Nes, St: StateStore<N::State>> Explorer<N, St> {
                         }
                         first_success.get_or_insert(i);
                     } else {
-                        let name = step.info.ending().unwrap_or(if step.truncated {
-                            "truncated"
+                        let name = if reached {
+                            KILLS_FAILURE
                         } else {
-                            "terminated"
-                        });
+                            step.info.ending().unwrap_or(if step.truncated { "truncated" } else { "terminated" })
+                        };
                         *failures.entry(name.to_owned()).or_default() += 1;
                     }
                     break;
                 }
                 let state = self.env.session().state().clone();
+                if self.kills.is_some_and(|k| k.too_many(&state)) {
+                    *failures.entry(KILLS_FAILURE.to_owned()).or_default() += 1;
+                    break;
+                }
                 progress += progress_events(&before, &state);
                 let key = cell_key(&state);
                 let known = archive.get(&key);

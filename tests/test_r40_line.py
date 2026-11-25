@@ -32,13 +32,13 @@ def test_the_way_out_walks_the_line_without_a_strike(line):
 
 def test_the_way_in_swords_the_darknut_in_the_column_and_passes(line):
     """Seed 1 (8 bombs): Link comes down the column and the rule alone strikes the Darknut below him once (S) and
-    walks on to the stairs unhit.  Seed 4 (4 bombs, `_1`) the same, timed by the look-ahead.  The seeds are chosen
-    under round 43's reset rule (`room_entry::EntryRule`: the seed draws 3x69 N's layout from its reachable set, the
-    route's on half) on the generation's `d3first_3_69n_*` (r40-states, b9ebd4e9); a rebuilt entry state or a new
-    table needs them chosen again (the script's `trace --pass in SEED --start STATE` shows the walk)."""
+    walks on to the stairs unhit.  Seed 4 (4 bombs) the same, timed by the look-ahead.  The seeds are chosen under
+    round 43's reset rule (`room_entry::EntryRule`: the seed draws 3x69 N's layout from its reachable set, the
+    route's on half) on round 44's one state per door, `d3first_3_69n_0`; a rebuilt entry state or a new table needs
+    them chosen again (the script's `trace --pass in SEED --start STATE` shows the walk)."""
     alone = line.play(line.make_env(8, REPO_STATES_DIR), 'in', 1, 'd3first_3_69n_0')
     assert (alone['ending'], alone['hits'], alone['situation']) == ('exit-correct', 0, 'sworded'), alone
-    looked = line.play(line.make_env(4, REPO_STATES_DIR), 'in', 4, 'd3first_3_69n_1', probe=line.make_env(4, REPO_STATES_DIR), depth=4)
+    looked = line.play(line.make_env(4, REPO_STATES_DIR), 'in', 4, 'd3first_3_69n_0', probe=line.make_env(4, REPO_STATES_DIR), depth=4)
     assert (looked['ending'], looked['hits'], looked['situation']) == ('exit-correct', 0, 'sworded'), looked
     assert looked['swings'] >= 1
 
@@ -50,7 +50,7 @@ def test_the_builder_finds_a_way_unhit_and_records_it(line, which, seed):
     from triforce.demos import DemoRecorder
     recorder = DemoRecorder()
     env = line.make_env(4 + 4 * (seed % 2), REPO_STATES_DIR)
-    record = line.teach(env, which, seed, f'{line.STATES[which]}_{seed % 3}', recorder)
+    record = line.teach(env, which, seed, f'{line.STATES[which]}_0', recorder)   # round 44: one state per door
     assert (record['teacher'], record['ending'], record['hits']) == ('search', 'exit-correct', 0), record
     assert len(recorder.rows) == record['actions'] + (line.REPEAT['SWORD'] - 1) * record['swings']
 

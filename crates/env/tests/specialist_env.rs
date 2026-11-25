@@ -1257,10 +1257,10 @@ fn d3first_crosses_dungeon_2s_goriya_room() {
 fn the_link_block_reads_the_routes_rupee_reserve() {
     let Some(mut nes) = open_core() else { return };
     let read = |name: &str| std::fs::read_to_string(common::repo().join("triforce").join(name)).unwrap();
-    let step = "- {level: 1, room: '0x44', specialist: goriya, entry: W, exit: E}";
+    let step = "- {level: 1, room: '0x44', specialist: goriya, entry: W, exit: E, clear: true}";
     let routes = read("routes.yaml");
     assert_eq!(routes.matches(step).count(), 1, "the route's step of 1:0x44 from W");
-    let routes = routes.replace(step, &step.replace("exit: E}", "exit: E, rupee_reserve: 2}"));
+    let routes = routes.replace(step, &step.replace("exit: E,", "exit: E, rupee_reserve: 2,"));
     let mut with_reserve = (**data()).clone();
     with_reserve.map = Arc::new(zelda::GameMap::from_yaml(&read("game.yaml"), &routes).unwrap());
     let with_reserve = Arc::new(with_reserve);
@@ -2925,10 +2925,11 @@ fn a_lying_clock_is_walked_round_while_a_wallmaster_lives() {
 }
 
 /// Round 40 (the fresh generation's Dungeon 3, decisions 2026-11-23): darknut@d3first's training starts (the
-/// `ram_randomization` of specialists/d3first/darknut.yaml) on real resets. Into 3:0x5b from S (`d3first_3_5bs_*`)
+/// `ram_randomization` of specialists/d3first/darknut.yaml) on real resets. Into 3:0x5b from S (`d3first_3_5bs_0`)
 /// the game's drop cycle (`$52A`, asm:Drop_SetUpItem) is 0 or 1, about half each; into 3:0x59 from N
-/// (`d3first_3_59n_*`) Link holds exactly 4 or 8 bombs, about half each. The rooms' other passes keep the family's
-/// draws: 0x5b from W its state's own cycle, 0x59 from S the `bombs` range.
+/// (`d3first_3_59n_0`) Link holds exactly 4 or 8 bombs, about half each. The rooms' other passes keep the family's
+/// draws: 0x5b from W its state's own cycle, 0x59 from S the `bombs` range. Round 44: d3first has one state per door
+/// (chain 0), so each door's one state is checked (three chains were before).
 #[test]
 fn darknut_d3first_starts_hold_the_dungeon_3_plan() {
     let Some(nes) = open_core() else { return };
@@ -2941,23 +2942,21 @@ fn darknut_d3first_starts_hold_the_dungeon_3_plan() {
         out
     };
     let spec = &task.ram_randomization;
-    for chain in 0..3 {
-        let first = resets(&format!("d3first_3_5bs_{chain}"), spec, 100);
-        assert!(first.iter().all(|&(_, c)| c <= 1), "0x5b from S, chain {chain}: {first:?}");
-        let zero = first.iter().filter(|&&(_, c)| c == 0).count();
-        assert!((30..=70).contains(&zero), "0x5b from S, chain {chain}: the cycle at 0 in {zero} of 100");
+    let first = resets("d3first_3_5bs_0", spec, 100);
+    assert!(first.iter().all(|&(_, c)| c <= 1), "0x5b from S: {first:?}");
+    let zero = first.iter().filter(|&&(_, c)| c == 0).count();
+    assert!((30..=70).contains(&zero), "0x5b from S: the cycle at 0 in {zero} of 100");
 
-        let bombs = resets(&format!("d3first_3_59n_{chain}"), spec, 100);
-        assert!(bombs.iter().all(|&(b, _)| b == 4 || b == 8), "0x59 from N, chain {chain}: {bombs:?}");
-        let full = bombs.iter().filter(|&&(b, _)| b == 8).count();
-        assert!((30..=70).contains(&full), "0x59 from N, chain {chain}: 8 bombs in {full} of 100");
+    let bombs = resets("d3first_3_59n_0", spec, 100);
+    assert!(bombs.iter().all(|&(b, _)| b == 4 || b == 8), "0x59 from N: {bombs:?}");
+    let full = bombs.iter().filter(|&&(b, _)| b == 8).count();
+    assert!((30..=70).contains(&full), "0x59 from N: 8 bombs in {full} of 100");
 
-        let own = resets(&format!("d3first_3_5bw_{chain}"), &RamRandomization::default(), 1)[0].1;
-        let last = resets(&format!("d3first_3_5bw_{chain}"), spec, 40);
-        assert!(last.iter().all(|&(_, c)| c == own), "0x5b from W keeps its state's cycle {own}: {last:?}");
-        let back = resets(&format!("d3first_3_59s_{chain}"), spec, 40);
-        assert!(back.iter().any(|&(b, _)| b != 4 && b != 8), "0x59 from S draws `bombs`: {back:?}");
-    }
+    let own = resets("d3first_3_5bw_0", &RamRandomization::default(), 1)[0].1;
+    let last = resets("d3first_3_5bw_0", spec, 40);
+    assert!(last.iter().all(|&(_, c)| c == own), "0x5b from W keeps its state's cycle {own}: {last:?}");
+    let back = resets("d3first_3_59s_0", spec, 40);
+    assert!(back.iter().any(|&(b, _)| b != 4 && b != 8), "0x59 from S draws `bombs`: {back:?}");
 }
 
 /// (bombs, drop cycle) after each of `n` darknut resets (seeds 0..n) into `start` under `spec`.

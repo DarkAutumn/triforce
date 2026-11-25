@@ -25,7 +25,7 @@ const ROUTE: &str = "revisit";
 
 /// The last step of `d2first`, Zelda's room (round 29): `exit: end` is the last step of every route it is in, so the
 /// test route extends `d2first` without it (to Ganon's room, 357 steps).
-const END_STEP: &str = "- {level: 9, room: '0x32', specialist: ganon, entry: S, exit: end}\n";
+const END_STEP: &str = "- {level: 9, room: '0x32', specialist: ganon, entry: S, exit: end, clear: true}\n";
 
 fn map() -> Arc<GameMap> {
     assert!(ROUTES_YAML.contains(END_STEP), "d2first's last step");

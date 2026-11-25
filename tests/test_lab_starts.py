@@ -10,8 +10,9 @@ from triforce.specialist import load_specialist
 
 from .conftest import REPO_STATES_DIR, require_rom
 
-PLAIN_ONLY = {'vire': ['4_20s_0', '4_20s_1', '4_20s_2', '4_30e_0', '4_30e_1', '4_30e_2'],
-              'stalfos-keese-gel': ['4_21w_0', '4_21w_1', '4_21w_2']}
+# Round 44: d3first has one state per door (chain 0).
+PLAIN_ONLY = {'vire': ['4_20s_0', '4_30e_0'],
+              'stalfos-keese-gel': ['4_21w_0']}
 
 
 def test_plain_way_seed_states_are_left_out_with_clips_on(capsys):

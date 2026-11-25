@@ -8,7 +8,7 @@ use crate::errors::env_err;
 use crate::game::{PyGameState, PySnapshot};
 use crate::signals::{interruptible, interruptible_ticking};
 use env::config::{GameData, SpecialistConfig};
-use env::explore::{AcceptSpec, ExploreResult, Explorer};
+use env::explore::{AcceptSpec, ExploreResult, Explorer, KillSpec};
 use env::start_states::state_label;
 use parking_lot::Mutex;
 use pyo3::prelude::*;
@@ -174,19 +174,24 @@ pub struct PyExplorer {
 
 #[pymethods]
 impl PyExplorer {
+    /// `exact_starts` (round 44, the real walk): every `explore` starts from its state's machine exactly (no RNG or
+    /// spawn redraw, no fresh room, no banked kills).
     #[new]
-    #[pyo3(signature = (config, seed=0, states_dir=None))]
+    #[pyo3(signature = (config, seed=0, states_dir=None, exact_starts=false))]
     fn new(
         py: Python<'_>,
         config: &Bound<'_, PyAny>,
         seed: u64,
         states_dir: Option<PathBuf>,
+        exact_starts: bool,
     ) -> PyResult<Self> {
         let config = extract_config(py, config)?;
         let data = context::data(py, states_dir.as_deref())?;
         let rom = context::rom(py)?;
+        let mut explorer = new_explorer(&config, data, rom, seed).map_err(env_err)?;
+        explorer.set_exact_starts(exact_starts);
         Ok(PyExplorer {
-            inner: Mutex::new(new_explorer(&config, data, rom, seed).map_err(env_err)?),
+            inner: Mutex::new(explorer),
         })
     }
 
@@ -194,8 +199,10 @@ impl PyExplorer {
     /// it at its next iteration (KeyboardInterrupt).
     /// `room_kills`: [(level, room, kills)] banked before the entry of a pre-entry start into those dungeon rooms (a
     /// staged start, round 24); kept for later `replay`/`write` until the next `explore`.
+    /// `max_kills`, `exit_kills`, `clear` (round 44, `KillSpec`): the room's kill count never above `max_kills`,
+    /// exactly `exit_kills` on the last frame in the room, and with `clear` no monster living there then.
     #[pyo3(signature = (start_state, iterations=3000, explore_steps=25, patience=300, accept=None, room_kills=None,
-                        clips=None))]
+                        clips=None, max_kills=None, exit_kills=None, clear=false))]
     #[allow(clippy::too_many_arguments)]
     fn explore(
         &self,
@@ -207,12 +214,18 @@ impl PyExplorer {
         accept: Option<PyAcceptSpec>,
         room_kills: Option<Vec<(u8, u8, u8)>>,
         clips: Option<bool>,
+        max_kills: Option<u8>,
+        exit_kills: Option<u8>,
+        clear: bool,
     ) -> PyResult<PyExploreResult> {
         let accept = accept.map(|a| a.spec());
+        let kills = (max_kills.is_some() || exit_kills.is_some() || clear)
+            .then_some(KillSpec { max: max_kills, exact: exit_kills, clear });
         {
             let mut explorer = self.inner.lock();
             explorer.set_banked_kills(room_kills.map(|r| r.into_iter().map(|(l, room, k)| ((l, room), k)).collect()));
             explorer.set_clips_allowed(clips);
+            explorer.set_kills(kills);
         }
         let stop = Arc::new(AtomicBool::new(false));
         let result = interruptible(
