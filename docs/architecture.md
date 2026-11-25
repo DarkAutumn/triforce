@@ -2632,6 +2632,51 @@ has every flag and key).
   controller's buttons, the monitors, the sound device, the feel of the pacing and a whole game played by hand are
   the owner's to try.
 
+## The owner's takes and the solved rooms (`scripts/owner_takes.py`, `triforce/solved_rooms.py`, Nov 25)
+
+- **The takes** (`replays/owner/`): every replay the owner plays on `emu-zelda.py` (META `kind` `human`), under his
+  own file name, in `replays/owner/<room>/` (a whole game from power on: `replays/owner/game/`; the Darknut
+  lesson's three in `replays/owner/darknut/`). `scripts/owner_takes.py sync` (a queue job) finds every take under
+  `~/triforce-review/` by its META, wherever it lies and whatever it is called, copies the new ones (by SHA-1),
+  each verified first, archives them (`archive_replays.py --kind owner --keep-names`:
+  `/backup/triforce/replays/<version>/owner/<his name>.tfreplay.bz2`) and writes `replays/owner/INDEX.md` (a row a
+  take: room, entry, date, seed, frames, ending, `$524` against the route's layout for the door, chase flag, hearts
+  and items at control, cheats and overrides, replay version; a whole game: the rooms it passes with their first
+  frame in play) from `replays/owner/index.json` (each take's facts by SHA-1, so a whole game is read once). The
+  route's layout is `triforce/entry_rule.<namespace>.json`'s `planned` (`--entry-rule PATH` where the checkout has
+  none; "layout unknown" without one).
+- **The solved rooms** (`triforce/solved_rooms.yaml`, `docs/owner/solved-rooms.md`): an entry a room and entry side
+  (`5x47-S`; a cellar never: the loader refuses one), with the owner's words, the lead's description, the
+  conditions (`$524` the route brings, claimed for the route's layout or all), the cost, the takes (repository
+  paths), the phase test's rates and the **criteria**. `solved_rooms.load` checks the file against game.yaml (the
+  room, its exits) and the repository (the takes); `on_route` against `_native.route_steps`.
+- **A pass** (`solved_rooms.read_passes`): one visit of a room read frame by frame from any TFREPLAY: chain and
+  golden replays by their ROOM events (the 400 frames before each, for the `$524` the spawn reads), a take or a
+  power-on game from frame 0 (the frame-0 EDITs give a take's `$524` and `$60`). It opens on the first GameMode-5
+  frame in the room and closes on the first frame of a scroll (the side, from Link's last position), the stairs
+  (`cave`) or death; it keeps Link's position, the controller byte and whether he is mid-swing each frame, every
+  swing with the monsters ahead of him then, the hits (drops of his hearts), the entry side (the edge behind him;
+  `cave` after a cellar or cave mode, or out of a dungeon's mouth; a take's own META entry; `start` at a power-on
+  game's hand-over; from a start state with no transition seen, `cave` when he stands inside the room,
+  `zelda::room_entry::enters_inside`), and `cut` when the replay ends in it by its own stop (not counted).
+  `check(entry, pass)` applies the
+  criteria (`exit`, `hits`, `hold` with `gap` and `grace`, `directions`, `line` with `tolerance`, `bands`,
+  `swings` with `when: in_the_way`, `frames`).
+- **The comparison** (`triforce solved compare TEAM [TEAM ...]`, a queue job): each team's replay folders and
+  chain records (`*.jsonl`: out, hits, frames and deaths only; a visit's side from the room before it and
+  game.yaml's exits), read in parallel processes; one table a team (passes, out by the solved exit, hits a pass,
+  seconds and median frames beside the owner's, the solved way's rate in all and in the route's layout, each
+  criterion's rate) and the teams side by side; `--json` keeps it.
+- **The phase test** (`scripts/solved_phases.py ROOM`): scripted inputs (legs of a path, swings at fixed heights
+  or at a monster in the blade's reach) over thousands of seeds from the route step's entry states, loaded by
+  `LiveGame.load(..., layout='route')` (round 43's load rule: the route's `$524` for the door, the chase flag
+  50/50, the random phase from the seed), measured as a pass is; clean runs of all and by chase flag, frames,
+  which script saves the runs another loses; `--out` keeps takes. It needs a checkout with that load rule.
+- **Tested** (`tests/test_solved_rooms.py`): the file loads, every entry is on its route, every take named exists,
+  verifies and scores as solved; his pure-north take of 5x37 does not; a cellar and malformed entries are refused;
+  made-up passes against 5x47's criteria; chain records counted by entry side. `tests/test_backup_scripts.py`:
+  `--keep-names`.
+
 ## Sound (`crates/zcore/src/sound.rs`, `crates/zcore/src/tracks.rs`)
 
 The emulated APU keeps only what the CPU can observe and `MachineState` holds no sound state, so states, replays

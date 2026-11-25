@@ -434,10 +434,11 @@ def main(argv=None):
                    'convert-model': ('triforce.convert', 'main'),
                    'select-checkpoint': ('triforce.select_checkpoint', 'main'),
                    'test-times': ('triforce.testlog', 'report_main'), 'stats': ('triforce.run_stats', 'main'),
-                   'lineage': ('triforce.lineage', 'main'), 'manifest': ('triforce.manifest', 'main')}
+                   'lineage': ('triforce.lineage', 'main'), 'manifest': ('triforce.manifest', 'main'),
+                   'solved': ('triforce.solved_rooms', 'main')}
     # `triforce [--models-dir DIR | --team TEAM] train|run|play|evaluate|eval-batch|room-stats|convert-model|
-    # select-checkpoint|test-times|stats|lineage|manifest ...` forwards the rest to the module's own CLI (``--team``:
-    # ``registry.use_team``).
+    # select-checkpoint|test-times|stats|lineage|manifest|solved ...` forwards the rest to the module's own CLI
+    # (``--team``: ``registry.use_team``).
     models_dir, team, rest = None, None, argv
     while rest:
         if rest[0] in ('--models-dir', '--team') and len(rest) > 1:
@@ -499,6 +500,8 @@ def main(argv=None):
     sub.add_parser('list', help="specialists, their promoted run and run count")
     sub.add_parser('lineage', help="python -m triforce.lineage [--route R] (each promoted pointer's chain of "
                                    "parents back to its origin)")
+    sub.add_parser('solved', help="the owner's solved rooms (triforce/solved_rooms.yaml): list, check, passes, "
+                                  "compare (whether a team plays them the solved way; triforce.solved_rooms)")
 
     promote = sub.add_parser('promote', help="mark a run as the specialist's promoted model")
     promote.add_argument('specialist')

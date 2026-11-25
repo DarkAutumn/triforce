@@ -1,0 +1,635 @@
+{
+ "1999e81eb3704216101ce45e8a5ecd066d804a69": {
+  "came_with": {
+   "hearts": "8/8",
+   "items": {
+    "bombs": 8,
+    "boomerang": 1,
+    "bow": 1,
+    "keys": 5,
+    "ladder": 1,
+    "raft": 1,
+    "recorder": 1,
+    "rupees": 136,
+    "sword": 1
+   }
+  },
+  "chase": 0,
+  "cheats": {
+   "infinite": [],
+   "invincible": false
+  },
+  "date": "2026-11-25 10:12",
+  "ending": "other / left-room / left for 5x37",
+  "entry": "S",
+  "frames": 331,
+  "kind": "room",
+  "layout": 3,
+  "name": "5x47_S_seed204077_261125-101240.tfreplay",
+  "overrides": {},
+  "path": "replays/owner/5x47/5x47_S_seed204077_261125-101240.tfreplay",
+  "room": "5:0x47",
+  "seed": 204077,
+  "state": "d3first_5_47s_0",
+  "triforce": "2.0.0.16",
+  "version": 3
+ },
+ "28f97e6159f9eb52866dd779eb3e3cc6ac2bb6eb": {
+  "came_with": {
+   "hearts": "8/8",
+   "items": {
+    "bombs": 6,
+    "boomerang": 1,
+    "bow": 1,
+    "keys": 5,
+    "ladder": 1,
+    "raft": 1,
+    "rupees": 136,
+    "sword": 1
+   }
+  },
+  "chase": 1,
+  "cheats": null,
+  "date": "2026-11-24 15:27",
+  "ending": "unknown / playing",
+  "entry": "E",
+  "frames": 522,
+  "kind": "room",
+  "layout": 4,
+  "name": "5x64_E_sword-clip_right_held_past_swing_seed384724_261124-152722.tfreplay",
+  "overrides": {},
+  "path": "replays/owner/5x64/5x64_E_sword-clip_right_held_past_swing_seed384724_261124-152722.tfreplay",
+  "room": "5:0x64",
+  "seed": 384724,
+  "state": "d3first_5_64e_0",
+  "triforce": "2.0.0.16",
+  "version": 2
+ },
+ "3926719de291c00264fcd8cadeb73dd89578dc71": {
+  "came_with": {
+   "hearts": "8/8",
+   "items": {
+    "bombs": 6,
+    "boomerang": 1,
+    "bow": 1,
+    "keys": 5,
+    "ladder": 1,
+    "raft": 1,
+    "rupees": 136,
+    "sword": 1
+   }
+  },
+  "chase": 1,
+  "cheats": null,
+  "date": "2026-11-24 15:29",
+  "ending": "unknown / playing",
+  "entry": "E",
+  "frames": 481,
+  "kind": "room",
+  "layout": 8,
+  "name": "5x64_E_sword-clip_left_too_early_seed930859_261124-152900.tfreplay",
+  "overrides": {},
+  "path": "replays/owner/5x64/5x64_E_sword-clip_left_too_early_seed930859_261124-152900.tfreplay",
+  "room": "5:0x64",
+  "seed": 930859,
+  "state": "d3first_5_64e_0",
+  "triforce": "2.0.0.16",
+  "version": 2
+ },
+ "3fecc51114a2dfb4400ed965ed7fe1f0029adbdd": {
+  "came_with": {
+   "hearts": "2/8",
+   "items": {
+    "bombs": 8,
+    "boomerang": 1,
+    "bow": 1,
+    "keys": 4,
+    "ladder": 1,
+    "raft": 1,
+    "rupees": 136,
+    "sword": 1
+   }
+  },
+  "chase": 0,
+  "cheats": null,
+  "date": null,
+  "ending": "unknown / playing",
+  "entry": "E",
+  "frames": 2472,
+  "kind": "room",
+  "layout": 5,
+  "name": "blue_darknut-bombs_with_melee.tfreplay",
+  "overrides": {
+   "bombs": 8,
+   "hearts_and_containers": 114,
+   "partial_hearts": 0
+  },
+  "path": "replays/owner/darknut/blue_darknut-bombs_with_melee.tfreplay",
+  "room": "5:0x05",
+  "seed": 905371,
+  "state": "d3first_5_05e_0",
+  "triforce": "2.0.0.15",
+  "version": 2
+ },
+ "4303e43e7fee872a59230002ba7ace6df49f2278": {
+  "came_with": {
+   "hearts": "8/8",
+   "items": {
+    "bombs": 8,
+    "boomerang": 1,
+    "bow": 1,
+    "keys": 5,
+    "ladder": 1,
+    "raft": 1,
+    "recorder": 1,
+    "rupees": 136,
+    "sword": 1
+   }
+  },
+  "chase": 1,
+  "cheats": {
+   "infinite": [],
+   "invincible": false
+  },
+  "date": "2026-11-25 10:13",
+  "ending": "unknown / playing",
+  "entry": "S",
+  "frames": 206,
+  "kind": "room",
+  "layout": 4,
+  "name": "5x37_S_seed886279_261125-101333.tfreplay",
+  "overrides": {},
+  "path": "replays/owner/5x37/5x37_S_seed886279_261125-101333.tfreplay",
+  "room": "5:0x37",
+  "seed": 886279,
+  "state": "d3first_5_37s_0",
+  "triforce": "2.0.0.16",
+  "version": 3
+ },
+ "6865a3cc1ac005079718f60d97c339fa6dc105cd": {
+  "came_with": {
+   "hearts": "8/8",
+   "items": {
+    "bombs": 8,
+    "boomerang": 1,
+    "bow": 1,
+    "keys": 5,
+    "ladder": 1,
+    "raft": 1,
+    "recorder": 1,
+    "rupees": 136,
+    "sword": 1
+   }
+  },
+  "chase": 1,
+  "cheats": {
+   "infinite": [],
+   "invincible": false
+  },
+  "date": "2026-11-25 10:14",
+  "ending": "other / left-room / left for 5x27",
+  "entry": "S",
+  "frames": 320,
+  "kind": "room",
+  "layout": 3,
+  "name": "5x37_S_seed761531_261125-101448.tfreplay",
+  "overrides": {},
+  "path": "replays/owner/5x37/5x37_S_seed761531_261125-101448.tfreplay",
+  "room": "5:0x37",
+  "seed": 761531,
+  "state": "d3first_5_37s_0",
+  "triforce": "2.0.0.16",
+  "version": 3
+ },
+ "6b54d62a7397b3413127ae4918ebe829186a71d9": {
+  "came_with": {
+   "hearts": "8/8",
+   "items": {
+    "bombs": 6,
+    "boomerang": 1,
+    "bow": 1,
+    "keys": 5,
+    "ladder": 1,
+    "raft": 1,
+    "rupees": 136,
+    "sword": 1
+   }
+  },
+  "chase": 1,
+  "cheats": null,
+  "date": "2026-11-24 15:28",
+  "ending": "unknown / playing",
+  "entry": "E",
+  "frames": 351,
+  "kind": "room",
+  "layout": 8,
+  "name": "5x64_E_sword-clip_sword_too_far_up_seed391638_261124-152827.tfreplay",
+  "overrides": {},
+  "path": "replays/owner/5x64/5x64_E_sword-clip_sword_too_far_up_seed391638_261124-152827.tfreplay",
+  "room": "5:0x64",
+  "seed": 391638,
+  "state": "d3first_5_64e_0",
+  "triforce": "2.0.0.16",
+  "version": 2
+ },
+ "6c84b2c049d6b41cdf0f66045c37a18200af0d86": {
+  "came_with": {
+   "hearts": "8/8",
+   "items": {
+    "bombs": 6,
+    "boomerang": 1,
+    "bow": 1,
+    "keys": 5,
+    "ladder": 1,
+    "raft": 1,
+    "rupees": 136,
+    "sword": 1
+   }
+  },
+  "chase": 1,
+  "cheats": null,
+  "date": "2026-11-24 15:28",
+  "ending": "unknown / playing",
+  "entry": "E",
+  "frames": 460,
+  "kind": "room",
+  "layout": 2,
+  "name": "5x64_E_sword-clip_hit_during_swing_seed588442_261124-152806.tfreplay",
+  "overrides": {},
+  "path": "replays/owner/5x64/5x64_E_sword-clip_hit_during_swing_seed588442_261124-152806.tfreplay",
+  "room": "5:0x64",
+  "seed": 588442,
+  "state": "d3first_5_64e_0",
+  "triforce": "2.0.0.16",
+  "version": 2
+ },
+ "71f36ef8447169737c3ad21d052e75ecfcb27806": {
+  "came_with": {
+   "hearts": "2/8",
+   "items": {
+    "bombs": 8,
+    "boomerang": 1,
+    "bow": 1,
+    "keys": 4,
+    "ladder": 1,
+    "raft": 1,
+    "rupees": 136,
+    "sword": 1
+   }
+  },
+  "chase": 0,
+  "cheats": null,
+  "date": null,
+  "ending": "unknown / playing",
+  "entry": "E",
+  "frames": 163,
+  "kind": "room",
+  "layout": 3,
+  "name": "blue_darknut-dont_chase.tfreplay",
+  "overrides": {
+   "bombs": 8,
+   "hearts_and_containers": 114,
+   "partial_hearts": 0
+  },
+  "path": "replays/owner/darknut/blue_darknut-dont_chase.tfreplay",
+  "room": "5:0x05",
+  "seed": 474548,
+  "state": "d3first_5_05e_0",
+  "triforce": "2.0.0.15",
+  "version": 2
+ },
+ "9b3fd31b48bb3d6ebf5b0150e6d00ded58999a78": {
+  "came_with": {
+   "hearts": "8/8",
+   "items": {
+    "bombs": 8,
+    "boomerang": 1,
+    "bow": 1,
+    "keys": 5,
+    "ladder": 1,
+    "raft": 1,
+    "recorder": 1,
+    "rupees": 136,
+    "sword": 1
+   }
+  },
+  "chase": 1,
+  "cheats": {
+   "infinite": [],
+   "invincible": false
+  },
+  "date": "2026-11-25 10:13",
+  "ending": "other / left-room / left for 5x27",
+  "entry": "S",
+  "frames": 301,
+  "kind": "room",
+  "layout": 0,
+  "name": "5x37_S_seed729758_261125-101350.tfreplay",
+  "overrides": {},
+  "path": "replays/owner/5x37/5x37_S_seed729758_261125-101350.tfreplay",
+  "room": "5:0x37",
+  "seed": 729758,
+  "state": "d3first_5_37s_0",
+  "triforce": "2.0.0.16",
+  "version": 3
+ },
+ "b0085753cbbaaf0afad216dbab75c857e1abbd67": {
+  "came_with": {
+   "hearts": "8/8",
+   "items": {
+    "bombs": 8,
+    "boomerang": 1,
+    "bow": 1,
+    "keys": 5,
+    "ladder": 1,
+    "raft": 1,
+    "recorder": 1,
+    "rupees": 136,
+    "sword": 1
+   }
+  },
+  "chase": 0,
+  "cheats": null,
+  "date": "2026-11-25 07:55",
+  "ending": "other / left-room / left for 5x37",
+  "entry": "S",
+  "frames": 331,
+  "kind": "room",
+  "layout": 6,
+  "name": "5x47_S_seed270195_261125-075515.tfreplay",
+  "overrides": {},
+  "path": "replays/owner/5x47/5x47_S_seed270195_261125-075515.tfreplay",
+  "room": "5:0x47",
+  "seed": 270195,
+  "state": "d3first_5_47s_0",
+  "triforce": "2.0.0.16",
+  "version": 2
+ },
+ "b8ab185b3dafb980d6cbd573a632fd19b662139e": {
+  "came_with": {
+   "hearts": "8/8",
+   "items": {
+    "bombs": 8,
+    "boomerang": 1,
+    "bow": 1,
+    "keys": 5,
+    "ladder": 1,
+    "raft": 1,
+    "recorder": 1,
+    "rupees": 136,
+    "sword": 1
+   }
+  },
+  "chase": 0,
+  "cheats": null,
+  "date": "2026-11-25 07:59",
+  "ending": "other / left-room / left for 5x37",
+  "entry": "S",
+  "frames": 336,
+  "kind": "room",
+  "layout": 7,
+  "name": "5x47_S_seed775262_261125-075942.tfreplay",
+  "overrides": {},
+  "path": "replays/owner/5x47/5x47_S_seed775262_261125-075942.tfreplay",
+  "room": "5:0x47",
+  "seed": 775262,
+  "state": "d3first_5_47s_0",
+  "triforce": "2.0.0.16",
+  "version": 2
+ },
+ "cb487a8656ec5076c3adde997ccbacbe0d3747d2": {
+  "came_with": {
+   "hearts": "8/8",
+   "items": {
+    "bombs": 6,
+    "boomerang": 1,
+    "bow": 1,
+    "keys": 5,
+    "ladder": 1,
+    "raft": 1,
+    "rupees": 136,
+    "sword": 1
+   }
+  },
+  "chase": 1,
+  "cheats": null,
+  "date": "2026-11-24 15:29",
+  "ending": "unknown / playing",
+  "entry": "E",
+  "frames": 246,
+  "kind": "room",
+  "layout": 2,
+  "name": "5x64_E_sword-clip_left_too_early_seed515465_261124-152908.tfreplay",
+  "overrides": {},
+  "path": "replays/owner/5x64/5x64_E_sword-clip_left_too_early_seed515465_261124-152908.tfreplay",
+  "room": "5:0x64",
+  "seed": 515465,
+  "state": "d3first_5_64e_0",
+  "triforce": "2.0.0.16",
+  "version": 2
+ },
+ "e1d9bf4b0ee41eab270b6aad50368468e30db2b1": {
+  "came_with": {
+   "hearts": "8/8",
+   "items": {
+    "bombs": 8,
+    "boomerang": 1,
+    "bow": 1,
+    "keys": 5,
+    "ladder": 1,
+    "raft": 1,
+    "recorder": 1,
+    "rupees": 136,
+    "sword": 1
+   }
+  },
+  "chase": 1,
+  "cheats": {
+   "infinite": [],
+   "invincible": false
+  },
+  "date": "2026-11-25 10:15",
+  "ending": "other / left-room / left for 5x27",
+  "entry": "S",
+  "frames": 302,
+  "kind": "room",
+  "layout": 4,
+  "name": "5x37_S_seed96045_261125-101501.tfreplay",
+  "overrides": {},
+  "path": "replays/owner/5x37/5x37_S_seed96045_261125-101501.tfreplay",
+  "room": "5:0x37",
+  "seed": 96045,
+  "state": "d3first_5_37s_0",
+  "triforce": "2.0.0.16",
+  "version": 3
+ },
+ "edacb6e753ec20b08ba87d0d4affe5ffbbd83264": {
+  "came_with": {
+   "hearts": "8/8",
+   "items": {
+    "bombs": 8,
+    "boomerang": 1,
+    "bow": 1,
+    "keys": 5,
+    "ladder": 1,
+    "raft": 1,
+    "recorder": 1,
+    "rupees": 136,
+    "sword": 1
+   }
+  },
+  "chase": 0,
+  "cheats": {
+   "infinite": [],
+   "invincible": false
+  },
+  "date": "2026-11-25 10:12",
+  "ending": "other / left-room / left for 5x37",
+  "entry": "S",
+  "frames": 318,
+  "kind": "room",
+  "layout": 5,
+  "name": "5x47_S_seed846236_261125-101232.tfreplay",
+  "overrides": {},
+  "path": "replays/owner/5x47/5x47_S_seed846236_261125-101232.tfreplay",
+  "room": "5:0x47",
+  "seed": 846236,
+  "state": "d3first_5_47s_0",
+  "triforce": "2.0.0.16",
+  "version": 3
+ },
+ "efff3e009e2c8532b6108fc51b659ba0cbcbe2fd": {
+  "came_with": {
+   "hearts": "8/8",
+   "items": {
+    "bombs": 8,
+    "boomerang": 1,
+    "bow": 1,
+    "keys": 5,
+    "ladder": 1,
+    "raft": 1,
+    "recorder": 1,
+    "rupees": 136,
+    "sword": 1
+   }
+  },
+  "chase": 0,
+  "cheats": null,
+  "date": "2026-11-25 07:54",
+  "ending": "other / left-room / left for 5x37",
+  "entry": "S",
+  "frames": 331,
+  "kind": "room",
+  "layout": 6,
+  "name": "5x47_S_seed546985_261125-075456.tfreplay",
+  "overrides": {},
+  "path": "replays/owner/5x47/5x47_S_seed546985_261125-075456.tfreplay",
+  "room": "5:0x47",
+  "seed": 546985,
+  "state": "d3first_5_47s_0",
+  "triforce": "2.0.0.16",
+  "version": 2
+ },
+ "f1211739f08b35f03a4d818103b9e5ae332b1adc": {
+  "came_with": {
+   "hearts": "8/8",
+   "items": {
+    "bombs": 8,
+    "boomerang": 1,
+    "bow": 1,
+    "keys": 5,
+    "ladder": 1,
+    "raft": 1,
+    "recorder": 1,
+    "rupees": 136,
+    "sword": 1
+   }
+  },
+  "chase": 0,
+  "cheats": null,
+  "date": "2026-11-25 07:55",
+  "ending": "other / left-room / left for 5x37",
+  "entry": "S",
+  "frames": 331,
+  "kind": "room",
+  "layout": 0,
+  "name": "5x47_S_seed719457_261125-075506.tfreplay",
+  "overrides": {},
+  "path": "replays/owner/5x47/5x47_S_seed719457_261125-075506.tfreplay",
+  "room": "5:0x47",
+  "seed": 719457,
+  "state": "d3first_5_47s_0",
+  "triforce": "2.0.0.16",
+  "version": 2
+ },
+ "f6c1d1535ad8489037b852475afcb2457d5f2832": {
+  "came_with": {
+   "hearts": "2/8",
+   "items": {
+    "bombs": 8,
+    "boomerang": 1,
+    "bow": 1,
+    "keys": 4,
+    "ladder": 1,
+    "raft": 1,
+    "rupees": 136,
+    "sword": 1
+   }
+  },
+  "chase": 0,
+  "cheats": null,
+  "date": null,
+  "ending": "unknown / playing",
+  "entry": "E",
+  "frames": 547,
+  "kind": "room",
+  "layout": 1,
+  "name": "blue_darknut-play_with_anticipation.tfreplay",
+  "overrides": {
+   "bombs": 8,
+   "hearts_and_containers": 114,
+   "partial_hearts": 0
+  },
+  "path": "replays/owner/darknut/blue_darknut-play_with_anticipation.tfreplay",
+  "room": "5:0x05",
+  "seed": 31644,
+  "state": "d3first_5_05e_0",
+  "triforce": "2.0.0.15",
+  "version": 2
+ },
+ "f727302907db5461512d8dcecee56dd4e04b6a38": {
+  "came_with": {
+   "hearts": "8/8",
+   "items": {
+    "bombs": 8,
+    "boomerang": 1,
+    "bow": 1,
+    "keys": 5,
+    "ladder": 1,
+    "raft": 1,
+    "recorder": 1,
+    "rupees": 136,
+    "sword": 1
+   }
+  },
+  "chase": 0,
+  "cheats": {
+   "infinite": [],
+   "invincible": false
+  },
+  "date": "2026-11-25 10:12",
+  "ending": "other / left-room / left for 5x37",
+  "entry": "S",
+  "frames": 328,
+  "kind": "room",
+  "layout": 6,
+  "name": "5x47_S_seed886385_261125-101220.tfreplay",
+  "overrides": {},
+  "path": "replays/owner/5x47/5x47_S_seed886385_261125-101220.tfreplay",
+  "room": "5:0x47",
+  "seed": 886385,
+  "state": "d3first_5_47s_0",
+  "triforce": "2.0.0.16",
+  "version": 3
+ }
+}
