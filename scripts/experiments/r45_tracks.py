@@ -134,7 +134,7 @@ def replay_point(config, track: Path, actions: list, length: int, point: int, se
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp) / 'tracks'
         root.mkdir()
-        os.symlink(track, root / track.name)
+        os.symlink(track.resolve(), root / track.name)
         progress = Path(tmp) / 'curriculum.json'
         progress.write_text(json.dumps({track.name: {'length': length, 'point': point, 'attempts': 0, 'successes': 0,
                                                      'stages_passed': 0}}), encoding='utf-8')
