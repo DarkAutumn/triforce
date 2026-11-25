@@ -533,8 +533,10 @@ def serving_text(network, served: dict) -> str:
         return "the Rust actor plays the network (nothing served)"
     window = f"{served['gather'] * 1000:g} ms batch window"
     if served['forward'] == 'graphs':
-        return (f"CUDA graphs on {served['device']}, each batch size captured at the first rollout ({window}; "
-                f"TRIFORCE_SERVE_GRAPHS=0 serves eagerly)")
+        extra = ''.join(part for part, on in ((', one staged copy a batch', served.get('staged')),
+                                              (', no hit logits answered', served.get('hits') is False)) if on)
+        return (f"CUDA graphs on {served['device']}, each batch size captured at the first rollout{extra} "
+                f"({window}; TRIFORCE_SERVE_GRAPHS=0 serves eagerly)")
     return f"the eager forward on {served['device']} ({window})"
 
 

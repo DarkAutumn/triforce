@@ -416,6 +416,84 @@ def test_a_lab_trainer_captures_every_bucket_at_its_first_batch_then_replays_bes
     assert not Server(device='cuda').graphs and serve_module.serve_mode()['forward'] == 'eager'
 
 
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA graphs need the GPU")
+def test_a_lab_trainers_server_stages_one_copy_a_batch_and_answers_no_hit_logits(observations, monkeypatch):
+    """The lab trainer's server (round40.md "Where a teacher's time goes", the second step): a batch's observation
+    arrays go to the GPU as one copy from a pinned buffer (``_Graph`` ``staged``), and it answers no hit logits (a
+    training never reads them); the logits and values are the eager forward's, staged or not, for every batch size.
+    A chain's server (no learner) answers the hit logits; ``TRIFORCE_SERVE_HITS=1`` keeps them in a training."""
+    monkeypatch.setattr(serve_module, '_LEARNER', {'on': False, 'graphs': False})
+    eager = Server(device='cuda', graphs=False)
+    serve_module.learner_process(graphs=True)
+    torch.manual_seed(13)
+    network = nets.create('wide', native_spec(), hidden_dim=64, depth=2).to('cuda').eval()
+
+    def server(**env):
+        for key, value in env.items():
+            monkeypatch.setenv(key, value)
+        made = Server(device='cuda')
+        for key in env:
+            monkeypatch.delenv(key)
+        return made
+    servers = {'staged': server(), 'unstaged': server(TRIFORCE_SERVE_STAGING='0'),
+               'hits': server(TRIFORCE_SERVE_HITS='1'), 'eager': eager}
+    assert servers['staged'].staged and not servers['staged'].hits
+    assert not servers['unstaged'].staged and servers['hits'].hits and eager.hits
+    answered = {}
+    for name, each in servers.items():
+        class Queue:            # pylint: disable=too-few-public-methods
+            logits_size = 11 * 13
+
+            @staticmethod
+            def answer(slots, logits, values, hit, name=name):
+                answered[name] = (logits.copy(), values.copy(), None if hit is None else hit.copy())
+        each.queue = Queue()
+        each.models[0] = network
+    total = observations['action_mask'].shape[0]
+    for n in sorted({1, 3, min(5, total), total}):
+        for _ in range(4):          # past the checked replays
+            obs = {k: v[:n] for k, v in observations.items()}
+            for each in servers.values():
+                each.answer({'obs': obs, 'slot': np.arange(n), 'model': np.zeros(n, dtype=np.int64),
+                             'job': np.arange(n), 'step': np.zeros(n, dtype=np.int64),
+                             'bootstrap': np.zeros(n, dtype=bool)})
+            for name in ('staged', 'unstaged', 'hits'):
+                assert np.allclose(answered[name][0], answered['eager'][0], atol=1e-5)
+                assert np.allclose(answered[name][1], answered['eager'][1], atol=1e-5)
+            assert answered['staged'][2] is None and answered['unstaged'][2] is None
+            assert answered['hits'][2].shape == answered['eager'][2].shape == (n, serve_module.JOINT)
+    assert all(each._graphs and not each._eager for name, each in servers.items() if name != 'eager')
+
+
+def test_the_game_threads_are_niced_above_the_server():
+    """``lab.collect.nice_game_threads``: the pools' game threads (``pool-N``) are raised the given steps above the
+    calling thread (the server and the learner stay where they are); a thread already there is left alone."""
+    import ctypes
+    import os
+    import threading
+    from triforce.lab.collect import nice_game_threads
+    ready, done, tids = threading.Event(), threading.Event(), []
+
+    def game():
+        ctypes.CDLL(None).prctl(15, b'pool-test', 0, 0, 0)       # PR_SET_NAME: as the pool names its workers
+        tids.append(threading.get_native_id())
+        ready.set()
+        done.wait()
+    thread = threading.Thread(target=game)
+    thread.start()
+    ready.wait()
+    base = os.getpriority(os.PRIO_PROCESS, 0)
+    try:
+        assert nice_game_threads(0) == 0
+        assert nice_game_threads(2) == 1
+        assert os.getpriority(os.PRIO_PROCESS, tids[0]) == min(19, base + 2)
+        assert os.getpriority(os.PRIO_PROCESS, 0) == base
+        assert nice_game_threads(2) == 0
+    finally:
+        done.set()
+        thread.join()
+
+
 def test_networks_served_from_temporaries_never_share_an_index():
     """``load_model(path)[0].to_native()`` in a loop (``runner.Policies``): each temporary dies at once, and a later
     network may reuse its id; each must keep its own index and weights (Nov 22: chains with several served

@@ -32,14 +32,23 @@ for config in "$@"; do
             w256) args+=(--arch-config '{"hidden_dim": 256}') ;;
             notry) args=(--families darknut@d3first --state-route d3first --arch hitnet --arch-config "$gen"
                          --aux hit=hit:0.5) ;;
+            fam) args=(--families darknut@d3first --state-route d3first --arch hitnet --arch-config "$gen"
+                       --aux hit=hit:0.5 --try-others 4:0.25) ;;
             noobs) args=(--families "darknut@d3first=specialists/experiments/r43-perf/darknut-noobs.yaml"
                          --state-route d3first --arch hitnet --arch-config "$bare" --aux hit=hit:0.5
                          --try-others 4:0.25) ;;
             g8) games=8 steps=6552 ;;
-            eager) env=(env TRIFORCE_SERVE_GRAPHS=0) ;;
-            gather1) env=(env TRIFORCE_SERVE_GRAPHS=0 TRIFORCE_SERVE_GATHER=0.001) ;;
-            alt) env=(env TRIFORCE_SERVE_ALTERNATE=1) ;;
-            audit) env=(env TRIFORCE_SERVE_AUDIT=1) ;;
+            eager) env+=(TRIFORCE_SERVE_GRAPHS=0) ;;
+            gather1) env+=(TRIFORCE_SERVE_GRAPHS=0 TRIFORCE_SERVE_GATHER=0.001) ;;
+            alt) env+=(TRIFORCE_SERVE_ALTERNATE=1) ;;
+            audit) env+=(TRIFORCE_SERVE_AUDIT=1) ;;
+            plain) env+=(TRIFORCE_SERVE_STAGING=0 TRIFORCE_SERVE_HITS=1 TRIFORCE_GAME_NICE=0) ;;
+            staging) env+=(TRIFORCE_SERVE_STAGING=1) ;;
+            nostaging) env+=(TRIFORCE_SERVE_STAGING=0) ;;
+            hits) env+=(TRIFORCE_SERVE_HITS=1) ;;
+            nohits) env+=(TRIFORCE_SERVE_HITS=0) ;;
+            nice) env+=(TRIFORCE_GAME_NICE=3) ;;
+            nonice) env+=(TRIFORCE_GAME_NICE=0) ;;
             rust) args=(--families "darknut@d3first=specialists/experiments/r43-perf/darknut-noobs.yaml"
                         --state-route d3first --arch zelda --try-others 4:0.25) ;;
             *) echo "r43_perf.sh: no config $part" >&2; exit 2 ;;
@@ -48,7 +57,7 @@ for config in "$@"; do
     tag=${OLD:+old-}${config//+/-}
     "$here/.venv/bin/triforce" job run --agent Perf43 --task perf --subtask "$tag-r$rep" --express --timeout 10m \
         --desc "Speed: the darknut teacher's recipe ($tag), $iterations iterations of $steps steps, $games games." \
-        --detach -- ${env[@]+"${env[@]}"} .venv/bin/python -m triforce.lab.train --name "r43-perf-$tag" \
+        --detach -- ${env[@]+env "${env[@]}"} .venv/bin/python -m triforce.lab.train --name "r43-perf-$tag" \
         --run-id "r$rep" "${args[@]}" --parallel "$games" --steps-per-update "$steps" --iterations "$iterations" \
         --seed 4101 --save-every 1000 --models-dir "$tree/target/r43-perf/models" 2>&1 | tail -n 1
 done

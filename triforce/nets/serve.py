@@ -52,6 +52,12 @@ def serve_half() -> bool:
     return os.environ.get('TRIFORCE_SERVE_HALF', '') not in ('', '0')
 
 
+def _flag(name: str, default: bool) -> bool:
+    """An on/off environment switch: unset is ``default``; '', '0' are off; anything else on."""
+    value = os.environ.get(name)
+    return default if value is None else value not in ('', '0')
+
+
 _LEARNER = {'on': False, 'graphs': False}
 
 
@@ -77,13 +83,17 @@ def serve_graphs() -> bool:
 
 def serve_mode() -> dict:
     """How this process serves its networks, for a run's manifest (``training.serve``): ``graphs`` (CUDA graphs
-    replayed) or ``eager``, the batch window in seconds, the device and the precision."""
+    replayed) or ``eager``, the batch window in seconds, the device, the precision, and in a learner with graphs
+    whether a batch is one staged copy (``staged``) and whether the answers carry the hit logits (``hits``)."""
     device = serve_device()
     graphs = serve_graphs() and device.type == 'cuda'
     default = GRAPH_GATHER if graphs else DEFAULT_GATHER
+    capture_all = graphs and _LEARNER['on']
     return {'forward': 'graphs' if graphs else 'eager', 'device': device.type,
             'gather': float(os.environ.get('TRIFORCE_SERVE_GATHER', default)),
-            'half': serve_half() and device.type == 'cuda'}
+            'half': serve_half() and device.type == 'cuda',
+            'staged': capture_all and _flag('TRIFORCE_SERVE_STAGING', True),
+            'hits': not capture_all or _flag('TRIFORCE_SERVE_HITS', False)}
 
 
 def _bucket(rows: int) -> Optional[int]:
@@ -92,13 +102,34 @@ def _bucket(rows: int) -> Optional[int]:
 
 class _Graph:
     """One network's forward at one batch size, captured as a CUDA graph: static inputs filled in place, one
-    replay, the logits, value and hit logits side by side in a static output. A replay launches the captured kernels
-    in one call, so it costs about a millisecond where the eager forward's Python and launches cost 4-5 (docs/lab.md
-    "Acting speed")."""
+    replay, the logits, value (and with ``hits`` the hit logits) side by side in a static output. A replay launches
+    the captured kernels in one call, so it costs about a millisecond where the eager forward's Python and launches
+    cost 4-5 (docs/lab.md "Acting speed").  ``staged``: the observation arrays are one pinned host buffer and one
+    device buffer (each array a view at its own aligned offset), so a batch is one host-to-device copy instead of one
+    per array (round40.md "Where a teacher's time goes")."""
 
-    def __init__(self, network, obs: dict, half: bool):
-        self.network, self.half = network, half
-        self.inputs = {key: value.clone() for key, value in obs.items()}
+    ALIGN = 64
+
+    def __init__(self, network, obs: dict, half: bool, device, hits: bool = True, staged: bool = False):
+        """``obs``: the rows to capture with, numpy arrays of the bucket's size."""
+        self.network, self.half, self.hits, self.staged = network, half, hits, staged
+        if staged:
+            offsets, total = {}, 0
+            for key, value in obs.items():
+                offsets[key] = total
+                total += -(-value.nbytes // self.ALIGN) * self.ALIGN
+            self.host = torch.empty(total, dtype=torch.uint8, pin_memory=True)
+            self.device_buffer = torch.empty(total, dtype=torch.uint8, device=device)
+            host = self.host.numpy()
+            self.host_views = {key: host[offsets[key]:offsets[key] + value.nbytes].view(value.dtype)
+                               .reshape(value.shape) for key, value in obs.items()}
+            self.inputs = {key: self.device_buffer[offsets[key]:offsets[key] + value.nbytes]
+                           .view(torch.from_numpy(value[:0]).dtype).view(value.shape) for key, value in obs.items()}
+            for key, value in obs.items():
+                self.host_views[key][...] = value
+            self.device_buffer.copy_(self.host)
+        else:
+            self.inputs = {key: torch.from_numpy(value).to(device) for key, value in obs.items()}
         stream = torch.cuda.Stream()
         stream.wait_stream(torch.cuda.current_stream())
         with torch.cuda.stream(stream):
@@ -113,22 +144,32 @@ class _Graph:
     def _forward(self) -> torch.Tensor:
         with torch.autocast('cuda', dtype=torch.float16, enabled=self.half):
             heads, _ = self.network.heads(self.inputs)
-        return _flat(heads)
+        return _flat(heads, self.hits)
 
-    def run(self, obs: dict) -> torch.Tensor:
-        for key, value in obs.items():
-            self.inputs[key].copy_(value, non_blocking=True)
+    def run(self, obs: dict, rows) -> torch.Tensor:
+        """Replays on ``rows`` of the batch's arrays ``obs`` (``rows``: the bucket's size, padded)."""
+        if self.staged:
+            for key, value in obs.items():
+                np.take(value, rows, axis=0, out=self.host_views[key])
+            self.device_buffer.copy_(self.host, non_blocking=True)
+        else:
+            for key, value in obs.items():
+                self.inputs[key].copy_(torch.from_numpy(value[rows]).to(self.inputs[key].device, non_blocking=True),
+                                       non_blocking=True)
         self.graph.replay()
         return self.output
 
 
-def _flat(heads) -> torch.Tensor:
-    """The logits, the value and the hit head's logits per joint action (NaN without one) side by side (one copy
-    back)."""
+def _flat(heads, hits: bool = True) -> torch.Tensor:
+    """The logits, the value and (``hits``) the hit head's logits per joint action (NaN without one) side by side
+    (one copy back)."""
     flat = heads.flat().float()
-    hit = heads.aux.get('hit')
-    hit = torch.full((flat.shape[0], JOINT), float('nan'), device=flat.device) if hit is None else hit.float()
-    return torch.cat([flat, heads.value.float().unsqueeze(-1), hit], dim=-1)
+    parts = [flat, heads.value.float().unsqueeze(-1)]
+    if hits:
+        hit = heads.aux.get('hit')
+        parts.append(torch.full((flat.shape[0], JOINT), float('nan'), device=flat.device) if hit is None
+                     else hit.float())
+    return torch.cat(parts, dim=-1)
 
 
 def weights_hash(network: torch.nn.Module) -> int:
@@ -160,6 +201,11 @@ class Server:
         self.capture_all = self.graphs and _LEARNER['on']
         self._captured: set[int] = set()
         self._copies: dict = {}
+        # The lab trainer's server (``capture_all``) answers no hit logits: a training never reads them (a play's
+        # records do, `Decided.danger`); ``$TRIFORCE_SERVE_HITS=1`` keeps them. And it stages a batch's observation
+        # arrays for one host-to-device copy (``_Graph`` ``staged``; ``$TRIFORCE_SERVE_STAGING=0``: one copy an array).
+        self.hits = not self.capture_all or _flag('TRIFORCE_SERVE_HITS', False)
+        self.staged = self.capture_all and _flag('TRIFORCE_SERVE_STAGING', True)
         # A measurement (``$TRIFORCE_SERVE_ALTERNATE=1``, round40.md "Where a teacher's time goes"): a learner's
         # rollouts alternate between the graphs (1 ms window) and the eager forward (5 ms), the first with graphs,
         # so both are timed under the same load; ``replaying`` says which the current rollout serves with.
@@ -261,7 +307,7 @@ class Server:
         count, size = len(models), self.queue.logits_size
         logits = np.empty((count, size), dtype=np.float32)
         values = np.empty(count, dtype=np.float32)
-        hit = np.empty((count, JOINT), dtype=np.float32)
+        hit = np.empty((count, JOINT), dtype=np.float32) if self.hits else None
         for model in np.unique(models):
             rows = np.nonzero(models == model)[0]
             network = self.models[int(model)]
@@ -274,10 +320,11 @@ class Server:
                        for key, value in batch['obs'].items()}
                 with torch.autocast('cuda', dtype=torch.float16, enabled=self.half):
                     heads, new_state = network.heads(obs, state)
-                out = _flat(heads).cpu().numpy()        # one copy back: the logits, value and hit side by side
+                out = _flat(heads, self.hits).cpu().numpy()     # one copy back: the logits, value (and hit) together
             logits[rows] = out[:, :size]
             values[rows] = out[:, size]
-            hit[rows] = out[:, size + 1:]
+            if hit is not None:
+                hit[rows] = out[:, size + 1:]
             if new_state is not None:
                 self._keep_states(int(model), batch, rows, new_state)
         self.queue.answer(batch['slot'], logits, values, hit)
@@ -294,8 +341,7 @@ class Server:
         if bucket is None or model in self._eager:
             return None
         padded = np.concatenate([rows, np.repeat(rows[-1:], bucket - len(rows))])
-        obs = {key: torch.from_numpy(value[padded]).to(self.device, non_blocking=True)
-               for key, value in batch['obs'].items()}
+        arrays = batch['obs']
         graph = self._graphs.get((model, bucket))
         try:
             if graph is None and self.capture_all:
@@ -306,19 +352,20 @@ class Server:
                 self._captured.add(model)
                 for size in GRAPH_BUCKETS:
                     sized = np.resize(rows, size)
-                    self._graphs[(model, size)] = _Graph(
-                        network, {key: torch.from_numpy(value[sized]).to(self.device) for key, value in
-                                  batch['obs'].items()}, self.half)
+                    self._graphs[(model, size)] = _Graph(network, {key: value[sized] for key, value in arrays.items()},
+                                                         self.half, self.device, self.hits, self.staged)
                 graph = self._graphs[(model, bucket)]
             if graph is None:
-                graph = self._graphs[(model, bucket)] = _Graph(network, obs, self.half)
-            out = graph.run(obs)
+                graph = self._graphs[(model, bucket)] = _Graph(
+                    network, {key: value[padded] for key, value in arrays.items()}, self.half, self.device, self.hits,
+                    self.staged)
+            out = graph.run(arrays, padded)
             if self.audit is not None:
                 self._audit(network, batch, rows, out[:len(rows)])
             if graph.checks:
                 graph.checks -= 1
                 with torch.autocast('cuda', dtype=torch.float16, enabled=self.half):
-                    eager = _flat(network.heads(obs)[0])
+                    eager = _flat(network.heads(graph.inputs)[0], self.hits)
                 if not torch.allclose(out, eager, atol=GRAPH_TOLERANCE, rtol=GRAPH_TOLERANCE, equal_nan=True):
                     raise RuntimeError(f"graph and eager forward differ by {float((out - eager).abs().max()):.3g}")
             return out[:len(rows)].cpu().numpy()
@@ -336,7 +383,7 @@ class Server:
         head as the Rust actor picks (``policy::logits``: the legal logits plus one Gumbel draw shared by both)."""
         obs = {key: torch.from_numpy(value[rows]).to(self.device) for key, value in batch['obs'].items()}
         with torch.autocast('cuda', dtype=torch.float16, enabled=self.half):
-            eager = _flat(network.heads(obs)[0])
+            eager = _flat(network.heads(obs)[0], self.hits)
         a, b = graphed.float().cpu().numpy(), eager.float().cpu().numpy()
         size = self.queue.logits_size
         both = np.isfinite(a[:, :size + 1]) & np.isfinite(b[:, :size + 1])

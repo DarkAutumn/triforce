@@ -10,6 +10,7 @@ rows each family's rollout takes (decisions an env) by its need, from the run's 
 
 import fnmatch
 import json
+import os
 import threading
 import time
 from collections import deque
@@ -28,6 +29,30 @@ from ..ppo import Collector
 from ..specialist import SpecialistConfig, load_specialist
 
 CHUNK = 4096
+GAME_NICE = 0                   # niceness steps the game threads take above the process (``nice_game_threads``)
+GAME_NICE_ENV = 'TRIFORCE_GAME_NICE'
+
+
+def nice_game_threads(steps: int) -> int:
+    """Raises the niceness of this process's game threads (the pools' workers, ``pool-N``) ``steps`` above the
+    calling thread's, so that under a full machine the one thread every game waits on, the network server, gets a CPU
+    first (round40.md "Where a teacher's time goes"); raising needs no privilege, and a thread already there is left
+    alone.  Returns how many threads it changed."""
+    if steps <= 0:
+        return 0
+    target = min(19, os.getpriority(os.PRIO_PROCESS, 0) + steps)
+    changed = 0
+    for tid in os.listdir('/proc/self/task'):
+        try:
+            with open(f'/proc/self/task/{tid}/comm', encoding='utf-8') as file:
+                if not file.read().startswith('pool-'):
+                    continue
+            if os.getpriority(os.PRIO_PROCESS, int(tid)) < target:
+                os.setpriority(os.PRIO_PROCESS, int(tid), target)
+                changed += 1
+        except OSError:         # a thread that ended meanwhile
+            continue
+    return changed
 
 
 @dataclass
@@ -315,6 +340,7 @@ class MultiCollector:
         self._errors = []
         self._began = time.time()
         self._served = self._server_counters()
+        nice_game_threads(int(os.environ.get(GAME_NICE_ENV, GAME_NICE)))
         extra = {} if self.tried is None else {'tried': self.tried}
 
         def run(collector, index, policy):
