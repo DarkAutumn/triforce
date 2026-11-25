@@ -31,17 +31,14 @@ def test_the_way_out_walks_the_line_without_a_strike(line):
 
 
 def test_the_way_in_swords_the_darknut_in_the_column_and_passes(line):
-    """Seed 5 (8 bombs): Link comes down the column X $90 and, at Y $7B, a Darknut stands below him in it ($90,
-    $88); the rule alone strikes it (S) and walks on to the stairs unhit.  Seed 4 (4 bombs, pinned on `_1`, `_0` since
-    round 44) the same, timed by the look-ahead: the strike S from ($90, $66) at two Darknuts crossing the column
-    below him (Y $7D).  The seeds
-    are chosen on the generation's rebuilt `d3first_3_69n_*` (r40-states, b9ebd4e9) and merged code (5f5647c9),
-    where seed 3 has the rule wait, not strike; a rebuilt entry state needs them chosen again (the script's `trace
-    --pass in SEED --start STATE` shows the walk)."""
-    alone = line.play(line.make_env(8, REPO_STATES_DIR), 'in', 5, 'd3first_3_69n_0')
+    """Seed 1 (8 bombs): the rule alone strikes a Darknut in Link's column (S) and walks on to the stairs unhit.
+    Seed 0 (4 bombs) the same, timed by the look-ahead.  The seeds are the first of 0-39 that pass on the walked
+    `d3first_3_69n_0` (round 44: one state per door, from the real walk; seeds 5 and 4 were chosen on round 40's
+    rebuilt states, r40-states b9ebd4e9); a rebuilt entry state needs them chosen again (the script's `trace --pass
+    in SEED --start STATE` shows the walk)."""
+    alone = line.play(line.make_env(8, REPO_STATES_DIR), 'in', 1, 'd3first_3_69n_0')
     assert (alone['ending'], alone['hits'], alone['situation']) == ('exit-correct', 0, 'sworded'), alone
-    # round 44: d3first has one state per door (chain 0); seed 4 was pinned on chain 1's state
-    looked = line.play(line.make_env(4, REPO_STATES_DIR), 'in', 4, 'd3first_3_69n_0', probe=line.make_env(4, REPO_STATES_DIR), depth=4)
+    looked = line.play(line.make_env(4, REPO_STATES_DIR), 'in', 0, 'd3first_3_69n_0', probe=line.make_env(4, REPO_STATES_DIR), depth=4)
     assert (looked['ending'], looked['hits'], looked['situation']) == ('exit-correct', 0, 'sworded'), looked
     assert looked['swings'] >= 1
 
