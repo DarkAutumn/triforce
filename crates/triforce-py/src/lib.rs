@@ -86,6 +86,7 @@ fn step_dict<'py>(
     d.set_item("banked_kills", s.banked_kills)?;
     d.set_item("sword", s.sword)?;
     d.set_item("carriers", s.carriers)?;
+    d.set_item("carrier_fight", s.carrier_fight)?;
     d.set_item("way", s.way.map(|w| w.name()))?;
     d.set_item("stretch", s.stretch.as_deref())?;
     d.set_item("visit", visit)?;

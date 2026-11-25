@@ -32,9 +32,19 @@ const BOMB_MAX: u16 = 0x67C;
 const ROOM: MapLocation = MapLocation::new(3, 0x5b, false);
 
 /// The first pass's start state with `cycle` and `bombs` (`None`: the bag full) written, saved under its own name
-/// (the name says the route step) in `dir`, played on `d3first` with `darknut` observing the threat block.
-fn first_pass(nes: ZCore, dir: &Path, cycle: u8, bombs: Option<u8>) -> (C, Box<Observation>) {
-    let data = common::game_data();
+/// (the name says the route step) in `dir`, played on `d3first` with `darknut` observing the threat block; the
+/// step's `carriers: fight` (round 43) set to `fight` whatever routes.yaml ships.
+fn first_pass(nes: ZCore, dir: &Path, cycle: u8, bombs: Option<u8>, fight: bool) -> (C, Box<Observation>) {
+    let mut data = (*common::game_data()).clone();
+    let line = zelda::game_map::ROUTES_YAML
+        .lines()
+        .find(|l| l.contains("{level: 3, room: '0x5b'") && l.contains("entry: S") && l.contains("exit: N"))
+        .expect("0x5b's first pass");
+    let bare = line.replacen(", carriers: fight", "", 1);
+    let set = if fight { bare.replacen('}', ", carriers: fight}", 1) } else { bare };
+    let routes = zelda::game_map::ROUTES_YAML.replacen(line, &set, 1);
+    data.map = Arc::new(zelda::game_map::GameMap::from_yaml(zelda::game_map::GAME_YAML, &routes).unwrap());
+    let data = Arc::new(data);
     let mut source = common::read_state_file(&common::state_path("d3first_3_5bs_0")).unwrap();
     source.machine.poke(CYCLE, cycle);
     let max = source.machine.peek(BOMB_MAX);
@@ -92,7 +102,7 @@ fn assert_crossing(c: &C, what: &str) {
 fn at_cycle_0_the_darknuts_are_targets_beside_the_exit() {
     let Some(nes) = open_core() else { return };
     let dir = tempfile::tempdir().unwrap();
-    let (mut c, obs) = first_pass(nes, dir.path(), 0, Some(2));
+    let (mut c, obs) = first_pass(nes, dir.path(), 0, Some(2), false);
     let obs = darknuts_out(&mut c, obs);
     assert_crossing(&c, "cycle 0");
     let want = darknuts(&c);
@@ -116,7 +126,7 @@ fn at_cycle_0_the_darknuts_are_targets_beside_the_exit() {
 fn at_cycle_1_the_room_is_a_plain_crossing() {
     let Some(nes) = open_core() else { return };
     let dir = tempfile::tempdir().unwrap();
-    let (mut c, obs) = first_pass(nes, dir.path(), 1, Some(2));
+    let (mut c, obs) = first_pass(nes, dir.path(), 1, Some(2), false);
     let obs = darknuts_out(&mut c, obs);
     assert_crossing(&c, "cycle 1");
     assert!(c.objective().unwrap().carriers().is_empty(), "no Darknut's death reads a bomb column at cycle 1");
@@ -129,10 +139,44 @@ fn at_cycle_1_the_room_is_a_plain_crossing() {
 fn with_a_full_bag_no_darknut_is_a_carrier() {
     let Some(nes) = open_core() else { return };
     let dir = tempfile::tempdir().unwrap();
-    let (mut c, obs) = first_pass(nes, dir.path(), 0, None);
+    let (mut c, obs) = first_pass(nes, dir.path(), 0, None, false);
     let obs = darknuts_out(&mut c, obs);
     assert_eq!(c.session().state().bombs(), c.session().state().bomb_max());
     assert_crossing(&c, "a full bag");
     assert!(c.objective().unwrap().carriers().is_empty(), "the bag has no room");
     assert!(carrier_column(&obs).is_empty());
+}
+
+/// Round 43, `carriers: fight` (the owner: "it should force kill that darknut if the part of its observation is lit
+/// up"): at cycle 0 the three Darknuts are the only targets, the N exit none (no aim, no PBRS) but still a correct
+/// room (`next_rooms`: a chain that leaves goes on); once the cycle moves on (any kill: by the sword, a bomb, with or
+/// without a drop) the room is the plain crossing again. At cycle 1 and with a full bag the flag changes nothing.
+#[test]
+fn with_carriers_fight_the_kill_comes_before_the_door() {
+    let Some(nes) = open_core() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let (mut c, obs) = first_pass(nes, dir.path(), 0, Some(2), true);
+    let obs = darknuts_out(&mut c, obs);
+    let objective = c.objective().unwrap();
+    assert_eq!(objective.kind, ObjectiveKind::Move);
+    assert_eq!(objective.carriers(), darknuts(&c), "every Darknut is a carrier target");
+    assert!(objective.carriers_first(), "the carriers come first");
+    assert!(!objective.labels.iter().any(|(_, r)| matches!(r, Role::Exit(_))), "the N exit is no target yet");
+    assert!(!objective.pbrs_targets.is_empty() && objective.pbrs_targets.iter().all(|t| objective.targets.contains(t)));
+    assert!(objective.next_rooms.contains(&MapLocation::new(3, 0x4b, false)), "0x4b stays the correct room");
+    assert_eq!(carrier_column(&obs).len(), 3);
+
+    c.session_mut().apply_ram(&[(zelda::Var::WorldKillCycle, 1)]);
+    c.step(Action::parse("WAIT 4").unwrap()).unwrap();
+    assert_crossing(&c, "cycle 1 after the kill");
+    assert!(!c.objective().unwrap().carriers_first());
+
+    for (cycle, bombs, what) in [(1, Some(2), "cycle 1"), (0, None, "a full bag")] {
+        let Some(nes) = open_core() else { return };
+        let dir = tempfile::tempdir().unwrap();
+        let (mut c, obs) = first_pass(nes, dir.path(), cycle, bombs, true);
+        darknuts_out(&mut c, obs);
+        assert_crossing(&c, what);
+        assert!(!c.objective().unwrap().carriers_first(), "{what}");
+    }
 }

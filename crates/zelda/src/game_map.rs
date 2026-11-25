@@ -586,6 +586,10 @@ pub struct RouteStep {
     /// `carriers: false` (round 40, the fresh generation): the route's `bomb_rules: {carrier_targets: true}` makes no
     /// bomb carrier a target on this step (`crate::objectives::GameCompletion::carrier_targets`). Default true.
     pub carriers: bool,
+    /// `carriers: fight` (round 43, the owner: "it should force kill that darknut if the part of its observation is
+    /// lit up"): the carriers are this step's targets and the exit is none while one is named
+    /// (`crate::objectives::Objective::carriers_first`); `carriers` is true. Default false.
+    pub carrier_fight: bool,
     /// The way of a `stretch:` this step belongs to (None: a step both ways share).
     pub way: Option<Way>,
     /// The name of that stretch.
@@ -786,6 +790,7 @@ fn parse_step(v: &Value) -> Result<RouteStep, MapError> {
         }
     };
     let entry = one_of("entry", &STEP_ENTRIES, true)?.unwrap_or_default();
+    let carriers = carriers_key(v, &what)?;
     Ok(RouteStep {
         level: loc.level,
         room: loc.value,
@@ -802,19 +807,37 @@ fn parse_step(v: &Value) -> Result<RouteStep, MapError> {
         banked_kills: get(v, "banked_kills").map(|n| as_u8(n, &format!("{what}: banked_kills"))).transpose()?,
         grant: step_grant(get(v, "grant"), &what)?,
         sword: bool_key(v, "sword", &what)?,
-        carriers: bool_key(v, "carriers", &what)?,
+        carriers: carriers != Carriers::Off,
+        carrier_fight: carriers == Carriers::Fight,
         entry,
         way: None,
         stretch: None,
     })
 }
 
-/// A step's boolean key, true when absent (`sword:`, `carriers:`).
+/// A step's boolean key, true when absent (`sword:`).
 fn bool_key(v: &Value, key: &str, what: &str) -> Result<bool, MapError> {
     match get(v, key) {
         None => Ok(true),
         Some(Value::Bool(b)) => Ok(*b),
         Some(other) => err(format!("{what}: {key} must be true or false, got {other:?}")),
+    }
+}
+
+/// A step's `carriers:` (round 40, `fight` round 43): true when absent.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Carriers {
+    On,
+    Off,
+    Fight,
+}
+
+fn carriers_key(v: &Value, what: &str) -> Result<Carriers, MapError> {
+    match get(v, "carriers") {
+        None | Some(Value::Bool(true)) => Ok(Carriers::On),
+        Some(Value::Bool(false)) => Ok(Carriers::Off),
+        Some(Value::String(s)) if s == "fight" => Ok(Carriers::Fight),
+        Some(other) => err(format!("{what}: carriers must be true, false or fight, got {other:?}")),
     }
 }
 
@@ -4102,7 +4125,8 @@ mod tests {
         ] {
             assert!(load(&ROUTES_YAML.replacen(on, bad, 1)).unwrap_err().contains(error), "{bad}");
         }
-        // 3:0x5b's first pass (S -> N): a carrier step, unless its line says `carriers: false`.
+        // 3:0x5b's first pass (S -> N): a carrier step, unless its line says `carriers: false`; with `carriers: fight`
+        // (round 43) its carriers come before the exit.
         let first_pass = ROUTES_YAML
             .lines()
             .find(|l| l.contains("{level: 3, room: '0x5b'") && l.contains("entry: S") && l.contains("exit: N"))
@@ -4112,11 +4136,22 @@ mod tests {
         };
         let i = index(&map);
         assert!(map.routes["d3first"][i].carriers && crate::goals::step_goals(&map, "d3first", i).carriers);
-        let with = |extra: &str| ROUTES_YAML.replacen(first_pass, &first_pass.replacen('}', extra, 1), 1);
+        assert_eq!(map.routes["d3first"][i].carrier_fight, first_pass.contains("carriers: fight"));
+        let bare = first_pass.replacen(", carriers: fight", "", 1);
+        let with = |extra: &str| ROUTES_YAML.replacen(first_pass, &bare.replacen('}', extra, 1), 1);
         let out = load(&with(", carriers: false}")).unwrap();
         let j = index(&out);
         assert!(!out.routes["d3first"][j].carriers && !crate::goals::step_goals(&out, "d3first", j).carriers);
-        assert!(load(&with(", carriers: 2}")).unwrap_err().contains("carriers must be true or false"));
+        assert!(!out.routes["d3first"][j].carrier_fight);
+        let fight = load(&with(", carriers: fight}")).unwrap();
+        let j = index(&fight);
+        assert!(fight.routes["d3first"][j].carriers && fight.routes["d3first"][j].carrier_fight);
+        assert!(crate::goals::step_goals(&fight, "d3first", j).carriers);
+        let plain = load(&with("}")).unwrap();
+        assert!(plain.routes["d3first"][index(&plain)].carriers && !plain.routes["d3first"][index(&plain)].carrier_fight);
+        for bad in [", carriers: 2}", ", carriers: kill}"] {
+            assert!(load(&with(bad)).unwrap_err().contains("carriers must be true, false or fight"), "{bad}");
+        }
         assert!(!crate::goals::step_goals(&map, "d2first", 0).carriers, "d2first has no carrier targets");
     }
 

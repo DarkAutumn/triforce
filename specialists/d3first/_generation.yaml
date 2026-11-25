@@ -8,3 +8,8 @@ obs:
 reward:
   aimless_penalty: 0.002    # the lead's default (round40.md "What came after the report"); the owner may change it
 warm_start: null            # from scratch: no family's run under it
+# Clips on in every episode of every task (the owner, Nov 24-25: "the default choice is going to be clips=yes for all
+# [...] unless I specify otherwise"; the overworld's screen wrap everywhere, ow-ghini too, "to keep it simpler"; Patra:
+# "9x61 is VERY clippable with a patra in it"; no boss room has a clip, so it changes nothing there). The one
+# exception is the owner's: "I definitely don't want clipping in the equipment rooms" (equipment-room.yaml turns it off).
+clips: {enabled: true, off_share: 0}

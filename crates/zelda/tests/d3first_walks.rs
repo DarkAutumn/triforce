@@ -364,14 +364,28 @@ fn next_action(s: &S, objective: &Objective, nudge: u32) -> Action {
         return wait;
     }
     // The walk kills nothing: a crossing's bomb carriers (the route's `carrier_targets`, `Objective::carriers`) stay
-    // alive and the exit is its way.
+    // alive and the exit is its way. Where they come first (`carriers: fight`, round 43: 3:0x5b's first pass at cycle
+    // 0) the exit is no target but still the correct room: the walk takes the edge toward it, as a chain that leaves
+    // the carriers alive does.
     let carriers: Vec<Target> = objective
         .labels
         .iter()
         .filter(|(_, role)| objective.kind == ObjectiveKind::Move && matches!(role, Role::Monster { .. }))
         .map(|a| a.0)
         .collect();
-    let targets: Vec<Target> = objective.targets.iter().copied().filter(|t| !carriers.contains(t)).collect();
+    let mut targets: Vec<Target> = objective.targets.iter().copied().filter(|t| !carriers.contains(t)).collect();
+    if objective.carriers_first() {
+        let here = state.full_location();
+        targets.extend(objective.next_rooms.iter().filter(|r| r.level == here.level).filter_map(|r| {
+            match i16::from(r.value) - i16::from(here.value) {
+                -16 => Some(Target::Dir(Direction::N)),
+                16 => Some(Target::Dir(Direction::S)),
+                -1 => Some(Target::Dir(Direction::W)),
+                1 => Some(Target::Dir(Direction::E)),
+                _ => None,
+            }
+        }));
+    }
     let room = state.room();
     // A locked door is a way through while Link holds a key in a dungeon, as the objective's own search counts it.
     let locked: Vec<Direction> = if state.keys() > 0 && state.level() > 0 && !state.full_location().in_cave {
