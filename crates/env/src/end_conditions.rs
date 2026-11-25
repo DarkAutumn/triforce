@@ -38,13 +38,19 @@ pub const ENTER_ROOM_PREFIX: &str = "enter-room:";
 /// `zelda::objectives::Objective::carriers_first`): a bomb carrier left alive while its death may drop bombs. Training
 /// only; a chain goes on along the route (the exit is correct there).
 pub const CARRIER_LEFT: &str = "carrier-left";
+/// Round 43 (the owner: Manhandla and Dodongo must not leave bombs behind): a correct exit while wanted bomb drops lie
+/// in the room (`objective::bombs_left_behind`: the bag has room). Opt-in: only a task whose `endings` names it ends
+/// there (`rewards::score_step`), as the failure it gives; training only, a chain goes on (its room record counts
+/// `bomb_drop_left`).
+pub const DROPS_LEFT: &str = "drops-left";
 
 pub const SUCCESS_KINDS: [&str; 4] = [EXIT_CORRECT, TRIFORCE_COLLECTED, BOSS_DEAD_AND_HEART, GAME_COMPLETED];
 
 /// Central table of the other endings; successes come only from each specialist's `success` list.
-pub const DEFAULT_ENDINGS: [(&str, &str); 10] = [
+pub const DEFAULT_ENDINGS: [(&str, &str); 11] = [
     (EXIT_WRONG, SOFT_FAILURE),
     (CARRIER_LEFT, SOFT_FAILURE),
+    (DROPS_LEFT, SOFT_FAILURE),
     (MAX_STEPS, SOFT_FAILURE),
     (NO_ROOM_PROGRESS, SOFT_FAILURE),
     (NO_DAMAGE, SOFT_FAILURE),

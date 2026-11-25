@@ -806,9 +806,22 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
                     None
                 };
             let mut values = ram_randomization_values(spec, state.max_health(), &mut self.rng, chain);
-            // The room's own values (round 40: by the side the start enters from, its route entry: a curriculum
-            // start's is its track's seed state's).
-            apply_room_values(spec, state.full_location(), state_entry(seed_name), &mut self.rng, &mut values);
+            // A curriculum start past its track's first point is a moment inside the room's play (round 43, Tracks45):
+            // it keeps its bag, its kill counters and its drop cycle (a 3:0x5b first-pass point after the kill stays at
+            // cycle 1), and takes only the hearts draw (`start_states::track_point_values`). A seed start, or a track's
+            // first point (the room's entry), draws the room's own values (round 40: by the side the start enters
+            // from, its route entry: a track's is its seed state's), then the forced-drop counters and the drop cycle
+            // where the room states no cycle (round 43, `drop_state: real`), as real play brings them to a door.
+            if self.curriculum_tag.as_ref().is_some_and(|tag| tag.1 > 0) {
+                crate::start_states::track_point_values(&mut values);
+            } else {
+                let (at, entry) = (state.full_location(), state_entry(seed_name));
+                apply_room_values(spec, at, entry, &mut self.rng, &mut values);
+                if spec.drop_state.is_some() {
+                    let table = self.drop_table()?;
+                    crate::start_states::apply_drop_state(spec, &table, at, entry, &mut self.rng, &mut values);
+                }
+            }
             values
         };
         if !values.is_empty() {
@@ -818,7 +831,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         let spec = &self.config.ram_randomization;
         self.drop_bombs = self.forced_drops
             && spec.drop_bombs.is_some_and(|p| rand::RngExt::random::<f64>(&mut self.rng) < p);
-        if let Some(armed) = self.arm_bomb_drop() {
+        if let Some(armed) = self.arm_bomb_drop()? {
             state = armed;
         }
         let entry_name = entry_name.as_deref().unwrap_or(&name);
@@ -925,17 +938,37 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
 
     /// With the episode's forced bomb drop ([`SpecialistEnv::drop_bombs`]) and a monster left in the room (alive or
     /// dying: the last hand's death sparkle ends in the drop, asm:Obj_EndMetastate), arms the game's help drop as
-    /// bombs (`HelpDropCount` $0A, `IsHelpDropBomb` 1; asm:Drop_SetUpItem) unless it is; any harm to Link clears both
-    /// (asm:Link_BeHarmed), so this runs after every step. The state written, None when nothing was.
-    fn arm_bomb_drop(&mut self) -> Option<Arc<GameView>> {
+    /// bombs (`HelpDropCount` $0A, `IsHelpDropBomb` set; asm:Drop_SetUpItem) unless it is; any harm to Link clears both
+    /// (asm:Link_BeHarmed), so this runs after every step. Under `drop_state: real` (round 43, the owner: "nothing
+    /// unreal") the three counters are a real armed triple (`start_states::armed_drop_values`: `$627` with them as the
+    /// game held it when a bomb drop was armed), at the reset and at every re-arm; without it the two bytes alone, as
+    /// before (`d2first`'s tasks). The state written, None when nothing was.
+    fn arm_bomb_drop(&mut self) -> Result<Option<Arc<GameView>>, EnvError> {
         let state = self.session.state();
         if !self.drop_bombs
             || state.enemies.is_empty()
             || (state.help_drop_count() == 10 && state.help_drop_is_bombs())
         {
-            return None;
+            return Ok(None);
         }
-        Some(self.session.apply_ram(&[(Var::HelpDropCount, 10), (Var::HelpDropValue, 1)]).clone())
+        let values = if self.config.ram_randomization.drop_state.is_some() {
+            let table = self.drop_table()?;
+            crate::start_states::armed_drop_values(&table, &mut self.rng).to_vec()
+        } else {
+            vec![(Var::HelpDropCount, 10), (Var::HelpDropValue, 1)]
+        };
+        Ok(Some(self.session.apply_ram(&values).clone()))
+    }
+
+    /// The table `drop_state: real` draws from ([`GameData::drop_states`]); refused when the checkout has none.
+    fn drop_table(&self) -> Result<Arc<crate::start_states::DropStates>, EnvError> {
+        self.data.drop_states.clone().ok_or_else(|| {
+            EnvError::Config(crate::config::ConfigError(format!(
+                "{}: ram_randomization.drop_state needs {} (scripts/experiments/r43_drop_state.py build)",
+                self.config.name,
+                crate::config::DROP_STATE_FILE
+            )))
+        })
     }
 
     /// The session's disabled kinds for Link's state: the config's `items` (bombs by [`crate::config::BombUse`],
@@ -1174,7 +1207,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             self.objectives.as_ref().expect("episode started"),
             change.previous.full_location(),
         );
-        let state = self.arm_bomb_drop().unwrap_or(state);
+        let state = self.arm_bomb_drop()?.unwrap_or(state);
         self.left_with = cheats.left_with;
         let taken = self.hearts.taken;
         self.hearts.follow(&HeartView::of(&state), &change);

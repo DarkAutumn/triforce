@@ -7,12 +7,15 @@
 #     scripts/experiments/r43_perf.sh REP CONFIG...      (REP: the repeat's number, part of the run id)
 #     OLD=/path/to/worktree scripts/experiments/r43_perf.sh REP base   (the same command from another checkout)
 #
-# CONFIG: parts joined by +, e.g. g8+eager: base (this tree's default serving: CUDA graphs since Nov 25) | w256 |
-# notry | noobs | g8 (8 games, the same decisions a game an iteration) | eager (the served network's eager forward
-# and 5 ms window, as before Nov 25) | gather1 (eager, 1 ms window) | alt (rollouts alternate graphs and eager: both
-# under the same load) | audit (every graphed answer checked against the eager forward) | rust (the old network,
-# zelda-256, played by the Rust actor, the task without threat and chase).  Every job is queued detached; the units
-# are printed (triforce job wait UNIT).  scripts/experiments/r43_perf_read.py reads the runs.
+# CONFIG: parts joined by +, e.g. g8+eager: base (this tree's default serving: CUDA graphs since Nov 25, one staged
+# copy a batch and no hit logits in the answers) | w256 | notry | fam | noobs | g8 (8 games, the same decisions a game
+# an iteration) | gohma | others | walkers | overworld (those teachers' shapes) | eager (the served network's eager
+# forward and 5 ms window, as before Nov 25) | gather1 (eager, 1 ms window) | alt (rollouts alternate graphs and
+# eager: both under the same load) | audit (every graphed answer checked against the eager forward) | plain (graphs
+# as merged on Nov 25 morning: a copy an array, hit logits answered) | staging | nostaging | hits | nohits | cap (torch
+# at most 40% of the card: the suites keep their memory) | rust (the old network, zelda-256, played by the Rust
+# actor, the task without threat and chase).  Every job is queued detached; the units are printed (triforce job wait
+# UNIT).  scripts/experiments/r43_perf_read.py reads the runs.
 set -euo pipefail
 rep=${1:?usage: r43_perf.sh REP CONFIG...}
 shift
@@ -32,14 +35,26 @@ for config in "$@"; do
             w256) args+=(--arch-config '{"hidden_dim": 256}') ;;
             notry) args=(--families darknut@d3first --state-route d3first --arch hitnet --arch-config "$gen"
                          --aux hit=hit:0.5) ;;
+            fam) args=(--families darknut@d3first --state-route d3first --arch hitnet --arch-config "$gen"
+                       --aux hit=hit:0.5 --try-others 4:0.25) ;;
             noobs) args=(--families "darknut@d3first=specialists/experiments/r43-perf/darknut-noobs.yaml"
                          --state-route d3first --arch hitnet --arch-config "$bare" --aux hit=hit:0.5
                          --try-others 4:0.25) ;;
             g8) games=8 steps=6552 ;;
-            eager) env=(env TRIFORCE_SERVE_GRAPHS=0) ;;
-            gather1) env=(env TRIFORCE_SERVE_GRAPHS=0 TRIFORCE_SERVE_GATHER=0.001) ;;
-            alt) env=(env TRIFORCE_SERVE_ALTERNATE=1) ;;
-            audit) env=(env TRIFORCE_SERVE_AUDIT=1) ;;
+            gohma) args=(--group boss-gohma) games=8 steps=4096 ;;
+            others) args=(--group others) games=10 steps=8192 ;;
+            walkers) args=(--group walkers) games=18 steps=14742 ;;
+            overworld) args=(--group overworld) games=20 steps=16384 ;;
+            cap) env+=(TRIFORCE_GPU_FRACTION=0.4) ;;
+            eager) env+=(TRIFORCE_SERVE_GRAPHS=0) ;;
+            gather1) env+=(TRIFORCE_SERVE_GRAPHS=0 TRIFORCE_SERVE_GATHER=0.001) ;;
+            alt) env+=(TRIFORCE_SERVE_ALTERNATE=1) ;;
+            audit) env+=(TRIFORCE_SERVE_AUDIT=1) ;;
+            plain) env+=(TRIFORCE_SERVE_STAGING=0 TRIFORCE_SERVE_HITS=1) ;;
+            staging) env+=(TRIFORCE_SERVE_STAGING=1) ;;
+            nostaging) env+=(TRIFORCE_SERVE_STAGING=0) ;;
+            hits) env+=(TRIFORCE_SERVE_HITS=1) ;;
+            nohits) env+=(TRIFORCE_SERVE_HITS=0) ;;
             rust) args=(--families "darknut@d3first=specialists/experiments/r43-perf/darknut-noobs.yaml"
                         --state-route d3first --arch zelda --try-others 4:0.25) ;;
             *) echo "r43_perf.sh: no config $part" >&2; exit 2 ;;
@@ -48,7 +63,7 @@ for config in "$@"; do
     tag=${OLD:+old-}${config//+/-}
     "$here/.venv/bin/triforce" job run --agent Perf43 --task perf --subtask "$tag-r$rep" --express --timeout 10m \
         --desc "Speed: the darknut teacher's recipe ($tag), $iterations iterations of $steps steps, $games games." \
-        --detach -- ${env[@]+"${env[@]}"} .venv/bin/python -m triforce.lab.train --name "r43-perf-$tag" \
+        --detach -- ${env[@]+env "${env[@]}"} .venv/bin/python -m triforce.lab.train --name "r43-perf-$tag" \
         --run-id "r$rep" "${args[@]}" --parallel "$games" --steps-per-update "$steps" --iterations "$iterations" \
         --seed 4101 --save-every 1000 --models-dir "$tree/target/r43-perf/models" 2>&1 | tail -n 1
 done

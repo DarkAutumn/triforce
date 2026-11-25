@@ -68,6 +68,7 @@ from .rehearse import Rehearsal
 
 REFERENCE = Path(__file__).with_name('reference.json')
 KIND = 'lab-train'          # the plan kind of a lab run's log folder
+GPU_FRACTION_ENV = 'TRIFORCE_GPU_FRACTION'  # a measurement's cap on torch's share of the card (unset: none)
 # The run's numbers (besides the family's own) every family's progress event carries: the teacher term and the
 # auxiliary losses are the one network's.
 SHARED_METRICS = ('losses/teacher_kl', 'charts/teacher_agreement', 'losses/approx_kl', 'losses/policy_loss',
@@ -540,8 +541,10 @@ def serving_text(network, served: dict) -> str:
         return "the Rust actor plays the network (nothing served)"
     window = f"{served['gather'] * 1000:g} ms batch window"
     if served['forward'] == 'graphs':
-        return (f"CUDA graphs on {served['device']}, each batch size captured at the first rollout ({window}; "
-                f"TRIFORCE_SERVE_GRAPHS=0 serves eagerly)")
+        extra = ''.join(part for part, on in ((', one staged copy a batch', served.get('staged')),
+                                              (', no hit logits answered', served.get('hits') is False)) if on)
+        return (f"CUDA graphs on {served['device']}, each batch size captured at the first rollout{extra} "
+                f"({window}; TRIFORCE_SERVE_GRAPHS=0 serves eagerly)")
     return f"the eager forward on {served['device']} ({window})"
 
 
@@ -568,6 +571,10 @@ def main(argv=None) -> Path:
     # Its learner uses the GPU beside the rollouts' server: the server captures its CUDA graphs only during the first
     # rollout, while the learner waits for it (``nets.serve.learner_process``).
     learner_process(graphs=True)
+    if os.environ.get(GPU_FRACTION_ENV) and torch.cuda.is_available():
+        # A measurement's cap (round40.md "Where a teacher's time goes"): torch's allocator stops at this share of
+        # the card, so the suites beside it keep their memory; an allocation past it fails as out of memory.
+        torch.cuda.set_per_process_memory_fraction(float(os.environ[GPU_FRACTION_ENV]))
     if args.mode == 'imitate' and args.teacher_coeff <= 0:
         args.teacher_coeff = 1.0
     if args.actor == 'teacher' and args.mode != 'imitate':
@@ -772,6 +779,9 @@ def main(argv=None) -> Path:
             state['iteration'], state['steps'] = iteration, result.total_steps
             metrics = {**result.rollout.summary(), **result.stats, **collector.serve_stats,
                        **collector.family_metrics()}
+            if torch.cuda.is_available():       # the learner's and the served copy's memory (torch's cache, graphs)
+                metrics['charts/gpu_reserved_gb'] = torch.cuda.memory_reserved() / 2 ** 30
+                metrics['charts/gpu_peak_reserved_gb'] = torch.cuda.max_memory_reserved() / 2 ** 30
             stop = stopper is not None and stopper.update(network, iteration, metrics)
             state['metrics'] = metrics
             state['rollout_steps'] += metrics.get('rollout/steps', 0.0)

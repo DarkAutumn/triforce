@@ -10,7 +10,7 @@
 
 use crate::critic::REWARD_PROFILES;
 use crate::end_conditions::{
-    DEFAULT_ENDINGS, ENTER_ROOM_PREFIX, MAX_STEPS, NO_DAMAGE, NO_ROOM_PROGRESS, SUCCESS_KINDS,
+    DEFAULT_ENDINGS, DROPS_LEFT, ENTER_ROOM_PREFIX, MAX_STEPS, NO_DAMAGE, NO_ROOM_PROGRESS, SUCCESS_KINDS,
     validate_success_kind,
 };
 use crate::heart_value::HeartValues;
@@ -755,7 +755,8 @@ impl ItemsConfig {
 /// inclusive ranges; `full_hp`/`chain_hp` shares of resets (see `start_states::ram_randomization_values`);
 /// `bombs_share` the share of resets that draw `bombs` (the rest keep the start state's own count, what the route
 /// carries there: none in Dungeon 2; round 19); `help_count: [lo, hi]` a damage-free kill streak (`$50`, 0-9, and
-/// `$627` with it, no forced drop armed), so the 10th kill (a bomb kill arms a forced bomb drop) comes up in training.
+/// `$627` with it, no forced drop armed), so the 10th kill (a bomb kill arms a forced bomb drop) comes up in training;
+/// `drop_state: real` (round 43) the forced-drop counters as real play holds them at a door, and the drop cycle.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RamRandomization {
@@ -773,6 +774,15 @@ pub struct RamRandomization {
     pub keys: Option<(i64, i64)>,
     #[serde(default)]
     pub help_count: Option<(i64, i64)>,
+    /// `drop_state: real` (round 43, the owner, Nov 25: every room but 3:0x5b from S randomized, "closer to real values
+    /// than uniform"): at a seed reset the forced-drop counters (`$627` WorldKillCount, `$50` HelpDropCount, `$51`
+    /// IsHelpDropBomb) are a triple real play held at a room entry of the start's kind of door
+    /// (`start_states::drop_state_values`, `triforce/drop_state.json`) in place of the `help_count` draw, and the drop
+    /// cycle (`$52A` WorldKillCycle) is drawn 0-9; after every other draw. An entry listed in `room_kill_cycle`
+    /// (3:0x5b from S) keeps its own cycle and the `help_count` streak, drawn exactly as without this key; a curriculum
+    /// start keeps the counters and the cycle its track's state holds (mid-room: they are part of its play so far).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub drop_state: Option<String>,
     /// `room_kills: {'(5, 0x05)': [1, 5]}` (round 24): a staged start, training only (`EnvOptions::staged_kills`):
     /// the room's kills banked before its entry (`LevelKillCounts`, asm:RoomHistory_ModifyObjCountUW), so the game
     /// itself makes that many fewer monsters (the Olive Garden's 6 Blue Darknuts, beyond the explorer and a new
@@ -884,6 +894,9 @@ impl RamRandomization {
                     "hp: bounds must satisfy 0 < min <= max <= 1 (or 'max'), got [{lo}, {hi}]"
                 ));
             }
+        }
+        if self.drop_state.as_deref().is_some_and(|d| d != "real") {
+            return Err(format!("drop_state: 'real' is the one rule, got {:?}", self.drop_state));
         }
         for (key, value, max) in [("bombs", self.bombs, 255), ("keys", self.keys, 255), ("help_count", self.help_count, 9)] {
             if let Some((lo, hi)) = value
@@ -1276,6 +1289,12 @@ impl SpecialistConfig {
                     ),
                 ));
             }
+            if ending == DROPS_LEFT && ![HARD_FAILURE, SOFT_FAILURE].contains(&outcome.as_str()) {
+                return Err(fail(
+                    "endings",
+                    format!("ending {ending:?} is switched on by naming it, as a failure (round 43), got {outcome:?}"),
+                ));
+            }
         }
         if !REWARD_PROFILES.contains(&self.reward_profile.as_str()) {
             return Err(fail(
@@ -1515,12 +1534,19 @@ pub struct GameData {
     /// (`triforce/entry_rule.<ns>.json`, written by `scripts/experiments/r43_seeds.py rule`): what a reset of a
     /// pre-entry start state may write there, values some play of the game can bring to the door and nothing else.
     pub entry_rules: HashMap<String, Arc<EntryRule>>,
+    /// Round 43: the forced-drop counters real play held at room entries (`triforce/drop_state.json`, built by
+    /// `scripts/experiments/r43_drop_state.py`), which a task's `ram_randomization.drop_state: real` draws from; None
+    /// without the file (a task that names it is then refused when its env is made).
+    pub drop_states: Option<Arc<crate::start_states::DropStates>>,
 }
 
 /// The repo root of this checkout (`crates/env/../..`).
 pub fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
+
+/// Round 43: the table `ram_randomization.drop_state: real` draws from ([`GameData::drop_states`]).
+pub const DROP_STATE_FILE: &str = "triforce/drop_state.json";
 
 /// A chain_hp key in a route state namespace: `d3first:1:0x44` (`ns` Some), else the room key.
 pub fn chain_key(ns: Option<&str>, location: MapLocation) -> String {
@@ -1753,6 +1779,11 @@ impl GameData {
                 entry_rules.insert(ns.unwrap_or("").to_owned(), Arc::new(parse_entry_rule(&read(&rel)?, &rel)?));
             }
         }
+        let drop_states = if root.join(DROP_STATE_FILE).exists() {
+            Some(Arc::new(crate::start_states::DropStates::parse(&read(DROP_STATE_FILE)?, DROP_STATE_FILE)?))
+        } else {
+            None
+        };
         let data = GameData {
             root: root.to_path_buf(),
             map: Arc::new(map),
@@ -1765,6 +1796,7 @@ impl GameData {
             states_dir: root.join(STATES_DIR),
             trajectories_dir: paths::data_dir("trajectories", &root.join("trajectories")),
             entry_rules,
+            drop_states,
         };
         data.cross_check()?;
         Ok(Arc::new(data))

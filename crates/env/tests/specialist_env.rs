@@ -1655,6 +1655,59 @@ fn curriculum_start_takes_the_seed_states_route_step() {
     assert_eq!(curriculum, (seed.route().0.to_owned(), seed.route().1));
 }
 
+/// A two-point track of `seed` (a TFZSTATE `seed`'s first playable frame after `MOVE N 4`, then the same frame with
+/// `point` written: a moment inside the room's play) under `dir/<seed>`, and darknut@d3first's env on it, every
+/// reset a curriculum start at the second point.
+fn track_point_env(nes: ZCore, dir: &std::path::Path, seed: &str, point: &[(Var, u8)]) -> Env {
+    let track = dir.join(seed);
+    std::fs::create_dir_all(&track).unwrap();
+    let store = TfzStore::new();
+    let mut s = session(nes);
+    load(&mut s, seed, LoadOptions::default());
+    s.act(Action::parse("MOVE N 4").unwrap()).unwrap();
+    store.save(&track.join("0000.state"), &s.snapshot()).unwrap();
+    s.apply_ram(point);
+    store.save(&track.join("0001.state"), &s.snapshot()).unwrap();
+    std::fs::write(track.join("trajectory.json"), format!(r#"{{"start_state": "{seed}", "success": true}}"#)).unwrap();
+    let spec = CurriculumSpec::new(dir.to_path_buf(), dir.join("progress.json"), 1.0, 0.8);
+    let task = SpecialistConfig::from_file(&common::repo().join("specialists/d3first/darknut.yaml"), Some(&data().map))
+        .expect("darknut@d3first");
+    let opts = EnvOptions { curriculum: Some(Curriculum::new(spec).unwrap().shared()), ..Default::default() };
+    SpecialistEnv::new(Arc::new(task), data().clone(), s.into_nes(), TfzStore::new(), opts).unwrap()
+}
+
+/// Round 43 (Tracks45; the lead: "a track start keeps its own mid-room state"): a curriculum start past its track's
+/// first point draws only the hearts. 3:0x5b's first pass, a point after the kill (cycle 1): every reset keeps cycle 1
+/// (the seed's `room_kill_cycle` would draw 0 half the time), no carrier is lit, the step is a plain crossing (no
+/// `carriers: fight` second kill) and its N exit ends `exit-correct`, never `carrier-left`. 3:0x59 from N, a point
+/// mid-fight with 6 bombs (the seed's `room_bomb_counts` would draw 4 or 8): every reset keeps 6.
+#[test]
+fn a_track_point_keeps_its_own_cycle_bag_and_counters() {
+    let Some(nes) = open_core() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let point = [(Var::WorldKillCycle, 1), (Var::HelpDropCount, 3), (Var::HelpDropValue, 0), (Var::KillStreak, 3)];
+    let mut env = track_point_env(nes, &dir.path().join("a"), "d3first_3_5bs_0", &point);
+    let mut endings = Vec::new();
+    for seed in 0..12 {
+        let (obs, info) = env.reset(Some(seed), None).unwrap();
+        assert!(info.start_state.as_deref().is_some_and(|n| n.ends_with("0001.state")), "{:?}", info.start_state);
+        let s = state(&env);
+        assert_eq!((s.world_kill_cycle(), s.help_drop_count(), s.kill_streak()), (1, 3, 3), "seed {seed}");
+        assert!(obs.entity_threat.iter().all(|row| row[row.len() - 1] == 0.0), "no carrier lit");
+        assert!(!objective(&env).carriers_first() && objective(&env).carriers().is_empty());
+        let infos = walk(&mut env, 80);
+        endings.push(infos.last().and_then(|i| i.ending().map(str::to_owned)));
+    }
+    assert!(endings.iter().all(|e| e.as_deref() != Some("carrier-left")), "{endings:?}");
+    assert!(endings.iter().any(|e| e.as_deref() == Some("exit-correct")), "{endings:?}");
+    let mut env = track_point_env(release(env), &dir.path().join("b"), "d3first_3_59n_0", &[(Var::Bombs, 6)]);
+    for seed in 0..12 {
+        env.reset(Some(seed), None).unwrap();
+        assert_eq!(state(&env).bombs(), 6, "seed {seed}: the track point's bag");
+    }
+    release(env);
+}
+
 // --- tests/test_nearby_items.py ---
 
 /// stalfos-keese-gel at 1_73s_v2 (one empty room) with Link hurt at (120, y) and `drops` (kind, x, y) placed in
@@ -1968,6 +2021,37 @@ fn forced_bomb_drop_arms_the_help_drop_in_training_envs_only() {
     }
 }
 
+/// Round 43 (`drop_state: real`, the owner: "nothing unreal"): a training reset that arms the bomb drop copies a real
+/// armed triple (`$627`, `$50` = $0A, `$51`) from the table, never a drawn kill count under the two written bytes; the
+/// re-arm after a step does the same.
+#[test]
+fn an_armed_bomb_drop_is_a_real_armed_triple() {
+    let Some(nes) = open_core() else { return };
+    let table = data().drop_states.clone().expect("triforce/drop_state.json");
+    let armed: BTreeSet<(u8, u8, u8)> = table.armed().map(|r| (r.0, r.1, r.2)).collect();
+    let opts = EnvOptions { start_state: Some("3_4dw_0".to_owned()), forced_drops: true, ..Default::default() };
+    let mut env = make_env_with(nes, "boss-manhandla", opts, |c| {
+        c.ram_randomization.drop_bombs = Some(1.0);
+        c.ram_randomization.drop_state = Some("real".into());
+    });
+    let triple = |env: &Env| {
+        let s = state(env);
+        (s.peek(0x627), s.peek(0x50), s.peek(0x51))
+    };
+    let mut seen = BTreeSet::new();
+    for seed in 0..40 {
+        env.reset(Some(seed), None).unwrap();
+        assert!(armed.contains(&triple(&env)), "seed {seed}: {:?} is no real armed triple", triple(&env));
+        seen.insert(triple(&env));
+        act(&mut env, "MOVE E 8");
+        if !state(&env).enemies.is_empty() {
+            assert!(armed.contains(&triple(&env)), "after a step: {:?}", triple(&env));
+        }
+    }
+    assert!(seen.len() >= 3, "several armed triples drawn: {seen:?}");
+    release(env);
+}
+
 /// `reward.heal_targets` (round 25): a heart pulls while Link is hurt, not at full health; a rupee never does.
 #[test]
 fn heal_targets_take_only_healing_drops_while_hurt() {
@@ -2085,6 +2169,53 @@ fn locked_door_reward_fires_once() {
         Some(REWARD_MEDIUM)
     );
     assert!(infos[hits[0]..].iter().any(|i| i.room == (6, 0x78, false)));
+}
+
+/// Round 43 (`endings: {drops-left: soft-failure}`, Manhandla's and Dodongo's tasks; the owner: never leave bombs
+/// behind): the same walk out of 6_79s with a dropped bomb pack written lying in the E part of the room (slot $B, type
+/// $60, item $00, its timer full; SETUP: RAM, after the reset, continued with `restore`). With the ending named and
+/// room in the bag the exit ends `drops-left`, a soft failure with no exit reward; with a full bag (nothing to take)
+/// or without the ending named it is `exit-correct` as before.
+#[test]
+fn leaving_wanted_bombs_behind_ends_drops_left_where_the_task_names_it() {
+    use zelda::Nes;
+    let Some(nes) = open_core() else { return };
+    let mut nes = Some(nes);
+    for (named, full, want) in [(true, false, "drops-left"), (true, true, "exit-correct"), (false, false, "exit-correct")] {
+        let mut env = make_env(nes.take().unwrap(), "stalfos-keese-gel", Some("6_79s_0"), |c| {
+            c.reward.item_targets = false;
+            c.reward.drops_first = false;
+            if named {
+                c.endings.insert("drops-left".into(), "soft-failure".into());
+            }
+        });
+        env.reset(Some(0), None).unwrap();
+        let max = env.session().state().bomb_max() as u8;
+        let mut snap = env.session().snapshot();
+        let slot = 0xB;
+        for (table, value) in [
+            (tables::OBJ_ID, 0x60),
+            (tables::OBJ_STATUS, item::BOMBS as u8),
+            (tables::ITEM_TIMER, 0xFF),
+            (tables::OBJ_POS_X, 0xC0),
+            (tables::OBJ_POS_Y, 0x80),
+        ] {
+            <ZCore as Nes>::poke_state(&mut snap.machine, (table.0 + slot) as u16, value);
+        }
+        <ZCore as Nes>::poke_state(&mut snap.machine, Var::Bombs.addr(), if full { max } else { 2 });
+        env.restore(&snap, "6_79s_0+bombs").unwrap();
+        assert!(env.session().state().items.iter().any(|it| it.id == item::BOMBS), "the bombs lie in the room");
+        let infos = walk(&mut env, 60);
+        let last = infos.last().unwrap();
+        assert_eq!(last.room, (6, 0x78, false), "named {named} full {full}");
+        assert_eq!(last.ending(), Some(want), "named {named} full {full}");
+        assert_eq!(has_term(last, "reward-new-location"), want == "exit-correct", "{:?}", last.rewards);
+        if want == "drops-left" {
+            assert_eq!(last.outcome(), Some("soft-failure"));
+            assert_eq!(term(last, PENALTY_TERMINAL_FAILURE), Some(-TERMINAL_FAILURE_PENALTY_VALUE));
+        }
+        nes = Some(release(env));
+    }
 }
 
 /// Same start, same RNG, same actions: PBRS on adds pbrs-movement outcomes, PBRS off has none, and every other
@@ -2928,8 +3059,9 @@ fn a_lying_clock_is_walked_round_while_a_wallmaster_lives() {
 /// `ram_randomization` of specialists/d3first/darknut.yaml) on real resets. Into 3:0x5b from S (`d3first_3_5bs_0`)
 /// the game's drop cycle (`$52A`, asm:Drop_SetUpItem) is 0 or 1, about half each; into 3:0x59 from N
 /// (`d3first_3_59n_0`) Link holds exactly 4 or 8 bombs, about half each. The rooms' other passes keep the family's
-/// draws: 0x5b from W its state's own cycle, 0x59 from S the `bombs` range. Round 44: d3first has one state per door
-/// (chain 0), so each door's one state is checked (three chains were before).
+/// draws: 0x5b from W the drop cycle `drop_state: real` draws (round 43: 0-9, no longer its state's own), 0x59 from S
+/// the `bombs` range. Round 44: d3first has one state per door (chain 0), so each door's one state is checked (three
+/// chains were before).
 #[test]
 fn darknut_d3first_starts_hold_the_dungeon_3_plan() {
     let Some(nes) = open_core() else { return };
@@ -2952,9 +3084,9 @@ fn darknut_d3first_starts_hold_the_dungeon_3_plan() {
     let full = bombs.iter().filter(|&&(b, _)| b == 8).count();
     assert!((30..=70).contains(&full), "0x59 from N: 8 bombs in {full} of 100");
 
-    let own = resets("d3first_3_5bw_0", &RamRandomization::default(), 1)[0].1;
     let last = resets("d3first_3_5bw_0", spec, 40);
-    assert!(last.iter().all(|&(_, c)| c == own), "0x5b from W keeps its state's cycle {own}: {last:?}");
+    let cycles: BTreeSet<u8> = last.iter().map(|&(_, c)| c).collect();
+    assert!(cycles.len() >= 5 && cycles.iter().all(|&c| c <= 9), "0x5b from W draws its cycle: {last:?}");
     let back = resets("d3first_3_59s_0", spec, 40);
     assert!(back.iter().any(|&(b, _)| b != 4 && b != 8), "0x59 from S draws `bombs`: {back:?}");
 }

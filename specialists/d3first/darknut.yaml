@@ -62,9 +62,6 @@ ram_randomization:
   - 0
   - 8
   bombs_share: 0.5
-  help_count:
-  - 0
-  - 9
   room_kills:
     (3, 0x5b, W):
     - 1

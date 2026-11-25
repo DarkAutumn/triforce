@@ -4,3 +4,17 @@
 # f"{family}@d3first" (lab.collect.task_yaml).
 extends: [../boss-dodongo.yaml, _generation.yaml]
 state_routes: [d3first]
+# Round 43 (the owner, Nov 25: "Same with dodongo's forced bomb drops. If we leave behind bombs after killing dodongo we
+# have to do a new training round to fix that"). His sword death (stunned by a blast) sets HelpDropCount and
+# IsHelpDropBomb to $0A: his own drop is then 4 bombs unless Link is hurt before the sparkle ends (asm:
+# Dodongo_CheckCollisions); the death by a second swallowed bomb drops from the table. A correct exit while those bombs lie
+# and the bag has room ends the episode `drops-left` (a failure, no exit reward; training only, a chain goes on);
+# `drops_first` makes them the target once he is dead; `drop_bombs` arms the bomb drop in half the training resets so
+# every death drops bombs there, a bomb death too, while a new network still kills him by feeding him (today's team:
+# bombs dropped in 887 of 999 visits, r40-2015-1k-d2).
+reward:
+  drops_first: true
+ram_randomization:
+  drop_bombs: 0.5
+endings:
+  drops-left: soft-failure

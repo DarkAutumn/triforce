@@ -11,7 +11,8 @@
 //!   harvested room entries alike, then a state of it by the entry's own selector, so a room's share does not depend
 //!   on how many files were harvested for it.
 //! - [`ram_randomization_values`]: reset-time hp/bombs/keys; [`apply_room_values`]: a listed room's own bombs and
-//!   drop cycle, by the side the start enters from.
+//!   drop cycle, by the side the start enters from; [`apply_drop_state`]: the forced-drop counters real play holds at
+//!   a door and the drop cycle (`drop_state: real`, round 43).
 //!
 //! States are opaque here: a [`StateStore`] turns names into emulator states and writes captures.  Python's
 //! `random` streams are not reproduced; every draw comes from the caller's RNG.
@@ -655,6 +656,128 @@ pub fn apply_room_values<R: Rng + ?Sized>(
     if let Some(cycles) = spec.room_kill_cycle_at(at, entry) {
         set(Var::WorldKillCycle, cycles[rng.random_range(0..cycles.len())]);
     }
+}
+
+/// The share of `drop_state: real` draws that take the kill count from real play's distribution at the start's kind
+/// of door; the rest take it uniform over 0-[`DROP_STATE_UNIFORM_KILLS`] (round 43, the owner, Nov 25: "closer to real
+/// values than uniform [...] somewhere between uniform and what we see in practice"). Two thirds real keeps the draw
+/// near what a route brings; the uniform third puts twice real play's share in the band where a fairy is one to six
+/// unhurt kills away (10-15), because a better network will be unhurt more often than the networks the table was
+/// played by. One table a kind of door (dungeon, overworld), never a table a door: a door's own values are those
+/// networks' habits (Dungeon 3 entered at 16+ kills 25.7% of the time, Dungeon 7 at 0 kills 61.2%).
+pub const DROP_STATE_REAL_SHARE: f64 = 2.0 / 3.0;
+/// The kill counts the uniform part of the draw spreads over: up to the fairy's (`$627` = 15: the next kill is the 16th).
+pub const DROP_STATE_UNIFORM_KILLS: u8 = 15;
+
+/// The forced-drop counters real play held at room entries (round 43, `triforce/drop_state.json`, built by
+/// `scripts/experiments/r43_drop_state.py` from Seeds43's scans of power-on replays): per kind of door, every triple
+/// (`$627` WorldKillCount, `$50` HelpDropCount, `$51` IsHelpDropBomb) seen with its count. A triple is written as play
+/// held it: the counters do not follow from one another (deaths that count for one and not the other, a forced drop
+/// spent, a fairy), so none is ever computed.
+#[derive(Clone, Debug, PartialEq, serde::Deserialize)]
+pub struct DropStates {
+    /// Level 1-9 doors.
+    pub dungeon: Vec<(u8, u8, u8, u32)>,
+    /// Level 0 doors, caves included.
+    pub overworld: Vec<(u8, u8, u8, u32)>,
+}
+
+impl DropStates {
+    /// Parses the table; refuses an empty kind, a zero count, a kill count 0-15 the kind has no triple for (the
+    /// uniform part of the draw needs one), or a HelpDropCount above $0A (the game caps it there).
+    pub fn parse(text: &str, rel: &str) -> Result<DropStates, crate::config::ConfigError> {
+        let fail = |msg: String| crate::config::ConfigError(format!("{rel}: {msg}"));
+        let table: DropStates = serde_json::from_str(text).map_err(|e| fail(e.to_string()))?;
+        for (kind, rows) in [("dungeon", &table.dungeon), ("overworld", &table.overworld)] {
+            if rows.is_empty() || rows.iter().any(|r| r.3 == 0 || r.1 > 10) {
+                return Err(fail(format!("{kind}: triples with a count, HelpDropCount at most $0A")));
+            }
+            if let Some(k) = (0..=DROP_STATE_UNIFORM_KILLS).find(|&k| !rows.iter().any(|r| r.0 == k)) {
+                return Err(fail(format!("{kind}: no triple with kill count {k}")));
+            }
+        }
+        if table.armed().next().is_none() {
+            return Err(fail("no triple with a bomb drop armed ($50 = $0A, $51 set): `drop_bombs` copies one".into()));
+        }
+        Ok(table)
+    }
+
+    /// The triples of a kind of door.
+    pub fn rows(&self, overworld: bool) -> &[(u8, u8, u8, u32)] {
+        if overworld { &self.overworld } else { &self.dungeon }
+    }
+
+    /// The triples with a forced bomb drop armed (`$50` = $0A, `$51` set), of both kinds of door: what a training
+    /// reset copies when the task arms that drop (`drop_bombs`, [`armed_drop_values`]).
+    pub fn armed(&self) -> impl Iterator<Item = &(u8, u8, u8, u32)> + Clone {
+        self.dungeon.iter().chain(&self.overworld).filter(|r| r.1 >= 10 && r.2 != 0)
+    }
+}
+
+/// A real triple for a door of the kind `overworld` says ([`DropStates`]): the kill count by real play's distribution
+/// with probability [`DROP_STATE_REAL_SHARE`], else uniform over 0-[`DROP_STATE_UNIFORM_KILLS`]; then a triple with that
+/// kill count at its real frequency among them. The writes: `$627`, `$50`, `$51`.
+pub fn drop_state_values<R: Rng + ?Sized>(table: &DropStates, overworld: bool, rng: &mut R) -> [(Var, u8); 3] {
+    let rows = table.rows(overworld);
+    let kills = (rng.random::<f64>() >= DROP_STATE_REAL_SHARE).then(|| rng.random_range(0..=DROP_STATE_UNIFORM_KILLS));
+    let pool = rows.iter().filter(move |r| kills.is_none_or(|k| r.0 == k));
+    let row = pick_by_count(pool, rng);
+    [(Var::KillStreak, row.0), (Var::HelpDropCount, row.1), (Var::HelpDropValue, row.2)]
+}
+
+/// A real triple with a bomb drop armed ([`DropStates::armed`], at its real frequency among them), for a training reset
+/// whose task arms that drop (`drop_bombs`; round 43, the owner: "nothing unreal"): `$627` comes with `$50` = $0A and
+/// `$51` as the game held them, never a drawn kill count under two written bytes. The writes: `$627`, `$50`, `$51`.
+pub fn armed_drop_values<R: Rng + ?Sized>(table: &DropStates, rng: &mut R) -> [(Var, u8); 3] {
+    let row = pick_by_count(table.armed(), rng);
+    [(Var::KillStreak, row.0), (Var::HelpDropCount, row.1), (Var::HelpDropValue, row.2)]
+}
+
+/// One of `rows`, each as likely as its count.
+fn pick_by_count<'a, R: Rng + ?Sized>(
+    rows: impl Iterator<Item = &'a (u8, u8, u8, u32)> + Clone,
+    rng: &mut R,
+) -> &'a (u8, u8, u8, u32) {
+    let mut pick = rng.random_range(0..rows.clone().map(|r| u64::from(r.3)).sum::<u64>());
+    rows.into_iter()
+        .find(|r| {
+            let take = pick < u64::from(r.3);
+            pick = pick.saturating_sub(u64::from(r.3));
+            take
+        })
+        .expect("the pick lies within the counts")
+}
+
+/// `drop_state: real` at a seed reset into `at` from `entry` (round 43; the owner: every room but 3:0x5b from S
+/// randomized): the `help_count` streak among `values` is replaced by a real triple of the door's kind
+/// ([`drop_state_values`]) and the drop cycle `$52A` drawn 0-9 (a hit zeroes the counters and not the cycle, so every
+/// pair is one play can bring), after every other draw. An entry listed in `room_kill_cycle` keeps its own cycle and
+/// streak and draws nothing here (3:0x5b from S: its random stream as without the key). Nothing without the key.
+pub fn apply_drop_state<R: Rng + ?Sized>(
+    spec: &crate::config::RamRandomization,
+    table: &DropStates,
+    at: MapLocation,
+    entry: Option<&str>,
+    rng: &mut R,
+    values: &mut Vec<(Var, u8)>,
+) {
+    if spec.drop_state.is_none() || spec.room_kill_cycle_at(at, entry).is_some() {
+        return;
+    }
+    values.retain(|(v, _)| {
+        !matches!(v, Var::KillStreak | Var::HelpDropCount | Var::HelpDropValue | Var::WorldKillCycle)
+    });
+    values.extend(drop_state_values(table, at.level == 0, rng));
+    values.push((Var::WorldKillCycle, rng.random_range(0..=9)));
+}
+
+/// A curriculum start past its track's first point (round 43, Tracks45; the lead: "a track start keeps its own
+/// mid-room state"): of the reset's family draws only the hearts stay (`hp`); the bag, the keys and the kill counters
+/// are the track state's own, and no room value or drop state is drawn for it. A 3:0x5b first-pass point after the
+/// kill keeps cycle 1 (no carrier lit, no second kill asked); a 3:0x59 point mid-fight keeps the bag its track held.
+/// The draws are still made (the random stream as a seed start's up to here); only their writes are dropped.
+pub fn track_point_values(values: &mut Vec<(Var, u8)>) {
+    values.retain(|(v, _)| matches!(v, Var::HeartsAndContainers | Var::PartialHearts));
 }
 
 /// A harvested start's values (round 43, Carrier43): it keeps the hearts, items and room its run handed over, but a
@@ -1302,5 +1425,88 @@ mod tests {
             assert!(harvested_room_values(&spec, at, entry, &mut r).is_empty(), "{at} {entry:?}");
         }
         assert_eq!(r.random::<u64>(), b.random::<u64>(), "no draw for an entry not listed");
+    }
+
+    /// Round 43 (`drop_state: real`, the owner: every room randomized but 3:0x5b from S, "closer to real values than
+    /// uniform"), on the shipped table (`triforce/drop_state.json`):
+    /// - 3:0x5b from S keeps its `room_kill_cycle` and its `help_count` streak: the same values, value for value, and
+    ///   the same random stream after them, with or without the key;
+    /// - elsewhere only triples real play held at that kind of door are written (no counter computed from another),
+    ///   the kill counts' bands at 2/3 real + 1/3 uniform over 0-15, every drop cycle 0-9;
+    /// - a track start keeps its own counters and cycle (the streak's draw still made, nothing written).
+    #[test]
+    fn the_drop_state_is_real_play_everywhere_but_where_the_room_states_it() {
+        let table = DropStates::parse(include_str!("../../../triforce/drop_state.json"), "drop_state.json").unwrap();
+        let before = RamRandomization {
+            hp: Some((HpBound::Fraction(0.15), HpBound::Max)),
+            bombs: Some((0, 8)),
+            bombs_share: Some(0.5),
+            help_count: Some((0, 9)),
+            room_kill_cycle: [("(3, 0x5b, S)".to_owned(), vec![0, 1])].into(),
+            ..Default::default()
+        };
+        let after = RamRandomization { drop_state: Some("real".into()), ..before.clone() };
+        let draw = |spec: &RamRandomization, r: &mut ChaCha8Rng, at, entry| {
+            let mut values = ram_randomization_values(spec, 3, r, None);
+            apply_room_values(spec, at, entry, r, &mut values);
+            apply_drop_state(spec, &table, at, entry, r, &mut values);
+            values
+        };
+        let one = |values: &[(Var, u8)], var: Var| values.iter().filter(|p| p.0 == var).map(|p| p.1).next_back();
+        let (r5b, r4d, ow) =
+            (MapLocation::new(3, 0x5b, false), MapLocation::new(3, 0x4d, false), MapLocation::new(0, 0x77, false));
+        let (mut a, mut b) = (rng(), rng());
+        for _ in 0..300 {
+            assert_eq!(draw(&before, &mut a, r5b, Some("S")), draw(&after, &mut b, r5b, Some("S")));
+        }
+        assert_eq!(a.random::<u64>(), b.random::<u64>(), "3:0x5b from S draws nothing more");
+        let bands = [(0u8, 0u8), (1, 3), (4, 9), (10, 15), (16, 255)];
+        for (at, entry, overworld) in [(r4d, Some("W"), false), (ow, Some("E"), true)] {
+            let rows = table.rows(overworld);
+            let total: f64 = rows.iter().map(|r| f64::from(r.3)).sum();
+            let mut r = rng();
+            let (n, mut kills, mut cycles) = (30_000, [0u32; 5], [0u32; 10]);
+            for _ in 0..n {
+                let values = draw(&after, &mut r, at, entry);
+                let triple = (
+                    one(&values, Var::KillStreak).unwrap(),
+                    one(&values, Var::HelpDropCount).unwrap(),
+                    one(&values, Var::HelpDropValue).unwrap(),
+                );
+                assert!(rows.iter().any(|row| (row.0, row.1, row.2) == triple), "{triple:?} is no real triple");
+                kills[bands.iter().position(|&(lo, hi)| (lo..=hi).contains(&triple.0)).unwrap()] += 1;
+                cycles[usize::from(one(&values, Var::WorldKillCycle).unwrap())] += 1;
+            }
+            for (i, &(lo, hi)) in bands.iter().enumerate() {
+                let real = rows.iter().filter(|row| (lo..=hi).contains(&row.0)).map(|row| f64::from(row.3)).sum::<f64>();
+                let uniform = f64::from(hi.min(15).saturating_sub(lo) + 1) * f64::from(u8::from(lo <= 15)) / 16.0;
+                let want = DROP_STATE_REAL_SHARE * real / total + (1.0 - DROP_STATE_REAL_SHARE) * uniform;
+                let got = f64::from(kills[i]) / f64::from(n);
+                assert!((got - want).abs() < 0.015, "overworld {overworld}: kills {lo}-{hi}: {got:.3} against {want:.3}");
+            }
+            assert!(cycles.iter().all(|&c| (2_600..3_400).contains(&c)), "{cycles:?}");
+        }
+        // Dungeon doors only: a forced drop armed as bombs ($51) is real at a dungeon door and never at an overworld one.
+        assert!(table.dungeon.iter().any(|r| r.2 != 0) && table.overworld.iter().all(|r| r.2 == 0));
+        // A track point keeps its own state: only the hearts draw is written.
+        let mut values = ram_randomization_values(&after, 3, &mut rng(), None);
+        assert!(one(&values, Var::HelpDropCount).is_some() && one(&values, Var::HeartsAndContainers).is_some());
+        track_point_values(&mut values);
+        assert!(values.iter().all(|(v, _)| matches!(v, Var::HeartsAndContainers | Var::PartialHearts)), "{values:?}");
+        assert!(one(&values, Var::HeartsAndContainers).is_some(), "the hearts draw stays");
+        // A training reset that arms the bomb drop (`drop_bombs`): a real armed triple, at its real frequency.
+        let armed: Vec<(u8, u8, u8, u32)> = table.armed().copied().collect();
+        assert!(armed.iter().all(|r| r.1 == 10 && r.2 != 0 && r.0 >= 10), "{armed:?}");
+        let commonest = *armed.iter().max_by_key(|r| r.3).unwrap();
+        let mut r = rng();
+        let mut hits = 0;
+        for _ in 0..5_000 {
+            let [(k, kv), (h, hv), (b, bv)] = armed_drop_values(&table, &mut r);
+            assert_eq!((k, h, b), (Var::KillStreak, Var::HelpDropCount, Var::HelpDropValue));
+            assert!(armed.iter().any(|row| (row.0, row.1, row.2) == (kv, hv, bv)), "{kv} {hv} {bv} is no real armed triple");
+            hits += u32::from((kv, hv, bv) == (commonest.0, commonest.1, commonest.2));
+        }
+        let share = f64::from(commonest.3) / f64::from(armed.iter().map(|r| r.3).sum::<u32>());
+        assert!((f64::from(hits) / 5_000.0 - share).abs() < 0.03, "{hits} of 5000 against {share:.3}");
     }
 }

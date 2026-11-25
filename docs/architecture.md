@@ -1483,6 +1483,11 @@ A training config may name a truncation (`max-steps`, `no-damage`, `no-room-prog
 failure (`hard-failure` or `soft-failure`; anything else is refused): the episode then *terminates* as that failure,
 with the terminal failure penalty and no bootstrap (round 34: a boss that waits out the budget is not paid for
 surviving). No shipped family yaml does; chains and evaluation classify as before.
+A task may also name `drops-left` (round 43, Manhandla's and Dodongo's d3first tasks; only as a failure): a correct
+exit that leaves wanted bombs lying in the room (`objective::bombs_left_behind`: Link's own bombs below the bag's
+size, the drop not about to vanish) ends the episode as that failure, with no exit reward (`rewards::score_step`, the
+critic). Leaving a carrier alive where the route step says `carriers: fight` ends it `carrier-left` (a soft failure;
+`zelda::objectives::Objective::carriers_first`). Neither is a chain's: a chain goes on along the route.
 
 Endings, linger, the chain's stall counter and the visit metrics read `Change.observed` (hits, stuns and pickups
 seen in the step itself); only the critic and the bomb counts (`zelda::bombs::BombStats`) read the credited fields,
@@ -1668,6 +1673,26 @@ every step, so following an enemy that moves away pays again, and knockback rese
   earlier run had measured it) or failed. Its Eval tab lists every entry's result and, for a selected entry, the
   outcomes with their share of the evaluation, `108× (10.8%)`: of the chain's runs (where the failed runs ended),
   or of the family evaluation's episodes (start room and ending; `eval` event `by_room_failures`).
+- Each job's CPU and load (`triforce/jobload.py`, `JobLoads`; the owner, Nov 25): the GUI's process alone samples
+  every running job of this host every 3 s (`INTERVAL`; one sampler shared by the window's timer and the web view's
+  thread, rate-limited under a lock). A job's cgroup is read once from its wrapper's `/proc/<pid>/cgroup` (a
+  detached job's `tfjob-...service` unit; a job without one is followed by its wrapper's process tree through
+  `/proc/*/task/*/children`). **CPU** is the cgroup's `cpu.stat` `usage_usec` between two samples (cores, and their
+  share of `os.cpu_count()` threads); **load** is the count of its threads in state R (`cgroup.threads`, each
+  `/proc/<tid>/task/<tid>/stat`) smoothed as the kernel smooths its 1-minute average (`load * e + n * (1 - e)`, `e =
+  exp(-dt/60)`; first seen, as if it had run that many since its admission); **waiting** is `cpu.pressure` `some
+  avg10`. The machine's busy cores (`/proc/stat`) and load average beside the jobs' sums (an ended job's load still
+  in it, fading as the kernel's average still holds it) give what is outside the queue; over 3 cores
+  (`OUTSIDE_CORES`) for 60 s (`OUTSIDE_SECONDS`) warns, and only while over is `/proc/*/stat`
+  read, every 15 s (`OUTSIDE_SCAN`), to name the busiest process outside every job. A unit that ends, a missing
+  file, a vanished pid are skipped, never raised; an ended job keeps its last sample (`final`: total CPU time and
+  mean cores, when that sample came within 8 s of its end). Cost (Nov 25, at load 60): 3.3 ms of CPU a sample on
+  10 jobs of 40 threads (0.11% of a core at one sample in 3 s); the look at every process (650: 6-10 ms) adds under
+  0.07% while it runs. The card shows it at its first line's right (`job_load`, `fit_aside`: the longest variant
+  that fits beside the headline, so it is cut before anything else; the page's `.jload` shrinks first and
+  ellipsizes); the line over the list is `loads_line`.
+  Rates: `fmt_rate` is the one formatter of every counter, chain and evaluation rate, never below one (`s/test`,
+  `min/chain`, `h/chain` under one a second; `singular`).
 - Web view (`training-gui.py`, `WebState`/`WebServer`): beside the window (or alone, `--web-only`, no display
   needed) a stdlib `ThreadingHTTPServer` on `--web-host` (default `0.0.0.0`, every interface) port `--web-port`
   (default 22222; `--no-web` off) answers GET `/` (one page, no external assets, its first snapshot inlined) and
@@ -2017,11 +2042,24 @@ every step, so following an enemy that moves away pays again, and knockback rese
   as likely, in place of the `bombs` and `room_bombs` draws; `room_kill_cycle: {'(3, 0x5b, S)': [0, 1]}` holds the
   game's drop cycle (`$52A`, asm:Drop_SetUpItem) at one of the listed values (darknut@d3first's fresh-generation
   starts: 0x5b's first pass at 0, one Darknut's death drops bombs, or 1, it drops none).
+- The drop state as real play brings it (round 43, the fresh generation's `_generation.yaml`; the owner, Nov 25):
+  `ram_randomization: {drop_state: real}` replaces the `help_count` streak at a seed reset with a triple (`$627`,
+  `$50`, `$51`) real play held at a door of the same kind (dungeon, overworld), from `triforce/drop_state.json`
+  (`scripts/experiments/r43_drop_state.py build` over Seeds43's power-on scans: every triple with its count), the
+  kill count two thirds by real play's distribution and a third uniform over 0-15
+  (`start_states::drop_state_values`, `DROP_STATE_REAL_SHARE`), and draws the drop cycle `$52A` 0-9; after every
+  other draw. An entry listed in `room_kill_cycle` (3:0x5b from S) keeps its cycle and its `help_count` streak, draw
+  for draw. Without the table a task that names it is refused at its first reset.
+- A curriculum start past its track's first point (round 43) keeps its own mid-room state: of the reset's draws only
+  the hearts are written (`start_states::track_point_values`): no bag, kill counters, drop cycle, room value
+  (`room_kill_cycle`, `room_bomb_counts`, `room_bombs`) or drop state. A track's first point draws as a seed start.
 - A forced bomb drop (round 25; boss-manhandla): `ram_randomization: {drop_bombs: P}` arms the game's help drop as
   bombs (`HelpDropCount` $0A, `IsHelpDropBomb` 1, asm:Drop_SetUpItem) in a share P of resets, at the reset and again
   after every step while a monster is in the room (harm to Link clears both), so the room's next drop (Manhandla's
   last hand) is 4 bombs, unless it is the 16th damage-free kill (a fairy). Only a training env draws it
   (`EnvOptions::forced_drops`, set by the training pool; Python `Env(..., forced_drops=True)`, `Env.drop_bombs`).
+  Under `drop_state: real` (round 43) each arming writes a real armed triple (`$627`, `$50` = $0A, `$51`) copied from
+  `triforce/drop_state.json` (`start_states::armed_drop_values`) instead of the two bytes alone.
 - Staged starts (round 24; darknut): `ram_randomization: {room_kills: {'(5, 0x05)': [1, 5]}, room_kills_share: 0.5}`
   banks k kills in `LevelKillCounts` before a pre-entry start's dungeon room is entered (`LoadOptions::banked_kills`,
   asm:RoomHistory_ModifyObjCountUW), so the game makes k fewer monsters and clearing the rest clears the room. Only a
@@ -2841,6 +2879,51 @@ has every flag and key).
   the ending's frame on the corpus's golden race, the state file, the command line of both forms. The real
   controller's buttons, the monitors, the sound device, the feel of the pacing and a whole game played by hand are
   the owner's to try.
+
+## The owner's takes and the solved rooms (`scripts/owner_takes.py`, `triforce/solved_rooms.py`, Nov 25)
+
+- **The takes** (`replays/owner/`): every replay the owner plays on `emu-zelda.py` (META `kind` `human`), under his
+  own file name, in `replays/owner/<room>/` (a whole game from power on: `replays/owner/game/`; the Darknut
+  lesson's three in `replays/owner/darknut/`). `scripts/owner_takes.py sync` (a queue job) finds every take under
+  `~/triforce-review/` by its META, wherever it lies and whatever it is called, copies the new ones (by SHA-1),
+  each verified first, archives them (`archive_replays.py --kind owner --keep-names`:
+  `/backup/triforce/replays/<version>/owner/<his name>.tfreplay.bz2`) and writes `replays/owner/INDEX.md` (a row a
+  take: room, entry, date, seed, frames, ending, `$524` against the route's layout for the door, chase flag, hearts
+  and items at control, cheats and overrides, replay version; a whole game: the rooms it passes with their first
+  frame in play) from `replays/owner/index.json` (each take's facts by SHA-1, so a whole game is read once). The
+  route's layout is `triforce/entry_rule.<namespace>.json`'s `planned` (`--entry-rule PATH` where the checkout has
+  none; "layout unknown" without one).
+- **The solved rooms** (`triforce/solved_rooms.yaml`, `docs/owner/solved-rooms.md`): an entry a room and entry side
+  (`5x47-S`; a cellar never: the loader refuses one), with the owner's words, the lead's description, the
+  conditions (`$524` the route brings, claimed for the route's layout or all), the cost, the takes (repository
+  paths), the phase test's rates and the **criteria**. `solved_rooms.load` checks the file against game.yaml (the
+  room, its exits) and the repository (the takes); `on_route` against `_native.route_steps`.
+- **A pass** (`solved_rooms.read_passes`): one visit of a room read frame by frame from any TFREPLAY: chain and
+  golden replays by their ROOM events (the 400 frames before each, for the `$524` the spawn reads), a take or a
+  power-on game from frame 0 (the frame-0 EDITs give a take's `$524` and `$60`). It opens on the first GameMode-5
+  frame in the room and closes on the first frame of a scroll (the side, from Link's last position), the stairs
+  (`cave`) or death; it keeps Link's position, the controller byte and whether he is mid-swing each frame, every
+  swing with the monsters ahead of him then, the hits (drops of his hearts), the entry side (the edge behind him;
+  `cave` after a cellar or cave mode, or out of a dungeon's mouth; a take's own META entry; `start` at a power-on
+  game's hand-over; from a start state with no transition seen, `cave` when he stands inside the room,
+  `zelda::room_entry::enters_inside`), and `cut` when the replay ends in it by its own stop (not counted).
+  `check(entry, pass)` applies the
+  criteria (`exit`, `hits`, `hold` with `gap` and `grace`, `directions`, `line` with `tolerance`, `bands`,
+  `swings` with `when: in_the_way`, `frames`).
+- **The comparison** (`triforce solved compare TEAM [TEAM ...]`, a queue job): each team's replay folders and
+  chain records (`*.jsonl`: out, hits, frames and deaths only; a visit's side from the room before it and
+  game.yaml's exits), read in parallel processes; one table a team (passes, out by the solved exit, hits a pass,
+  seconds and median frames beside the owner's, the solved way's rate in all and in the route's layout, each
+  criterion's rate) and the teams side by side; `--json` keeps it.
+- **The phase test** (`scripts/solved_phases.py ROOM`): scripted inputs (legs of a path, swings at fixed heights
+  or at a monster in the blade's reach) over thousands of seeds from the route step's entry states, loaded by
+  `LiveGame.load(..., layout='route')` (round 43's load rule: the route's `$524` for the door, the chase flag
+  50/50, the random phase from the seed), measured as a pass is; clean runs of all and by chase flag, frames,
+  which script saves the runs another loses; `--out` keeps takes. It needs a checkout with that load rule.
+- **Tested** (`tests/test_solved_rooms.py`): the file loads, every entry is on its route, every take named exists,
+  verifies and scores as solved; his pure-north take of 5x37 does not; a cellar and malformed entries are refused;
+  made-up passes against 5x47's criteria; chain records counted by entry side. `tests/test_backup_scripts.py`:
+  `--keep-names`.
 
 ## Sound (`crates/zcore/src/sound.rs`, `crates/zcore/src/tracks.rs`)
 
