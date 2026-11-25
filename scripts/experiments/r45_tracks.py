@@ -23,10 +23,12 @@ decision: ``LoadOptions::controllable``) through ``SpecialistEnv::reset`` as eve
 new RNG phase (``$18``-``$24``); the reset rule's draw (``$524``, the chase state, ``$4A``, ``$26``, ``$525``) and the
 fresh-room and banked-kill writes act only on a pre-entry state, which no ``NNNN.state`` is; the task's
 ``ram_randomization`` (hearts, bombs, help count, a listed room's values) is written as at any start.  So a curriculum
-start keeps the track's layout and every monster where the track had it, and redraws the random phase.  For each
-track and ``--points`` points spread over it (always its first and last decision), a real curriculum env of the
-family's task (``Env`` with a ``CurriculumSpec`` whose progress file pins the track's point there: ``stages`` = the
-track's length, so the start is that state exactly) is reset with ``--seeds`` seeds; checked: (a) the RAM after the
+start keeps the track's layout and every monster where the track had it, and redraws the random phase.  A curriculum
+start is never a track's ``0000.state`` (a track's point moves a stride earlier per stage and the track is complete,
+never drawn again, once it reaches 0; the room start is the seed state's own reset).  For each track and ``--points``
+points spread over decisions 1 to its last (both always among them), a real curriculum env of the family's task
+(``Env`` with a ``CurriculumSpec`` whose progress file pins the track's point there: ``stages`` = the track's length,
+so the start is that state exactly) is reset with ``--seeds`` seeds; checked: (a) the RAM after the
 reset equals the state file's but for the RNG registers (the layout and the monsters kept), with the explorer's
 config (no ``ram_randomization``, as the track was made); (b) the track's remaining actions played from there reach
 the track's own ending (``success``), the phase redrawn.  (b) is open-loop: a fight whose monsters walk by the
@@ -119,10 +121,10 @@ def table(roots: list, out: Path | None):
 
 
 def points_of(length: int, count: int) -> list[int]:
-    """``count`` decisions spread over a track of ``length``, its first and last always among them."""
-    if length <= count:
-        return list(range(length))
-    return sorted({round(i * (length - 1) / (count - 1)) for i in range(count)})
+    """``count`` decisions spread over 1 .. ``length - 1`` (a curriculum start's range), both ends among them."""
+    if length - 1 <= count:
+        return list(range(1, length))
+    return sorted({1 + round(i * (length - 2) / (count - 1)) for i in range(count)})
 
 
 def replay_point(config, track: Path, actions: list, length: int, point: int, seeds: list, files: list) -> dict:
@@ -142,10 +144,7 @@ def replay_point(config, track: Path, actions: list, length: int, point: int, se
         saved = bytes(Game(seed=0).load(str(files[point]), randomize_rng=False, controllable=True).ram)
         out = {'point': point, 'left': length - point, 'kept': 0, 'won': 0, 'endings': Counter(), 'differ': Counter()}
         for seed in seeds:
-            _, info = env.reset(seed=seed)
-            tag = (info.get('curriculum') or {})
-            if tag.get('index', point) != point:
-                raise SystemExit(f"{track.name}: the curriculum started at {tag} for point {point}")
+            env.reset(seed=seed)
             ram = bytes(env.state.ram)
             differ = [a for a in range(len(ram)) if a not in RNG and ram[a] != saved[a]]
             out['kept'] += not differ
@@ -190,8 +189,8 @@ def replay(root: Path, points: int, seeds: int, families: list | None, out: Path
     print(json.dumps({'tracks': len(results), 'recorded success': sum(bool(r['recorded_success']) for r in results),
                       'resets': resets, 'layout kept (RAM = file but the RNG)': kept,
                       'won from the last decision': f"{sum(p['won'] for p in last)}/{len(last) * seeds}",
-                      'won from the first decision': f"{sum(r['points'][0]['won'] for r in results)}/"
-                                                     f"{len(results) * seeds}"}))
+                      'won from the first point': f"{sum(r['points'][0]['won'] for r in results)}/"
+                                                  f"{len(results) * seeds}"}))
     if out:
         out.write_text(json.dumps(results, indent=1), encoding='utf-8')
     return 0 if kept == resets else 1
