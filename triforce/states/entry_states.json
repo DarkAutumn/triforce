@@ -2426,19 +2426,17 @@
   "in_cave": false,
   "entry": "N",
   "exit": "E",
-  "alternate": false,
-  "env_steps": 4695,
+  "way": null,
+  "walk": "261125-100336",
+  "env_steps": 7708,
   "attempts": 1,
-  "seconds": 12.503085886000001,
-  "steps": 5,
+  "seconds": 10.79661185,
+  "how": "explorer",
+  "steps": 11,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d3first --chains 0,1,2 --start-step 53 --last-step 54 --source triforce/states/d3first_0_45c_{chain}.state --out target/entry-states/r32c-s2/053-0_45c",
-  "keys": {
-   "was": 3,
-   "now": 2,
-   "by": "scripts/experiments/r40_route.py patch (round 40: 3:0x6b's key left, the Moldorm's taken, no kill before 3:0x5b)"
-  }
+  "attempt": 0,
+  "command": "python -m triforce.entry_states walk --route d3first --out target/r44/walk4 --start-step 52 --source target/r44/walk4/carry/d3first_4_03s_0.state --attempts 4 --iterations 6000 --patience 300"
  },
  {
   "file": "1_7fcave_0.state",
@@ -2473,19 +2471,17 @@
   "in_cave": false,
   "entry": "W",
   "exit": "N",
-  "alternate": false,
-  "env_steps": 3730,
+  "way": null,
+  "walk": "261125-100336",
+  "env_steps": 4340,
   "attempts": 1,
-  "seconds": 12.338196407,
-  "steps": 22,
+  "seconds": 8.808811878,
+  "how": "explorer",
+  "steps": 35,
   "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d3first --chains 0,1,2 --start-step 54 --last-step 55 --source triforce/states/d3first_0_55n_{chain}.state --out target/entry-states/r32c-s2/054-0_55n",
-  "keys": {
-   "was": 3,
-   "now": 2,
-   "by": "scripts/experiments/r40_route.py patch (round 40: 3:0x6b's key left, the Moldorm's taken, no kill before 3:0x5b)"
-  }
+  "attempt": 0,
+  "command": "python -m triforce.entry_states walk --route d3first --out target/r44/walk4 --start-step 52 --source target/r44/walk4/carry/d3first_4_03s_0.state --attempts 4 --iterations 6000 --patience 300"
  },
  {
   "file": "1_22c_0.state",
@@ -2520,19 +2516,17 @@
   "in_cave": false,
   "entry": "S",
   "exit": "E",
-  "alternate": false,
-  "env_steps": 3867,
-  "attempts": 1,
-  "seconds": 14.339899126,
-  "steps": 42,
-  "health": 4.5,
+  "way": null,
+  "walk": "261125-100336",
+  "env_steps": 17750,
+  "attempts": 4,
+  "seconds": 46.179506717,
+  "how": "explorer",
+  "steps": 24,
+  "health": 5.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d3first --chains 0,1,2 --start-step 55 --last-step 56 --source triforce/states/d3first_0_56w_{chain}.state --out target/entry-states/r32c-s2/055-0_56w",
-  "keys": {
-   "was": 3,
-   "now": 2,
-   "by": "scripts/experiments/r40_route.py patch (round 40: 3:0x6b's key left, the Moldorm's taken, no kill before 3:0x5b)"
-  }
+  "attempt": 1,
+  "command": "python -m triforce.entry_states walk --route d3first --out target/r44/walk4 --start-step 52 --source target/r44/walk4/carry/d3first_4_03s_0.state --attempts 4 --iterations 6000 --patience 300"
  },
  {
   "file": "1_23w_0.state",
@@ -2567,19 +2561,22 @@
   "in_cave": false,
   "entry": "W",
   "exit": "E",
-  "alternate": false,
-  "env_steps": 3257,
-  "attempts": 1,
-  "seconds": 11.744380372,
-  "steps": 18,
-  "health": 5.0,
+  "way": null,
+  "walk": "261125-100336",
+  "env_steps": 328899,
+  "attempts": 4,
+  "seconds": 655.3530264460001,
+  "how": "explorer",
+  "failures": {
+   "exit-wrong": 1451,
+   "kills": 2551,
+   "death": 193
+  },
+  "steps": 106,
+  "health": 3.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d3first --chains 0,1,2 --start-step 56 --last-step 57 --source triforce/states/d3first_0_46s_{chain}.state --out target/entry-states/r32c-s2/056-0_46s",
-  "keys": {
-   "was": 3,
-   "now": 2,
-   "by": "scripts/experiments/r40_route.py patch (round 40: 3:0x6b's key left, the Moldorm's taken, no kill before 3:0x5b)"
-  }
+  "attempt": 1,
+  "command": "python -m triforce.entry_states walk --route d3first --out target/r44/walk4 --start-step 52 --source target/r44/walk4/carry/d3first_4_03s_0.state --attempts 4 --iterations 6000 --patience 300"
  },
  {
   "file": "1_33n_0.state",
@@ -2614,19 +2611,17 @@
   "in_cave": false,
   "entry": "W",
   "exit": "N",
-  "alternate": false,
-  "env_steps": 3587,
-  "attempts": 1,
-  "seconds": 11.72346814,
-  "steps": 2,
-  "health": 5.0,
+  "way": null,
+  "walk": "261125-100336",
+  "env_steps": 163768,
+  "attempts": 4,
+  "seconds": 335.939285725,
+  "how": "explorer",
+  "steps": 71,
+  "health": 1.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d3first --chains 0,1,2 --start-step 57 --last-step 58 --source triforce/states/d3first_0_47w_{chain}.state --out target/entry-states/r32c-s2/057-0_47w",
-  "keys": {
-   "was": 3,
-   "now": 2,
-   "by": "scripts/experiments/r40_route.py patch (round 40: 3:0x6b's key left, the Moldorm's taken, no kill before 3:0x5b)"
-  }
+  "attempt": 2,
+  "command": "python -m triforce.entry_states walk --route d3first --out target/r44/walk4 --start-step 52 --source target/r44/walk4/carry/d3first_4_03s_0.state --attempts 4 --iterations 6000 --patience 300"
  },
  {
   "file": "1_43n_0.state",
@@ -2661,19 +2656,17 @@
   "in_cave": false,
   "entry": "S",
   "exit": "W",
-  "alternate": false,
-  "env_steps": 4375,
-  "attempts": 1,
-  "seconds": 14.33649424,
-  "steps": 42,
-  "health": 4.5,
+  "way": null,
+  "walk": "261125-100336",
+  "env_steps": 17042,
+  "attempts": 4,
+  "seconds": 33.336286509999994,
+  "how": "explorer",
+  "steps": 26,
+  "health": 1.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d3first --chains 0,1,2 --start-step 58 --last-step 59 --source triforce/states/d3first_0_48w_{chain}.state --out target/entry-states/r32c-s2/058-0_48w",
-  "keys": {
-   "was": 3,
-   "now": 2,
-   "by": "scripts/experiments/r40_route.py patch (round 40: 3:0x6b's key left, the Moldorm's taken, no kill before 3:0x5b)"
-  }
+  "attempt": 1,
+  "command": "python -m triforce.entry_states walk --route d3first --out target/r44/walk4 --start-step 52 --source target/r44/walk4/carry/d3first_4_03s_0.state --attempts 4 --iterations 6000 --patience 300"
  },
  {
   "file": "1_44w_0.state",
@@ -2708,19 +2701,17 @@
   "in_cave": false,
   "entry": "E",
   "exit": "cave",
-  "alternate": false,
-  "env_steps": 4463,
-  "attempts": 1,
-  "seconds": 15.44695054,
-  "steps": 62,
-  "health": 4.5,
+  "way": null,
+  "walk": "261125-100336",
+  "env_steps": 17630,
+  "attempts": 4,
+  "seconds": 42.89981113099999,
+  "how": "explorer",
+  "steps": 36,
+  "health": 1.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d3first --chains 0,1,2 --start-step 59 --last-step 60 --source triforce/states/d3first_0_38s_{chain}.state --out target/entry-states/r32c-s2/059-0_38s",
-  "keys": {
-   "was": 3,
-   "now": 2,
-   "by": "scripts/experiments/r40_route.py patch (round 40: 3:0x6b's key left, the Moldorm's taken, no kill before 3:0x5b)"
-  }
+  "attempt": 1,
+  "command": "python -m triforce.entry_states walk --route d3first --attempts 4 --iterations 6000 --patience 300 --out target/r44/walk4 --start-step 59 --source target/r44/walk4/carry/d3first_0_38s_0.state --last-step 79"
  },
  {
   "file": "1_45w_0.state",
@@ -2755,19 +2746,17 @@
   "in_cave": false,
   "entry": "S",
   "exit": "S",
-  "alternate": false,
-  "env_steps": 5951,
+  "way": null,
+  "walk": "261125-100336",
+  "env_steps": 6653,
   "attempts": 1,
-  "seconds": 16.853286583,
-  "steps": 30,
-  "health": 5.0,
+  "seconds": 10.374453749,
+  "how": "explorer",
+  "steps": 23,
+  "health": 1.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d3first --chains 0,1,2 --start-step 60 --last-step 61 --source triforce/states/d3first_0_37e_{chain}.state --out target/entry-states/r32c-s2/060-0_37e",
-  "keys": {
-   "was": 3,
-   "now": 2,
-   "by": "scripts/experiments/r40_route.py patch (round 40: 3:0x6b's key left, the Moldorm's taken, no kill before 3:0x5b)"
-  }
+  "attempt": 0,
+  "command": "python -m triforce.entry_states walk --route d3first --attempts 4 --iterations 6000 --patience 300 --out target/r44/walk4 --start-step 59 --source target/r44/walk4/carry/d3first_0_38s_0.state --last-step 79"
  },
  {
   "file": "1_35s_0.state",
@@ -2802,19 +2791,17 @@
   "in_cave": false,
   "entry": "cave",
   "exit": "cave",
-  "alternate": false,
-  "env_steps": 4778,
+  "way": null,
+  "walk": "261125-100336",
+  "env_steps": 7025,
   "attempts": 1,
-  "seconds": 16.413160566,
-  "steps": 1,
-  "health": 5.0,
+  "seconds": 12.61234601,
+  "how": "explorer",
+  "steps": 2,
+  "health": 1.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d3first --chains 0,1,2 --start-step 61 --last-step 62 --source triforce/states/d3first_1_73s_{chain}.state --out target/entry-states/r32c-s2/061-1_73s",
-  "keys": {
-   "was": 3,
-   "now": 2,
-   "by": "scripts/experiments/r40_route.py patch (round 40: 3:0x6b's key left, the Moldorm's taken, no kill before 3:0x5b)"
-  }
+  "attempt": 0,
+  "command": "python -m triforce.entry_states walk --route d3first --attempts 4 --iterations 6000 --patience 300 --out target/r44/walk4 --start-step 59 --source target/r44/walk4/carry/d3first_0_38s_0.state --last-step 79"
  },
  {
   "file": "1_36w_0.state",
@@ -2849,19 +2836,17 @@
   "in_cave": false,
   "entry": "S",
   "exit": "N",
-  "alternate": false,
-  "env_steps": 4634,
+  "way": null,
+  "walk": "261125-100336",
+  "env_steps": 4703,
   "attempts": 1,
-  "seconds": 12.627673741,
-  "steps": 5,
-  "health": 5.0,
+  "seconds": 7.066751868,
+  "how": "explorer",
+  "steps": 2,
+  "health": 1.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d3first --chains 0,1,2 --start-step 62 --last-step 63 --source triforce/states/d3first_0_37c_{chain}.state --out target/entry-states/r32c-s2/062-0_37c",
-  "keys": {
-   "was": 3,
-   "now": 2,
-   "by": "scripts/experiments/r40_route.py patch (round 40: 3:0x6b's key left, the Moldorm's taken, no kill before 3:0x5b)"
-  }
+  "attempt": 0,
+  "command": "python -m triforce.entry_states walk --route d3first --attempts 4 --iterations 6000 --patience 300 --out target/r44/walk4 --start-step 59 --source target/r44/walk4/carry/d3first_0_38s_0.state --last-step 79"
  },
  {
   "file": "0_37c_v2_0.state",
@@ -2896,19 +2881,17 @@
   "in_cave": false,
   "entry": "S",
   "exit": "N",
-  "alternate": false,
-  "env_steps": 5421,
+  "way": null,
+  "walk": "261125-100336",
+  "env_steps": 7751,
   "attempts": 1,
-  "seconds": 18.75523096,
-  "steps": 12,
-  "health": 5.0,
+  "seconds": 13.234587936,
+  "how": "explorer",
+  "steps": 15,
+  "health": 1.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d3first --chains 0,1,2 --start-step 63 --last-step 64 --source triforce/states/d3first_1_73s_v2_{chain}.state --out target/entry-states/r32c-s2/063-1_73s_v2",
-  "keys": {
-   "was": 3,
-   "now": 2,
-   "by": "scripts/experiments/r40_route.py patch (round 40: 3:0x6b's key left, the Moldorm's taken, no kill before 3:0x5b)"
-  }
+  "attempt": 0,
+  "command": "python -m triforce.entry_states walk --route d3first --attempts 4 --iterations 6000 --patience 300 --out target/r44/walk4 --start-step 59 --source target/r44/walk4/carry/d3first_0_38s_0.state --last-step 79"
  },
  {
   "file": "0_38w_0.state",
@@ -2943,19 +2926,17 @@
   "in_cave": false,
   "entry": "S",
   "exit": "N",
-  "alternate": false,
-  "env_steps": 5630,
+  "way": null,
+  "walk": "261125-100336",
+  "env_steps": 6037,
   "attempts": 1,
-  "seconds": 23.111414674,
-  "steps": 44,
-  "health": 5.0,
+  "seconds": 13.486584135,
+  "how": "explorer",
+  "steps": 60,
+  "health": 1.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d3first --chains 0,1,2 --start-step 64 --last-step 65 --source triforce/states/d3first_1_63s_{chain}.state --out target/entry-states/r32c-s2/064-1_63s",
-  "keys": {
-   "was": 3,
-   "now": 2,
-   "by": "scripts/experiments/r40_route.py patch (round 40: 3:0x6b's key left, the Moldorm's taken, no kill before 3:0x5b)"
-  }
+  "attempt": 0,
+  "command": "python -m triforce.entry_states walk --route d3first --attempts 4 --iterations 6000 --patience 300 --out target/r44/walk4 --start-step 59 --source target/r44/walk4/carry/d3first_0_38s_0.state --last-step 79"
  },
  {
   "file": "0_48n_0.state",
@@ -2990,19 +2971,17 @@
   "in_cave": false,
   "entry": "S",
   "exit": "N",
-  "alternate": false,
-  "env_steps": 33425,
-  "attempts": 1,
-  "seconds": 148.353222838,
-  "steps": 164,
+  "way": null,
+  "walk": "261125-100336",
+  "env_steps": 120630,
+  "attempts": 4,
+  "seconds": 337.552233359,
+  "how": "explorer",
+  "steps": 141,
   "health": 1.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d3first --chains 0,1,2 --start-step 65 --last-step 66 --source triforce/states/d3first_1_53s_{chain}.state --out target/entry-states/r32c-s2/065-1_53s",
-  "keys": {
-   "was": 4,
-   "now": 3,
-   "by": "scripts/experiments/r40_route.py patch (round 40: 3:0x6b's key left, the Moldorm's taken, no kill before 3:0x5b)"
-  }
+  "attempt": 1,
+  "command": "python -m triforce.entry_states walk --route d3first --attempts 4 --iterations 6000 --patience 300 --out target/r44/walk4 --start-step 59 --source target/r44/walk4/carry/d3first_0_38s_0.state --last-step 79"
  },
  {
   "file": "0_58n_0.state",
@@ -3037,19 +3016,17 @@
   "in_cave": false,
   "entry": "S",
   "exit": "N",
-  "alternate": false,
-  "env_steps": 5051,
-  "attempts": 1,
-  "seconds": 19.682102974,
-  "steps": 100,
-  "health": 4.0,
+  "way": null,
+  "walk": "261125-100336",
+  "env_steps": 24991,
+  "attempts": 4,
+  "seconds": 88.46078182299999,
+  "how": "explorer",
+  "steps": 49,
+  "health": 1.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d3first --chains 0,1,2 --start-step 66 --last-step 67 --source triforce/states/d3first_1_43s_{chain}.state --out target/entry-states/r32c-s2/066-1_43s",
-  "keys": {
-   "was": 4,
-   "now": 3,
-   "by": "scripts/experiments/r40_route.py patch (round 40: 3:0x6b's key left, the Moldorm's taken, no kill before 3:0x5b)"
-  }
+  "attempt": 2,
+  "command": "python -m triforce.entry_states walk --route d3first --attempts 4 --iterations 6000 --patience 300 --out target/r44/walk4 --start-step 59 --source target/r44/walk4/carry/d3first_0_38s_0.state --last-step 79"
  },
  {
   "file": "0_68n_0.state",
@@ -3084,19 +3061,17 @@
   "in_cave": false,
   "entry": "S",
   "exit": "W",
-  "alternate": false,
-  "env_steps": 5551,
-  "attempts": 1,
-  "seconds": 22.50232117,
-  "steps": 88,
+  "way": null,
+  "walk": "261125-100336",
+  "env_steps": 40438,
+  "attempts": 4,
+  "seconds": 103.820352472,
+  "how": "explorer",
+  "steps": 46,
   "health": 1.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d3first --chains 0,1,2 --start-step 67 --last-step 68 --source triforce/states/d3first_1_33s_{chain}.state --out target/entry-states/r32c-s2/067-1_33s",
-  "keys": {
-   "was": 4,
-   "now": 3,
-   "by": "scripts/experiments/r40_route.py patch (round 40: 3:0x6b's key left, the Moldorm's taken, no kill before 3:0x5b)"
-  }
+  "attempt": 2,
+  "command": "python -m triforce.entry_states walk --route d3first --attempts 4 --iterations 6000 --patience 300 --out target/r44/walk4 --start-step 59 --source target/r44/walk4/carry/d3first_0_38s_0.state --last-step 79"
  },
  {
   "file": "0_67e_0.state",
@@ -3131,19 +3106,17 @@
   "in_cave": false,
   "entry": "E",
   "exit": "cave",
-  "alternate": false,
-  "env_steps": 51181,
-  "attempts": 1,
-  "seconds": 201.00921662,
-  "steps": 141,
-  "health": 1.0,
+  "way": null,
+  "walk": "261125-100336",
+  "env_steps": 105351,
+  "attempts": 4,
+  "seconds": 216.487473115,
+  "how": "explorer",
+  "steps": 155,
+  "health": 1.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d3first --chains 0,1,2 --start-step 68 --last-step 69 --source triforce/states/d3first_1_23s_{chain}.state --out target/entry-states/r32c-s2/068-1_23s",
-  "keys": {
-   "was": 4,
-   "now": 3,
-   "by": "scripts/experiments/r40_route.py patch (round 40: 3:0x6b's key left, the Moldorm's taken, no kill before 3:0x5b)"
-  }
+  "attempt": 2,
+  "command": "python -m triforce.entry_states walk --route d3first --attempts 4 --iterations 6000 --patience 300 --out target/r44/walk4 --start-step 59 --source target/r44/walk4/carry/d3first_0_38s_0.state --last-step 79"
  },
  {
   "file": "0_67cave_0.state",
@@ -3178,19 +3151,17 @@
   "in_cave": true,
   "entry": "S",
   "exit": "N",
-  "alternate": false,
-  "env_steps": 3793,
+  "way": null,
+  "walk": "261125-100336",
+  "env_steps": 3909,
   "attempts": 1,
-  "seconds": 15.340971505,
-  "steps": 41,
-  "health": 3.0,
+  "seconds": 7.380491319,
+  "how": "explorer",
+  "steps": 20,
+  "health": 1.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d3first --chains 0,1,2 --start-step 69 --last-step 70 --source triforce/states/d3first_1_22e_{chain}.state --out target/entry-states/r32c-s2/069-1_22e",
-  "keys": {
-   "was": 4,
-   "now": 3,
-   "by": "scripts/experiments/r40_route.py patch (round 40: 3:0x6b's key left, the Moldorm's taken, no kill before 3:0x5b)"
-  }
+  "attempt": 0,
+  "command": "python -m triforce.entry_states walk --route d3first --attempts 4 --iterations 6000 --patience 300 --out target/r44/walk4 --start-step 59 --source target/r44/walk4/carry/d3first_0_38s_0.state --last-step 79"
  },
  {
   "file": "0_67c_0.state",
@@ -3225,19 +3196,17 @@
   "in_cave": false,
   "entry": "cave",
   "exit": "E",
-  "alternate": false,
-  "env_steps": 8962,
-  "attempts": 1,
-  "seconds": 33.427321005,
-  "steps": 106,
-  "health": 4.5,
+  "way": null,
+  "walk": "261125-100336",
+  "env_steps": 27202,
+  "attempts": 4,
+  "seconds": 54.944886755,
+  "how": "explorer",
+  "steps": 68,
+  "health": 1.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d3first --chains 0,1,2 --start-step 70 --last-step 71 --source triforce/states/d3first_1_7fcave_{chain}.state --out target/entry-states/r32c-s2/070-1_7fcave",
-  "keys": {
-   "was": 4,
-   "now": 3,
-   "by": "scripts/experiments/r40_route.py patch (round 40: 3:0x6b's key left, the Moldorm's taken, no kill before 3:0x5b)"
-  }
+  "attempt": 3,
+  "command": "python -m triforce.entry_states walk --route d3first --attempts 4 --iterations 6000 --patience 300 --out target/r44/walk4 --start-step 59 --source target/r44/walk4/carry/d3first_0_38s_0.state --last-step 79"
  },
  {
   "file": "0_77n_0.state",
@@ -3272,19 +3241,17 @@
   "in_cave": false,
   "entry": "W",
   "exit": "S",
-  "alternate": false,
-  "env_steps": 3679,
-  "attempts": 1,
-  "seconds": 14.664849366,
-  "steps": 31,
-  "health": 1.0,
+  "way": null,
+  "walk": "261125-100336",
+  "env_steps": 20759,
+  "attempts": 4,
+  "seconds": 39.213664557,
+  "how": "explorer",
+  "steps": 30,
+  "health": 1.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d3first --chains 0,1,2 --start-step 71 --last-step 72 --source triforce/states/d3first_1_22c_{chain}.state --out target/entry-states/r32c-s2/071-1_22c",
-  "keys": {
-   "was": 4,
-   "now": 3,
-   "by": "scripts/experiments/r40_route.py patch (round 40: 3:0x6b's key left, the Moldorm's taken, no kill before 3:0x5b)"
-  }
+  "attempt": 1,
+  "command": "python -m triforce.entry_states walk --route d3first --attempts 4 --iterations 6000 --patience 300 --out target/r44/walk4 --start-step 59 --source target/r44/walk4/carry/d3first_0_38s_0.state --last-step 79"
  },
  {
   "file": "0_76e_0.state",
@@ -3319,19 +3286,17 @@
   "in_cave": false,
   "entry": "N",
   "exit": "S",
-  "alternate": false,
-  "env_steps": 4925,
+  "way": null,
+  "walk": "261125-100336",
+  "env_steps": 8625,
   "attempts": 1,
-  "seconds": 21.060842281,
-  "steps": 27,
-  "health": 5.0,
+  "seconds": 15.406944941,
+  "how": "explorer",
+  "steps": 23,
+  "health": 1.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d3first --chains 0,1,2 --start-step 72 --last-step 73 --source triforce/states/d3first_1_23w_{chain}.state --out target/entry-states/r32c-s2/072-1_23w",
-  "keys": {
-   "was": 4,
-   "now": 3,
-   "by": "scripts/experiments/r40_route.py patch (round 40: 3:0x6b's key left, the Moldorm's taken, no kill before 3:0x5b)"
-  }
+  "attempt": 0,
+  "command": "python -m triforce.entry_states walk --route d3first --attempts 4 --iterations 6000 --patience 300 --out target/r44/walk4 --start-step 59 --source target/r44/walk4/carry/d3first_0_38s_0.state --last-step 79"
  },
  {
   "file": "0_75e_0.state",
@@ -3366,19 +3331,17 @@
   "in_cave": false,
   "entry": "N",
   "exit": "E",
-  "alternate": false,
-  "env_steps": 4898,
+  "way": null,
+  "walk": "261125-100336",
+  "env_steps": 5027,
   "attempts": 1,
-  "seconds": 20.060232774,
-  "steps": 27,
-  "health": 5.0,
+  "seconds": 11.258908876,
+  "how": "explorer",
+  "steps": 17,
+  "health": 1.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d3first --chains 0,1,2 --start-step 73 --last-step 74 --source triforce/states/d3first_1_33n_{chain}.state --out target/entry-states/r32c-s2/073-1_33n",
-  "keys": {
-   "was": 4,
-   "now": 3,
-   "by": "scripts/experiments/r40_route.py patch (round 40: 3:0x6b's key left, the Moldorm's taken, no kill before 3:0x5b)"
-  }
+  "attempt": 0,
+  "command": "python -m triforce.entry_states walk --route d3first --attempts 4 --iterations 6000 --patience 300 --out target/r44/walk4 --start-step 59 --source target/r44/walk4/carry/d3first_0_38s_0.state --last-step 79"
  },
  {
   "file": "0_74e_0.state",
@@ -3413,19 +3376,17 @@
   "in_cave": false,
   "entry": "W",
   "exit": "E",
-  "alternate": false,
-  "env_steps": 5568,
-  "attempts": 1,
-  "seconds": 23.402742867,
-  "steps": 60,
-  "health": 4.0,
+  "way": null,
+  "walk": "261125-100336",
+  "env_steps": 28565,
+  "attempts": 4,
+  "seconds": 66.444912299,
+  "how": "explorer",
+  "steps": 50,
+  "health": 1.0,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d3first --chains 0,1,2 --start-step 74 --last-step 75 --source triforce/states/d3first_1_43n_{chain}.state --out target/entry-states/r32c-s2/074-1_43n",
-  "keys": {
-   "was": 3,
-   "now": 2,
-   "by": "scripts/experiments/r40_route.py patch (round 40: 3:0x6b's key left, the Moldorm's taken, no kill before 3:0x5b)"
-  }
+  "attempt": 0,
+  "command": "python -m triforce.entry_states walk --route d3first --attempts 4 --iterations 6000 --patience 300 --out target/r44/walk4 --start-step 59 --source target/r44/walk4/carry/d3first_0_38s_0.state --last-step 79"
  },
  {
   "file": "d3first_1_45w_0.state",
@@ -3439,19 +3400,17 @@
   "in_cave": false,
   "entry": "W",
   "exit": "N",
-  "alternate": false,
-  "env_steps": 35728,
+  "way": null,
+  "walk": "261125-100336",
+  "env_steps": 15914,
   "attempts": 1,
-  "seconds": 144.903103825,
-  "steps": 224,
-  "health": 2.0,
+  "seconds": 30.908912086,
+  "how": "explorer",
+  "steps": 236,
+  "health": 1.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d3first --chains 0,1,2 --start-step 75 --last-step 76 --source triforce/states/d3first_1_44w_{chain}.state --out target/entry-states/r32c-s2/075-1_44w",
-  "keys": {
-   "was": 3,
-   "now": 2,
-   "by": "scripts/experiments/r40_route.py patch (round 40: 3:0x6b's key left, the Moldorm's taken, no kill before 3:0x5b)"
-  }
+  "attempt": 0,
+  "command": "python -m triforce.entry_states walk --route d3first --attempts 4 --iterations 6000 --patience 300 --out target/r44/walk4 --start-step 59 --source target/r44/walk4/carry/d3first_0_38s_0.state --last-step 79"
  },
  {
   "file": "0_66e_0.state",
@@ -3489,19 +3448,17 @@
   "in_cave": false,
   "entry": "S",
   "exit": "E",
-  "alternate": false,
-  "env_steps": 23901,
+  "way": null,
+  "walk": "261125-100336",
+  "env_steps": 17486,
   "attempts": 1,
-  "seconds": 111.239554169,
-  "steps": 115,
-  "health": 5.0,
+  "seconds": 43.613575257,
+  "how": "explorer",
+  "steps": 113,
+  "health": 1.5,
   "ending": "exit-correct",
-  "command": "python -m triforce.entry_states build --route d3first --chains 0,1,2 --start-step 76 --last-step 77 --source triforce/states/d3first_1_45w_{chain}.state --out target/entry-states/r32c-s2/076-1_45w",
-  "keys": {
-   "was": 3,
-   "now": 2,
-   "by": "scripts/experiments/r40_route.py patch (round 40: 3:0x6b's key left, the Moldorm's taken, no kill before 3:0x5b)"
-  }
+  "attempt": 0,
+  "command": "python -m triforce.entry_states walk --route d3first --attempts 4 --iterations 6000 --patience 300 --out target/r44/walk4 --start-step 59 --source target/r44/walk4/carry/d3first_0_38s_0.state --last-step 79"
  },
  {
   "file": "0_65e_0.state",
@@ -3539,21 +3496,17 @@
   "in_cave": false,
   "entry": "W",
   "exit": "triforce",
-  "alternate": false,
-  "steps": 0,
-  "frames": 610,
-  "health": 5.0,
-  "ending": "exit-correct",
-  "env_steps": 0,
+  "way": null,
+  "walk": "261125-100336",
+  "env_steps": 46883,
   "attempts": 1,
-  "seconds": 0.0,
-  "played_by": "scripts/experiments/r32c_harvest.py 1_35s (seed 1000, the walks' rule)",
-  "command": "python scripts/experiments/r32c_harvest.py 1_35s --out target/entry-states/r32c-s2/077-1_35s --chains 0,1,2 --seeds 30",
-  "keys": {
-   "was": 3,
-   "now": 2,
-   "by": "scripts/experiments/r40_route.py patch (round 40: 3:0x6b's key left, the Moldorm's taken, no kill before 3:0x5b)"
-  }
+  "seconds": 97.788037941,
+  "how": "explorer",
+  "steps": 91,
+  "health": 1.5,
+  "ending": "exit-correct",
+  "attempt": 0,
+  "command": "python -m triforce.entry_states walk --route d3first --attempts 4 --iterations 6000 --patience 300 --out target/r44/walk4 --start-step 59 --source target/r44/walk4/carry/d3first_0_38s_0.state --last-step 79"
  },
  {
   "file": "0_64e_0.state",
@@ -3591,19 +3544,17 @@
   "in_cave": false,
   "entry": "cave",
   "exit": "E",
-  "alternate": false,
-  "env_steps": 4095,
+  "way": null,
+  "walk": "261125-100336",
+  "env_steps": 6656,
   "attempts": 1,
-  "seconds": 18.387539834000002,
-  "steps": 21,
+  "seconds": 15.119643288,
+  "how": "explorer",
+  "steps": 16,
   "health": 6.0,
   "ending": "triforce-collected",
-  "command": "python -m triforce.entry_states build --route d3first --chains 0,1,2 --start-step 78 --last-step 79 --source triforce/states/d3first_1_36w_{chain}.state --out target/entry-states/r32c-s2/078-1_36w",
-  "keys": {
-   "was": 3,
-   "now": 2,
-   "by": "scripts/experiments/r40_route.py patch (round 40: 3:0x6b's key left, the Moldorm's taken, no kill before 3:0x5b)"
-  }
+  "attempt": 0,
+  "command": "python -m triforce.entry_states walk --route d3first --attempts 4 --iterations 6000 --patience 300 --out target/r44/walk4 --start-step 59 --source target/r44/walk4/carry/d3first_0_38s_0.state --last-step 79"
  },
  {
   "file": "0_63e_0.state",

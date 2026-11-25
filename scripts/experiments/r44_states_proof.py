@@ -133,13 +133,16 @@ def cmd_table(args):
             continue
         level, room = step.level, step.room
         key = (level, room, facing)
-        seen[key] += 0 if step.in_cave else 1      # the scans hold no cave or cellar entries
+        # The scans hold no cave or cellar entries and no frame of the arrival out of a dungeon (no room-entry event
+        # there; a run's next entry of that screen is a later arrival from an edge, not this door).
+        out_of_dungeon = step.entry == 'cave' and steps[door['from_step']].level > 0 and not level
+        seen[key] += 0 if step.in_cave or out_of_dungeon else 1
         f = []
         for value in range(9):
             placed, after, _, _ = enter(game, machines[name], spawn_cycle=value)
             f.append(after)
         made = len(enter(game, machines[name])[0])
-        runs = [] if step.in_cave else real.get((*key, seen[key]), [])
+        runs = [] if step.in_cave or out_of_dungeon else real.get((*key, seen[key]), [])
         row = {'file': name, 'step': step.index, 'door': door_key(level, room, facing, seen[key]),
                'cave': step.in_cave, 'clear_before': steps[door['from_step']].clear, 'made': made, 'map': f,
                'runs': len(runs), 'room_kills': (door.get('level_kill_counts') or {}).get(f"0x{room:02x}", 0)}
@@ -217,12 +220,25 @@ def compose(rows: list, steps: dict):
         if not step.level:
             row['planned'] = None
             continue
-        row['planned'] = value
         key = (step.room, step.in_cave)
-        fresh_none = row['monsters'] == 0
-        empty = fresh_none or (key in cleared and key in history)
+        if step.in_cave:
+            # A dungeon cellar's saved frame is already in mode 9 with its four blue Keese placed: the spot walk has
+            # run (1x7f: 8 -> 1, as every run has it) and its map cannot be measured from the frame; the composition
+            # goes on from the game's value there.
+            row['planned'] = None
+            value = row['spawn_cycle']
+            if key not in history:
+                history = (history + [key])[-6:]
+            continue
+        row['planned'] = value
+        # A room the game makes any object in walks the spot list; an object game.yaml does not list (1x22's type
+        # $4A) is made on every entry, whatever the room's memory, so only listed monsters can be cleared away.
+        if row['monsters'] == 0:
+            empty = row['made'] == 0
+        else:
+            empty = key in cleared and key in history
         row['plan_empty'] = empty
-        value = value if empty or step.in_cave else row['map'][value]
+        value = value if empty else row['map'][value]
         if key not in history:
             history = (history + [key])[-6:]
         uncounted = any(SPLIT_BY[k] > (1 if row['wood'] else 3) for k in row['splitters'])
@@ -236,7 +252,9 @@ def report(rows: list):
     for field in FIELDS + ('room_history', 'room_kills'):
         rated = [r for r in judged if r[f'{field}_agrees'] is not None]
         agree = sum(1 for r in rated if r[f'{field}_agrees'])
-        print(f"  {field}: the walk's value among the runs' at {agree} of {len(rated)}")
+        commonest = sum(1 for r in rated if json.dumps(r[field]) == next(iter(r[f'{field}_real'])))
+        print(f"  {field}: the walk's value among the runs' at {agree} of {len(rated)}, their commonest at "
+              f"{commonest}")
     dungeon = [r for r in rows if r.get('planned') is not None and not r['cave'] and r['made']]
     print(f"  plan's composed $524 = walked at {sum(r['planned'] == r['spawn_cycle'] for r in dungeon)} of "
           f"{len(dungeon)} dungeon doors with monsters")
