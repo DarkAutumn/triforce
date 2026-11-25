@@ -1,20 +1,25 @@
-"""The window of ``emu-zelda.py``: a thin layer over ``triforce.emu.Session``.
+"""The window of ``emu-zelda.py``: a thin layer over ``triforce.emu.Session`` (one room) or ``GameSession`` (the
+whole game).
 
 - **Inputs.** The controller (a PS5 DualSense, read through SDL's game-controller mapping by ``Pad``) and the
-  keyboard both become named inputs: the game's buttons (``GAME_INPUTS``: the d-pad, B, A, START) and the window's
-  (``PAUSE``, ``SAVE``, ``RESET_NEW``, ``RESET_SAME``, ``FASTER``, ``SLOWER``).  ``PAD_INPUTS`` and ``KEY_INPUTS``
-  map them; the sticks and NES Select map to nothing.
+  keyboard both become named inputs: the game's buttons (``GAME_INPUTS``: the d-pad, B, A, START, SELECT) and the
+  window's (``PAUSE``, ``SAVE``, ``STATE``, ``RESET_NEW``, ``RESET_SAME``, ``FASTER``, ``SLOWER``).
+  ``PAD_INPUTS`` and ``KEY_INPUTS`` map them; the sticks map to nothing.
 - **The states** (``Machine``, pure): ``READY`` (the start loaded and paused: any game button starts it, counting on
   the first frame; ``PAUSE`` starts it with nothing held), ``PLAYING``, ``PAUSED`` (the emulator's own hard pause:
   only ``PAUSE`` leaves it; nothing runs or is recorded), ``DONE`` (the session's DONE rule fired).  ``SAVE`` and the
-  resets work only in ``PAUSED`` and ``DONE``; a reset loads the start again into ``READY`` with a new recording.
+  resets work only in ``PAUSED`` and ``DONE`` (the whole game's resets, a new power on, only in ``DONE``); a reset
+  loads the start again into ``READY`` with a new recording.  ``STATE`` saves the machine state in any state, play
+  going on.
 - **The rate** (pure: ``rate_of``, ``step_rate``, ``sound_allowed``, ``title_text``): the frames a second the game
   runs at, the NES's ``NES_FPS`` and steps of ``RATE_STEP`` from it (``RATE_STEPS``: 5.1 to 240.1), in every state;
   the window's pacing only (the session and the replay are frames).  The sound plays only within
   ``SOUND_BAND`` of ``NES_FPS``; switched back on it takes the machine's sound as it stands (no backlog).
-- **The picture**: the NES's 256x240 scaled by a whole number, sharp, a status line under it (room, seed, hearts,
-  bombs, keys, the last saved file), the two pause bars over it in ``READY`` and ``PAUSED``, DONE over it in
-  ``DONE``.  The window opens centred on the centermost monitor (``centermost``).
+- **The picture**: the NES's 256x240 scaled by a whole number, sharp, a status line under it (the session's: room,
+  seed or name, hearts, bombs, keys, rupees; then the last file saved, or for the whole game the hand-over), the
+  two pause bars over it in ``READY`` and ``PAUSED``, DONE over it in ``DONE``.  The window opens centred on the
+  centermost monitor (``centermost``).  Closing the window of a whole-game take saves it first if it holds frames
+  not saved yet.
 """
 
 import os
@@ -39,22 +44,28 @@ STATUS_H = 20                           # the status strip's two lines, in NES p
 
 READY, PLAYING, PAUSED, DONE = 'ready', 'playing', 'paused', 'done'
 GAME_INPUTS = {'UP': emu.UP, 'DOWN': emu.DOWN, 'LEFT': emu.LEFT, 'RIGHT': emu.RIGHT, 'B': emu.B, 'A': emu.A,
-               'START': emu.START}
-WINDOW_INPUTS = ('PAUSE', 'SAVE', 'RESET_NEW', 'RESET_SAME', 'FASTER', 'SLOWER')
+               'START': emu.START, 'SELECT': emu.SELECT}
+WINDOW_INPUTS = ('PAUSE', 'SAVE', 'STATE', 'RESET_NEW', 'RESET_SAME', 'FASTER', 'SLOWER')
 # SDL game-controller buttons (SDL_GameControllerGetStringForButton names) on a DualSense: cross is SDL's a,
-# circle b, square x, triangle y, Create back, Options start, R1 rightshoulder.
+# circle b, square x, triangle y, Create back, Options start, L1 leftshoulder, R1 rightshoulder, L3 leftstick.
 PAD_INPUTS = {'dpup': 'UP', 'dpdown': 'DOWN', 'dpleft': 'LEFT', 'dpright': 'RIGHT', 'a': 'B', 'b': 'A',
-              'start': 'START', 'back': 'PAUSE', 'x': 'SAVE', 'y': 'RESET_NEW', 'rightshoulder': 'RESET_SAME'}
+              'start': 'START', 'leftstick': 'SELECT', 'back': 'PAUSE', 'x': 'SAVE', 'leftshoulder': 'STATE',
+              'y': 'RESET_NEW', 'rightshoulder': 'RESET_SAME'}
 KEY_INPUTS = {Qt.Key.Key_Up: 'UP', Qt.Key.Key_Down: 'DOWN', Qt.Key.Key_Left: 'LEFT', Qt.Key.Key_Right: 'RIGHT',
               Qt.Key.Key_Z: 'B', Qt.Key.Key_X: 'A', Qt.Key.Key_Return: 'START', Qt.Key.Key_Enter: 'START',
-              Qt.Key.Key_P: 'PAUSE', Qt.Key.Key_S: 'SAVE', Qt.Key.Key_R: 'RESET_NEW', Qt.Key.Key_T: 'RESET_SAME',
+              Qt.Key.Key_Shift: 'SELECT', Qt.Key.Key_P: 'PAUSE', Qt.Key.Key_S: 'SAVE', Qt.Key.Key_F5: 'STATE',
+              Qt.Key.Key_R: 'RESET_NEW', Qt.Key.Key_T: 'RESET_SAME',
               Qt.Key.Key_Minus: 'SLOWER', Qt.Key.Key_Plus: 'FASTER', Qt.Key.Key_Equal: 'FASTER'}
 KEYS_HELP = """Controller (PS5): d-pad = directions, cross = B, circle = A, Options = Start (the item screen),
-  Create = pause the emulator (also starts the game), square = save the replay (paused or DONE),
-  triangle = start over with a new seed, R1 = start over with the same seed (paused or DONE).
-Keyboard: arrows, Z = B, X = A, Enter = Start, P = pause, S = save, R = new seed, T = same seed,
-  - and + (or =, the keypad's) = 5 frames a second slower / faster.
-Alt-F4 or closing the window quits."""
+  L3 (press the left stick) = Select, Create = pause the emulator (also starts the game),
+  square = save the replay (paused or DONE), L1 = save the machine state now (play goes on),
+  triangle = start over with a new seed, R1 = start over with the same seed (one room: paused or DONE;
+  the whole game: DONE only, from power on again).
+Keyboard: arrows, Z = B, X = A, Enter = Start, Shift = Select, P = pause, S = save, F5 = save the state,
+  R = new seed, T = same seed, - and + (or =, the keypad's) = 5 frames a second slower / faster.
+A state is a TFZSTATE file beside the replays (--out), named for the room Link stands in, the frame and the
+  time: 5x47_frame81234_261125-101502.state.
+Alt-F4 or closing the window quits (the whole game's take is saved first if it holds unsaved frames)."""
 
 
 # ---------------------------------------------------------------------------------------------- pure parts
@@ -104,10 +115,13 @@ def centred(screen: tuple, size: tuple) -> tuple:
 class Machine:
     """The window's states and what each input does in them (no window, no session: ``Window`` acts on what it
     returns).  ``press(name)`` returns the action to take: ``'start'`` (READY to PLAYING; the frame that follows
-    counts the buttons held), ``'pause'``, ``'resume'``, ``'save'``, ``'reset-new'``, ``'reset-same'``, or None."""
+    counts the buttons held), ``'pause'``, ``'resume'``, ``'save'``, ``'state'``, ``'reset-new'``, ``'reset-same'``,
+    or None.  ``reset_paused`` False: the resets only in DONE (the whole game: an accidental press while paused
+    must not throw a long take away)."""
 
-    def __init__(self):
+    def __init__(self, reset_paused: bool = True):
         self.state = READY
+        self.reset_paused = reset_paused
 
     def press(self, name: str) -> Optional[str]:
         state = self.state
@@ -124,11 +138,13 @@ class Machine:
                 self.state = PLAYING
                 return 'start'
             return None
+        if name == 'STATE':
+            return 'state'
         if state not in (PAUSED, DONE):
             return None
         if name == 'SAVE':
             return 'save'
-        if name in ('RESET_NEW', 'RESET_SAME'):
+        if name in ('RESET_NEW', 'RESET_SAME') and (state == DONE or self.reset_paused):
             self.state = READY
             return 'reset-new' if name == 'RESET_NEW' else 'reset-same'
         return None
@@ -164,7 +180,7 @@ class Pad:
         self._names = {getattr(pygame, f"CONTROLLER_BUTTON_{suffix}"): name for suffix, name in (
             ('DPAD_UP', 'dpup'), ('DPAD_DOWN', 'dpdown'), ('DPAD_LEFT', 'dpleft'), ('DPAD_RIGHT', 'dpright'),
             ('A', 'a'), ('B', 'b'), ('X', 'x'), ('Y', 'y'), ('BACK', 'back'), ('START', 'start'),
-            ('RIGHTSHOULDER', 'rightshoulder'))}
+            ('LEFTSHOULDER', 'leftshoulder'), ('RIGHTSHOULDER', 'rightshoulder'), ('LEFTSTICK', 'leftstick'))}
         self._open()
 
     def _open(self):
@@ -224,16 +240,19 @@ class Window(QWidget):
     """The session on screen.  ``press(name)`` / ``release(name)`` are every input's way in (keys, the pad, tests);
     ``tick()`` runs the frames due at the rate, ``compose()`` is the picture with its overlays."""
 
-    def __init__(self, session: emu.Session, options: Options, pad: Optional[Pad] = None, timer: bool = True):
+    def __init__(self, session, options: Options, pad: Optional[Pad] = None, timer: bool = True):
         super().__init__()
         self.session, self.options, self.pad = session, options, pad
-        self.machine = Machine()
+        self.whole = isinstance(session, emu.GameSession)
+        self.machine = Machine(reset_paused=not self.whole)
         self.held: set = set()               # game inputs held now
         self.latched = 0                     # game buttons pressed since the last frame (a tap shorter than one)
         self.rate_steps = 0
         self.sound_error: Optional[str] = None
         self.heard: Optional[tuple] = None   # the last (on, speed) the session was given
         self.saved: Optional[Path] = None
+        self.saved_frames = 0                # the frames of the recording the last replay saved held
+        self.state_saved: Optional[Path] = None
         self._clock: Optional[tuple] = None  # (time, frames) the pacing counts from
         self._frame = 0
         self.picture = self._image()
@@ -265,13 +284,18 @@ class Window(QWidget):
             if action == 'start' and name == 'PAUSE':
                 self.latched = 0                # Create starts the game with no button held
         elif action == 'save':
-            self.saved = self.session.save(self.options.played_dir)
-            print(f"saved {self.saved}", flush=True)
+            self.save()
+        elif action == 'state':
+            self.state_saved = self.session.save_state(self.options.played_dir)
+            print(f"state saved {self.state_saved}", flush=True)
         elif action in ('reset-new', 'reset-same'):
+            if self.whole:
+                self.autosave()
             self.session.reset(None if action == 'reset-new' else self.session.seed)
             self.latched = 0
+            self.saved_frames = 0
             self.picture = self._image()
-            print(f"{self.session.spec.name}: seed {self.session.seed}", flush=True)
+            print(self.session.start_text(), flush=True)
         if action is not None:
             self._update_sound()
             self._update_title()
@@ -279,6 +303,24 @@ class Window(QWidget):
 
     def release(self, name: str):
         self.held.discard(name)
+
+    def save(self) -> Path:
+        """The replay so far into ``--out``."""
+        self.saved = self.session.save(self.options.played_dir)
+        self.saved_frames = self.session.frames
+        print(f"saved {self.saved}", flush=True)
+        return self.saved
+
+    def autosave(self) -> Optional[Path]:
+        """Saves the whole game's take if it holds frames played since the hand-over that no saved file holds."""
+        if self.session.frames > max(self.saved_frames, self.session.hand_over.frame):
+            return self.save()
+        return None
+
+    def closeEvent(self, event):  # pylint: disable=invalid-name
+        if self.whole:
+            self.autosave()
+        super().closeEvent(event)
 
     def buttons(self) -> int:
         """The controller byte of the next frame: what is held and what was pressed since the last frame."""
@@ -314,7 +356,7 @@ class Window(QWidget):
         self._frame += 1
         if done is not None:
             self.machine.finish()
-            print(f"{self.session.spec.name}: DONE ({done}) after {self.session.frames} frames", flush=True)
+            print(f"{self.session.label}: DONE ({done}) after {self.session.frames} frames", flush=True)
             self._update_sound()
             self._update_title()
         return done
@@ -353,7 +395,7 @@ class Window(QWidget):
             self.heard = asked
 
     def _update_title(self):
-        self.setWindowTitle(title_text(self.session.spec.name, self.rate, self.machine.state))
+        self.setWindowTitle(title_text(self.session.label, self.rate, self.machine.state))
 
     # ---- the picture
     def _image(self) -> QImage:
@@ -361,14 +403,13 @@ class Window(QWidget):
         return QImage(pixels.tobytes(), FRAME_W, FRAME_H, FRAME_W * 3, QImage.Format.Format_RGB888).copy()
 
     def status_lines(self) -> tuple:
-        """The status strip: the room, entry, seed, hearts, bombs, keys and (``--enemies``) the monsters left of
-        the room's; the last file saved."""
-        state, session = self.session.state, self.session
-        first = (f"{session.spec.name} {session.start.entry}   seed {session.seed}   hearts "
-                 f"{state.health:g}/{state.max_health}   bombs {state.bombs}   keys {state.keys}")
-        if session.enemies is not None:
-            first += "   enemies {} of {}".format(*session.enemies)
-        return first, (f"saved {self.saved.name}" if self.saved is not None else 'not saved yet')
+        """The status strip: the session's line (the room, entry, seed, hearts, bombs, keys, rupees and
+        ``--enemies``' monsters left; for the whole game the room Link stands in, the name and the frame); the last
+        file saved (else the session's note: the whole game's hand-over) and the last state saved."""
+        second = f"saved {self.saved.name}" if self.saved is not None else self.session.note
+        if self.state_saved is not None:
+            second += f"   state {self.state_saved.name}"
+        return self.session.status_line(), second
 
     def status_text(self) -> str:
         return '   '.join(self.status_lines())
@@ -402,8 +443,9 @@ class Window(QWidget):
         state = self.machine.state
         if state in (READY, PAUSED):
             self._paint_pause(painter, picture, scale)
+            restart = 'triangle/R1: from power on (when DONE)' if self.whole else 'triangle: new seed   R1: same seed'
             hint = ('press a game button (or Create) to start' if state == READY else
-                    'Create: go on   square: save   triangle: new seed   R1: same seed')
+                    f'Create: go on   square: save   L1: state   {restart}')
             band = QRect(0, picture.bottom() - 20 * scale, picture.width(), 14 * scale)
             painter.fillRect(band, QColor(0, 0, 0, 170))
             painter.setPen(QColor(255, 255, 255))
@@ -416,8 +458,9 @@ class Window(QWidget):
             _text(painter, QRect(inner.left(), inner.top(), inner.width(), 30 * scale), 'DONE', 24 * scale, bold=True)
             _text(painter, QRect(inner.left(), inner.top() + 30 * scale, inner.width(), 14 * scale),
                   self.session.done or '', 8 * scale)
+            restart = 'triangle/R1: from power on again' if self.whole else 'triangle: new seed   R1: same seed'
             _text(painter, QRect(inner.left(), inner.top() + 44 * scale, inner.width(), 14 * scale),
-                  'square: save   triangle: new seed   R1: same seed', 7 * scale)
+                  f'square: save   {restart}', 7 * scale)
 
     @staticmethod
     def _paint_pause(painter: QPainter, picture: QRect, scale: int):

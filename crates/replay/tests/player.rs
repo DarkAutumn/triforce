@@ -4,8 +4,8 @@
 use std::sync::Arc;
 
 use replay::{
-    Context, Ending, Player, RecordOptions, Recorder, Replay, ReplayError, Report, Source, StateKind, file_hash,
-    verify,
+    Context, Ending, Event, Player, REPLAY_VERSION, RecordOptions, Recorder, Replay, ReplayError, Report, Source,
+    StateKind, file_hash, verify,
 };
 use zcore::{Rom, ZCore, state_file};
 
@@ -102,6 +102,49 @@ fn seeking_lands_on_the_machine_that_playing_there_reaches() {
     assert!(player.nes().pixels().is_some());
     assert!(state_file::machines_equal(&player.nes().snapshot(), &at(400)));
     assert!(player.seek(401).is_err());
+}
+
+/// A RESET event (version 3) presses the console's RESET before its frame's edits: a recording with one between
+/// two stretches of play and one after its last frame verifies, plays to the recorded machine (the title screen
+/// again, the game's own reset code having run) and seeks across the press both ways.
+#[test]
+fn a_reset_is_pressed_where_it_was_recorded() {
+    let Some(rom) = rom() else { return };
+    let mut nes = ZCore::power_on(rom.clone());
+    let mut rec = Recorder::new(Arc::new(RecordOptions::default()));
+    rec.set_source(Source::PowerOn { name: "LINK".into(), delay: 0 });
+    drive(&mut nes, &mut rec, &rom, 200);
+    assert_eq!(nes.ram()[0x12], 1, "on the file-select screen");
+    nes.reset();
+    rec.event(Event::Reset);
+    drive(&mut nes, &mut rec, &rom, 200);
+    assert_eq!(nes.ram()[0x12], 0, "the title screen again");
+    nes.reset();
+    rec.event(Event::Reset);
+    let bytes = finish(&nes, rec, &rom);
+    let replay = Replay::parse(bytes).unwrap();
+    assert_eq!(replay.version(), REPLAY_VERSION);
+    let resets: Vec<u32> =
+        replay.events().map(|e| e.unwrap()).filter(|e| e.event == Event::Reset).map(|e| e.frame).collect();
+    assert_eq!(resets, [200, 400]);
+    assert_eq!(verify(rom.clone(), replay.clone(), &no_files).unwrap().frames, 400);
+
+    let at = |frame: u32| {
+        let mut player = Player::open(rom.clone(), replay.clone(), &no_files).unwrap();
+        for _ in 0..frame {
+            assert!(player.step(false).unwrap());
+        }
+        player.nes().snapshot()
+    };
+    let mut player = Player::open(rom.clone(), replay.clone(), &no_files).unwrap();
+    for frame in [300, 150, 201, 240, 199, 360] {
+        player.seek(frame).unwrap();
+        assert!(state_file::machines_equal(&player.nes().snapshot(), &at(frame)), "frame {frame}");
+    }
+    while player.step(false).unwrap() {}
+    player.finish().unwrap();
+    assert_eq!(player.nes().ram()[..], nes.ram()[..]);
+    assert!(state_file::machines_equal(&player.nes().snapshot(), &nes.snapshot()));
 }
 
 #[test]

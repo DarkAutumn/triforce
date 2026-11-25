@@ -97,14 +97,16 @@ def test_the_controller_and_keyboard_maps():
     pad = emu_view.PAD_INPUTS
     assert (pad['a'], pad['b'], pad['start'], pad['back']) == ('B', 'A', 'START', 'PAUSE')     # cross, circle
     assert (pad['x'], pad['y'], pad['rightshoulder']) == ('SAVE', 'RESET_NEW', 'RESET_SAME')   # square, triangle
+    assert (pad['leftshoulder'], pad['leftstick']) == ('STATE', 'SELECT')                     # L1, L3
     assert {pad[d] for d in ('dpup', 'dpdown', 'dpleft', 'dpright')} == {'UP', 'DOWN', 'LEFT', 'RIGHT'}
-    assert not {'leftx', 'lefty', 'rightx', 'righty', 'guide', 'leftshoulder'} & set(pad)      # sticks: nothing
-    assert 'SELECT' not in emu_view.GAME_INPUTS
+    assert not {'leftx', 'lefty', 'rightx', 'righty', 'guide'} & set(pad)                     # sticks: nothing
+    assert emu_view.GAME_INPUTS['SELECT'] == emu.SELECT
     keys = emu_view.KEY_INPUTS
     from PySide6.QtCore import Qt  # pylint: disable=import-outside-toplevel
     assert (keys[Qt.Key.Key_Z], keys[Qt.Key.Key_X], keys[Qt.Key.Key_Return], keys[Qt.Key.Key_P]) == \
         ('B', 'A', 'START', 'PAUSE')
     assert (keys[Qt.Key.Key_S], keys[Qt.Key.Key_R], keys[Qt.Key.Key_T]) == ('SAVE', 'RESET_NEW', 'RESET_SAME')
+    assert (keys[Qt.Key.Key_F5], keys[Qt.Key.Key_Shift]) == ('STATE', 'SELECT')
     assert (keys[Qt.Key.Key_Minus], keys[Qt.Key.Key_Plus], keys[Qt.Key.Key_Equal]) == ('SLOWER', 'FASTER', 'FASTER')
 
 

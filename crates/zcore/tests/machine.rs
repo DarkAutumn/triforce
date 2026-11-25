@@ -246,6 +246,73 @@ fn restore_drops_the_frame_and_rewinds_the_cycle_count() {
     assert_eq!(nes.frame(), frame + 2);
 }
 
+/// The RESET button (`ZCore::reset`) on a game in play (`power_on_to_start`: LINK registered in slot 1, Link in
+/// overworld 0x77), against what the console does: CPU RAM and the battery RAM keep every byte through the
+/// press; the first instruction after it is the reset vector's target, Zelda's `asm:Reset_Handler`, whose path
+/// (`asm:Reset_RunGame`) reaches `asm:Save_InitSaveRam` with both save-RAM markers present ($6001 = $5A, $7FFF =
+/// $A5), so the registered file is kept (the warm start; at power on the battery RAM is 0 and is cleared), and
+/// `asm:Reset_ClearRam`, which seeds `Random` ($18) with $40 and the other twelve bytes with 0: from then on the
+/// thirteen random bytes step once a frame through the same sequence as after power on.  A snapshot taken right
+/// after the press plays on frame for frame like the machine that was reset.
+#[test]
+fn reset_keeps_ram_and_restarts_the_game_as_the_console_does() {
+    let Some(rom) = rom() else { return };
+    let inputs = inputs();
+    let mut nes = ZCore::power_on(rom.clone());
+    for &x in &inputs {
+        nes.run_frame(x, false);
+    }
+    assert_eq!((nes.ram()[0x12], nes.ram()[0x10], nes.ram()[0xEB]), (5, 0, 0x77), "in play in 0x77");
+    assert_eq!((nes.prg_ram()[0x0001], nes.prg_ram()[0x1FFF]), (0x5A, 0xA5), "save RAM markers written");
+    let (ram, prg_ram, frame) = (*nes.ram(), *nes.prg_ram(), nes.frame());
+    let cycles = nes.cycles();
+
+    nes.reset();
+    assert_eq!(nes.ram(), &ram, "CPU RAM keeps every byte through the press");
+    assert_eq!(nes.prg_ram(), &prg_ram, "battery RAM keeps every byte through the press");
+    assert_eq!(nes.frame(), frame, "a reset runs no frame");
+    assert_eq!(nes.cycles(), cycles + 7, "the reset's 7 cycles count");
+    let pressed = nes.snapshot();
+
+    let (tx, rx) = std::sync::mpsc::channel();
+    nes.set_trace(Some(Box::new(move |r: &zcore::TraceRow| {
+        tx.send(r.pc).unwrap();
+    })));
+    nes.run_frame(0, false);
+    nes.set_trace(None);
+    let reset = u16::from_le_bytes([nes.bus().peek(0xFFFC), nes.bus().peek(0xFFFD)]);
+    assert_eq!(rx.try_iter().next(), Some(reset), "the first instruction is the reset vector's target");
+
+    let mut after_rng = vec![nes.ram()[0x18..0x25].to_vec()];
+    for _ in 1..600 {
+        nes.run_frame(0, false);
+        after_rng.push(nes.ram()[0x18..0x25].to_vec());
+    }
+    assert_eq!(nes.ram()[0x12], 0, "back on the title screen (GameMode 0)");
+    assert_eq!(nes.prg_ram()[..0x0530], prg_ram[..0x0530], "the saved files are kept (warm start)");
+    // Random restarts at $40, 0 x 12 and steps once a frame, whatever the buttons: frames 300-599 after the
+    // press hold the bytes of the same frames after power on, at most a frame or two apart (the two paths to
+    // the first vertical blank differ: at power on Save_InitSaveRam clears the battery RAM).
+    let mut fresh = ZCore::power_on(rom.clone());
+    let power_on_rng: Vec<Vec<u8>> = (0..610)
+        .map(|_| {
+            fresh.run_frame(0, false);
+            fresh.ram()[0x18..0x25].to_vec()
+        })
+        .collect();
+    let apart = (-5i64..=5)
+        .find(|&d| (300..600).all(|k| after_rng[k] == power_on_rng[(k as i64 + d) as usize]))
+        .expect("the random bytes after a reset follow the power-on sequence");
+    assert!(apart.abs() <= 2, "the sequences are {apart} frames apart");
+
+    let mut twin = ZCore::power_on(rom);
+    twin.restore(&pressed);
+    for _ in 0..600 {
+        twin.run_frame(0, false);
+    }
+    assert_eq!(state_bytes(&twin), state_bytes(&nes), "a snapshot after the press plays on the same");
+}
+
 /// The whole machine state, as bytes (`MachineState` has no `PartialEq`).
 fn state_bytes(nes: &ZCore) -> Vec<u8> {
     postcard::to_allocvec(&nes.snapshot()).unwrap()

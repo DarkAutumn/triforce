@@ -6,7 +6,7 @@ use zcore::state_file::{self, StateFormatError};
 use zcore::tracks::{Mix, Tracks};
 use zcore::{MachineState, Rom, ZCore};
 
-use crate::format::{Edit, ReplayError, Source, StateKind, file_hash, format_error};
+use crate::format::{Edit, Event, ReplayError, Source, StateKind, file_hash, format_error};
 use crate::reader::Replay;
 
 /// Resolves a [`Source::File`] name to the state file's bytes.
@@ -19,16 +19,22 @@ struct Entry {
     kind: StateKind,
 }
 
-/// A replay being played.  Before input frame `k` runs, the EDITS records tagged `k` are applied.
+/// A replay being played.  Before input frame `k` runs, a RESET event tagged `k` presses the console's RESET
+/// button (`ZCore::reset`), then the EDITS records tagged `k` are applied; a state recorded at frame `k` is the
+/// machine after that frame's RESET.
 pub struct Player {
     nes: ZCore,
     replay: Replay,
     origin: MachineState,
     inputs: Vec<u8>,
     edits: Vec<Edit>,
+    /// The frames of the RESET events, in order.
+    resets: Vec<u32>,
     states: Vec<Entry>,
     frame: u32,
     edit: usize,
+    /// The next RESET to press.
+    reset: usize,
     /// The next STATES entry [`verify`] compares.
     state: usize,
     /// The controller byte of the last frame run.
@@ -94,6 +100,13 @@ impl Player {
             }
             edits.push(edit);
         }
+        let mut resets = Vec::new();
+        for record in replay.events() {
+            let record = record?;
+            if record.event == Event::Reset {
+                resets.push(record.frame);
+            }
+        }
         let states = replay
             .states()
             .map(|s| Entry { frame: s.frame, edits: s.edits, kind: s.kind })
@@ -103,10 +116,12 @@ impl Player {
             nes,
             inputs: replay.inputs(),
             edits,
+            resets,
             states,
             replay,
             frame: 0,
             edit: 0,
+            reset: 0,
             state: 0,
             buttons: 0,
             sound: None,
@@ -220,8 +235,13 @@ impl Player {
         Ok(())
     }
 
-    /// Applies the edits tagged with the current frame, each after checking the byte it replaces.
+    /// Presses RESET where a RESET event is tagged with the current frame, then applies the frame's edits, each
+    /// after checking the byte it replaces.
     fn apply_edits(&mut self, compare: bool) -> Result<(), ReplayError> {
+        while self.resets.get(self.reset) == Some(&self.frame) {
+            self.nes.reset();
+            self.reset += 1;
+        }
         loop {
             if compare {
                 self.compare_states()?;
@@ -294,11 +314,13 @@ impl Player {
                     self.nes.restore(&file.machine);
                     self.frame = recorded.frame;
                     self.edit = recorded.edits as usize;
+                    self.reset = self.resets.partition_point(|&r| r <= recorded.frame);
                 }
                 None => {
                     self.nes.restore(&self.origin);
                     self.frame = 0;
                     self.edit = 0;
+                    self.reset = 0;
                 }
             }
         }
