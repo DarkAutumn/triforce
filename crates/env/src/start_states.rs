@@ -6,10 +6,10 @@
 //!   15% uniform floor.
 //! - [`StartWeights`]: a training pool's shared seed-state weights (prioritized level replay); while set, seed draws
 //!   follow them instead of the selector's own weights.
-//! - Harvested states (`<harvested dir>/*.state` of the family's start-state namespaces, `state_routes:`) stand in for
-//!   the seed draw's room entry at `harvested_fraction` (round 42): the seed draw picks the room entry, and that share
-//!   of its resets start from a harvested state of the same entry (its own selector), so a room's share of the episodes
-//!   is the seed states' whatever the number of files harvested for it.
+//! - Harvested states (`<harvested dir>/*.state` of the family's start-state namespaces, `state_routes:`) mix with
+//!   seed states at `harvested_fraction`, stratified by room entry (round 42): a harvested draw picks one of the
+//!   harvested room entries alike, then a state of it by the entry's own selector, so a room's share does not depend
+//!   on how many files were harvested for it.
 //! - [`ram_randomization_values`]: reset-time hp/bombs/keys; [`apply_room_values`]: a listed room's own bombs and
 //!   drop cycle, by the side the start enters from.
 //!
@@ -270,13 +270,13 @@ fn entry_key(name: &str) -> EntryKey {
 
 /// Seed + harvested start states for one specialist.
 ///
-/// A reset draws a seed state (the seed selector, or the shared weights while set): that picks the room entry. With
-/// probability `harvested_fraction` a harvested state of the same room entry stands in for it, drawn by that entry's
-/// own selector (round 42: one selector over every harvested file gave each room a share by its number of files, and
-/// its warm-up walked them in file-name order). So every room keeps the seed states' share of the episodes; an entry
-/// with harvested states starts `harvested_fraction` of its resets from them, one without none; a harvested entry no
-/// seed state has (an off-route entry a chain wandered into) is never drawn. A pool without seed states draws its
-/// harvested room entries alike.
+/// With probability `harvested_fraction` (always without seed states) a reset starts from a harvested state: one of
+/// the harvested room entries (namespace, room, side, visit) alike, then a state of that entry by its own selector
+/// (badness within the entry). Else a seed state (the seed selector, or the shared weights while set). Round 42: one
+/// selector over every harvested file gave each room a share by its number of files (Darknut's 1,792 files of 3x5b's
+/// first pass against 150 of the Olive Garden's), and its warm-up walked them in file-name order. So every harvested
+/// entry gets `harvested_fraction / entries` of the resets, entries a seed state lacks included (8:0x3c's Gleeok,
+/// harvested only).
 #[derive(Clone, Debug)]
 pub struct StartStatePool {
     harvested_dir: PathBuf,
@@ -388,25 +388,18 @@ impl StartStatePool {
         if self.draws_harvested() && self.resets.is_multiple_of(HARVEST_RESCAN_RESETS) {
             self.scan_harvested()?;
         }
-        let Some(seed) = self.seed.as_mut() else {
+        if !self.harvested.is_empty() && (self.seed.is_none() || rng.random::<f64>() < self.harvested_fraction) {
             let entry = rng.random_range(0..self.harvested.len());
-            let path = self.harvested.values_mut().nth(entry).expect("scanned").next(rng);
-            return self.existing(path);
-        };
-        let state = match &self.weights {
-            Some(weights) if weights.fill(&seed.states, &mut self.drawn) => {
-                seed.states[weighted_index(rng, &self.drawn)].clone()
-            }
-            _ => seed.next(rng),
-        };
-        if self.harvested_fraction > 0.0
-            && let Some(h) = self.harvested.get_mut(&entry_key(&state))
-            && rng.random::<f64>() < self.harvested_fraction
-        {
-            let path = h.next(rng);
+            let path = self.harvested.values_mut().nth(entry).expect("an entry").next(rng);
             return self.existing(path);
         }
-        Ok(state)
+        let seed = self.seed.as_mut().expect("seed states");
+        if let Some(weights) = &self.weights
+            && weights.fill(&seed.states, &mut self.drawn)
+        {
+            return Ok(seed.states[weighted_index(rng, &self.drawn)].clone());
+        }
+        Ok(seed.next(rng))
     }
 
     /// `path`, a harvested state just drawn, while its file is there.
@@ -910,11 +903,11 @@ mod tests {
         assert!(picks.iter().any(|p| p.ends_with("/d3first_1_73s_h1_0.state")));
     }
 
-    /// Round 42: the seed draw picks the room entry and `harvested_fraction` of an entry's resets start from its own
-    /// harvested states, so the entries share the resets as their seed states do (not 90 files against 2), the harvest
-    /// stands in for half of each, and an entry without harvested files or without seed states keeps to its own.
+    /// Round 42: harvested draws are stratified by room entry: at 0.5, half the resets are harvested, split alike over
+    /// the harvested entries whatever their files (90, 2 and 1), an entry no seed state has included; the seed states
+    /// keep the other half; within an entry every file once before any again.
     #[test]
-    fn pool_draws_harvested_states_by_the_seed_draws_room_entry() {
+    fn pool_stratifies_harvested_draws_by_room_entry() {
         let dir = tempfile::tempdir().unwrap();
         let seeds = dir.path().join("seeds");
         let harvested = dir.path().join("harvested");
@@ -929,7 +922,7 @@ mod tests {
         for i in 0..2 {
             std::fs::write(harvested.join(format!("1_73e_h{i}_3.state")), b"x").unwrap();
         }
-        // An entry no seed state has (a chain wandered in from N): never drawn while there are seed states.
+        // An entry no seed state has (a room only chains bring, as 8:0x3c's Gleeok).
         std::fs::write(harvested.join("1_73n_h0_3.state"), b"x").unwrap();
         let text = format!(
             "name: t\nrooms: ['(1, 0x73)']\nsuccess: exit-correct\nstart_states: ['1_73*_[0-9]']\n\
@@ -941,20 +934,17 @@ mod tests {
         assert_eq!(pool.harvested.len(), 3);
         let mut r = rng();
         let picks: Vec<String> = (0..6000).map(|_| pool.next(&mut r).unwrap()).collect();
-        let count = |f: &dyn Fn(&str) -> bool| picks.iter().filter(|p| f(state_label(p))).count() as f64 / 6000.0;
-        for side in ["s", "e", "w"] {
-            let entry = count(&|l| l.starts_with(&format!("1_73{side}_")));
-            assert!((entry - 1.0 / 3.0).abs() < 0.03, "1_73{side}: {entry}");
+        let count = |prefix: &str| picks.iter().filter(|p| state_label(p).starts_with(prefix)).count() as f64 / 6000.0;
+        for entry in ["1_73s_h", "1_73e_h", "1_73n_h"] {
+            assert!((count(entry) - 1.0 / 6.0).abs() < 0.03, "{entry}: {}", count(entry));
         }
-        let harvested_s = count(&|l| l.starts_with("1_73s_h"));
-        let harvested_e = count(&|l| l.starts_with("1_73e_h"));
-        assert!((harvested_s - 1.0 / 6.0).abs() < 0.03, "{harvested_s}");
-        assert!((harvested_e - 1.0 / 6.0).abs() < 0.03, "{harvested_e}");
-        assert_eq!(count(&|l| l.starts_with("1_73w_h") || l.starts_with("1_73n_")), 0.0);
+        for seed in ["1_73s_0", "1_73e_0", "1_73w_0"] {
+            assert!((count(seed) - 1.0 / 6.0).abs() < 0.03, "{seed}: {}", count(seed));
+        }
         // Within an entry, every file once before any again.
         let first: Vec<&String> = picks.iter().filter(|p| state_label(p).starts_with("1_73s_h")).take(90).collect();
         assert_eq!(first.iter().collect::<std::collections::HashSet<_>>().len(), 90);
-        // Without seed states, the harvested entries share the resets alike, whatever their files.
+        // Without seed states, the harvested entries share every reset alike.
         let mut harvest_only = config.clone();
         harvest_only.start_states.clear();
         let mut pool = StartStatePool::new(&harvest_only, &seeds).unwrap();

@@ -130,7 +130,7 @@ def test_harvested_starts_are_drawn_in_a_multi_family_run(states_dir, tmp_path):
     seed = require_state('0_5bw_0')
     harvested = tmp_path / 'harvested'
     harvested.mkdir()
-    for i in range(2):     # round 42: a harvested state stands in for its own room entry's seed draw (bare 0x5b W)
+    for i in range(2):     # round 42: a d2first state named as d3first's harvest would be refused (no d3first step)
         shutil.copy(seed, harvested / f'0_5bw_h{i}_0.state')
     states = tmp_path / 'states'
     states.mkdir()

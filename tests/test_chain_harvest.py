@@ -119,10 +119,8 @@ def test_training_resets_from_harvested_states_with_their_true_health(states_dir
     directory, results = harvested
     health_in = handoffs(results)
     files = {str(p) for p in (directory / 'ow-moblin').iterdir()}
-    # Round 42: a harvested state stands in for the seed draw's room entry, so the seed states are 0x5b from W's.
     config = native.SpecialistConfig.load('ow-moblin').replace(
-        harvested_states=str(directory / 'ow-moblin'), harvested_fraction=1.0, max_steps=2,
-        start_states=['0_5bw_[0-9]'])
+        harvested_states=str(directory / 'ow-moblin'), harvested_fraction=1.0, max_steps=2)
     assert config.ram_randomization.hp is not None      # a seed state would get a random health
     env = native.Env(config, states_dir=str(states_dir), seed=3)
     seen = set()

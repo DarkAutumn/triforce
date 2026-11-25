@@ -22,7 +22,7 @@ from triforce import registry, train
 from triforce.inputs import MissingInput
 from triforce.metrics import EpisodeTracker, MetricsLogger, read_jsonl
 
-from .conftest import require_state, start_task
+from .conftest import start_task
 
 SPECIALIST = 'ow-start'
 GAMEPLAY_PREFIXES = ('kind/', 'duration/', 'interrupt/', 'ending/', 'outcome/', 'reward/', 'health', 'hearts/',
@@ -251,20 +251,14 @@ def test_early_stop_balances_both_clips_switch_states():
 def test_training_logs_its_harvested_source_and_rate(states_dir, tmp_path, logs_dir):
     """F069/F140: run.json and the start event name the harvested dir, its state count and fraction; harvested
     episodes are logged as harvested/success_rate and the early stop balances over the seed state only."""
-    # Round 42: a harvested state stands in for the seed draw's room entry: 0x77 out of the cave, both.
-    seed = require_state('0_77c_0')
-    states = tmp_path / 'states'
-    states.mkdir()
-    shutil.copyfile(states_dir / 'start.state', states / 'start.state')
-    shutil.copyfile(seed, states / '0_77c_0.state')
     harvest = tmp_path / 'harvest'
     harvest.mkdir()
-    shutil.copyfile(seed, harvest / '0_77c_h1_0.state')
+    shutil.copyfile(states_dir / 'start.state', harvest / '0_77s_h1_0.state')
     config = tmp_path / 'short.yaml'
     config.write_text("name: ow-start\nrooms: ['(0, 0x77)', '(0, 0x77, cave)', '(0, 0x39)']\n"
-                      f"start_states: ['0_77c_0']\nsuccess: [exit-correct]\nmax_steps: 4\n"
+                      f"start_states: ['start']\nsuccess: [exit-correct]\nmax_steps: 4\n"
                       f"harvested_states: {harvest}\nharvested_fraction: 0.5\n")
-    run_dir = train.main(['--specialist', str(config), '--states-dir', str(states), '--parallel', '4',
+    run_dir = train.main(['--specialist', str(config), '--states-dir', str(states_dir), '--parallel', '4',
                           '--steps-per-update', '32', '--iterations', '4', '--models-dir', str(tmp_path),
                           '--run-id', 'harvest', '--seed', '3', '--device', 'cpu'])
     harvested = json.loads((run_dir / 'run.json').read_text())['harvested']
