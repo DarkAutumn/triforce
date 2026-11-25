@@ -72,9 +72,6 @@ def build_parser() -> argparse.ArgumentParser:
                         help="the B item selected at the load (one Link holds there; bombs always)")
     parser.add_argument('--enemies', type=int, help="at most N monsters in the (dungeon) room")
     parser.add_argument('--seed', type=int, help="the first start's seed (the RNG phase; default: drawn)")
-    parser.add_argument('--natural-entries', action='store_true',
-                        help="the room's monsters placed as real play from power on places them at that door (the "
-                             "route's measured entries, triforce/entry_draws.<route>.json), not by a uniform draw")
     parser.add_argument('--no-sound', action='store_true', help="no sound")
     parser.add_argument('--scale', type=int, default=3, help="the picture's whole-number scale (default 3)")
     parser.add_argument('--done', default='room', choices=sorted(emu.DONE_RULES),
@@ -90,7 +87,7 @@ def main(argv=None) -> int:
     spec = emu.Spec(args.level, args.room, route=args.route, entry=args.entry, visit=args.visit, chain=args.chain,
                     bombs=args.bombs, hearts=args.hearts, keys=args.keys, item=args.item, enemies=args.enemies)
     try:
-        session = emu.Session(spec, seed=args.seed, done_rule=args.done, natural_entries=args.natural_entries)
+        session = emu.Session(spec, seed=args.seed, done_rule=args.done)
     except (emu.StartError, ValueError) as error:
         print(f"emu-zelda: {error}", file=sys.stderr)
         return 2

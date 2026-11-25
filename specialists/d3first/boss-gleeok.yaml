@@ -36,7 +36,6 @@ items:
   bombs: never
 curriculum:
   enabled: true
-harvested_fraction: 1.0
 one_room: true
 max_steps: 1000
 endings:

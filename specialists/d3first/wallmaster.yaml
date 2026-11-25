@@ -43,7 +43,6 @@ items:
   candle: true                            # round 40 (Switch40): 7:0x0d's Wallmasters burn while the Bubbles block the sword (BOOMERANG stays on)
 curriculum:
   enabled: true
-harvested_fraction: 0.3
 one_room: true
 max_steps: 2000
 warm_start: null

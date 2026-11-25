@@ -43,4 +43,3 @@ notes: Kill Aquamentus, collect the heart container, then leave east into the tr
   no correct exit before the heart is collected.
 state_routes:
 - d3first
-harvested_fraction: 0.3

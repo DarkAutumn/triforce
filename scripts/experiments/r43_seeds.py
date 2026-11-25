@@ -11,8 +11,11 @@ Subcommands (each writes JSON under --out, default target/r43-seeds/):
   enumerate STATE       a pre-entry state entered by the game for every phase of the random cycle (only the
                         thirteen bytes written), and for each spawn cycle of --cycles (only `$524` written): the
                         placement and the monsters' walk under a fixed input (hold UP)
-  draws SCAN...         the natural entry table (`triforce/entry_draws.<ns>.json`, `room_entry::EntryDraws`): per
-                        door the real entries of the scanned power-on runs of a route
+  plan SCAN...          the route's planned `$524` at every door, composed by the game's maps (`--from-dungeon-doors`)
+  scrolls REPLAY...     door-leaving states per (dungeon, direction), the start of `door_map`
+  reach SCAN...         every dungeon door's reachable `$524` set (the game's maps searched over every play)
+  rule SCAN...          the reset rule's table, `triforce/entry_rule.<ns>.json` (`zelda::room_entry::EntryRule`)
+  overworld SCAN...     the route's overworld doors, real against the uniform draw
 
 The RAM read (zelda-asm/index/ram.md): `$12` GameMode, `$11` IsUpdatingMode, `$EB` RoomId, `$15` FrameCounter,
 `$26` LongTimerCycle, `$4A` ChaseLongTimer, `$60-$62` IsChasingOtherTarget / ChaseTargetX / Y, `$18-$24` Random,
@@ -92,17 +95,33 @@ def phase_of(register) -> int:
 
 # ---- RAM facts ----
 
+def room_flags_address(ram, level: int, room: int) -> int:
+    """The entered room's flags byte (zelda::room_entry::room_flags_base: the level block's pointer `$6BAF` when
+    set, else the fixed block of the level)."""
+    pointer = int(ram[0x800 + 0xBAF]) | int(ram[0x800 + 0xBB0]) << 8 if len(ram) > 0x800 else 0
+    base = pointer if 0 < pointer < 0x800 else (0x67F if level == 0 else 0x77F if level >= 7 else 0x6FF)
+    return base + room
+
+
 def entry_facts(ram) -> dict:
-    """What the pre-entry RAM holds that the room's monsters can depend on."""
+    """What the pre-entry RAM holds that the room's monsters can depend on, and the bytes the drops and the room
+    history keep: `$52A` WorldKillCycle, `$50`/`$51` HelpDropCount / IsHelpDropBomb, `$627` WorldKillCount, `$621-$626`
+    RoomHistory, `$560-$5DF` LevelKillCounts, the entered room's flags byte (bits 6-7: the dungeon's saved kills)."""
     room = int(ram[ROOM])
+    level = int(ram[LEVEL])
+    flags = room_flags_address(ram, level, room & 0x7F)
     return {
-        'mode': int(ram[MODE]), 'updating': int(ram[UPDATING]), 'level': int(ram[LEVEL]), 'room': room,
+        'mode': int(ram[MODE]), 'updating': int(ram[UPDATING]), 'level': level, 'room': room,
         'phase': phase_of(ram[RANDOM:RANDOM + 13]), 'frame_counter': int(ram[FRAME_COUNTER]),
         'long_timer_cycle': int(ram[LONG_TIMER_CYCLE]), 'chase_timer': int(ram[CHASE_TIMER]),
         'chase_flag': int(ram[CHASE_FLAG]), 'chase_target': [int(ram[CHASE_X]), int(ram[CHASE_Y])],
         'spawn_cycle': int(ram[SPAWN_CYCLE]), 'edge_cell': int(ram[EDGE_CELL]),
         'link': [int(ram[OBJ_X]), int(ram[OBJ_Y]), int(ram[OBJ_DIR])],
         'hearts': [int(ram[HEARTS]), int(ram[PARTIAL])], 'level_kills': int(ram[LEVEL_KILLS + (room & 0x7F)]),
+        'drop_cycle': int(ram[0x52A]), 'help_drop_count': int(ram[0x50]), 'help_drop_bomb': int(ram[0x51]),
+        'world_kill_count': int(ram[0x627]), 'room_history': [int(b) for b in ram[0x621:0x627]],
+        'level_kill_counts': [int(b) for b in ram[0x560:0x5E0]],
+        'room_flags': int(ram[flags]) if flags < 0x800 else int(ram[0x800 + flags - 0x6000]),
     }
 
 
@@ -371,101 +390,29 @@ def route_maps(route: str, chain: int = 0) -> dict:
         ram = game.ram()
         if not is_pre_entry(ram):
             continue
-        f, monsters = [], 0
+        f, layouts = [], []
         for sc in range(9):
             placed, _, _, _ = enter(game, name, None, sc, 0)
             f.append(int(game.ram()[SPAWN_CYCLE]))
-            monsters = len(placed)
+            layouts.append(placed)
         steps[e['route_step']] = {'from': e.get('from_step'), 'door': (e['level'], int(e['room'], 16), int(ram[OBJ_DIR])),
-                                  'cave': bool(e['in_cave']), 'f': f, 'monsters': monsters, 'state': name}
+                                  'cave': bool(e['in_cave']), 'entry': e['entry'], 'f': f, 'layouts': layouts,
+                                  'monsters': len(layouts[0]), 'state': name,
+                                  'inside': enters_inside(int(ram[OBJ_X]), int(ram[OBJ_Y]), int(ram[OBJ_DIR]))}
     return steps
 
 
-def predicted_cycles(steps: dict, run_entries: list) -> dict:
-    """A run's $524 at each dungeon step of today's route: at a step that comes in from another level (a dungeon's
-    entrance) the run's own real value there (its k-th entry of that door for the route's k-th), and inside the
-    dungeon the game's maps of the steps it comes from (`route_maps`).  Steps the run gives no start for are left out."""
-    seen, at = {}, {}
-    real_at = {}
-    for e in run_entries:
-        real_at.setdefault((e['level'], e['room'], e['link'][2]), []).append(e['spawn_cycle'])
-    for step in sorted(steps):
-        s = steps[step]
-        level = s['door'][0]
-        if level == 0:
-            continue
-        before = steps.get(s['from'])
-        if before is not None and before['door'][0] == level and s['from'] in at:
-            at[step] = before['f'][at[s['from']]]
-            continue
-        k = seen.get(s['door'], 0)
-        seen[s['door']] = k + 1
-        values = real_at.get(s['door'], [])
-        if k < len(values):
-            at[step] = values[k]
-    return at
-
-
-def cmd_draws(args):
-    """`triforce/entry_draws.<ns>.json`: per door (level, room, Link's facing) the real entries of power-on runs
-    (`room_entry::EntryRecord`: spawn cycle, edge cell, chase flag, target and timer, long-timer divider).  With
-    --today, a dungeon door where the runs' real values disagree with today's route (`predicted_cycles`: fewer than
-    10% of the runs that reach it agree) takes each run's predicted value instead, the rest of the record its own."""
-    doors, runs, by_run = {}, set(), {}
-    for run, e in real_entries(args.scans, args.route, args.min_version):
-        runs.add(run['path'])
-        by_run.setdefault(run['path'], []).append(e)
-        doors.setdefault((e['level'], e['room'], e['link'][2]), []).append(
-            [e['spawn_cycle'], e['edge_cell'], e['chase_flag'], *e['chase_target'], e['chase_timer'],
-             e['long_timer_cycle']])
-    changed = {}
-    if args.today:
-        steps = route_maps(args.route)
-        predicted, agree = {}, {}
-        for path, entries in by_run.items():
-            first = {}
-            for e in entries:
-                first.setdefault((e['level'], e['room'], e['link'][2]), e)
-            for step, sc in predicted_cycles(steps, entries).items():
-                door = steps[step]['door']
-                if steps[step]['cave'] or steps[step]['monsters'] == 0 or door in predicted.get(path, {}):
-                    continue
-                predicted.setdefault(path, {})[door] = sc
-                if door in first:
-                    agree.setdefault(door, []).append(first[door]['spawn_cycle'] == sc)
-        for door in {d for p in predicted.values() for d in p}:
-            votes = agree.get(door, [])
-            if votes and sum(votes) >= 0.1 * len(votes):
-                continue                # today's route brings what the runs brought (or a mix of the ways): keep them
-            entries = []
-            for path, at in predicted.items():
-                if door not in at:
-                    continue
-                own = next((e for e in by_run[path] if (e['level'], e['room'], e['link'][2]) == door), None)
-                own = own or next(e for e in by_run[path] if e['level'] == door[0])
-                entries.append([at[door], own['edge_cell'], own['chase_flag'], *own['chase_target'],
-                                own['chase_timer'], own['long_timer_cycle']])
-            changed[door] = (sorted({r[0] for r in doors.get(door, [])}), sorted({r[0] for r in entries}))
-            doors[door] = entries
-        for door, (was, now) in sorted(changed.items()):
-            print(f"today's route: {door[0]}x{door[1]:02x} facing {door[2]}: real runs {was} -> {now}")
-    out = {'route': args.route, 'min_version': args.min_version, 'runs': len(runs),
-           'source': 'scripts/experiments/r43_seeds.py draws (power-on runs, no memory edit but bombs and rupees)'
-                     + (", today's route's dungeon doors by the game's own maps" if args.today else ''),
-           'today': [{'level': d[0], 'room': d[1], 'facing': d[2], 'runs': c[0], 'today': c[1]}
-                     for d, c in sorted(changed.items())],
-           'doors': [{'level': k[0], 'room': k[1], 'facing': k[2], 'entries': v} for k, v in sorted(doors.items())]}
-    Path(args.output).write_text(json.dumps(out, separators=(',', ':')) + '\n')
-    print(f"{len(doors)} doors, {sum(len(v) for v in doors.values())} entries of {len(runs)} runs -> {args.output}")
-
-
 def plan_clears(route: str) -> dict:
-    """Route step index -> True when the route's plan leaves the room with every monster dead (a fight to the end): it
-    leaves by a shutter, or the room's treasure comes from killing them all (game.yaml `trigger: kill-all`,
-    `kill-all-item`) and the step takes it, or `treasure: clear`.  Every other step crosses (monsters left alive)."""
+    """Route step index -> True when the route's plan leaves the room with every monster dead (a fight to the end).
+    The step's routes.yaml `clear: true|false` when the route says (States44); else read from the room: it leaves by a
+    shutter, or the room's treasure comes from killing them all (game.yaml `trigger: kill-all`, `kill-all-item`) and
+    the step takes it, or `treasure: clear`; every other step crosses (monsters left alive)."""
     rooms = _native.game_rooms()
     out = {}
     for step in _native.route_steps(route):
+        if step.get('clear') is not None:
+            out[step['index']] = bool(step['clear'])
+            continue
         room = rooms.get((step['level'], step['room'], step['in_cave'])) or {}
         exit_ = (room.get('exits') or {}).get(step['exit']) or {}
         takes = step['treasure'] not in ('skip', 'refuse')
@@ -571,6 +518,334 @@ def first_edge_spawn(game, state, cell: int, frames: int = 300):
     return None
 
 
+SIDE_FACING = {'S': 8, 'N': 4, 'W': 1, 'E': 2}           # Link's facing on entering by that side
+SIDE_STEP = {'S': 0x10, 'N': -0x10, 'W': -1, 'E': 1}     # the room he comes from, relative to the room entered
+MAX_EMPTY_CHAIN = 5    # emptied rooms stay empty only among the last six rooms entered (asm:RoomHistory_ModifyObjCountUW)
+UNKILLABLE = ('Bubble',)                                  # in the count, never killed: the room is never emptied
+
+
+def scroll_states(directory: Path) -> dict:
+    """(level, Link's facing) -> a machine state on the first frame of game mode 6 (a room left by a door) in that
+    level and direction (`scrolls`)."""
+    out = {}
+    for path in sorted(directory.glob('L*_d*_m6_*.tfzstate')):
+        level, facing = path.name.split('_')[:2]
+        out.setdefault((int(level[1:]), int(facing[1:])), path.read_bytes())
+    return out
+
+
+def cmd_scrolls(args):
+    """The states `door_map` starts from: the first frame of game mode 6 (a room left by a door) of each (dungeon,
+    direction) in the power-on replays given, first come; `--out`/scroll/L<level>_d<facing>_m6_<frame>.tfzstate."""
+    folder = Path(args.out) / 'scroll'
+    folder.mkdir(parents=True, exist_ok=True)
+    have = set(scroll_states(folder))
+    for path in args.replays:
+        player = _native.ReplayPlayer(read_replay(path))
+        prev = None
+        while player.step(1):
+            ram = player.ram()
+            mode = int(ram[MODE])
+            key = (int(ram[LEVEL]), int(ram[OBJ_DIR]))
+            if mode == 6 and prev != 6 and key[0] > 0 and key not in have:
+                (folder / f'L{key[0]}_d{key[1]}_m6_{player.frame}.tfzstate').write_bytes(player.save_state())
+                have.add(key)
+            prev = mode
+    print(f"{len(have)} (level, direction) states in {folder}: {sorted(have)}")
+
+
+def door_map(game, scrolls: dict, level: int, room: int, side: str):
+    """The game's map $524 -> $524 of entering dungeon `room` by `side` (and the layout each value makes): a state
+    leaving a room of the level by a door in the same direction, its room id written to the room on the other side
+    of `side`, so the game itself scrolls into `room`, lays it out and places its monsters; the room fresh (its kills
+    and saved kill bits cleared: the full set).  Link stands at the door's centre in every dungeon room."""
+    state = scrolls.get((level, SIDE_FACING[side]))
+    if state is None:
+        return None
+    game.load(state, randomize_rng=False, controllable=True)
+    ram = game.ram()
+    flags = room_flags_address(ram, level, room)
+    writes = ((ROOM, (room + SIDE_STEP[side]) & 0xFF), (LEVEL_KILLS + room, 0),
+              (flags, int(ram[flags] if flags < 0x800 else 0) & 0x3F))
+    f, layouts = [], []
+    for sc in range(9):
+        placed, _, _, _ = enter(game, state, None, sc, 0, writes=writes)
+        ram = game.ram()
+        if ram[ROOM] != room:
+            return None
+        f.append(int(ram[SPAWN_CYCLE]))
+        layouts.append(placed)
+    return f, layouts
+
+
+def reachable_cycles(maps: dict, rooms: dict, entrances: dict, clearable, monsters) -> dict:
+    """Per door (room, side): {value: the fewest emptied rooms passed since it was placed} for every $524 value some
+    play can bring there.  A door's value is what Link carries out of the room on its other side, entered by any of
+    that room's doors; a room entered with monsters gives its map's image (`maps`), an emptied one (cleared earlier,
+    still among the last six rooms) passes the value on, at most MAX_EMPTY_CHAIN in a row; a room without monsters
+    always passes it; a room with monsters whose map is unknown gives nothing (the search stays inside what is
+    proven).  `entrances`: door -> the values the overworld brings there.  A fixed point."""
+    doors = [(room, side) for room in rooms for side in rooms[room]]
+    into = {door: dict(entrances.get(door, {})) for door in doors}
+    changed = True
+    while changed:
+        changed = False
+        out = {}
+        for room, side in doors:
+            values = {}
+            m = maps.get((room, side))
+            for v, chain in into[(room, side)].items():
+                if m is not None:
+                    values[m[0][v]] = 0
+                    if clearable(room) and chain + 1 <= MAX_EMPTY_CHAIN:
+                        values[v] = min(values.get(v, 99), chain + 1)
+                elif not monsters(room):
+                    values[v] = min(values.get(v, 99), chain)
+            out[(room, side)] = values
+        for room, side in doors:
+            neighbours = rooms[room][side]
+            if neighbours is None:
+                continue
+            # A door has one room on its other side; a stair ('C') every room whose stairs lead into its cellar
+            # (the room itself, the other end of a tunnel): a cellar places no monsters and passes the value on.
+            for neighbour in neighbours if isinstance(neighbours, list) else [neighbours]:
+                for t in rooms.get(neighbour, {}):
+                    for v, chain in out.get((neighbour, t), {}).items():
+                        if chain < into[(room, side)].get(v, 99):
+                            into[(room, side)][v] = chain
+                            changed = True
+    return into
+
+
+def cmd_reach(args):
+    """The reachable set of every dungeon door of the route: the game's maps of every door of each dungeon
+    (`door_map`), searched over every order of rooms and clear pattern (`reachable_cycles`) from the values the runs
+    bring to the dungeon's entrance; the layouts they make, the route's planned value, the served draw's nine."""
+    scrolls = scroll_states(Path(args.scrolls))
+    rooms_data = _native.game_rooms()
+    steps = route_maps(args.route)
+    clears = plan_clears(args.route)
+    for index, flip in json.loads(args.flips).items():
+        clears[int(index)] = flip
+    # A dungeon's entrance (a step coming in from another level) at the runs' commonest value there, the k-th entry of
+    # a door for the route's k-th (Dungeon 1 is entered twice by its S door).
+    by_occurrence = {}
+    runs = {}
+    for run, e in real_entries(args.scans, args.route, args.min_version):
+        runs.setdefault(run['path'], []).append(e)
+    for entries in runs.values():
+        count = {}
+        for e in entries:
+            door = (e['level'], e['room'], e['link'][2])
+            k = count.get(door, 0)
+            count[door] = k + 1
+            by_occurrence.setdefault((door, k), []).append(e['spawn_cycle'])
+    anchors, count = {}, {}
+    for index in sorted(steps):
+        s = steps[index]
+        door = tuple(s['door'])
+        k = count.get(door, 0)
+        count[door] = k + 1
+        before = steps.get(s['from'])
+        seen = by_occurrence.get((door, k), [])
+        if door[0] and seen and (before is None or before['door'][0] != door[0]):
+            anchors[index] = max(set(seen), key=seen.count)
+    planned = plan_cycles(steps, clears, anchors=anchors)
+    real = real_by_side(args.scans, args.route, args.min_version)
+    game = _native.Game()
+    table = []
+    for level in range(1, 10):
+        level_rooms = {room: data for (lv, room, cave), data in rooms_data.items() if lv == level and not cave}
+        rooms, maps = {}, {}
+        opposite = {'N': 'S', 'S': 'N', 'E': 'W', 'W': 'E'}
+        for room, data in level_rooms.items():
+            rooms[room] = {}
+            for side in 'NSEW':
+                exit_ = data['exits'].get(side)
+                if not (exit_ and exit_['to'][0] == level and not exit_['to'][2] and exit_['to'][1] in level_rooms):
+                    continue
+                # Entering by `side` means leaving the neighbour by its door toward this room (game.yaml lists a
+                # room's passable exits: a wall or a one-way shutter has none).
+                back = level_rooms[exit_['to'][1]]['exits'].get(opposite[side])
+                if back and back['to'][:2] == (level, room):
+                    rooms[room][side] = exit_['to'][1]
+        for room, data in level_rooms.items():
+            if sum(data['enemies'].values()) == 0:
+                continue
+            for side in list(rooms[room]):
+                m = door_map(game, scrolls, level, room, side)
+                if m is not None:
+                    maps[(room, side)] = m
+        # Every value real play brought to a door is reachable there by definition: each route door of the level is
+        # seeded with the runs' values (the entrance's values are all the overworld is known to deliver).  A return up
+        # a stair ('C') enters with Link on the stairs: its map is the seed state's own (the game's).
+        entrances = {}
+        for index, s in steps.items():
+            lv, room, facing = s['door']
+            if lv != level or s['cave'] or room not in rooms:
+                continue
+            side = step_side(s)
+            rooms[room].setdefault(side, None)
+            if side == 'C':
+                rooms[room]['C'] = cellar_sources(rooms_data, level, room)
+            if side == 'C' and s['monsters']:
+                maps[(room, side)] = (s['f'], s['layouts'])
+            for v in set(real.get((lv, room, side), [])):
+                entrances.setdefault((room, side), {})[v] = 0
+
+        def clearable(room, level_rooms=level_rooms):
+            enemies = level_rooms[room]['enemies']
+            return not any(u in name for name in enemies for u in UNKILLABLE)
+        reach = reachable_cycles(maps, rooms, entrances, clearable,
+                                 lambda room, level_rooms=level_rooms: sum(level_rooms[room]['enemies'].values()) > 0)
+        for index, s in sorted(steps.items()):
+            lv, room, facing = s['door']
+            side = step_side(s)
+            if lv != level or s['cave']:
+                continue
+            m = maps.get((room, side))
+            values = sorted(reach.get((room, side), {}))
+            layouts = s['layouts']
+            table.append({'step': index, 'level': level, 'room': room, 'side': side, 'facing': facing,
+                          'reachable': values, 'reachable_layouts': len({json.dumps(layouts[v]) for v in values}),
+                          'served_layouts': len({json.dumps(lay) for lay in layouts}), 'planned': planned.get(index),
+                          'real': sorted(set(real.get((lv, room, side), []))),
+                          # The values a dungeon's entrance gets from the overworld are the runs' (measured); every
+                          # other door's set is the game's maps searched from them.
+                          'proof': 'measured' if index in anchors else 'maps', 'monsters': s['monsters'],
+                          'inside': s['inside'],
+                          'map_checked': m is None or m[0] == s['f']})
+        print(f"D{level}: {len(maps)} door maps, {sum(1 for r in table if r['level'] == level)} route doors", flush=True)
+    (Path(args.out) / args.name).write_text('\n'.join(json.dumps(r) for r in table) + '\n')
+    print(f"route doors {len(table)}; maps equal to the seed state's: {sum(r['map_checked'] for r in table)}; "
+          f"real values inside the reachable set: {sum(set(r['real']) <= set(r['reachable']) for r in table)}; "
+          f"planned inside: {sum(r['planned'] in r['reachable'] for r in table)}")
+
+
+def cellar_sources(rooms_data: dict, level: int, room: int) -> list:
+    """The rooms whose stairs lead down into a cellar that comes back up into `room` (game.yaml `cave` exits: the
+    room itself, a tunnel's other end)."""
+    cellars = [key for key, data in rooms_data.items()
+               if key[0] == level and key[2] and any(e['to'] == (level, room, False) for e in data['exits'].values())]
+    return sorted({key[1] for key, data in rooms_data.items()
+                   if key[0] == level and not key[2] and (data['exits'].get('cave') or {}).get('to') in cellars})
+
+
+def step_side(step: dict) -> str:
+    """The side a route step's entry comes in by: N, S, E, W by Link's facing, 'C' up a stair from a cellar."""
+    if step['entry'] == 'cave':
+        return 'C'
+    return next(k for k, f in SIDE_FACING.items() if f == step['door'][2])
+
+
+def real_by_side(scans, route: str, min_version: str) -> dict:
+    """(level, room, side) -> every `$524` real play held on that door's pre-entry frame (side 'C': up a stair)."""
+    out = {}
+    for _, e in real_entries(scans, route, min_version):
+        side = 'C' if e['side'] == 'cave' else next((k for k, f in SIDE_FACING.items() if f == e['link'][2]), None)
+        if side is not None:
+            out.setdefault((e['level'], e['room'], side), []).append(e['spawn_cycle'])
+    return out
+
+
+def enters_inside(x: int, y: int, facing: int) -> bool:
+    """zelda::room_entry::enters_inside: Link stands inside the room (up a stair, out of a cave) on an entry's pre-entry
+    frame rather than on the screen edge he crossed."""
+    side = x <= 0x10 or x >= 0xE0
+    return not {8: y >= 0xC0, 4: y <= 0x50, 1: side, 2: side}.get(facing, False)
+
+
+def cmd_rule(args):
+    """`triforce/entry_rule.<ns>.json`, the reset rule's table (`zelda::room_entry::EntryRule`): per door of the route
+    the planned `$524` and every other value some play can bring there (`reach`: the dungeons by the game's maps; the
+    overworld, where the maps move with the point Link crosses an edge, by the values the power-on runs held), and the
+    door's real `$525` cells, chase targets and `ChaseLongTimer` values."""
+    reach = [json.loads(line) for line in Path(args.reach).read_text().splitlines()]
+    seen = {}
+    for _, e in real_entries(args.scans, args.route, args.min_version):
+        seen.setdefault((e['level'], e['room'], e['link'][2], enters_inside(*e['link'])), []).append(e)
+    level_cells = {}
+    for key, entries in seen.items():
+        level_cells.setdefault(key[0], set()).update(e['edge_cell'] for e in entries)
+    doors, conflicts = {}, []
+    for row in reach:
+        key = (row['level'], row['room'], row['facing'], row['inside'])
+        if key in doors:
+            if doors[key]['planned'] != row['planned']:
+                conflicts.append((key, doors[key]['planned'], row['planned']))
+                doors[key]['others'] = sorted(set(doors[key]['others']) | {row['planned']})
+            continue
+        doors[key] = {'planned': row['planned'], 'others': [v for v in row['reachable'] if v != row['planned']],
+                      'proof': row['proof'], 'steps': [row['step']]}
+    steps = route_maps(args.route)
+    # The overworld: the values the runs held at the door.  Out of a cave or a dungeon (Link inside the screen, a
+    # door the runs reach facing another way or not at all): a cave places nothing and passes `$524` on, so the
+    # values are those the runs held on leaving the room's own entries (`spawn_cycle_after`).
+    after = {}
+    for (lv, room, _facing, _inside), entries in seen.items():
+        after.setdefault((lv, room), set()).update(e['spawn_cycle_after'] for e in entries)
+    for index, s in sorted(steps.items()):
+        lv, room, facing = s['door']
+        if lv != 0 or s['cave']:
+            continue
+        key = (lv, room, facing, s['inside'])
+        values = [e['spawn_cycle'] for e in seen.get(key, [])]
+        if key in doors:
+            continue
+        if not values and s['inside']:
+            values = sorted(after.get((lv, room), set()))
+            # Out of a dungeon by its entrance (the overworld room's `cave` exit leads into a level): what Link
+            # carries out of the entrance room, any of the values its doors can hold.
+            down = ((_native.game_rooms().get((0, room, False)) or {}).get('exits', {}).get('cave') or {}).get('to')
+            if down and down[0] > 0:
+                values = sorted(set(values) | {v for r in reach if (r['level'], r['room']) == tuple(down[:2])
+                                                for v in r['reachable']})
+        if not values:
+            continue
+        planned = max(set(values), key=values.count)
+        doors[key] = {'planned': planned, 'others': sorted(set(values) - {planned}), 'proof': 'measured',
+                      'steps': [index]}
+    # States44's walk from power on (`<states>/<route>_walk.json`): each door's own `$524` is the route's value as real
+    # play under the plan brought it: it is the planned value where it lies in the door's set (else left as composed
+    # and reported; `triforce.start_audit` fails such a door).
+    walk = ROOT / 'triforce' / 'states' / f'{args.route}_walk.json'
+    outside = []
+    if walk.exists():
+        from triforce import start_audit  # pylint: disable=import-outside-toplevel
+        game = _native.Game()
+        for name, info in json.loads(walk.read_text()).get('doors', {}).items():
+            game.load(name.removesuffix('.state'), randomize_rng=False, controllable=True)
+            key = start_audit.door_of(game.ram())
+            if key is None or key not in doors or info.get('spawn_cycle') is None:
+                continue
+            door, value = doors[key], int(info['spawn_cycle'])
+            values = {door['planned'], *door['others']}
+            if value in values:
+                door['planned'], door['others'] = value, sorted(values - {value})
+                door['planned_from'] = 'walk'
+            else:
+                outside.append((name, value, sorted(values)))
+        print(f"walk record: {walk.name}; walked values outside the door's set: {outside}")
+    out = []
+    for key, door in sorted(doors.items()):
+        entries = seen.get(key, [])
+        cells = sorted({e['edge_cell'] for e in entries} or level_cells.get(key[0], set()))
+        out.append({'level': key[0], 'room': key[1], 'facing': key[2], 'inside': key[3], **door,
+                    'edge_cells': cells,
+                    'chase_targets': sorted({tuple(e['chase_target']) for e in entries if e['chase_flag']}),
+                    'chase_timers': sorted({e['chase_timer'] for e in entries}),
+                    'runs': len(entries)})
+    table = {'route': args.route, 'planned_share': 0.5,
+             'planned_share_why': "the owner, Nov 25: \"I don't want you to train on the planned layout exclusively "
+                                  "at all [...] I want all valid starting positions something we train on\"; the "
+                                  "route's own layout weighted more strongly, one half (the lead)",
+             'source': 'scripts/experiments/r43_seeds.py reach + rule over the archive power-on runs from '
+                       f'{args.min_version} on', 'doors': out}
+    Path(args.output).write_text(json.dumps(table, indent=0, separators=(',', ':')) + '\n')
+    print(f"{len(out)} doors ({sum(d['proof'] == 'maps' for d in out)} by the maps, "
+          f"{sum(d['proof'] == 'measured' for d in out)} measured); planned conflicts between visits: {conflicts}")
+
+
 def cmd_overworld(args):
     """The route's overworld doors: what real play brings ($524 for a room with spawn spots, the first edge cell a
     monster comes in by for an edge room) against the uniform draw's 9 and 41 values, by the game entering each
@@ -665,6 +940,25 @@ def main(argv=None):
     p.add_argument('states', nargs='+')
     p.add_argument('--name', default='served.json')
     p.set_defaults(func=cmd_served)
+    p = sub.add_parser('scrolls')
+    p.add_argument('replays', nargs='+')
+    p.set_defaults(func=cmd_scrolls)
+    p = sub.add_parser('rule')
+    p.add_argument('scans', nargs='*')
+    p.add_argument('--route', default='d3first')
+    p.add_argument('--min-version', default='2.0.0.7')
+    p.add_argument('--reach', default=str(OUT / 'reach_d3first.jsonl'))
+    p.add_argument('--output', default=str(ROOT / 'triforce' / 'entry_rule.d3first.json'))
+    p.set_defaults(func=cmd_rule)
+    p = sub.add_parser('reach')
+    p.add_argument('scans', nargs='*')
+    p.add_argument('--route', default='d3first')
+    p.add_argument('--min-version', default='2.0.0.7')
+    p.add_argument('--scrolls', default=str(OUT / 'scroll'))
+    # The plan's clears the runs show the yaml rule gets wrong (`plan` against 445 runs): step -> fought to the end.
+    p.add_argument('--flips', default='{"68": true, "77": false, "37": false, "128": true, "268": true}')
+    p.add_argument('--name', default='reach_d3first.jsonl')
+    p.set_defaults(func=cmd_reach)
     p = sub.add_parser('overworld')
     p.add_argument('scans', nargs='*')
     p.add_argument('--route', default='d3first')
@@ -679,15 +973,6 @@ def main(argv=None):
     p.add_argument('--from-dungeon-doors', action='store_true',
                    help="each dungeon's entrance at the runs' commonest value (the overworld's maps move with Link)")
     p.set_defaults(func=cmd_plan)
-    p = sub.add_parser('draws')
-    p.add_argument('scans', nargs='+')
-    p.add_argument('--route', default='d3first')
-    p.add_argument('--min-version', default='0', help='runs of this triforce version and later only')
-    p.add_argument('--today', action='store_true',
-                   help="dungeon doors where today's route (entry_states.json, the game's own maps) brings other values "
-                        "than the runs' path did take today's")
-    p.add_argument('--output', default=str(ROOT / 'triforce' / 'entry_draws.d3first.json'))
-    p.set_defaults(func=cmd_draws)
     args = parser.parse_args(argv)
     args.func(args)
 

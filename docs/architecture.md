@@ -417,18 +417,27 @@ Stored start states were built by the old loads: 132 of the 364 hold `$FF` in th
 compared with room ids, so inert) and 120 an off-ring or corner edge cell (`$E0` in 109; `$10`, `$1F`, `$3F` in
 11): a randomized load replaces the cell, a load without it keeps it. Their own RNG registers are all on the cycle.
 
-**The natural entry draw (round 43, switched off by default).** In a dungeon (and in an overworld room with spawn
-spots) the monsters' positions come from `$524` alone (asm:Spawn_AssignPositions walks a 9-spot list from it; no
-random byte); `$524` is zeroed only at reset and moved only by that routine, by a fixed map per door, and those maps
-fold the nine values onto few, so power-on runs of a route bring one value (rarely two) to almost every door. The
-uniform draw above gives most doors layouts real play never shows there (5x47 from S: 6 layouts served, 1 real). The
-chase flag `$60` (real: 50/50; a stored state: one fixed value) decides whether the monsters first head for Link or
-his mirror point, and the divider `$26` shifts every long timer. `natural_entries: true` in a task (training resets),
-`ChainTask(natural_entries=True)` (a chain's first room), `LiveGame(natural_entries=True)` / `emu-zelda.py
---natural-entries` draw one real entry of the door instead (`room_entry::EntryDraws`: `$524`, `$525`, `$60-$62`,
-`$4A`, `$26`; door = level, room and Link's facing on the pre-entry frame) from `triforce/entry_draws.<ns>.json`
-(`scripts/experiments/r43_seeds.py scan` over the archive's power-on runs, then `draws`); the phase stays uniform
-(every phase is reachable at a door). A door without real entries keeps the uniform draw.
+**The reset rule (round 43; the owner, Nov 25: "never serve an unreal room", "all valid starting positions").** In a
+dungeon (and an overworld room with spawn spots) the monsters' positions come from `$524` alone
+(asm:Spawn_AssignPositions walks a 9-spot list from it; no random byte); `$524` is zeroed only at reset and moved only
+by that routine, by a fixed map per door. A pre-entry start of a door in `triforce/entry_rule.<ns>.json`
+(`room_entry::EntryRule`; door = level, room, Link's facing on the pre-entry frame and whether he comes up a stair or
+out of a cave, `enters_inside`) writes only values some play of the game can bring there: `$524` the route's planned
+value on half the resets (`PLANNED_SHARE`, the owner's words beside it) and the door's other reachable values evenly
+on the rest; the chase flag `$60` 50/50 (with a flag set, a target `$61-$62` real entries held there); `$4A` from its
+real values (0 at every dungeon door: the scroll outlasts it); the divider `$26` evenly over its ten; `$525` from
+the door's real cells; the phase uniform as above. A door the table lacks keeps the uniform draw (`start_audit` fails
+such a seed state). Training's unseeded resets deal the few-valued factors from the env's decks (a shuffled deck per
+door and factor: exact shares every few resets); a seeded reset (evaluation, a chain run, `LiveGame.load`) draws
+from its seed alone, so a seed is the same start in every arm. One rule everywhere: `SpecialistEnv::reset` (training,
+`triforce evaluate`), a chain's first room (`ChainEnv::start_from_state`; the game carries `$524` on from there, and a
+drawn value persists 13-16 rooms, so the entrance draws by the rule too), `LiveGame.load(..., layout='route'|'valid')`
+(the emulator tool: the planned layout by default). The table (`scripts/experiments/r43_seeds.py scan`, `reach`,
+`rule`): per dungeon the game's map of every door (`door_map`: a mode-6 state of the level scrolled by the game into
+the room, checked equal to the seed states' own maps at all 123 route doors), searched over every order of rooms and
+every clear pattern from the values power-on runs bring to the dungeon's entrance (an emptied room passes the value
+on, at most five in a row: the six-room history); the overworld's doors, whose maps move with the point Link crosses
+an edge, take the values the runs held (`proof: measured`).
 
 ### Attacks by buttons (`crates/zelda/src/attack.rs`, `submenu.rs`; round 21)
 

@@ -240,9 +240,6 @@ class Session:
     seed: Optional[int] = None
     done_rule: str = 'room'
     states_dir: Optional[Path] = None
-    # Round 43 (off by default): the door's spawn cycle and chase state drawn from the route's real entries
-    # (triforce/entry_draws.<ns>.json) instead of uniformly: the layouts real play brings to that door.
-    natural_entries: bool = False
     start: Start = field(init=False)
     overrides: dict = field(init=False)                  # the spec's writes over the start state
     banked: list = field(init=False)                     # --enemies: the kills banked for the room at the load
@@ -261,8 +258,7 @@ class Session:
         in_cave = _native.state_name(self.start.state)[2]
         self.banked = banked_kills(self.spec, in_cave)
         self.monsters = room_monsters(self.spec.level, self.spec.room, in_cave)
-        self.game = _native.LiveGame(route=self.spec.route, states_dir=states_dir,
-                                     natural_entries=self.natural_entries)
+        self.game = _native.LiveGame(route=self.spec.route, states_dir=states_dir)
         self.reset(self.seed)
 
     @property
@@ -308,7 +304,7 @@ class Session:
             'room': f"{spec.level}:0x{spec.room:02x}", 'state': self.start.state, 'entry': self.start.entry,
             'visit': spec.visit, 'chain': spec.chain, 'overrides': self.overrides, 'item': spec.item,
             'enemies': None if self.enemies is None else list(self.enemies), 'banked_kills': self.banked,
-            'done_rule': self.done_rule, 'done': self.done, 'natural_entries': self.natural_entries})
+            'done_rule': self.done_rule, 'done': self.done})
 
     def replay(self) -> bytes:
         """The recording so far: ended ``death`` (died), ``other`` (left the room) or ``unknown`` (still playing)."""
@@ -332,7 +328,6 @@ class Session:
                                                        ('keys', spec.keys), ('enemies', spec.enemies))
                   if value is not None]
         parts += [f"item{spec.item}"] if spec.item else []
-        parts += ['natural'] if self.natural_entries else []
         parts += [f"seed{self.seed}", (when or datetime.now()).strftime('%y%m%d-%H%M%S')]
         return '_'.join(parts) + replay.SUFFIX
 
