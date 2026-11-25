@@ -234,10 +234,25 @@ def eval_failures(ev: dict) -> dict:
 
 
 CLIP_SWITCHES = ('on', 'off')
+CLIPS_SPLIT_MIN_OFF = 0.1   # the clips-off share of episodes below which the on/off split is not shown
+
+
+def clips_split_matters(on_episodes, off_episodes) -> bool:
+    """Whether a clips on/off split says anything: only when the run plays clips off in a real share of its episodes.
+    The fresh generation plays clips on always (the owner, Nov 24: "We always do clips/screen scrolls now"), and a
+    split whose off side is a stray episode or two only repeats the success line.  Without episode counts (runs
+    before they were logged) the split is shown as before."""
+    if on_episodes is None and off_episodes is None:
+        return True
+    on, off = on_episodes or 0, off_episodes or 0
+    return on + off > 0 and off / (on + off) >= CLIPS_SPLIT_MIN_OFF
 
 
 def fmt_clips(metrics: dict) -> str:
-    """A clip family's training success per run-time clips switch state, 'clips on 75% / off 25%' ('' without)."""
+    """A clip family's training success per run-time clips switch state, 'clips on 75% / off 25%' ('' without, or
+    when the run hardly plays clips off: [`clips_split_matters`])."""
+    if not clips_split_matters(metrics.get('clips/on/episodes'), metrics.get('clips/off/episodes')):
+        return ''
     clips = [f"{state} {fmt_pct(metrics[f'clips/{state}/success_rate'])}" for state in CLIP_SWITCHES
              if f'clips/{state}/success_rate' in metrics]
     return f"clips {' / '.join(clips)}" if clips else ''
@@ -1887,10 +1902,14 @@ def run_chart_data(run: Run, skip: int) -> dict[str, tuple[list[dict], list[tupl
     hlines = [(stop, C.faint, f"early stop {fmt_pct(stop)}")] if stop is not None else []
     if run.eval_rate() is not None:
         hlines.append((run.eval_rate(), C.eval, f"eval {fmt_pct(run.eval_rate())}"))
-    # A clip family's success per run-time clips switch state (round 22), only when the run logs it.
+    # A clip family's success per run-time clips switch state (round 22), only when the run logs it and plays clips
+    # off in a real share of its episodes.
+    episodes = {state: sum(value for _, value in run.series(f'clips/{state}/episodes')) or None
+                for state in CLIP_SWITCHES}
     clip_series = [{'label': label, 'color': color, 'points': run.series(f'clips/{state}/success_rate', skip),
                     'width': 1.4} for state, label, color in (('on', 'clips on', C.eval),
-                                                              ('off', 'clips off', C.text))]
+                                                              ('off', 'clips off', C.text))
+                   ] if clips_split_matters(episodes['on'], episodes['off']) else []
     earned, cost, net = bomb_reward_series(run, skip)
     return {
         'success': ([
