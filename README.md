@@ -214,6 +214,28 @@ final figures. The page asks for `/api/state` (JSON) every second; nothing else 
 `--no-web` is given; a taken port (a second training-gui) is an error: one line and exit 1 (`--web-port N` for
 another port).
 
+Each running job's card (window and web view) shows at its top right what it costs the machine, sampled every 3
+seconds by the GUI alone (`triforce/jobload.py`; a job is never asked anything), e.g. `CPU 13.4 cores (67%) · load
+21.8 · waiting 38%`; when the card is narrow this text alone is cut (the waiting share first, then the load, then
+the CPU's share), never anything else on the card:
+
+- **CPU**: the cores the job uses now, its systemd unit's cgroup's `cpu.stat` `usage_usec` between two samples, and
+  that as a share of the machine's 20 threads.
+- **load**: what the job adds to the load average (the kernel keeps none per job): its threads that are runnable
+  (running or waiting for a CPU, state R in `/proc`), smoothed over a minute as the kernel smooths its own 1-minute
+  load average (the kernel's also counts threads waiting on the disk, state D).
+- **waiting**: the share of the last 10 seconds in which some of its threads were ready to run and got no CPU (its
+  cgroup's `cpu.pressure`, `some avg10`): a starved job, which its cores alone do not show.
+
+An ended job shows its CPU time in all and its mean cores over its run. Over the list, under the queues' line:
+`LOAD jobs: 31.2 cores · load 33.0 · machine: 19.4 of 20 cores · load 35.1 · outside the queue: 1.8 cores · load
+2.1`, the outside part in the warning colour while more than 3 cores have been busy outside the queue for a minute
+(a job that skipped it), with the busiest process there named (and in the tooltip); a job that just ended still
+counts in the jobs' load as it fades from the kernel's 1-minute average. A job started without
+`--detach` has no unit of its own: it is followed by its wrapper's process tree (no waiting share, no total at its
+end). Every rate the GUI prints is a number of one or more (the owner, Nov 25): `4.5 tests/s`, else the time one
+takes, `4.0 s/test`, `2.5 min/chain`; a training's steps a second stay `steps/s`.
+
 Evaluations go through `triforce eval-batch NAME` (`triforce/eval_batch.py`): one log folder, every evaluation
 listed up front, shown in the training GUI as one group named NAME with a progress bar per evaluation; its Eval tab
 gives each outcome its share (`108× (10.8%)` of a chain's runs or of a family evaluation's episodes).
