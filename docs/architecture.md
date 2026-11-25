@@ -2382,10 +2382,10 @@ every step, so following an enemy that moves away pays again, and knockback rese
   (`harvested_states`, default `<states dir>/harvested/<name>`) reads, so a plain `--harvest` feeds training
   directly; elsewhere, point a config at `DIR/<name>` with `harvested_states:`. Training
   envs draw harvested states only when `harvested_fraction` > 0 (default 0: opt-in) or the specialist has no seed
-  states; then (round 42) the seed draw picks the room entry and that fraction of its resets start from a harvested
-  state of the same entry (namespace, room, side, visit), each entry its own selector, so a room's share of the
-  episodes is the seed states' whatever the number of files harvested for it (an entry without harvested states
-  draws none; a harvested entry no seed state has is never drawn; without seed states the entries are drawn alike).
+  states; then that fraction of the resets start from a harvested state, stratified by room entry (round 42): one of
+  the harvested entries (namespace, room, side, visit) alike, then a state of it by the entry's own selector, so a
+  room's share does not depend on how many files were harvested for it (each entry `harvested_fraction / entries`;
+  an entry no seed state has included, e.g. 8:0x3c's Gleeok; without seed states every reset).
   A harvested start whose triforce pieces and items are the route's at no step of its room
   (`zelda::objectives::start_on_route`) is refused at reset, and a chain's harvest does not write one; `python -m
   triforce.harvest_audit` checks a whole snapshot (the lead, before a retrain). The pool rescans the dir every 64

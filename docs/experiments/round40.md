@@ -4169,15 +4169,18 @@ entry, standard error up to 0.05; jobs #1335-#1339, #1351, #1352, outputs `r42-h
   every state has a result, instead of round-robin from one offset in file-name order; once every state is drawn,
   the states with results are weighted (uniform while none has one). Tests: every state once in a random order; the
   first 100 draws of a 1,000-name list sorted in 10 blocks reach at least 9 blocks; the old ones rewritten.
-- **(b) Harvested starts by room entry.** The pool groups harvested states by room entry (namespace, room, side,
-  visit). A reset draws the seed state (the seed selector, or PLR's shared weights): that picks the room entry; with
-  probability `harvested_fraction` a harvested state of the same entry stands in, drawn by that entry's own selector
-  (badness within the entry). **The shares that result**: every room entry keeps the seed states' share of the
-  family's episodes (the task's rooms, weighted by their seed states' badness); an entry with harvested states starts
-  `harvested_fraction` of its resets from them, one without none; a harvested entry no seed state has (an off-route
-  entry a chain wandered into) is never drawn; a pool without seed states draws its harvested entries alike. Test:
-  three entries with 90, 2 and 0 harvested files at 0.5: each entry a third of the resets, each harvested share
-  1/6, the 90 files each drawn once before any again, the no-seed entry never.
+- **(b) Harvested starts stratified by room entry.** The pool groups harvested states by room entry (namespace, room,
+  side, visit), each entry its own selector (badness within the entry). With probability `harvested_fraction` a reset
+  picks one of the harvested entries alike, then a state of it; else a seed state as before (its selector, or PLR's
+  shared weights). **The shares that result**: each harvested entry gets `harvested_fraction / entries` of the
+  family's resets whatever its number of files; the seed states keep `1 - harvested_fraction`, by their badness. For
+  darknut on `harvested` 261124-gen2 that is 11 entries at 3.0% each (3x59 from N, 3x5b from N, S and W, 3x69 out of
+  its cellar, the Olive Garden from its cellar, 5x06 from the cave, 5x37, 5x64 from the cave and from E, 8x5e); the
+  Olive Garden from E has no harvested state left (all 150 were the first order's) and trains from its seed states
+  alone. A first design drew the harvest for the seed draw's own entry only; it would have dropped every entry a
+  seed state lacks (8:0x3c's Gleeok, 68 states, Gleeok's whole Dungeon 8 training at fraction 1.0; ow-tektite's
+  0x1e and 0x0d, 860), so the stratified draw replaced it before the suites. Test: 90, 2 and 1 files in three
+  entries at 0.5: each entry 1/6 of the resets, each seed state 1/6, the 90 files each once before any again.
 - **(c) Stale harvests can't be drawn again**: `zelda::objectives::start_on_route` (Link's progress is the route's at
   a step of the room; for an entry the route never makes, at any step of the room) is checked **at every training
   reset from a harvested state** (refused with an error naming the file and the audit, as a removed file is), **in
@@ -4189,11 +4192,11 @@ entry, standard error up to 0.05; jobs #1335-#1339, #1351, #1352, outputs `r42-h
   `RolloutMetrics` logs `room/<room>/<entry>/seed_episodes`, `seed_success_rate`, `harvested_episodes`,
   `harvested_success_rate` beside the totals.
 - **What changes**: every training with `harvested_fraction` > 0 (the lab's and `triforce train`'s: one Rust pool):
-  the rooms' shares (no longer by file counts), the warm-up order, the RNG streams (no run reproduces a pre-round-42
-  run bit for bit), harvested entries without seed states no longer drawn, and a stale harvested state now stops the
-  training at its first draw. Seed-only trainings change only in the warm-up order. **What does not**: chains play
-  no start-state pool (their harvest writes nothing new but skips a state the route can't be in: a run off the
-  route's progress); `triforce evaluate` names its starts; rewards, routes, tasks.
+  the rooms' shares of the harvested resets (no longer by file counts), the warm-up order, the RNG streams (no run
+  reproduces a pre-round-42 run bit for bit), and a stale harvested state now stops the training at its first draw.
+  Seed-only trainings change only in the warm-up order. **What does not**: chains play no start-state pool (their
+  harvest only skips a state the route can't be in: a run off the route's progress); `triforce evaluate` names its
+  starts; rewards, routes, tasks.
 
 ### The plain-way seed states (the lead's question; nothing changed)
 
