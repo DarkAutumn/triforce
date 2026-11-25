@@ -99,12 +99,7 @@ clips:
   enabled: true
   off_share: 0
 curriculum:
-  enabled: true
-  untracked:                              # round 40: the seed states that train without a track (triforce.inputs);
-  - d3first_8_3es_[0-9]                   # round 45: Dungeon 3's and 5's doors have tracks from the walked states;
-  - d3first_8_3fw_[0-9]                   # Dungeon 8's wait for theirs (Tracks45)
-  - d3first_8_4es_[0-9]
-  - d3first_8_5es_[0-9]
+  enabled: true                           # round 45: every door has tracks from the walked states (Tracks45)
 # Round 40 (Line40, Line40b; decisions 2026-11-23 "3:0x69 is crossed by a line"): 3:0x69's line taught by the
 # demonstration builder's hit-free visits of each pass (scripts/experiments/r40_d3_69_line.py demos: a search over the
 # env's actions per visit, the rule timed by its look-ahead where none is found; the room's rows only, 4 or 8 bombs,
