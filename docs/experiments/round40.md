@@ -5278,3 +5278,33 @@ So the fighter is still 98-100% in Dungeon 3's Darknut rooms, in the route's lay
   reach the track's end from the last decision. A 6-iteration lab training of the darknut group on the staged
   folders (express, 8 games, 4,096 steps an update): completed, 809 steps a second, its log carrying each room's
   seed starts by layout and its curriculum starts.
+
+### 6. Every other family's tracks on the walked route
+
+`scripts/experiments/r45_plan.py` lists each generation task's walked doors that are neither tracked nor declared; one
+regular job explored them (`--layout route`, 20,000 iterations, patience 3,000, 8 workers), 80 states in 13 tasks.
+79 were solved; 7x1b W (goriya, the six Blue Goriyas with the wood sword) was not in 20,000 iterations and has round
+34's rule track instead (`r32p_rules.py goriya-1b --hearts reset --layout route`: 12 of 12 runs won, 1 heart lost
+in the first). The explorer now solves the rooms that needed rules on the old starts (4x12 N and 4x31 E and W of
+the Vires, the Like-Likes' 4x32 W, Gleeok 4x13 W; the Gleeok also has the round-32 rule's track, 11 of 12 won).
+`r32p_rules.py --layout` and `r29_demos.write_track` keep the layout in a rule track, as the explorer's do.
+
+| teacher | new `d3first` tracks (doors in the owner's notation) |
+|---|---|
+| walkers | gibdo 7 (5x14, 5x26, 5x47, 5x65 E and W, 5x66, 5x76); zol 1 more (4x40); like-like 2 (4x32 W and its cellar); vire 8 (4x03, 4x12, 4x30, 4x31 E and W, 4x50, 4x61, 4x71); goriya 17 (1x23 S and W, 1x44, 2x1e, 2x5e, 7x18, 7x19, 7x1a W and cellar, 7x1b by rule, 7x28, 7x29 cellar, 7x2b, 7x38, 7x59, 7x69, 7x79) |
+| overworld | ow-leever 11 more (0x0b two ways, 0x29, 0x2a, 0x2b, 0x34 three ways, 0x48 N and W twice); ow-moblin 16 (0x3d, 0x42, 0x4d, 0x51-0x53, 0x5d, 0x63, 0x6d, 0x73); ow-zora 12 more (0x28, 0x2d, 0x38 S and W, 0x3f, 0x44 two ways, 0x46, 0x47, 0x55 N twice, 0x56); ow-lynel 2 (0x50, 0x60); ow-ghini 1 (0x31) |
+| others | wallmaster 2 (1x45, 7x0d) |
+| bosses | boss-aquamentus 2 (1x35, 7x2a); boss-gleeok 2 (4x13, explorer and rule) |
+
+stalfos-keese-gel, d2-rope, dodongo-crossing, moldorm, ow-start, ow-tektite, ow-octorok, ow-peahat, ow-boulder,
+wizzrobe, pols-voice, lanmola, patra and the other bosses' generation tasks needed none: their walked doors are
+declared untracked or their curriculum is off.
+
+- **The staged snapshot**, recomposed: 1,292 tracks, 120,277 files, 1,360,184,625 bytes. Task loader on it: 88 task
+  files, every generation task loads (overworld 10, walkers 9, others 5, rooms 2, darknut, each boss), no red flag.
+  The bare `boss-digdogger` task (d2first's, curriculum on) still draws three walked doors without a track (5x24,
+  7x1c, 7x39).
+- **Replay proof.** Walkers and overworld, 89 new tracks: 1,008 of 1,008 curriculum resets hold the track's state but
+  the RNG; 261 of 267 replays win from the last decision. The six that do not are ow-zora 0x44 N (3), 0x55 N's second
+  visit (2) and goriya's 7x1a cellar (1): the last action, played open-loop under another RNG, ends nowhere (no
+  ending); the recorded runs succeed. The others and the bosses, 6 tracks: 72 of 72 and 18 of 18.
