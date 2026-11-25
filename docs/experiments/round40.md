@@ -4297,8 +4297,9 @@ two solo runs 20 a state, 60 a room entry; `triforce-gen2/target/darknut-curve/*
   570 --scopes d3 --runs 300 --with walkers=gen1-walkers/s1@it912`, jobs #1393, #1394): **28.7% ± 2.6**, against
   6.7% for today's Darknut network beside the same walkers' checkpoint on this route (+22.0 ± 2.9 paired) and 44.7%
   for today's team on its own route; the group's teacher 0.7% at it684. 3:0x5b's first pass 298 of 300 out at 0.09
-  hits a visit, the Darknut killed 20 times and its bombs taken 8 (the teacher crosses: `crossed_kills` 2.82 a
-  run against 0.65 is elsewhere); 3:0x59 from N with 4 bombs 246 of 288; 3:0x69 in 218 of 254 at 0.74 hits, out
+  hits a visit, the Darknut killed 20 times and its bombs taken 8 (the teacher crosses); `crossed_kills` 2.82 a run
+  against the control's 0.65 (kills in rooms the plan crosses, not broken down by room or network here);
+  3:0x59 from N with 4 bombs 246 of 288; 3:0x69 in 218 of 254 at 0.74 hits, out
   188 of 188; runs end in 3:0x4d 17.3% (today's Manhandla), 3:0x59 13.0%, 3:0x69 12.0%.
 - Open: the first-pass kill the owner's Dungeon 3 plan wants (nothing in the task pays for the bombs against the
   risk); the Olive Garden's ceiling (0.43 at 9.3M; the fighter script 0.95).
