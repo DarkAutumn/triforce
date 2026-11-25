@@ -439,6 +439,11 @@ every clear pattern from the values power-on runs bring to the dungeon's entranc
 on, at most five in a row: the six-room history); the overworld's doors, whose maps move with the point Link crosses
 an edge, take the values the runs held (`proof: measured`).
 
+Round 44: `EnvOptions::exact_starts` (`SpecialistEnv::set_exact_starts`, `Explorer(exact_starts=True)`) makes a
+reset load its state's machine exactly as saved: none of the writes above, no banked kills. Only the real walk
+(`entry_states walk`, "Entry states") uses it: its explorer searches and replays each room from the carried machine
+itself, so the state carried on is the one real play of that room produced.
+
 ### Attacks by buttons (`crates/zelda/src/attack.rs`, `submenu.rs`; round 21)
 
 The executor never writes Link's facing (`$98`) or the selected item (`$656`): an attack is the button sequence a
@@ -3044,8 +3049,46 @@ default `target/entry-states/<yymmdd-HHMMSS>`), merging each file's manifest ent
 (atomically) as soon as the file is written, and exit 1 when a crossing failed; `install DIR [--partial]` copies a
 finished build into the states dir and merges its manifest. `audit [--dir DIR | --specialist S | --states GLOB]`
 checks start states against the owner's rules and exits 1 on any flag: NAME, MISNAMED, ENTRY, POST-ENTRY, SHORT, HEARTS,
-HP, OFFROUTE, BOSS-ENTRY and, for a whole directory, MISSING and ORPHAN (meanings in the module docstring). All
-use `Game`, `Explorer` and `AcceptSpec` from `triforce._native`.
+HP, OFFROUTE, BOSS-ENTRY, UNWALKED and, for a whole directory, MISSING, WALK-RECORD and ORPHAN (meanings in the module
+docstring). All use `Game`, `Explorer` and `AcceptSpec` from `triforce._native`.
+
+**The real walk** (round 44, the owner, Nov 25: "We should only need 1 save state per 'door/entry' to a room", "The
+layout that spawns should be real, not fake", "We should never train on an un-real state"). A route with its own start
+states (`d3first`) has ONE state per door (chain 0, `route_chains`), every one from a single walk of the whole route
+from console power on: `walk --route d3first [--delay 16610] [--attempts 6]` boots (`Game.boot('LINK', delay)`, inputs
+alone; the delay is the corpus golden's), then plays each step from the carried machine with no redraw, no fresh room
+and no refill: the explorer (`Explorer(exact_starts=True)`, a reset that loads the machine as saved) finds the step's
+objective-correct exit with the kills routes.yaml `clear:` names and no more (`explore::KillSpec`: `false` no kill,
+`true` every monster dead on the last frame in the room, `N` exactly N), keeping an unhurt path when an attempt finds
+one; a fight it cannot end is ended by `sparkle_fight` (the game's death of each monster, ObjMetastate `$10`, plus
+the two counters asm:Damage_KillMonster steps for a sword kill; a Zol or Vire the sword splits is first split the
+game's way, its state set to 1 as by a weak hit, and its uncounted children sparkled); a room still not passed (a boss
+the sparkle cannot end, Gleeok, whose heads are cut, not killed) is played by the explorer once more from the same
+machine with only Link's hearts filled (`filled_source`, `how: explorer, hearts filled`: the lead, Nov 25, "the walk
+only has to be a real game, not a typical one"); the replay of the path from the same machine gives the next door's
+pre-entry frame.
+Each door is kept as `<out>/carry/<name>` (the next step's source) and written as `<out>/<name>` with Link's hearts
+filled to his containers (the one write: the walk arrives hurt as runs do, the file holds the valid upper end, and a
+reset draws hp anyway). A stretch's plain way is a branch walked from the door where the ways part. After Dungeon 1
+(the power-on walk covers Dungeons 3, 4 and 1) the route is walked in segments side by side (the lead, Nov 25: what a
+door's state gives training past a reset's draws is the progress, the overworld's flags and the walked dungeon's
+memory, and none of a dungeon's memory reaches
+the next): each leg and the dungeon after it from the dungeon exit before it (0_37c_v2, 0_3cc, 0_0bc, 0_42c, 0_22c,
+0_6dc), its first machine that door's earlier state checked against the route and set to it
+(`scripts/experiments/r44_segments.py start`: containers, triforce, items, maps, compasses, the key ledger, the
+overworld's taken, secret and kill bits, the next dungeon's room flags 0, and `$524`/`$525`/`$52A`/`$50`/`$627`/
+`$621-$626` from the real runs' next arrival at that screen) and `walk --segment <its checks>`. `<out>/walk.json`
+records each walk (`walks[<id>]`: the power-on or the segment's start and checks, the commit, the command, each
+resumption) and per door its walk, `door_facts` (the spawn cycle, edge cell, chase state, dividers, drop cycle,
+help-drop counters, kills since the last hit, room history, banked kills, hearts carried, inventory) and the file's
+sha256; `install` merges it into `triforce/states/<ns>_walk.json` (the start rule takes each door's `spawn_cycle` as
+the route's planned value, round 43) and, unless `--partial`, removes the namespace's states no walk in it made. The
+audit's UNWALKED flags a namespaced state its record does not list with these bytes, WALK-RECORD a walk with no
+commit or start; `build` and `path` refuse the route.
+What the walk holds that a real run would not: full hearts in each file (a run is hurt); the explorer's way through
+each room (the spot and frame Link leaves by, hence the random phase, the chase state and the overworld's edge cells
+and `$524`, which depend on where Link crosses each screen edge); bombs used only where a room needs them
+(`step_config`), none as a weapon in the fights a run may bomb.
 
 `build` follows route steps; `path` accepts explicit off-route destinations. `build` and `path` use `cross_room`: arriving
 in the target is insufficient when the source room declares a key. The source room's persistent item-taken
@@ -3058,7 +3101,8 @@ downstream inventories and refreshing affected curriculum snapshots; old filenam
 
 **State names** (round 24). A start state is `<level>_<room><side>[_v<visit>]_<chain>.state`: `room` two lower-case
 hex digits, `side` the routes.yaml entry (`n`/`s`/`e`/`w`; `c` out of a cave, cellar or dungeon stairs; `r` set down by
-the whirlwind, round 26; `cave` a cave or cellar interior, entered from S), `chain` 0-2. `visit` is the route's visit
+the whirlwind, round 26; `cave` a cave or cellar interior, entered from S), `chain` 0-2 (`d2first`; one state per door,
+chain 0, on a route with its own start states, round 44). `visit` is the route's visit
 to that room from that side (`zelda::game_map::route_visits`, `GameMap.visits`, the `visit` of
 `_native.route_steps()`): 1 + the earlier steps entering the room from that side, not counting the other way of the
 step's own stretch (its `parts` step is the same visit on the other way: `0_55n` for both), a step right after one

@@ -4504,3 +4504,190 @@ an entry the task lists: with `room_kill_cycle`, `$050` HelpDropCount = n, `$051
 `help_count` draw) and `$52A` = a listed cycle; with `room_bombs`, `$658` from the range at its share; with
 `room_bomb_counts`, `$658` = a listed count. Nothing else (no hearts, keys, `$524`, positions); an entry not listed
 draws nothing. Seed and curriculum starts are as before.
+
+## The real walk: one start state per door, from power on (States44, branch `r44-states`, Nov 25)
+
+The owner, Nov 25, after Seeds43 found that the seed states hold a redrawn `$524` and refilled, fresh rooms: "We
+should only need 1 save state per 'door/entry' to a room to do all of our work"; "The layout that spawns should be
+real, not fake"; "We should never train on an un-real state". This branch gives the route the bit it lacked
+(`clear:`), builds every `d3first` state by walking the route (from console power on through Dungeon 1, then in
+segments), proves the states against real runs and teaches the audit the new rules. Seeds43 owns the load rule (what
+a reset draws on top of a state, `triforce.start_audit`); this section is about the states. `d2first`'s states are
+untouched.
+
+### 1. `clear:` on every step
+
+The owner: "Add it if you need it. There's nothing sacred about the route file". routes.yaml `clear: true|false|N`
+says what the plan leaves alive in the room: `true` every monster this visit makes dies (a room that makes none is
+`true`: the game saves it as all dead), `false` none, `N` a partial fight. All 290 `d3first` steps carry it, the
+shared blocks' steps too (`d2first` reads nothing from it). `zelda::game_map::StepClear` parses it; the loader checks
+the values against the route data (a shutter exit, a room without monsters or `treasure: clear` must be `true`, `N`
+below the room's monsters, `carriers: fight` not `true`); `_native.route_steps` serves it; the walk refuses a route
+without it. Derived from the ROM's room data (zelda-asm/data `levelblock-uw-*-q1.md`: shutter doors, the room item
+that appears when all are dead, push-block stairs), not game.yaml's `trigger`. The lead confirmed the values and the
+decided steps: 3x5b S `1` (carriers: fight); 3x4a E, 3x5b W, 7x1b W, 8x3f W, 9x16 S `true` (the bomb floor); 3x59 S,
+1x23 W and the Olive Garden out of its cellar `true` (cleared earlier and still in the room history, so the game makes
+none); 9x07 S, 5x64 E, 9x03 E, 9x55 E `false` (the clip way clips past them); the `banked_kills` returns `true`; 9x61 E
+`true` (its block moves only in an empty room); 5x65 W→E `false`; every dungeon cellar `false` (below).
+
+**The bit is the plan; the room's memory is the game's.** With the wood sword a Zol or a Vire splits into Gels or Red
+Keese the game does not count, so a room cleared that way (4x31, 4x32's Zols, 3x4b) is saved short and refills:
+Seeds43's "4x31 left alive". Nothing plays the bit: 30 power-on runs of the team to step 24, base commit against this
+branch, give 331 room records identical (floats within 1e-4).
+
+### 2. The builder (`entry_states walk`)
+
+`python -m triforce.entry_states walk --route d3first` boots the console with `Game.boot('LINK', 16610)` (controller
+inputs only; the corpus golden's name and delay) and carries the machine from door to door: nothing redrawn, no room
+made fresh, no refill on the way. Each step is played by the explorer from the carried machine exactly as saved
+(`EnvOptions::exact_starts`: no RNG, spawn-cycle or edge-cell draw, no fresh room, no banked kills), every path held
+to the step's `clear:` (`explore::KillSpec`: a path that kills more is dropped, a success has killed exactly what the
+plan kills, by the game's own `RoomKills`). Attempt 0 runs alone, the rest three at a time; the way that costs the
+fewest hearts is kept; its replay from the same machine gives the next door's pre-entry frame, kept as `carry/<name>`
+(the next step's source) and written as `<name>` (chain 0) with only Link's hearts filled (a reset draws hp anyway).
+
+A fight the explorer cannot end is ended by `sparkle_fight`: each monster put into the game's death sparkle
+(ObjMetastate `$10`; the game counts the kill, steps the drop cycle, decides the drop, banks the room), plus the two
+counters asm:Damage_KillMonster steps for a sword kill; a Zol or Vire the sword in hand splits is split the game's way
+first. A sparkle after which Link never becomes controllable is refused (Ganon, below). The last resort, a room still
+not passed, is the explorer again with only Link's hearts filled (the lead: "the walk only has to be a real game, not
+a typical one"); no room needed it. Six rooms were ended by the sparkle: 3x59 from N (step 13), 4x32 from W (38),
+4x12 from N (50), the Olive Garden from E (128), 7x1b from W (170), 7x1c from W (171); 278 by the explorer alone.
+Gleeok (4x13), whose heads are cut, not killed, was crossed by the explorer at a larger budget (12000 iterations,
+patience 600). Crossings, caves, stairs, the raft, the recorder and the whirlwind are played through the env as a run
+plays them; wall bombs come from the env's cheat ledger as a run's do; the d4-island plain way is a branch walked from
+4x31's E door.
+
+**Ganon (9x42, step 288).** The explorer's search from the walked 9_42s ran and failed. The sparkle stage then put
+Ganon, who dies only by the silver arrow, into his sparkle; that machine leaves Link stunned for good, and the
+explorer's reset from it raised "Link never became controllable (mode=5)" after its 2000-frame wait. The wait is not
+short for that room: on the walked 9_42s Ganon's entrance holds Link stunned for 257 frames (control at frame 272),
+and the explorer's own reset there runs. `sparkle_fight` now loads its machine waiting for control and raises when
+there is none, so the walk goes on to its next stage. 9_32s (Zelda's room, the `end` step) comes from the round-29
+scripted `ganon` rule played from the walked 9_42s (`r29_demos.py ganon --hearts own`, 20 of 20 won), recorded `how:
+r29 ganon rule` (the lead's choice). It is an Env load, so its random phase and its `$524` are drawn: 9_32s holds
+`$524` 8 against the 57 runs' 1 there (Zelda's room makes no monster).
+
+### 3. One state per door, in segments
+
+Before: 855 `d3first` states, chains 0-2 of 285 doors, built by an explorer from redrawn, refilled, fresh-room loads.
+After: 285 states, `d3first_<door>_0.state`, one per door of the clip way and the d4-island plain way (D9's plain-way
+steps share their doors with the clip way), each listed in `d3first_walk.json` with its walk and sha256. The full
+install removed the 570 `_1`/`_2` states and their manifest entries. Readers changed to chain 0 (4275173d): the
+specialists' start globs, the curriculum tracks, `emu.py`, `eval_batch`'s segment table, the lab starts and the tests
+naming `_1`/`_2`; readers globbing `_[0-9]` are unchanged. `scripts/experiments/r32c_models.py --bombs-quantiles`
+would still write `_1`/`_2` files; the historical scripts (r39_dark5b, r40_peahat_line, r40_states, r40_macros,
+r40_tracks, r34d5_garden_states, r32c_harvest, r32c_states) are left as they ran.
+
+The walk from power on covers Dungeons 3, 4 and 1 (to 0_37c_v2, step 79). The rest was walked in segments side by
+side (the lead, Nov 25: past what a reset draws, a door's state gives training only the progress, the overworld's
+flags and the walked dungeon's memory, and no dungeon's memory reaches the next), each leg and the dungeon after it
+from the dungeon exit before it: 0_37c_v2 (D2), 0_3cc (D5), 0_0bc (D7), 0_42c (D6), 0_22c (D8), 0_6dc (D9). A
+segment's first machine is that door's earlier state loaded exactly and set to the plan
+(`scripts/experiments/r44_segments.py start`: containers, triforce, item grades, maps, compasses, the round-40 key
+ledger; the overworld's taken bit only where the route took the item, secret bits only where it used the cave, kill
+counts 0; the next dungeon's room flags 0; `$524`, `$525`, `$52A`, `$50`, `$627`, `$621-$626` from the real runs'
+next arrival at that screen, the scans holding no frame of the arrival out of a dungeon). Every start set the D4 map
+(missing from every old chain) and 6-20 overworld flag bytes the old explorer's play had left. Checked against the
+walk's own doors 2-59 the checker agrees but for the room D4's key is taken in (the walk takes it one room later than
+the ledger). D8's first segment started from the old 0_22c, whose `$524` 6 and `$525` 227 had no real run to set them
+by: the overworld did not bring `$524` back (1 at every D8 door against all 66 runs' 5), so D8 was walked again from
+the D6 segment's own carried 0_22c, with nothing set. `walk.json` records each walk (`walks[<id>]`: the power-on or the
+segment's start and its checks, the commit, the command, each resumption) and per door its walk, `door_facts` (spawn
+cycle, edge cell, chase state, dividers, drop cycle, help-drop counters, kills since the last hit, room history, banked
+kills, carried hearts), how the room was played and the file's sha256.
+
+### 4. Proof against real runs
+
+`scripts/experiments/r44_states_proof.py table`: every walked door's bytes against the same door of 445 real power-on
+runs (Seeds43's scans, 2.0.0.7 on, runs whose memory edits before the door are only bombs and rupees), the door
+matched as each run's k-th entry of the room with Link's facing; caves, cellars and arrivals out of a dungeon have no
+scan frame. "Composed" is the plan's `$524`: from each dungeon's entrance (the runs' commonest there) the game's own
+map of each walked door (entered with `$524` 0-8 as its memory stands), a room making nothing when it makes nothing
+fresh or when the plan cleared it and it is among the last six (asm:RoomHistory_ModifyObjCountUW). A cellar's saved
+frame is already after its Keese (1x7f moves `$524` 8 to 1, as every run has it): the composition goes on from its
+value. 1x22 makes an object game.yaml does not list (type `$4A`) on every entry, cleared or not. Every door, per
+field: `docs/experiments/r44_states_proof.md`.
+
+| Part | Doors | With runs | `$524`: the runs' commonest | Composed = walked |
+|---|---:|---:|---:|---:|
+| Power on: D3, D4, the leg, D1 (steps 1-79) | 78 | 67 | 66 | 41 of 41 |
+| Leg + D2 (79-105) | 26 | 22 | 22 | 8 of 8 |
+| Leg + D5 (105-145) | 40 | 34 | 34 | 15 of 15 |
+| Leg + D7 (145-178) | 33 | 27 | 25 (27 among) | 16 of 16 |
+| Leg + D6 (178-213) | 35 | 30 | 30 | 13 of 13 |
+| Leg + D8, walked again (213-229) | 16 | 14 | 12 | 7 of 7 |
+| Leg + D9 to Ganon (229-288) | 56 | 47 | 43 (44 among) | 31 of 32 |
+| 9_32s, the Ganon rule | 1 | 1 | 0 | 0 of 1 |
+| **All (one table over the installed states)** | 285 | 242 | 238 (240 among) | 131 of 133 |
+
+Over all 242 doors with runs the walk's value is among the runs' for the drop cycle at 242, `$50` at 237, `$627` at
+236, `$525` at 196, the room history at 176 and the room's banked kills at 156 of 157. The misses: ox77 at power on
+(`$524` 0 against the 10 runs' 4: the golden's delay); 3x5b's last pass banks 1 kill against the runs' 0 (the plan's
+first-pass kill); the drop cycle, `$50` and `$627` are rarely the runs' commonest (the walk kills only what the plan
+says, runs kill more); `$525` in D5 (143, from 235 the start took at 0x3c) and in D8 (67 against the runs' 143),
+values a run holds and redrawn at a reset (the lead: accepted); the overworld doors right after a segment's start
+(ox4c and ox4d after D6, ox48, ox38 and ox28 after D8) before the overworld brings `$524` to the runs' value; the room
+history at D2's first overworld doors (a 0x6d the start took, gone by step 85) and in D7 and D9 (the runs' rooms with
+the ring rotated: the start set the six bytes, not the ring's place; the game reads membership); 9x20 from N (step
+275, composed 2, walked 8, which the runs hold too) and 9_32s (drawn).
+
+Hearts: the walk arrives more hurt than runs. At the dungeon entrances, walk against the runs' median: 3x7c 3 / 3,
+4x71 3.5 / 4, 1x73 1.5 / 4.5, 2x7d 3 / 5.5, 5x76 3 / 7, 7x79 5 / 7, 6x79 5.5 / 10.5, 8x7e 11 / 12.5, 9x76 9 / 13.5.
+Every file holds full hearts; a reset draws hp.
+
+Placements (`placement`, ten doors over the dungeons, three replays: `golden-d3first-51-networks`, the 2.0.0.8
+51-networks golden and the 2.0.0.12 single-network golden): the room entered from each replay's own pre-entry frame and
+from the walked state with the replay's `$524` and random register written, no input until the game has placed the
+monsters. 27 of 30 are identical (3x59 from N, 4x31 from W, 1x23 from S, 2x1e from S, the Olive Garden from E, 5x47
+from S, 7x1b from W, 6x3a from W, 8x3e from S, in all three). The three others are 3x5b from W, 3 Darknuts in the runs
+against 2 here (the plan's first-pass kill), identical once the run's kill memory is written.
+
+Banked kills at the `banked_kills` returns: 9x10 out of its cellar (step 274) and 9x61 out of the tunnel (278) hold
+exactly the route's 5 and 15. 9x07 out of its cellar (258) and 9x20 from N (276) are plain-way steps whose door file
+is the clip way's, where the plan kills nothing: they hold 0, and the env writes the route's value on a plain-way load
+(Seeds43). The garden fighter's pinned seed 104 passes on the walked 5_05e; the round-40 Darknut and line tests were
+re-pinned on the walked 3x59 and 3x69 (seeds 5 and 1; 1 and 0).
+
+### 5. The audit
+
+`python -m triforce.entry_states audit` checks the files, Seeds43's `python -m triforce.start_audit` the load. On a
+route with its own start states the audit wants one state per door, chain 0 only (`route_chains`; MISSING lists the
+`_0` names); each file listed in `<ns>_walk.json` with the same sha256, else UNWALKED (another chain, a file built some
+other way, a walked file edited afterwards); a record whose every walk names its commit and its start (power on or
+segment), else WALK-RECORD. A walked state loads with its room memory as saved (`fresh_rooms: false`), so SHORT does
+not apply to it. `build` and `path` refuse such a route; `install` merges a walk's record and, unless `--partial`,
+removes the namespace's states no walk made. After the full install: 1318 states, 0 with problems, 0 directory
+problems.
+
+### What a state still does not hold that a real run would
+
+- Full hearts in each file (above); the carried hearts are in the record.
+- `$50`, `$627` and the random phase follow the explorer's own play; 21 tasks redraw `$50`, `$51` and `$627`
+  (`help_count`) and the start rule redraws the phase.
+- The overworld's `$524` and `$525` depend on where Link crosses each screen edge: the walk's crossings are its own.
+- Bombs are used only where a room needs them (`step_config`), never as a weapon in a fight a run might bomb; bombs
+  and rupees at a segment's start are the old chain's.
+- 3x5b's first pass kills one Darknut (the plan): its last pass makes 2 Darknuts, 3 in every scanned run.
+- 9_32s is an Env load's machine (above).
+
+### Found on the way
+
+- **Every dungeon cellar makes four blue Keese**, whatever its room list (mode 9). The first derivation counted cellars
+  as rooms without monsters (`clear: true`) and the walk killed all four in 3x0f; real runs kill 0-4. Cellars are now
+  `clear: false`, the loader counts a cellar's Keese, and the walk was resumed from 3x0f (the record's `resumed`).
+- **9x61 (the owner: "VERY clippable with a patra in it")**: the plan fights there (step 268, E→stairs, `clear: true`);
+  the stairs lie under the push block, which moves only in an empty room. A block clip to the stairs would skip the
+  whole Patra fight, not only the push (the key lies in the open). The return from the tunnel (step 278,
+  `banked_kills: 15`, `clear: true`) would then meet Patra alive: a crossing, `clear: false`, without its
+  `banked_kills`. Unchanged, the owner's call.
+- **The death sparkle cannot end Ganon** (above), nor Gleeok (its heads are cut; the sparkle stage raised there).
+
+### Not done, not tested
+
+- No training ran on the walked states; whether a teacher's success moves is untested.
+- 9_32s is the one state not from the walk's own exact loads.
+- The proof compares each door with runs that may have reached it another way; caves, cellars and dungeon exits have
+  no real frame to compare.
+- The segments' starts come from old states set to the plan; a power-on walk of the whole route (about 5-8 hours in
+  one place) was not run.

@@ -15,6 +15,7 @@
 "steps":[
 243
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],
@@ -96,6 +97,7 @@
 "steps":[
 242
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],
@@ -223,6 +225,7 @@
 "steps":[
 241
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],
@@ -316,6 +319,7 @@
 "steps":[
 121
 ],
+"planned_from":"walk",
 "edge_cells":[
 67,
 69,
@@ -512,6 +516,7 @@
 "steps":[
 145
 ],
+"planned_from":"walk",
 "edge_cells":[
 64,
 67,
@@ -552,6 +557,7 @@
 "steps":[
 120
 ],
+"planned_from":"walk",
 "edge_cells":[
 67,
 69,
@@ -904,6 +910,7 @@
 "steps":[
 119
 ],
+"planned_from":"walk",
 "edge_cells":[
 67,
 69,
@@ -1088,6 +1095,7 @@
 "steps":[
 115
 ],
+"planned_from":"walk",
 "edge_cells":[
 64,
 67,
@@ -1128,6 +1136,7 @@
 "steps":[
 113
 ],
+"planned_from":"walk",
 "edge_cells":[
 67,
 69,
@@ -1304,6 +1313,7 @@
 "steps":[
 240
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],
@@ -1389,6 +1399,7 @@
 "steps":[
 118
 ],
+"planned_from":"walk",
 "edge_cells":[
 67,
 69,
@@ -1561,6 +1572,7 @@
 "steps":[
 110
 ],
+"planned_from":"walk",
 "edge_cells":[
 67,
 69,
@@ -1833,6 +1845,7 @@
 "steps":[
 111
 ],
+"planned_from":"walk",
 "edge_cells":[
 67,
 69,
@@ -2037,6 +2050,7 @@
 "steps":[
 117
 ],
+"planned_from":"walk",
 "edge_cells":[
 67,
 69,
@@ -2257,6 +2271,7 @@
 "steps":[
 112
 ],
+"planned_from":"walk",
 "edge_cells":[
 67,
 69,
@@ -2377,6 +2392,7 @@
 "steps":[
 116
 ],
+"planned_from":"walk",
 "edge_cells":[
 67,
 69,
@@ -2573,6 +2589,7 @@
 "steps":[
 193
 ],
+"planned_from":"walk",
 "edge_cells":[
 230,
 233,
@@ -2720,6 +2737,7 @@
 "steps":[
 191
 ],
+"planned_from":"walk",
 "edge_cells":[
 96,
 230,
@@ -2890,6 +2908,7 @@
 "steps":[
 196
 ],
+"planned_from":"walk",
 "edge_cells":[
 230,
 233,
@@ -3009,14 +3028,16 @@
 "room":34,
 "facing":8,
 "inside":true,
-"planned":2,
+"planned":1,
 "others":[
+2,
 3
 ],
 "proof":"measured",
 "steps":[
 213
 ],
+"planned_from":"walk",
 "edge_cells":[
 64,
 67,
@@ -3057,6 +3078,7 @@
 "steps":[
 239
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],
@@ -3156,16 +3178,17 @@
 "room":40,
 "facing":8,
 "inside":false,
-"planned":0,
+"planned":8,
 "others":[
+0,
 4,
-5,
-8
+5
 ],
 "proof":"measured",
 "steps":[
 81
 ],
+"planned_from":"walk",
 "edge_cells":[
 96,
 159,
@@ -3466,6 +3489,7 @@
 "steps":[
 82
 ],
+"planned_from":"walk",
 "edge_cells":[
 96,
 159,
@@ -3710,6 +3734,7 @@
 "steps":[
 83
 ],
+"planned_from":"walk",
 "edge_cells":[
 96,
 159,
@@ -3854,6 +3879,7 @@
 "steps":[
 84
 ],
+"planned_from":"walk",
 "edge_cells":[
 96,
 159,
@@ -4006,6 +4032,7 @@
 "steps":[
 85
 ],
+"planned_from":"walk",
 "edge_cells":[
 96,
 159,
@@ -4161,14 +4188,16 @@
 "room":44,
 "facing":4,
 "inside":true,
-"planned":8,
+"planned":4,
 "others":[
-2
+2,
+8
 ],
 "proof":"measured",
 "steps":[
 87
 ],
+"planned_from":"walk",
 "edge_cells":[
 64,
 67,
@@ -4212,6 +4241,7 @@
 "steps":[
 88
 ],
+"planned_from":"walk",
 "edge_cells":[
 96,
 159,
@@ -4457,6 +4487,7 @@
 "steps":[
 109
 ],
+"planned_from":"walk",
 "edge_cells":[
 67,
 69,
@@ -4707,14 +4738,15 @@
 "room":47,
 "facing":4,
 "inside":true,
-"planned":1,
+"planned":5,
 "others":[
-5
+1
 ],
 "proof":"measured",
 "steps":[
 188
 ],
+"planned_from":"walk",
 "edge_cells":[
 64,
 67,
@@ -4757,6 +4789,7 @@
 "steps":[
 186
 ],
+"planned_from":"walk",
 "edge_cells":[
 230,
 233,
@@ -4916,6 +4949,7 @@
 "steps":[
 194
 ],
+"planned_from":"walk",
 "edge_cells":[
 230,
 233,
@@ -5101,6 +5135,7 @@
 "steps":[
 190
 ],
+"planned_from":"walk",
 "edge_cells":[
 96,
 230,
@@ -5263,6 +5298,7 @@
 "steps":[
 195
 ],
+"planned_from":"walk",
 "edge_cells":[
 230,
 233,
@@ -5386,17 +5422,18 @@
 "room":52,
 "facing":4,
 "inside":true,
-"planned":8,
+"planned":3,
 "others":[
 0,
 2,
-3,
-6
+6,
+8
 ],
 "proof":"measured",
 "steps":[
 150
 ],
+"planned_from":"walk",
 "edge_cells":[
 67,
 69,
@@ -5595,6 +5632,7 @@
 "steps":[
 148
 ],
+"planned_from":"walk",
 "edge_cells":[
 67,
 69,
@@ -5767,6 +5805,7 @@
 "steps":[
 230
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],
@@ -5879,6 +5918,7 @@
 "steps":[
 60
 ],
+"planned_from":"walk",
 "edge_cells":[
 159,
 175,
@@ -6117,17 +6157,18 @@
 "room":55,
 "facing":8,
 "inside":true,
-"planned":0,
+"planned":8,
 "others":[
+0,
 1,
 3,
-7,
-8
+7
 ],
 "proof":"measured",
 "steps":[
 62
 ],
+"planned_from":"walk",
 "edge_cells":[
 64,
 67,
@@ -6162,15 +6203,16 @@
 "room":56,
 "facing":1,
 "inside":false,
-"planned":7,
+"planned":1,
 "others":[
 0,
-1
+7
 ],
 "proof":"measured",
 "steps":[
 80
 ],
+"planned_from":"walk",
 "edge_cells":[
 159,
 175,
@@ -6433,17 +6475,18 @@
 "room":56,
 "facing":8,
 "inside":false,
-"planned":3,
+"planned":7,
 "others":[
 0,
+3,
 5,
-6,
-7
+6
 ],
 "proof":"measured",
 "steps":[
 59
 ],
+"planned_from":"walk",
 "edge_cells":[
 96,
 159,
@@ -6733,6 +6776,7 @@
 "steps":[
 214
 ],
+"planned_from":"walk",
 "edge_cells":[
 230,
 233,
@@ -6858,6 +6902,7 @@
 "steps":[
 94
 ],
+"planned_from":"walk",
 "edge_cells":[
 72,
 74,
@@ -7051,16 +7096,17 @@
 "room":60,
 "facing":8,
 "inside":true,
-"planned":0,
+"planned":4,
 "others":[
+0,
 1,
-4,
 8
 ],
 "proof":"measured",
 "steps":[
 105
 ],
+"planned_from":"walk",
 "edge_cells":[
 64,
 67,
@@ -7104,6 +7150,7 @@
 "steps":[
 89
 ],
+"planned_from":"walk",
 "edge_cells":[
 159,
 175,
@@ -7392,6 +7439,7 @@
 "steps":[
 91
 ],
+"planned_from":"walk",
 "edge_cells":[
 159,
 175,
@@ -7672,6 +7720,7 @@
 "steps":[
 108
 ],
+"planned_from":"walk",
 "edge_cells":[
 67,
 69,
@@ -7874,6 +7923,7 @@
 "steps":[
 189
 ],
+"planned_from":"walk",
 "edge_cells":[
 230,
 233,
@@ -8017,6 +8067,7 @@
 "steps":[
 185
 ],
+"planned_from":"walk",
 "edge_cells":[
 230,
 233,
@@ -8209,6 +8260,7 @@
 "steps":[
 157
 ],
+"planned_from":"walk",
 "edge_cells":[
 128,
 144,
@@ -8390,6 +8442,7 @@
 "steps":[
 178
 ],
+"planned_from":"walk",
 "edge_cells":[
 128,
 144,
@@ -8517,16 +8570,17 @@
 "room":68,
 "facing":4,
 "inside":false,
-"planned":1,
+"planned":5,
 "others":[
+1,
 3,
-5,
 7
 ],
 "proof":"measured",
 "steps":[
 151
 ],
+"planned_from":"walk",
 "edge_cells":[
 67,
 69,
@@ -8713,8 +8767,9 @@
 "room":68,
 "facing":4,
 "inside":true,
-"planned":1,
+"planned":6,
 "others":[
+1,
 3,
 4
 ],
@@ -8722,6 +8777,7 @@
 "steps":[
 153
 ],
+"planned_from":"walk",
 "edge_cells":[
 64,
 67,
@@ -8764,6 +8820,7 @@
 "steps":[
 146
 ],
+"planned_from":"walk",
 "edge_cells":[
 67,
 69,
@@ -9032,6 +9089,7 @@
 "steps":[
 30
 ],
+"planned_from":"walk",
 "edge_cells":[
 67,
 69,
@@ -9259,8 +9317,9 @@
 "room":69,
 "facing":8,
 "inside":true,
-"planned":0,
+"planned":3,
 "others":[
+0,
 2,
 4,
 8
@@ -9269,6 +9328,7 @@
 "steps":[
 53
 ],
+"planned_from":"walk",
 "edge_cells":[
 64,
 67,
@@ -9311,6 +9371,7 @@
 "steps":[
 56
 ],
+"planned_from":"walk",
 "edge_cells":[
 159,
 175,
@@ -9564,6 +9625,7 @@
 "steps":[
 57
 ],
+"planned_from":"walk",
 "edge_cells":[
 159,
 175,
@@ -9783,6 +9845,7 @@
 "steps":[
 233
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],
@@ -9908,6 +9971,7 @@
 "steps":[
 235
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],
@@ -9994,15 +10058,16 @@
 "room":72,
 "facing":1,
 "inside":false,
-"planned":0,
+"planned":5,
 "others":[
-3,
-5
+0,
+3
 ],
 "proof":"measured",
 "steps":[
 58
 ],
+"planned_from":"walk",
 "edge_cells":[
 159,
 175,
@@ -10198,6 +10263,7 @@
 "steps":[
 232
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],
@@ -10331,6 +10397,7 @@
 "steps":[
 93
 ],
+"planned_from":"walk",
 "edge_cells":[
 72,
 74,
@@ -10596,14 +10663,15 @@
 "room":76,
 "facing":4,
 "inside":false,
-"planned":1,
+"planned":4,
 "others":[
-4
+1
 ],
 "proof":"measured",
 "steps":[
 106
 ],
+"planned_from":"walk",
 "edge_cells":[
 72,
 74,
@@ -10814,14 +10882,15 @@
 "room":77,
 "facing":1,
 "inside":false,
-"planned":2,
+"planned":5,
 "others":[
-5
+2
 ],
 "proof":"measured",
 "steps":[
 107
 ],
+"planned_from":"walk",
 "edge_cells":[
 72,
 74,
@@ -11170,6 +11239,7 @@
 "steps":[
 92
 ],
+"planned_from":"walk",
 "edge_cells":[
 159,
 175,
@@ -11422,6 +11492,7 @@
 "steps":[
 184
 ],
+"planned_from":"walk",
 "edge_cells":[
 230,
 233,
@@ -11623,6 +11694,7 @@
 "steps":[
 181
 ],
+"planned_from":"walk",
 "edge_cells":[
 230,
 233,
@@ -11736,6 +11808,7 @@
 "steps":[
 180
 ],
+"planned_from":"walk",
 "edge_cells":[
 230,
 233,
@@ -11868,6 +11941,7 @@
 "steps":[
 156
 ],
+"planned_from":"walk",
 "edge_cells":[
 67,
 69,
@@ -12080,6 +12154,7 @@
 "steps":[
 179
 ],
+"planned_from":"walk",
 "edge_cells":[
 128,
 144,
@@ -12220,6 +12295,7 @@
 "steps":[
 155
 ],
+"planned_from":"walk",
 "edge_cells":[
 67,
 69,
@@ -12428,6 +12504,7 @@
 "steps":[
 154
 ],
+"planned_from":"walk",
 "edge_cells":[
 67,
 69,
@@ -12632,6 +12709,7 @@
 "steps":[
 54
 ],
+"planned_from":"walk",
 "edge_cells":[
 67,
 69,
@@ -12922,6 +13000,7 @@
 "steps":[
 29
 ],
+"planned_from":"walk",
 "edge_cells":[
 69,
 71,
@@ -13123,6 +13202,7 @@
 "steps":[
 55
 ],
+"planned_from":"walk",
 "edge_cells":[
 159,
 175,
@@ -13338,6 +13418,7 @@
 "steps":[
 217
 ],
+"planned_from":"walk",
 "edge_cells":[
 78,
 143,
@@ -13425,6 +13506,7 @@
 "steps":[
 183
 ],
+"planned_from":"walk",
 "edge_cells":[
 230,
 233,
@@ -13574,6 +13656,7 @@
 "steps":[
 182
 ],
+"planned_from":"walk",
 "edge_cells":[
 230,
 233,
@@ -13699,6 +13782,7 @@
 "steps":[
 26
 ],
+"planned_from":"walk",
 "edge_cells":[
 159,
 175,
@@ -13886,6 +13970,7 @@
 "steps":[
 27
 ],
+"planned_from":"walk",
 "edge_cells":[
 159,
 175,
@@ -14073,6 +14158,7 @@
 "steps":[
 28
 ],
+"planned_from":"walk",
 "edge_cells":[
 159,
 175,
@@ -14184,6 +14270,7 @@
 "steps":[
 218
 ],
+"planned_from":"walk",
 "edge_cells":[
 128,
 144,
@@ -14271,6 +14358,7 @@
 "steps":[
 229
 ],
+"planned_from":"walk",
 "edge_cells":[
 143
 ],
@@ -14348,6 +14436,7 @@
 "steps":[
 25
 ],
+"planned_from":"walk",
 "edge_cells":[
 64
 ],
@@ -14551,6 +14640,7 @@
 "steps":[
 5
 ],
+"planned_from":"walk",
 "edge_cells":[
 64
 ],
@@ -14662,14 +14752,16 @@
 "room":116,
 "facing":8,
 "inside":true,
-"planned":8,
+"planned":1,
 "others":[
-7
+7,
+8
 ],
 "proof":"measured",
 "steps":[
 24
 ],
+"planned_from":"walk",
 "edge_cells":[
 64,
 67,
@@ -14712,6 +14804,7 @@
 "steps":[
 4
 ],
+"planned_from":"walk",
 "edge_cells":[
 64
 ],
@@ -14811,6 +14904,7 @@
 "steps":[
 3
 ],
+"planned_from":"walk",
 "edge_cells":[
 64
 ],
@@ -14995,6 +15089,7 @@
 "steps":[
 2
 ],
+"planned_from":"walk",
 "edge_cells":[
 64,
 67,
@@ -15044,6 +15139,7 @@
 "steps":[
 69
 ],
+"planned_from":"walk",
 "edge_cells":[
 159,
 175,
@@ -15233,6 +15329,7 @@
 "steps":[
 71
 ],
+"planned_from":"walk",
 "edge_cells":[
 159,
 175,
@@ -15466,6 +15563,7 @@
 "steps":[
 72
 ],
+"planned_from":"walk",
 "edge_cells":[
 159,
 175,
@@ -15703,6 +15801,7 @@
 "steps":[
 68
 ],
+"planned_from":"walk",
 "edge_cells":[
 159,
 175,
@@ -15916,6 +16015,7 @@
 "steps":[
 73
 ],
+"planned_from":"walk",
 "edge_cells":[
 159,
 175,
@@ -16137,6 +16237,7 @@
 "steps":[
 67
 ],
+"planned_from":"walk",
 "edge_cells":[
 159,
 175,
@@ -16346,6 +16447,7 @@
 "steps":[
 77
 ],
+"planned_from":"walk",
 "edge_cells":[
 159,
 175,
@@ -16527,6 +16629,7 @@
 "steps":[
 78
 ],
+"planned_from":"walk",
 "edge_cells":[
 159,
 175,
@@ -16752,6 +16855,7 @@
 "steps":[
 74
 ],
+"planned_from":"walk",
 "edge_cells":[
 159,
 175,
@@ -16965,6 +17069,7 @@
 "steps":[
 66
 ],
+"planned_from":"walk",
 "edge_cells":[
 159,
 175,
@@ -17194,6 +17299,7 @@
 "steps":[
 75
 ],
+"planned_from":"walk",
 "edge_cells":[
 159,
 175,
@@ -17363,6 +17469,7 @@
 "steps":[
 76
 ],
+"planned_from":"walk",
 "edge_cells":[
 159,
 175,
@@ -17576,6 +17683,7 @@
 "steps":[
 65
 ],
+"planned_from":"walk",
 "edge_cells":[
 159,
 175,
@@ -17745,6 +17853,7 @@
 "steps":[
 64
 ],
+"planned_from":"walk",
 "edge_cells":[
 159,
 175,
@@ -17931,17 +18040,18 @@
 "room":115,
 "facing":8,
 "inside":false,
-"planned":7,
+"planned":3,
 "others":[
 0,
 1,
-3,
+7,
 8
 ],
 "proof":"measured",
 "steps":[
 61
 ],
+"planned_from":"walk",
 "edge_cells":[
 159,
 175,
@@ -18143,6 +18253,7 @@
 "steps":[
 104
 ],
+"planned_from":"walk",
 "edge_cells":[
 72,
 74,
@@ -18431,6 +18542,7 @@
 "steps":[
 103
 ],
+"planned_from":"walk",
 "edge_cells":[
 72,
 74,
@@ -18695,6 +18807,7 @@
 "steps":[
 102
 ],
+"planned_from":"walk",
 "edge_cells":[
 72,
 74,
@@ -18959,6 +19072,7 @@
 "steps":[
 101
 ],
+"planned_from":"walk",
 "edge_cells":[
 72,
 74,
@@ -19235,6 +19349,7 @@
 "steps":[
 100
 ],
+"planned_from":"walk",
 "edge_cells":[
 72,
 74,
@@ -19487,6 +19602,7 @@
 "steps":[
 99
 ],
+"planned_from":"walk",
 "edge_cells":[
 72,
 74,
@@ -19719,6 +19835,7 @@
 "steps":[
 98
 ],
+"planned_from":"walk",
 "edge_cells":[
 72,
 74,
@@ -19931,6 +20048,7 @@
 "steps":[
 97
 ],
+"planned_from":"walk",
 "edge_cells":[
 72,
 74,
@@ -20153,6 +20271,7 @@
 "steps":[
 95
 ],
+"planned_from":"walk",
 "edge_cells":[
 72,
 74,
@@ -20341,6 +20460,7 @@
 "steps":[
 96
 ],
+"planned_from":"walk",
 "edge_cells":[
 72,
 74,
@@ -20545,6 +20665,7 @@
 "steps":[
 23
 ],
+"planned_from":"walk",
 "edge_cells":[
 64
 ],
@@ -20771,6 +20892,7 @@
 "steps":[
 12
 ],
+"planned_from":"walk",
 "edge_cells":[
 64
 ],
@@ -20973,6 +21095,7 @@
 "steps":[
 11
 ],
+"planned_from":"walk",
 "edge_cells":[
 64
 ],
@@ -21151,6 +21274,7 @@
 "steps":[
 10
 ],
+"planned_from":"walk",
 "edge_cells":[
 64
 ],
@@ -21345,6 +21469,7 @@
 "steps":[
 21
 ],
+"planned_from":"walk",
 "edge_cells":[
 64
 ],
@@ -21551,6 +21676,7 @@
 "steps":[
 22
 ],
+"planned_from":"walk",
 "edge_cells":[
 64
 ],
@@ -21689,6 +21815,7 @@
 "steps":[
 13
 ],
+"planned_from":"walk",
 "edge_cells":[
 64
 ],
@@ -21871,6 +21998,7 @@
 "steps":[
 17
 ],
+"planned_from":"walk",
 "edge_cells":[
 64
 ],
@@ -22061,6 +22189,7 @@
 "steps":[
 18
 ],
+"planned_from":"walk",
 "edge_cells":[
 64
 ],
@@ -22251,6 +22380,7 @@
 "steps":[
 19
 ],
+"planned_from":"walk",
 "edge_cells":[
 64
 ],
@@ -22449,6 +22579,7 @@
 "steps":[
 9
 ],
+"planned_from":"walk",
 "edge_cells":[
 64
 ],
@@ -22655,6 +22786,7 @@
 "steps":[
 20
 ],
+"planned_from":"walk",
 "edge_cells":[
 64
 ],
@@ -22829,6 +22961,7 @@
 "steps":[
 14
 ],
+"planned_from":"walk",
 "edge_cells":[
 64
 ],
@@ -23071,6 +23204,7 @@
 "steps":[
 16
 ],
+"planned_from":"walk",
 "edge_cells":[
 64
 ],
@@ -23269,6 +23403,7 @@
 "steps":[
 8
 ],
+"planned_from":"walk",
 "edge_cells":[
 64
 ],
@@ -23459,6 +23594,7 @@
 "steps":[
 7
 ],
+"planned_from":"walk",
 "edge_cells":[
 64
 ],
@@ -23614,6 +23750,7 @@
 "steps":[
 6
 ],
+"planned_from":"walk",
 "edge_cells":[
 64
 ],
@@ -23804,6 +23941,7 @@
 "steps":[
 48
 ],
+"planned_from":"walk",
 "edge_cells":[
 159,
 175,
@@ -23964,6 +24102,7 @@
 "steps":[
 49
 ],
+"planned_from":"walk",
 "edge_cells":[
 159,
 175,
@@ -24176,6 +24315,7 @@
 "steps":[
 52
 ],
+"planned_from":"walk",
 "edge_cells":[
 159,
 175,
@@ -24352,6 +24492,7 @@
 "steps":[
 47
 ],
+"planned_from":"walk",
 "edge_cells":[
 159,
 175,
@@ -24536,6 +24677,7 @@
 "steps":[
 50
 ],
+"planned_from":"walk",
 "edge_cells":[
 159,
 175,
@@ -24732,6 +24874,7 @@
 "steps":[
 51
 ],
+"planned_from":"walk",
 "edge_cells":[
 159,
 175,
@@ -24897,21 +25040,22 @@
 "room":32,
 "facing":8,
 "inside":false,
-"planned":0,
+"planned":7,
 "others":[
+0,
 1,
 2,
 3,
 4,
 5,
 6,
-7,
 8
 ],
 "proof":"maps",
 "steps":[
 45
 ],
+"planned_from":"walk",
 "edge_cells":[
 69,
 71,
@@ -24928,11 +25072,11 @@
 "room":33,
 "facing":1,
 "inside":false,
-"planned":0,
+"planned":3,
 "others":[
+0,
 1,
 2,
-3,
 4,
 5,
 6,
@@ -24943,6 +25087,7 @@
 "steps":[
 46
 ],
+"planned_from":"walk",
 "edge_cells":[
 69,
 71,
@@ -24974,6 +25119,7 @@
 "steps":[
 42
 ],
+"planned_from":"walk",
 "edge_cells":[
 159,
 175,
@@ -25151,12 +25297,12 @@
 "room":48,
 "facing":2,
 "inside":false,
-"planned":0,
+"planned":4,
 "others":[
+0,
 1,
 2,
 3,
-4,
 5,
 6,
 7,
@@ -25166,6 +25312,7 @@
 "steps":[
 44
 ],
+"planned_from":"walk",
 "edge_cells":[
 69,
 71,
@@ -25197,6 +25344,7 @@
 "steps":[
 36
 ],
+"planned_from":"walk",
 "edge_cells":[
 159,
 175,
@@ -25397,6 +25545,7 @@
 "steps":[
 37
 ],
+"planned_from":"walk",
 "edge_cells":[
 159,
 175,
@@ -25569,6 +25718,7 @@
 "steps":[
 41
 ],
+"planned_from":"walk",
 "edge_cells":[
 159,
 175,
@@ -25801,6 +25951,7 @@
 "steps":[
 38
 ],
+"planned_from":"walk",
 "edge_cells":[
 159,
 175,
@@ -26041,6 +26192,7 @@
 "steps":[
 40
 ],
+"planned_from":"walk",
 "edge_cells":[
 159,
 175,
@@ -26257,6 +26409,7 @@
 "steps":[
 35
 ],
+"planned_from":"walk",
 "edge_cells":[
 159,
 175,
@@ -26449,6 +26602,7 @@
 "steps":[
 34
 ],
+"planned_from":"walk",
 "edge_cells":[
 71,
 159,
@@ -26662,6 +26816,7 @@
 "steps":[
 33
 ],
+"planned_from":"walk",
 "edge_cells":[
 71,
 159,
@@ -26851,6 +27006,7 @@
 "steps":[
 32
 ],
+"planned_from":"walk",
 "edge_cells":[
 69,
 71,
@@ -27035,6 +27191,7 @@
 "steps":[
 31
 ],
+"planned_from":"walk",
 "edge_cells":[
 69,
 71,
@@ -27265,6 +27422,7 @@
 "steps":[
 128
 ],
+"planned_from":"walk",
 "edge_cells":[
 67,
 69,
@@ -27462,6 +27620,7 @@
 "steps":[
 130
 ],
+"planned_from":"walk",
 "edge_cells":[
 67,
 69,
@@ -27663,6 +27822,7 @@
 "steps":[
 131
 ],
+"planned_from":"walk",
 "edge_cells":[
 67,
 69,
@@ -27864,6 +28024,7 @@
 "steps":[
 127
 ],
+"planned_from":"walk",
 "edge_cells":[
 67,
 69,
@@ -28093,6 +28254,7 @@
 "steps":[
 144
 ],
+"planned_from":"walk",
 "edge_cells":[
 67,
 69,
@@ -28298,6 +28460,7 @@
 "steps":[
 143
 ],
+"planned_from":"walk",
 "edge_cells":[
 67,
 69,
@@ -28439,6 +28602,7 @@
 "steps":[
 142
 ],
+"planned_from":"walk",
 "edge_cells":[
 67,
 69,
@@ -28628,6 +28792,7 @@
 "steps":[
 141
 ],
+"planned_from":"walk",
 "edge_cells":[
 67,
 69,
@@ -28789,6 +28954,7 @@
 "steps":[
 140
 ],
+"planned_from":"walk",
 "edge_cells":[
 67,
 69,
@@ -29006,6 +29172,7 @@
 "steps":[
 139
 ],
+"planned_from":"walk",
 "edge_cells":[
 67,
 69,
@@ -29255,6 +29422,7 @@
 "steps":[
 138
 ],
+"planned_from":"walk",
 "edge_cells":[
 67,
 69,
@@ -29472,6 +29640,7 @@
 "steps":[
 136
 ],
+"planned_from":"walk",
 "edge_cells":[
 67,
 69,
@@ -29677,6 +29846,7 @@
 "steps":[
 137
 ],
+"planned_from":"walk",
 "edge_cells":[
 67,
 69,
@@ -29890,6 +30060,7 @@
 "steps":[
 125
 ],
+"planned_from":"walk",
 "edge_cells":[
 67,
 69,
@@ -30067,6 +30238,7 @@
 "steps":[
 133
 ],
+"planned_from":"walk",
 "edge_cells":[
 67,
 69,
@@ -30288,6 +30460,7 @@
 "steps":[
 134
 ],
+"planned_from":"walk",
 "edge_cells":[
 67,
 69,
@@ -30581,6 +30754,7 @@
 "steps":[
 124
 ],
+"planned_from":"walk",
 "edge_cells":[
 67,
 69,
@@ -30794,6 +30968,7 @@
 "steps":[
 135
 ],
+"planned_from":"walk",
 "edge_cells":[
 67,
 69,
@@ -31083,6 +31258,7 @@
 "steps":[
 123
 ],
+"planned_from":"walk",
 "edge_cells":[
 67,
 69,
@@ -31305,6 +31481,7 @@
 "steps":[
 122
 ],
+"planned_from":"walk",
 "edge_cells":[
 67,
 69,
@@ -31502,6 +31679,7 @@
 "steps":[
 212
 ],
+"planned_from":"walk",
 "edge_cells":[
 230,
 233,
@@ -31600,6 +31778,7 @@
 "steps":[
 211
 ],
+"planned_from":"walk",
 "edge_cells":[
 230,
 233,
@@ -31706,6 +31885,7 @@
 "steps":[
 208
 ],
+"planned_from":"walk",
 "edge_cells":[
 230,
 233,
@@ -31808,6 +31988,7 @@
 "steps":[
 203
 ],
+"planned_from":"walk",
 "edge_cells":[
 230,
 233,
@@ -31954,6 +32135,7 @@
 "steps":[
 204
 ],
+"planned_from":"walk",
 "edge_cells":[
 230,
 233,
@@ -32040,6 +32222,7 @@
 "steps":[
 210
 ],
+"planned_from":"walk",
 "edge_cells":[
 230,
 233,
@@ -32193,6 +32376,7 @@
 "steps":[
 209
 ],
+"planned_from":"walk",
 "edge_cells":[
 230,
 233,
@@ -32307,6 +32491,7 @@
 "steps":[
 202
 ],
+"planned_from":"walk",
 "edge_cells":[
 230,
 233,
@@ -32453,6 +32638,7 @@
 "steps":[
 205
 ],
+"planned_from":"walk",
 "edge_cells":[
 230,
 233,
@@ -32595,6 +32781,7 @@
 "steps":[
 206
 ],
+"planned_from":"walk",
 "edge_cells":[
 230,
 233,
@@ -32745,6 +32932,7 @@
 "steps":[
 201
 ],
+"planned_from":"walk",
 "edge_cells":[
 230,
 233,
@@ -32903,6 +33091,7 @@
 "steps":[
 200
 ],
+"planned_from":"walk",
 "edge_cells":[
 230,
 233,
@@ -33057,6 +33246,7 @@
 "steps":[
 199
 ],
+"planned_from":"walk",
 "edge_cells":[
 230,
 233,
@@ -33211,6 +33401,7 @@
 "steps":[
 198
 ],
+"planned_from":"walk",
 "edge_cells":[
 230,
 233,
@@ -33346,6 +33537,7 @@
 "steps":[
 197
 ],
+"planned_from":"walk",
 "edge_cells":[
 230,
 233,
@@ -33524,6 +33716,7 @@
 "steps":[
 172
 ],
+"planned_from":"walk",
 "edge_cells":[
 128,
 144,
@@ -33710,6 +33903,7 @@
 "steps":[
 173
 ],
+"planned_from":"walk",
 "edge_cells":[
 128,
 144,
@@ -33896,6 +34090,7 @@
 "steps":[
 165
 ],
+"planned_from":"walk",
 "edge_cells":[
 128,
 144,
@@ -34088,6 +34283,7 @@
 "steps":[
 166
 ],
+"planned_from":"walk",
 "edge_cells":[
 128,
 144,
@@ -34258,6 +34454,7 @@
 "steps":[
 167
 ],
+"planned_from":"walk",
 "edge_cells":[
 128,
 144,
@@ -34488,6 +34685,7 @@
 "steps":[
 169
 ],
+"planned_from":"walk",
 "edge_cells":[
 128,
 144,
@@ -34666,6 +34864,7 @@
 "steps":[
 170
 ],
+"planned_from":"walk",
 "edge_cells":[
 128,
 144,
@@ -34860,6 +35059,7 @@
 "steps":[
 171
 ],
+"planned_from":"walk",
 "edge_cells":[
 128,
 144,
@@ -35030,6 +35230,7 @@
 "steps":[
 164
 ],
+"planned_from":"walk",
 "edge_cells":[
 128,
 144,
@@ -35192,6 +35393,7 @@
 "steps":[
 175
 ],
+"planned_from":"walk",
 "edge_cells":[
 128,
 144,
@@ -35334,6 +35536,7 @@
 "steps":[
 176
 ],
+"planned_from":"walk",
 "edge_cells":[
 128,
 144,
@@ -35488,6 +35691,7 @@
 "steps":[
 177
 ],
+"planned_from":"walk",
 "edge_cells":[
 128,
 144,
@@ -35674,6 +35878,7 @@
 "steps":[
 163
 ],
+"planned_from":"walk",
 "edge_cells":[
 128,
 144,
@@ -35898,6 +36103,7 @@
 "steps":[
 162
 ],
+"planned_from":"walk",
 "edge_cells":[
 128,
 144,
@@ -36140,6 +36346,7 @@
 "steps":[
 161
 ],
+"planned_from":"walk",
 "edge_cells":[
 128,
 144,
@@ -36346,6 +36553,7 @@
 "steps":[
 160
 ],
+"planned_from":"walk",
 "edge_cells":[
 128,
 144,
@@ -36544,6 +36752,7 @@
 "steps":[
 159
 ],
+"planned_from":"walk",
 "edge_cells":[
 128,
 144,
@@ -36757,6 +36966,7 @@
 "steps":[
 158
 ],
+"planned_from":"walk",
 "edge_cells":[
 128,
 144,
@@ -37022,6 +37232,7 @@
 "steps":[
 228
 ],
+"planned_from":"walk",
 "edge_cells":[
 143
 ],
@@ -37130,6 +37341,7 @@
 "steps":[
 227
 ],
+"planned_from":"walk",
 "edge_cells":[
 143
 ],
@@ -37197,6 +37409,7 @@
 "steps":[
 223
 ],
+"planned_from":"walk",
 "edge_cells":[
 143
 ],
@@ -37316,6 +37529,7 @@
 "steps":[
 224
 ],
+"planned_from":"walk",
 "edge_cells":[
 143
 ],
@@ -37444,6 +37658,7 @@
 "steps":[
 226
 ],
+"planned_from":"walk",
 "edge_cells":[
 143
 ],
@@ -37555,6 +37770,7 @@
 "steps":[
 222
 ],
+"planned_from":"walk",
 "edge_cells":[
 143
 ],
@@ -37670,6 +37886,7 @@
 "steps":[
 221
 ],
+"planned_from":"walk",
 "edge_cells":[
 143
 ],
@@ -37765,6 +37982,7 @@
 "steps":[
 220
 ],
+"planned_from":"walk",
 "edge_cells":[
 143
 ],
@@ -37842,6 +38060,7 @@
 "steps":[
 219
 ],
+"planned_from":"walk",
 "edge_cells":[
 143
 ],
@@ -37932,6 +38151,7 @@
 "steps":[
 285
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],
@@ -38022,6 +38242,7 @@
 "steps":[
 284
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],
@@ -38128,6 +38349,7 @@
 "steps":[
 264
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],
@@ -38194,6 +38416,7 @@
 "steps":[
 263
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],
@@ -38305,6 +38528,7 @@
 "steps":[
 255
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],
@@ -38433,6 +38657,7 @@
 "steps":[
 257
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],
@@ -38527,6 +38752,7 @@
 "steps":[
 272
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],
@@ -38627,6 +38853,7 @@
 "steps":[
 274
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],
@@ -38737,6 +38964,7 @@
 "steps":[
 249
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],
@@ -38835,6 +39063,7 @@
 "steps":[
 250
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],
@@ -38921,6 +39150,7 @@
 "steps":[
 251
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],
@@ -39059,6 +39289,7 @@
 "steps":[
 262
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],
@@ -39159,6 +39390,7 @@
 "steps":[
 259
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],
@@ -39269,6 +39501,7 @@
 "steps":[
 254
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],
@@ -39369,6 +39602,7 @@
 "steps":[
 275
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],
@@ -39483,6 +39717,7 @@
 "steps":[
 270
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],
@@ -39585,6 +39820,7 @@
 "steps":[
 261
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],
@@ -39723,6 +39959,7 @@
 "steps":[
 252
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],
@@ -39841,6 +40078,7 @@
 "steps":[
 253
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],
@@ -39952,6 +40190,7 @@
 "steps":[
 260
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],
@@ -40054,6 +40293,7 @@
 "steps":[
 282
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],
@@ -40172,6 +40412,7 @@
 "steps":[
 281
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],
@@ -40420,6 +40661,7 @@
 "steps":[
 280
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],
@@ -40538,6 +40780,7 @@
 "steps":[
 288
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],
@@ -40672,6 +40915,7 @@
 "steps":[
 279
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],
@@ -40778,6 +41022,7 @@
 "steps":[
 287
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],
@@ -40888,6 +41133,7 @@
 "steps":[
 247
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],
@@ -41010,6 +41256,7 @@
 "steps":[
 246
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],
@@ -41128,6 +41375,7 @@
 "steps":[
 268
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],
@@ -41254,6 +41502,7 @@
 "steps":[
 278
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],
@@ -41348,6 +41597,7 @@
 "steps":[
 267
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],
@@ -41438,6 +41688,7 @@
 "steps":[
 266
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],
@@ -41540,6 +41791,7 @@
 "steps":[
 245
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],
@@ -41661,6 +41913,7 @@
 "steps":[
 244
 ],
+"planned_from":"walk",
 "edge_cells":[
 192
 ],

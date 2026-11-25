@@ -43,6 +43,8 @@ FRAME_COUNTER, LONG_TIMER_CYCLE, CHASE_TIMER = 0x15, 0x26, 0x4A
 CHASE_FLAG, CHASE_X, CHASE_Y = 0x60, 0x61, 0x62
 RANDOM = 0x18
 SPAWN_CYCLE, EDGE_CELL = 0x524, 0x525
+# The walk record's `how` of a door real play from power on reached (States44, round 44).
+WALKED = ('explorer', 'sparkle')
 OBJ_TYPE, OBJ_X, OBJ_Y, OBJ_DIR = 0x34F, 0x70, 0x84, 0x98
 ROOM_OBJ_COUNT, LEVEL_KILLS = 0x34E, 0x560
 HEARTS, PARTIAL = 0x66F, 0x670
@@ -805,27 +807,36 @@ def cmd_rule(args):
         planned = max(set(values), key=values.count)
         doors[key] = {'planned': planned, 'others': sorted(set(values) - {planned}), 'proof': 'measured',
                       'steps': [index]}
-    # States44's walk from power on (`<states>/<route>_walk.json`): each door's own `$524` is the route's value as real
-    # play under the plan brought it: it is the planned value where it lies in the door's set (else left as composed
-    # and reported; `triforce.start_audit` fails such a door).
+    # States44's walk from power on (`<states>/<route>_walk.json`, round 44): each door's own `$524` is the value real
+    # play under the plan brings there, so it is the door's planned value, and a value the search did not reach joins
+    # the door's set (a game from power on reached it).  A door whose state the walk did not play (`how` names a rule
+    # that drew it, 9x32's r29 Ganon load) keeps the composed plan.
     walk = ROOT / 'triforce' / 'states' / f'{args.route}_walk.json'
-    outside = []
+    joined, drawn = [], []
     if walk.exists():
         from triforce import start_audit  # pylint: disable=import-outside-toplevel
         game = _native.Game()
         for name, info in json.loads(walk.read_text()).get('doors', {}).items():
             game.load(name.removesuffix('.state'), randomize_rng=False, controllable=True)
             key = start_audit.door_of(game.ram())
-            if key is None or key not in doors or info.get('spawn_cycle') is None:
+            if key is None or info.get('spawn_cycle') is None:
+                continue
+            if info.get('how') not in WALKED:
+                drawn.append((name, info.get('how')))
+                continue
+            if key not in doors:
+                doors[key] = {'planned': int(info['spawn_cycle']), 'others': [], 'proof': 'walk',
+                              'steps': [info.get('route_step')]}
+                joined.append((name, int(info['spawn_cycle']), []))
                 continue
             door, value = doors[key], int(info['spawn_cycle'])
             values = {door['planned'], *door['others']}
-            if value in values:
-                door['planned'], door['others'] = value, sorted(values - {value})
-                door['planned_from'] = 'walk'
-            else:
-                outside.append((name, value, sorted(values)))
-        print(f"walk record: {walk.name}; walked values outside the door's set: {outside}")
+            if value not in values:
+                joined.append((name, value, sorted(values)))
+            door['planned'], door['others'] = value, sorted(values - {value})
+            door['planned_from'] = 'walk'
+        print(f"walk record: {walk.name}; walked values the search had not reached (joined): {joined}; "
+              f"doors not walked: {drawn}")
     out = []
     for key, door in sorted(doors.items()):
         entries = seen.get(key, [])

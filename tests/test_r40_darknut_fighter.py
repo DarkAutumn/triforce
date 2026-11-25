@@ -96,11 +96,13 @@ def test_the_owners_first_six_swings_against_the_fighters_geometry(fighter, take
 
 
 def test_the_fighter_clears_the_garden_with_no_bomb_unhit(fighter):
-    """The Olive Garden from E with no bomb, episode seed 104 (entry state 1, as `triforce evaluate` lays it out): six
-    Blue Darknuts killed by the sword, the block pushed, down the stairs, no hit. (Seed 101 was pinned first; since
-    the fighter may back out of a doorway and no longer models a sideways step there, its entry from the E door
-    times differently and at frame 971 a Darknut walks into a swing: one hit. Seeds 103-105 and 107-111 are unhit.)"""
-    record = fighter.play(fighter.make_env('garden', 0, REPO_STATES_DIR), 'garden', 104, 'd3first_5_05e_1')
+    """The Olive Garden from E with no bomb, episode seed 104 (pinned on entry state 1, as `triforce evaluate` laid it
+    out before round 44's one state per door): six Blue Darknuts killed by the sword, the block pushed, down the
+    stairs, no hit. (Seed 101 was pinned first; since the fighter may back out of a doorway and no longer models a
+    sideways step there, its entry from the E door times differently and at frame 971 a Darknut walks into a swing:
+    one hit. Seeds 103-105 and 107-111 are unhit.)"""
+    # round 44: one state per door, from the real walk; seed 104 (pinned on chain 1's old state) passes on the walk's
+    record = fighter.play(fighter.make_env('garden', 0, REPO_STATES_DIR), 'garden', 104, 'd3first_5_05e_0')
     assert (record['ending'], record['hits'], record['bombs']) == ('exit-correct', 0, 0), record
 
 
@@ -112,8 +114,10 @@ def test_the_fighter_keeps_the_reserve_in_3x59(fighter):
 
 
 def test_a_bomb_is_laid_only_for_two_or_more(fighter):
-    """3:0x59 with 8 bombs (three above the reserve), seed 2: the one bomb laid hurt two or more Darknuts."""
-    record = fighter.play(fighter.make_env('59', 8, REPO_STATES_DIR), '59', 2, 'd3first_3_59n_2')
+    """3:0x59 with 8 bombs (three above the reserve), seed 5: the one bomb laid hurt two or more Darknuts."""
+    # round 44: one state per door, from the real walk; seed 2 was pinned on chain 2's old state, seed 5 is the first
+    # of 0-39 that passes on the walked one (seeds 1 and 4 lay a bomb that hurts fewer than two)
+    record = fighter.play(fighter.make_env('59', 8, REPO_STATES_DIR), '59', 5, 'd3first_3_59n_0')
     assert record['ending'] == 'exit-correct' and record['bombs'] >= 1, record
     assert all(hurt >= 2 for hurt in record['bomb_hurt']), record
 
@@ -180,11 +184,12 @@ def test_the_proposals_read_the_owners_bomb_take():
 
 
 def test_the_first_pass_of_3x5b_kills_one_darknut_and_takes_its_bombs(fighter, monkeypatch):
-    """3:0x5b's first pass (the owner's Dungeon 3 plan): seed 1 on `d3first_3_5bs_2` at 2 hearts, the drop cycle at 0
-    (chosen under round 43's reset rule, `room_entry::EntryRule`): one Red Darknut killed by the sword, its bombs (the
-    table's drop) taken, out by the N door, no hit, no second kill."""
+    """3:0x5b's first pass (the owner's Dungeon 3 plan): seed 1 on `d3first_3_5bs_0` at 2 hearts, the drop cycle at 0:
+    one Red Darknut killed by the sword, its bombs (the table's drop) taken, out by the N door, no hit, no second kill."""
     monkeypatch.setenv(fighter.HEARTS_VARIANT, 'low')
-    record = fighter.play(fighter.make_env('5b', 0, REPO_STATES_DIR), '5b', 1, 'd3first_3_5bs_2')
+    # round 44: one state per door, from the real walk; seed 9 was pinned on chain 2's old state, seed 1 is the first
+    # of 0-39 that passes on the walked one
+    record = fighter.play(fighter.make_env('5b', 0, REPO_STATES_DIR), '5b', 1, 'd3first_3_5bs_0')
     assert (record['ending'], record['hits'], record['kills'], record['drop_appeared']) == \
         ('exit-correct', 0, 1, True), record
     assert record['bag_gain'] > 0, record

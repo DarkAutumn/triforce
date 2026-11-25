@@ -41,7 +41,7 @@ it and going on the same way (a strike: then along the line) for D decisions, fi
 latest.  The rule alone reacts to what it sees and is hit where a Darknut turns into Link at a grid point; the
 look-ahead picks among the same actions the moment that works.
 
-`measure` plays the rule from the route step's entry states (`d3first_3_69n_*` in, `d3first_3_69c_*` out) through
+`measure` plays the rule from the route step's entry states (`d3first_3_69n_0` in, `d3first_3_69c_0` out) through
 the darknut task's environment (`specialists/d3first/darknut.yaml`), seeds `--seed0`.. drawn as a training reset
 draws them (the start's random numbers and spawn draw, the task's hp draw), with 4 or 8 bombs (the route's: none is
 used here), and on the way out a third of the entries from the chains' harvested handoffs (the task's
@@ -575,15 +575,15 @@ def teach(env, which: str, seed: int, start: str, recorder=None, probe=None, dep
 
 
 def starts(which: str, seed0: int, runs: int):
-    """(seed, start state, bombs) per visit: the entry states round robin, a third of the out-pass from the
-    harvested handoffs (drawn by the seed), 4 or 8 bombs by the seed's parity."""
+    """(seed, start state, bombs) per visit: the entry state (round 44: d3first has one state per door, chain 0), a
+    third of the out-pass from the harvested handoffs (drawn by the seed), 4 or 8 bombs by the seed's parity."""
     pool = harvested(which) if which == 'out' else []
     for seed in range(seed0, seed0 + runs):
         draw = random.Random(seed)
         if pool and draw.random() < 0.33:
             yield seed, draw.choice(pool), 4 + 4 * (seed % 2)
         else:
-            yield seed, f'{STATES[which]}_{seed % 3}', 4 + 4 * (seed % 2)
+            yield seed, f'{STATES[which]}_0', 4 + 4 * (seed % 2)
 
 
 def _visits(task) -> list[dict]:
@@ -710,7 +710,7 @@ def demos(out: Path, which: str, seed0: int, runs: int, depth: int = 4, progress
 
 def trace(which: str, seed: int, start: str | None = None):
     env = make_env(4 + 4 * (seed % 2))
-    start = start or f'{STATES[which]}_{seed % 3}'
+    start = start or f'{STATES[which]}_0'
     obs, _ = env.reset(seed=seed, options={'start_state': start})
     rule = Line(which, Floor(env.state.render_grid()))
     health = env.state.health

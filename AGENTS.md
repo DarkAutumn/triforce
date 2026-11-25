@@ -597,15 +597,26 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   the route (3 through Dungeon 2, 4 after Dodongo, 5 after the 0x2c heart cave, 6 after Aquamentus, 7 after
   Manhandla, 8 after Gleeok, 9 after 0x5f's heart container, 10 after 0x2f's cave, 11 after Digdogger, 12 after
   Dungeon 7's Aquamentus, 13 after Gohma, 14 after Gleeok of Dungeon 8, 15 after 0x47's heart container), counted
-  along the stretch way a step is on (a plain-way step doesn't count the clip way's heart room). States are chains
-  0–2, `<level>_<room><entry>[_v<visit>]_<chain>`: a later visit of the route to a room from the same side adds
-  `_v2`, `_v3`, ... (`0_1be_v2_0`; the first visit keeps the bare name; `docs/architecture.md` "State names"). Boss
-  rooms keep only the fight entry. Build
-  states with `python -m triforce.entry_states build|path` (staged under `target/entry-states/<ts>`, then
-  `entry_states install <dir>`) and check them with `... audit` (it enforces these rules and exits 1 on a problem).
-  A room whose fight the explorer can't clear (round 24: the Olive Garden) is crossed by `build --skip-fights` (the
-  states after it marked `fight_skipped`) until a model clears it; then those states are rebuilt from chain runs'
-  harvested states (`eval-chain --harvest`), their hearts refilled as every entry state's (`write_entry_state`).
+  along the stretch way a step is on (a plain-way step doesn't count the clip way's heart room).
+  States are named `<level>_<room><entry>[_v<visit>]_<chain>`: a later visit of the route to a room from the same
+  side adds `_v2`, `_v3`, ... (`0_1be_v2_0`; the first visit keeps the bare name; `docs/architecture.md` "State
+  names"). Boss rooms keep only the fight entry.
+  **`d3first` (a route with its own start states): one state per door, real, from one walk** (round 44, the owner,
+  Nov 25: "We should only need 1 save state per 'door/entry' to a room to do all of our work", "The layout that
+  spawns should be real, not fake", "We should never train on an un-real state"): chain 0 only, every state from
+  `python -m triforce.entry_states walk --route d3first` (power on by controller inputs, the machine carried from door
+  to door with no redraw, no fresh room, no refill; each room's kills by routes.yaml `clear:`; after Dungeon 1 each
+  leg and dungeon walked as its own segment from the dungeon exit's checked state, `walk --segment`), its record
+  `triforce/states/d3first_walk.json` (each walk's commit and start, every door's walk, bytes and file sha256). A
+  state no walk made, or a walked file edited afterwards, is UNWALKED to the audit; `build` and `path` refuse the
+  route.
+  Its rooms hold the memory real play leaves (3x5b's last pass makes 2 Darknuts; 3x59 from S, 1x23 from W, the
+  Olive Garden out of its cellar make none). `d2first` keeps chains 0–2 built by `entry_states build|path`
+  (staged under `target/entry-states/<ts>`, then `entry_states install <dir>`). Check every state with `...
+  audit` (it enforces these rules and exits 1 on a problem). On `d2first` a room whose fight the explorer can't
+  clear (round 24: the Olive Garden) is crossed by `build --skip-fights` (the states after it marked
+  `fight_skipped`) until a model clears it; then those states are rebuilt from chain runs' harvested states
+  (`eval-chain --harvest`), their hearts refilled as every entry state's (`write_entry_state`).
 - **Training mixes full health (sword beams) and partial health** (`full_hp: 0.5`; partial down to
   `hp: [0.15, max]`; the owner, Nov 12: boss-gleeok `[0.5, max]`). The beam look-ahead must credit the firing step.
 - **Clips only: the no-clip way is dropped** (the owner, Nov 18; supersedes "clip families train with clips on and with

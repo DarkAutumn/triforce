@@ -264,13 +264,13 @@ def write_manifests(out: Path, goriya_states: int, goriya_episodes: int, episode
     states, source = yardstick.choose_states('goriya', goriya_states, ROOT / 'triforce' / 'states')
     goriya = {**base, 'episodes': goriya_episodes, 'states_per_family': goriya_states,
               'entries': [{'key': 'goriya@d3first', 'family': 'goriya', 'source': source, 'states': states}]}
-    room = {**base, 'episodes': episodes_0x1b, 'states_per_family': 3,
-            'entries': [{'key': '7:0x1b', 'family': YAML_0X1B, 'source': 'seed',
-                         'states': [f'd3first_7_1bw_{i}' for i in range(3)]}]}
+    # round 44: d3first has one state per door (chain 0)
+    room = {**base, 'episodes': episodes_0x1b, 'states_per_family': 1,
+            'entries': [{'key': '7:0x1b', 'family': YAML_0X1B, 'source': 'seed', 'states': ['d3first_7_1bw_0']}]}
     out.mkdir(parents=True, exist_ok=True)
     write_json_atomic(out / 'manifest-goriya.json', goriya)
     write_json_atomic(out / 'manifest-0x1b.json', room)
-    print(f'[manifests] goriya {len(states)} states x {goriya_episodes}; 7:0x1b 3 states x {episodes_0x1b}')
+    print(f'[manifests] goriya {len(states)} states x {goriya_episodes}; 7:0x1b 1 state x {episodes_0x1b}')
 
 
 def bench(manifests: list[str], arms: list[str], out: Path, parallel: int, logs_dir=None) -> None:

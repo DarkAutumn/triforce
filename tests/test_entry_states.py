@@ -58,7 +58,8 @@ def test_every_trainable_specialist_has_start_states():
 def test_configured_start_states_are_clean():
     """Every configured state passes the audit: named room and entry side, pre-entry, the full room, the route's max
     hearts at full health, a route step.  A state is audited against the route its manifest entry names (the shipped
-    states are steps of ``d2first`` and of ``d3first``)."""
+    states are steps of ``d2first`` and of ``d3first``); a ``d3first`` state is its walk's (round 44: listed in
+    ``d3first_walk.json`` with its bytes) and loads with its room memory as saved."""
     require_rom()
     paths = configured_states()
     if not paths:
@@ -69,7 +70,9 @@ def test_configured_start_states_are_clean():
     for path in paths:
         route = (indexes[DEFAULT_ROUTE].manifest_entry(path) or {}).get('route', DEFAULT_ROUTE)
         index = indexes.setdefault(route, entry_states.RouteIndex(route))
-        problems[os.path.basename(path)] = audit_problems(audit_state(game, path, loads=2, full=full, index=index))
+        walked = entry_states.walked_state(path)
+        row = audit_state(game, path, loads=2, full=full, index=index, walked=walked)
+        problems[os.path.basename(path)] = audit_problems({**row, 'walked': walked})
     assert {name: found for name, found in problems.items() if found} == {}
     assert set(indexes) == {DEFAULT_ROUTE, 'd3first'}
 
@@ -575,3 +578,101 @@ def test_entry_side_reads_a_dock_landing_as_the_whirlwind():
     assert side(State(0xF0, {2: entry_states.OBJ_WHIRLWIND})) == 'r'
     assert side(State(0xE0, {2: entry_states.OBJ_WHIRLWIND}, room=0x31)) == 'r'
     assert side(State(0xF0)) == 's'
+
+
+# --- round 44: one state per door, from one real walk ---
+
+def test_a_walked_route_has_one_state_per_door():
+    """``d3first`` (its own start states) has chain 0 alone, built by ``walk``; ``d2first`` keeps chains 0-2 and
+    ``build``.  A whole-directory audit wants every door's ``_0`` file and the walk record."""
+    assert entry_states.route_chains('d3first') == (entry_states.WALK_CHAIN,) == (0,)
+    assert entry_states.route_chains(DEFAULT_ROUTE) == CHAINS
+    steps = route_steps('d3first')
+    assert all(s.clear is not None for s in steps)
+    assert steps[9].planned_kills() == {'max_kills': 1, 'exit_kills': 1}        # 3x5b's first pass: one Darknut
+    assert [s.planned_kills() for s in steps[:4]] == [{'clear': True}] * 3 + [{'max_kills': 0}]
+
+
+def test_build_and_path_refuse_a_walked_route(capsys):
+    assert entry_states.main(['build', '--route', 'd3first']) == 2
+    assert entry_states.main(['path', '--route', 'd3first', '--source', '3_7cs_0', '--rooms', '3:0x7b']) == 2
+    assert 'walk --route d3first' in capsys.readouterr().err
+
+
+def test_the_walk_record_names_each_file_by_its_bytes(tmp_path):
+    """UNWALKED: a namespaced state its walk record does not list with these very bytes (another chain, a file
+    edited after the walk); a bare name is no walk's.  WALK-RECORD: a walked route without its record."""
+    name = 'd3first_3_7cs_0.state'
+    shutil.copyfile(REPO_STATES_DIR / '0_05e_0.state', tmp_path / name)
+    shutil.copyfile(REPO_STATES_DIR / '0_05e_0.state', tmp_path / 'd3first_3_7cs_1.state')
+    shutil.copyfile(REPO_STATES_DIR / '0_05e_0.state', tmp_path / '0_05e_0.state')
+    assert entry_states.walked_state(str(tmp_path / name)) is False                 # no record
+    assert any(p.startswith('WALK-RECORD d3first') for p in entry_states.directory_problems(str(tmp_path), 'd3first'))
+    record = {'route': 'd3first', 'walk': 'w', 'commit': 'abc', 'boot': {'name': 'LINK', 'delay': 1},
+              'doors': {name: {'sha256': entry_states._sha256(str(tmp_path / name))}}}  # pylint: disable=protected-access
+    (tmp_path / 'd3first_walk.json').write_text(json.dumps(record))
+    assert entry_states.walked_state(str(tmp_path / name)) is True
+    assert entry_states.walked_state(str(tmp_path / 'd3first_3_7cs_1.state')) is False
+    assert entry_states.walked_state(str(tmp_path / '0_05e_0.state')) is None
+    problems = entry_states.directory_problems(str(tmp_path), 'd3first')
+    assert not any(p.startswith('WALK-RECORD') for p in problems)
+    assert 'MISSING d3first_3_7be_0.state' in problems and 'MISSING d3first_3_7be_1.state' not in problems
+    with open(tmp_path / name, 'r+b') as file:
+        file.seek(-1, os.SEEK_END)
+        last = file.read(1)
+        file.seek(-1, os.SEEK_END)
+        file.write(bytes([last[0] ^ 1]))
+    assert entry_states.walked_state(str(tmp_path / name)) is False
+    assert 'UNWALKED' in audit_problems({'name_ok': True, 'named_room_matches': True, 'pre_entry': True,
+                                         'full_count': 0, 'full': True, 'hearts': 3, 'walked': False})
+
+
+def test_installing_a_walk_replaces_the_routes_states(tmp_path):
+    """A walk's build installs its record beside the states and removes every other state of its namespace (and its
+    manifest entry): one state per door, all from one walk; another route's states stay."""
+    staged, states = tmp_path / 'staged', tmp_path / 'states'
+    staged.mkdir()
+    states.mkdir()
+    for name in ('d3first_3_7cs_0.state',):
+        shutil.copyfile(REPO_STATES_DIR / '0_05e_0.state', staged / name)
+    for name in ('d3first_3_7cs_1.state', 'd3first_3_7be_0.state', '0_05e_0.state'):
+        shutil.copyfile(REPO_STATES_DIR / '0_05e_0.state', states / name)
+    _merge_manifest(str(states), [{'file': n, 'chain': int(n[-7]), 'route_step': 1}
+                                  for n in ('d3first_3_7cs_1.state', 'd3first_3_7be_0.state', '0_05e_0.state')])
+    _merge_manifest(str(staged), [{'file': 'd3first_3_7cs_0.state', 'chain': 0, 'route_step': 6}])
+    (staged / entry_states.BUILD_RECORD).write_text(json.dumps({'command': None, 'files': [], 'failed': []}))
+    record = {'route': 'd3first', 'walk': 'w', 'commit': 'abc', 'boot': {'name': 'LINK', 'delay': 1},
+              'doors': {'d3first_3_7cs_0.state': {'sha256': 'x'}}}
+    (staged / entry_states.WALK_RECORD).write_text(json.dumps(record))
+    assert install(str(staged), str(states)) == ['d3first_3_7cs_0.state']
+    files = sorted(f for f in os.listdir(states) if not f.endswith('.lock'))
+    assert files == ['0_05e_0.state', 'd3first_3_7cs_0.state', 'd3first_walk.json', MANIFEST]
+    with open(states / MANIFEST, encoding='utf-8') as file:
+        assert sorted(e['file'] for e in json.load(file)) == ['0_05e_0.state', 'd3first_3_7cs_0.state']
+    installed = entry_states.read_walk_record('d3first', str(states))
+    assert installed['doors'] == {'d3first_3_7cs_0.state': {'sha256': 'x', 'walk': 'w'}}
+    assert installed['walks'] == {'w': {'commit': 'abc', 'boot': {'name': 'LINK', 'delay': 1}}}
+
+
+def test_a_segment_walk_merges_into_the_record(tmp_path):
+    """A segment (walked from its start door's checked state) installs beside the first walk: each door names its
+    walk, a walk no door names is dropped, and the audit asks each walk for a commit and a start."""
+    states = tmp_path / 'states'
+    states.mkdir()
+    first = {'route': 'd3first', 'current': 'a', 'walks': {'a': {'commit': 'c', 'boot': {'name': 'LINK', 'delay': 1}},
+                                                            'old': {'commit': 'c', 'boot': {'delay': 1}}},
+             'doors': {'d3first_3_7cs_0.state': {'sha256': 'x', 'walk': 'a'},
+                       'd3first_0_37c_v2_0.state': {'sha256': 'y', 'walk': 'a'}}}
+    (states / 'd3first_walk.json').write_text(json.dumps(first))
+    staged = tmp_path / 'staged'
+    staged.mkdir()
+    (staged / entry_states.BUILD_RECORD).write_text(json.dumps({'command': None, 'files': [], 'failed': []}))
+    second = {'route': 'd3first', 'current': 'b', 'walks': {'b': {'commit': 'c', 'segment': {'start_step': 79}}},
+              'doors': {'d3first_2_7ds_0.state': {'sha256': 'z', 'walk': 'b'}}}
+    (staged / entry_states.WALK_RECORD).write_text(json.dumps(second))
+    install(str(staged), str(states), partial=True)
+    merged = entry_states.read_walk_record('d3first', str(states))
+    assert sorted(merged['walks']) == ['a', 'b'] and 'current' not in merged
+    assert {name: door['walk'] for name, door in merged['doors'].items()} == {
+        'd3first_3_7cs_0.state': 'a', 'd3first_0_37c_v2_0.state': 'a', 'd3first_2_7ds_0.state': 'b'}
+    assert not any(p.startswith('WALK-RECORD') for p in entry_states.directory_problems(str(states), 'd3first'))

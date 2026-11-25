@@ -64,7 +64,9 @@ def build_parser() -> argparse.ArgumentParser:
                         help="the side Link comes in by (cave: out of a cave or a dungeon's stairs); default: the "
                              "route's first")
     parser.add_argument('--visit', type=int, default=1, help="the route's visit from that side (default 1)")
-    parser.add_argument('--chain', type=int, default=0, choices=(0, 1, 2), help="the start state's chain (default 0)")
+    parser.add_argument('--chain', type=int, default=0, choices=(0, 1, 2),
+                        help="the start state's chain (default 0; d2first has 0-2, d3first only 0: one state per door "
+                             "since round 44)")
     parser.add_argument('--bombs', type=int, help="bombs held (written over the start state)")
     parser.add_argument('--hearts', type=float, help="hearts, halves allowed (the containers grow to hold them)")
     parser.add_argument('--keys', type=int, help="keys held")

@@ -59,7 +59,10 @@ def test_rooms_and_levels_in_the_owners_notation():
 
 def test_the_route_start_its_entries_visits_and_chains():
     assert find_start(Spec(3, 0x59)) == emu.Start('d3first_3_59n_0', 'N')        # the route's first entry
-    assert find_start(Spec(3, 0x59, entry='S', chain=2)) == emu.Start('d3first_3_59s_2', 'S')
+    # round 44: d3first has one state per door (chain 0)
+    assert find_start(Spec(3, 0x59, entry='S')) == emu.Start('d3first_3_59s_0', 'S')
+    with pytest.raises(emu.StartError, match='visit 1 chain 2 in .*there: visit 1 chain 0'):
+        find_start(Spec(3, 0x59, chain=2))
     assert find_start(Spec(3, 0x69, entry='cave')) == emu.Start('d3first_3_69c_0', 'cave')
     assert find_start(Spec(3, 0x0f)) == emu.Start('d3first_3_0fcave_0', 'S')      # the raft's cellar
     assert find_start(Spec(5, 0x05)) == emu.Start('d3first_5_05e_0', 'E')         # the Olive Garden, from E
@@ -120,11 +123,11 @@ def darknut_touches(session, limit: int = 1, frames: int = 600) -> list:
 @pytest.mark.parametrize('hearts, touches, died', [(2, 1, True), (2.5, 1, False), (2.5, 2, True), (0.5, 1, True)])
 def test_hearts_in_the_olive_garden_die_as_the_game_says(hearts, touches, died):
     """``--hearts 2``: a Blue Darknut's touch (two hearts; Link holds no ring at the route's Olive Garden) kills;
-    2.5 survive one; half a heart dies to anything.  The status line's hearts are what the HUD draws from the second
-    frame on (the first frame's picture is drawn before the game rewrites the status bar's text)."""
+    2.5 survive one; half a heart dies to anything.  The status line's hearts are what the HUD draws once the game has
+    rewritten the status bar: from the third frame on the walked state (round 44; the old chain state's took two)."""
     session = session_of(Spec(5, 0x05, bombs=0, hearts=hearts), 1)
     assert session.state.read(0x662) == 0                                   # InvRing: no ring
-    for _ in range(2):
+    for _ in range(3):
         session.step(0)
     assert hud_hearts(session) == session.state.health == hearts
     darknut_touches(session, touches)
@@ -208,22 +211,22 @@ def test_a_start_loads_ready_and_a_reset_with_the_same_seed_plays_the_same_frame
 # ---------------------------------------------------------------------------------------------- the recording
 
 def test_the_saved_replay_verifies_replays_to_the_same_frame_and_keeps_the_bombs(tmp_path):
-    session = session_of(Spec(3, 0x59, bombs=4), 123)
-    assert session.state.bombs == 4
+    session = session_of(Spec(3, 0x59, bombs=3), 123)      # the walked state holds 4 (round 44): 3 is a real write
+    assert session.state.bombs == 3
     play(session, 'D40L30N10')
     when = datetime(2026, 11, 24, 10, 15, 2)
     path = session.save(tmp_path / 'played', when)
-    assert path.name == '3x59_N_bombs4_seed123_261124-101502.tfreplay'
+    assert path.name == '3x59_N_bombs3_seed123_261124-101502.tfreplay'
     data = path.read_bytes()
     recording = _native.Replay(data)
     assert recording.frames == session.frames and recording.ending == 'unknown'
     meta = recording.meta
     assert meta['kind'] == 'human' and meta['seed'] == 123 and meta['route'] == 'd3first'
-    assert meta['human']['state'] == 'd3first_3_59n_0' and meta['human']['overrides'] == {'bombs': 4}
+    assert meta['human']['state'] == 'd3first_3_59n_0' and meta['human']['overrides'] == {'bombs': 3}
     assert recording.source['name'] == 'd3first_3_59n_0'                              # embedded, by its name
     edits = recording.edits()
     bombs = [tuple(int(v) for v in e) for e in edits if e[1] == 0x658]
-    assert bombs == [(0, 0x658, bombs[0][2], 4)] and bombs[0][2] != 4                # a frame-0 EDIT
+    assert bombs == [(0, 0x658, bombs[0][2], 3)] and bombs[0][2] != 3                # a frame-0 EDIT
     assert {e[1] for e in edits if e[0] == 0} >= set(range(0x18, 0x25))               # the RNG phase
     assert _native.replay_verify(data)['frames'] == session.frames
 

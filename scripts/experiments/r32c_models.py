@@ -2,7 +2,7 @@
 promoted models won (from the magic sword on `d3first`'s Link holds what `d2first`'s does but for the candle's colour
 and the rupees, so d2first's models play its rooms).
 
-    python scripts/experiments/r32c_models.py STEM --out DIR [--chains 0,1,2] [--runs 30] [--seed0 1000]
+    python scripts/experiments/r32c_models.py STEM --out DIR [--chains 0] [--runs 30] [--seed0 1000]
         [--goal-step N] [--bombs-quantiles Q0,Q1,...] [--parallel 4]
 
 For each chain: `triforce eval-chain --route d3first --from STEM_<chain> --stop-at step:<the goal step> --runs RUNS
@@ -218,14 +218,16 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     parser.add_argument('stem', help="the step's state without route or chain (6_38s)")
     parser.add_argument('--out', required=True)
-    parser.add_argument('--chains', default='0,1,2', type=lambda s: [int(c) for c in s.split(',')])
+    parser.add_argument('--chains', default='0', type=lambda s: [int(c) for c in s.split(',')],
+                        help="the chains played (round 44: d3first has one state per door, chain 0)")
     parser.add_argument('--runs', type=int, default=30)
     parser.add_argument('--seed0', type=int, default=1000)
     parser.add_argument('--parallel', type=int, default=4)
     parser.add_argument('--goal-step', type=int, default=None,
                         help="the route step whose entry is cut (default: the step after STEM's)")
     parser.add_argument('--bombs-quantiles', default=None, type=lambda s: [float(q) for q in s.split(',')],
-                        help="pool the chains' arrivals; chain i's state holds the bombs at the i-th quantile")
+                        help="pool the chains' arrivals; chain i's state holds the bombs at the i-th quantile "
+                             "(round 44: d3first has one state per door, so one quantile)")
     args = parser.parse_args()
     require_job()
     return harvest(args)

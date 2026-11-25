@@ -21,8 +21,7 @@ plan_demos = _script()
 
 def test_a_routes_stems_are_its_namespaced_states():
     names = plan_demos.state_names(['3_6bs', '4_40s'], 'd3first')
-    assert names == ['d3first_3_6bs_0', 'd3first_3_6bs_1', 'd3first_3_6bs_2',
-                     'd3first_4_40s_0', 'd3first_4_40s_1', 'd3first_4_40s_2']
+    assert names == ['d3first_3_6bs_0', 'd3first_4_40s_0']      # round 44: d3first has one state per door (chain 0)
     assert all((REPO_STATES_DIR / f'{name}.state').is_file() for name in names)
 
 
