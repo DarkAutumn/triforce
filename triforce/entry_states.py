@@ -427,6 +427,7 @@ def write_entry_state(game: Game, pre_entry: Snapshot, path: str, expected: MapL
 
 
 OBJ_METASTATE = 0x405                # ObjMetastate (asm:Obj_EndMetastate): $10 starts a death sparkle
+OBJ_STATE = 0xAC                     # ObjState per slot (asm:Zol_UpdateState, asm:Vire_Update): 1 = hit, flying off
 DEATH_SPARKLE = 0x10
 FIGHT_SKIP_FRAMES = 600
 OBJ_TYPE, DROPPED_ITEM, MONSTER_SLOTS = 0x34F, 0x60, range(1, 12)     # ObjType; a death's slot becomes a drop ($60)
@@ -608,26 +609,34 @@ def sparkle_fight(source: str, kills: Optional[int], out_dir: str, states_dir: s
     asm:Obj_EndMetastate: the game counts the kill, steps the drop cycle, decides the drop and banks the room as it
     would), with the two counters of the sword's kill that the sparkle skips (asm:Damage_KillMonster:
     WorldKillCount + 1, HelpDropCount + 1 up to $0A); ``kills`` of them (None: every one), Link's hearts as they are,
-    the drops left lying.  Refuses a Zol or Vire the sword cannot kill outright (``SPLITTERS``).  Written as
-    ``<out_dir>/<source's name>``, a controllable state the explorer goes on from."""
+    the drops left lying.  A Zol or Vire the sword in hand splits (``SPLITTERS``) is split the game's way instead: its
+    state set to 1, as a weak hit does (asm:Zol_State1Slide, asm:Vire_Update: it flies on until blocked, then splits,
+    the split uncounted and dropping nothing), and its child Gels or Red Keese die by the sparkle (deaths the game
+    does not count either); a partial fight (``kills``) refuses one.  Written as ``<out_dir>/<source's name>``, a
+    controllable state the explorer goes on from."""
     game = Game(seed=0, states_dir=str(states_dir), route=route if route in native_routes() else None)
     state = game.load(source, randomize_rng=False, fresh_room=False)
-    killed = set()
+    killed = 0
     for _ in range(FIGHT_SKIP_FRAMES):
         for enemy in state.enemies:
-            if enemy['dying'] or enemy['index'] in killed or (kills is not None and len(killed) >= kills):
+            slot = enemy['index']
+            if enemy['dying'] or (kills is not None and killed >= kills):
                 continue
             if state.sword < SPLITTERS.get(enemy['id'], 0):
-                raise RuntimeError(f"{source}: a {enemy['name']} the sword {state.sword} splits: the walk does not "
-                                   "sparkle it (its split deaths are not counted)")
-            game.write(OBJ_METASTATE + enemy['index'], DEATH_SPARKLE)
+                if kills is not None:
+                    raise RuntimeError(f"{source}: a {enemy['name']} the sword {state.sword} splits in a partial "
+                                       "fight: its split makes more monsters than the count")
+                if game.read(OBJ_METASTATE + slot) == 0 and game.read(OBJ_STATE + slot) == 0:
+                    game.write(OBJ_STATE + slot, 1)
+                continue
+            game.write(OBJ_METASTATE + slot, DEATH_SPARKLE)
             game.write(WORLD_KILL_COUNT, min(game.read(WORLD_KILL_COUNT) + 1, 0xFF))
             if game.read(HELP_DROP_COUNT) < 0x0A:
                 game.write(HELP_DROP_COUNT, game.read(HELP_DROP_COUNT) + 1)
-            killed.add(enemy['index'])
+            killed += 1
         state = game.press('NONE', 1)
         if (kills is None and not state.enemies and game.read(0x34D)) or \
-                (kills is not None and len(killed) >= kills and not any(e['dying'] for e in state.enemies)):
+                (kills is not None and killed >= kills and not any(e['dying'] for e in state.enemies)):
             break
     else:
         raise RuntimeError(f"{source}: the room's monsters did not die in {FIGHT_SKIP_FRAMES} frames")
