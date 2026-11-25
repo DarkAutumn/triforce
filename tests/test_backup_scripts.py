@@ -55,6 +55,19 @@ def test_a_kind_goes_to_the_backup_only_with_its_label(tmp_path):
     assert (backup / entry['path']).exists() and not repo.exists()
 
 
+def test_the_owners_takes_keep_their_own_names(tmp_path):
+    """`--kind owner --keep-names` (scripts/owner_takes.py sync): his file name, not the META's."""
+    take = tmp_path / 'review' / '5x47_S_seed886385_261125-101220.tfreplay'
+    take.parent.mkdir()
+    shutil.copy(GOLDEN, take)
+    repo, backup = tmp_path / 'replays', tmp_path / 'backup'
+    assert archive_replays.main([str(take), '--kind', 'owner', '--keep-names', '--repo', str(repo),
+                                 '--backup', str(backup)]) == 0
+    entry = next(iter(_index(backup).values()))
+    assert entry['name'] == take.stem
+    assert entry['path'] == f"{entry['version']}/owner/{take.stem}.tfreplay.bz2" and not repo.exists()
+
+
 @pytest.mark.skipif(not (shutil.which('7z') or shutil.which('7za')), reason="needs 7z")
 def test_segments_share_a_7z_per_directory(tmp_path):
     found = tmp_path / 'triforce-r99-x' / 'target' / 'chains' / 'run1'
