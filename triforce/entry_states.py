@@ -55,11 +55,13 @@ the file-select delay are the corpus golden's), the machine carried from door to
 and no refill.  Each room is crossed by the explorer started from the carried machine exactly as saved
 (``Explorer(exact_starts=True)``), its paths held to the step's routes.yaml ``clear:`` (``KillSpec``: no kill on a
 crossing, every monster on a fight to the end, N on a partial fight); a fight it cannot end is ended by the game's
-own deaths (``sparkle_fight``, with the sword kill's counters; never a Zol or Vire the sword splits); a crossing
-that costs hearts is kept only if no attempt costs fewer.  The replay of the found path from the same machine gives
-the next door's pre-entry frame: kept as ``<out>/carry/<name>`` and written as ``<out>/<name>`` (chain 0) with
-Link's hearts filled to his containers, the file's one write.  A stretch's plain way is walked as a branch from the
-door where the ways part.  ``<out>/walk.json`` records the power-on, the commit, the command and each door's
+own deaths (``sparkle_fight``, with the sword kill's counters; a Zol or Vire the sword splits is split the game's way
+first), and a room still not passed (a boss the sparkle does not end: Gleeok) is played once more with Link's hearts
+filled (``filled_source``), recorded as such; a crossing that costs hearts is kept only if no attempt costs fewer.
+The replay of the found path from the same machine gives the next door's pre-entry frame: kept as
+``<out>/carry/<name>`` and written as ``<out>/<name>`` (chain 0) with Link's hearts filled to his containers, the
+file's one write.  A stretch's plain way is walked as a branch from the door where the ways part.
+``<out>/walk.json`` records the power-on, the commit, the command and each door's
 bytes (``door_facts``: ``$524``, ``$525``, the chase state, the dividers, the drop cycle, the help-drop counters, the
 kills since the last hit, the room history, the level's banked kills, hearts, inventory) and file hash; ``install``
 puts it beside the states as ``<ns>_walk.json`` and removes the namespace's other states (and their manifest

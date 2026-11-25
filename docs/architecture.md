@@ -3039,8 +3039,12 @@ and no refill: the explorer (`Explorer(exact_starts=True)`, a reset that loads t
 objective-correct exit with the kills routes.yaml `clear:` names and no more (`explore::KillSpec`: `false` no kill,
 `true` every monster dead on the last frame in the room, `N` exactly N), keeping an unhurt path when an attempt finds
 one; a fight it cannot end is ended by `sparkle_fight` (the game's death of each monster, ObjMetastate `$10`, plus
-the two counters asm:Damage_KillMonster steps for a sword kill; never a Zol or Vire the sword splits, whose real
-deaths the game does not count); the replay of the path from the same machine gives the next door's pre-entry frame.
+the two counters asm:Damage_KillMonster steps for a sword kill; a Zol or Vire the sword splits is first split the
+game's way, its state set to 1 as by a weak hit, and its uncounted children sparkled); a room still not passed (a boss
+the sparkle cannot end, Gleeok, whose heads are cut, not killed) is played by the explorer once more from the same
+machine with only Link's hearts filled (`filled_source`, `how: explorer, hearts filled`: the lead, Nov 25, "the walk
+only has to be a real game, not a typical one"); the replay of the path from the same machine gives the next door's
+pre-entry frame.
 Each door is kept as `<out>/carry/<name>` (the next step's source) and written as `<out>/<name>` with Link's hearts
 filled to his containers (the one write: the walk arrives hurt as runs do, the file holds the valid upper end, and a
 reset draws hp anyway). A stretch's plain way is a branch walked from the door where the ways part. `<out>/walk.json`
