@@ -574,7 +574,9 @@ def checkpoints_plan(teacher: str, its: Optional[str], runs: int, dungeons: Opti
 
 
 def _job(agent: str, task: str, subtask: str, desc: str, timeout: str) -> list[str]:
-    return ['triforce', 'job', 'run', '--agent', agent, '--task', task, '--subtask', subtask, '--desc', desc,
+    # The program beside this interpreter, not a bare name: `--submit` from a shell without the venv on its path
+    # found no `triforce` (the lead's watcher, Nov 24).
+    return [_triforce(), 'job', 'run', '--agent', agent, '--task', task, '--subtask', subtask, '--desc', desc,
             '--express', '--timeout', timeout, '--detach', '--']
 
 

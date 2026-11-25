@@ -194,6 +194,11 @@ def _played(path: Path, runs: list[dict], team: dict):
     Path(f'{path}.meta.json').write_text(json.dumps({'provenance': {'route': ROUTE, 'team': team}}))
 
 
+def _job_lines(out: str) -> list:
+    """The plan's queue calls: lines of ``<the program beside the interpreter> job run ...``."""
+    return [line for line in out.splitlines() if line.split(' ', 1)[0].endswith('triforce') and ' job run ' in line]
+
+
 def test_checkpoints_are_planned_one_chain_a_job_then_collected_in_one_table(shared, tmp_path, capsys):
     store.create_team('t1', {'boss-gleeok': store.slot_of(_sealed('boss-gleeok', 'r1'))}, 'test')
     parent = _training('gen1-gleeok', 's1')
@@ -208,7 +213,7 @@ def test_checkpoints_are_planned_one_chain_a_job_then_collected_in_one_table(sha
     assert judge.main([*common, '--plan']) == 0
     out = capsys.readouterr().out
     assert '0 of 4 chains played; the control control-t1-r4 (t1): 0 of 2' in out
-    lines = [line for line in out.splitlines() if line.startswith('triforce job run')]
+    lines = _job_lines(out)
     assert len(lines) == 6 and all('--express --timeout 10m --detach' in line for line in lines)
     assert "eval-batch control-t1-r4 --team t1 --chain 'post-d3: --runs 4 --act model --route d3first --from " \
         "0_74c_0 --stop-at step:53 --output" in lines[0]
@@ -235,7 +240,7 @@ def test_checkpoints_are_planned_one_chain_a_job_then_collected_in_one_table(sha
     assert 'nothing filed yet' in out and not store.outputs(kind='judge')
     assert (chains / 'gen1-gleeok-s1-r4-checkpoints-vs-b.md').is_file()                # another base: named
     assert judge.main([*common, '--plan']) == 0                                    # only what is missing
-    assert len([line for line in capsys.readouterr().out.splitlines() if line.startswith('triforce job')]) == 4
+    assert len(_job_lines(capsys.readouterr().out)) == 4
     # Every piece and the control in: the table is filed in the store.
     team = {'name': 't1+@boss-gleeok=gen1-gleeok/s1-it000004',
             'overrides': {'boss-gleeok@d3first': store.checkpoint_run(parent, 4)['run']}}
