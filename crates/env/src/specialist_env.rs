@@ -780,17 +780,21 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
                     None
                 };
             let mut values = ram_randomization_values(spec, state.max_health(), &mut self.rng, chain);
-            // The room's own values (round 40: by the side the start enters from, its route entry: a curriculum
-            // start's is its track's seed state's), then the forced-drop counters and the drop cycle where the room
-            // states no cycle (round 43, `drop_state: real`): a seed start draws them as real play brings them to a
-            // door; a track start keeps its own (mid-room: the counters and the cycle are part of its play so far).
-            let (at, entry) = (state.full_location(), state_entry(seed_name));
-            apply_room_values(spec, at, entry, &mut self.rng, &mut values);
-            if self.curriculum_tag.is_some() {
-                crate::start_states::keep_track_drop_state(spec, at, entry, &mut values);
-            } else if spec.drop_state.is_some() {
-                let table = self.drop_table()?;
-                crate::start_states::apply_drop_state(spec, &table, at, entry, &mut self.rng, &mut values);
+            // A curriculum start past its track's first point is a moment inside the room's play (round 43, Tracks45):
+            // it keeps its bag, its kill counters and its drop cycle (a 3:0x5b first-pass point after the kill stays at
+            // cycle 1), and takes only the hearts draw (`start_states::track_point_values`). A seed start, or a track's
+            // first point (the room's entry), draws the room's own values (round 40: by the side the start enters
+            // from, its route entry: a track's is its seed state's), then the forced-drop counters and the drop cycle
+            // where the room states no cycle (round 43, `drop_state: real`), as real play brings them to a door.
+            if self.curriculum_tag.as_ref().is_some_and(|tag| tag.1 > 0) {
+                crate::start_states::track_point_values(&mut values);
+            } else {
+                let (at, entry) = (state.full_location(), state_entry(seed_name));
+                apply_room_values(spec, at, entry, &mut self.rng, &mut values);
+                if spec.drop_state.is_some() {
+                    let table = self.drop_table()?;
+                    crate::start_states::apply_drop_state(spec, &table, at, entry, &mut self.rng, &mut values);
+                }
             }
             values
         };

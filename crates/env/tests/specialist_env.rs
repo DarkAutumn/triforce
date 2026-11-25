@@ -1655,6 +1655,59 @@ fn curriculum_start_takes_the_seed_states_route_step() {
     assert_eq!(curriculum, (seed.route().0.to_owned(), seed.route().1));
 }
 
+/// A two-point track of `seed` (a TFZSTATE `seed`'s first playable frame after `MOVE N 4`, then the same frame with
+/// `point` written: a moment inside the room's play) under `dir/<seed>`, and darknut@d3first's env on it, every
+/// reset a curriculum start at the second point.
+fn track_point_env(nes: ZCore, dir: &std::path::Path, seed: &str, point: &[(Var, u8)]) -> Env {
+    let track = dir.join(seed);
+    std::fs::create_dir_all(&track).unwrap();
+    let store = TfzStore::new();
+    let mut s = session(nes);
+    load(&mut s, seed, LoadOptions::default());
+    s.act(Action::parse("MOVE N 4").unwrap()).unwrap();
+    store.save(&track.join("0000.state"), &s.snapshot()).unwrap();
+    s.apply_ram(point);
+    store.save(&track.join("0001.state"), &s.snapshot()).unwrap();
+    std::fs::write(track.join("trajectory.json"), format!(r#"{{"start_state": "{seed}", "success": true}}"#)).unwrap();
+    let spec = CurriculumSpec::new(dir.to_path_buf(), dir.join("progress.json"), 1.0, 0.8);
+    let task = SpecialistConfig::from_file(&common::repo().join("specialists/d3first/darknut.yaml"), Some(&data().map))
+        .expect("darknut@d3first");
+    let opts = EnvOptions { curriculum: Some(Curriculum::new(spec).unwrap().shared()), ..Default::default() };
+    SpecialistEnv::new(Arc::new(task), data().clone(), s.into_nes(), TfzStore::new(), opts).unwrap()
+}
+
+/// Round 43 (Tracks45; the lead: "a track start keeps its own mid-room state"): a curriculum start past its track's
+/// first point draws only the hearts. 3:0x5b's first pass, a point after the kill (cycle 1): every reset keeps cycle 1
+/// (the seed's `room_kill_cycle` would draw 0 half the time), no carrier is lit, the step is a plain crossing (no
+/// `carriers: fight` second kill) and its N exit ends `exit-correct`, never `carrier-left`. 3:0x59 from N, a point
+/// mid-fight with 6 bombs (the seed's `room_bomb_counts` would draw 4 or 8): every reset keeps 6.
+#[test]
+fn a_track_point_keeps_its_own_cycle_bag_and_counters() {
+    let Some(nes) = open_core() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let point = [(Var::WorldKillCycle, 1), (Var::HelpDropCount, 3), (Var::HelpDropValue, 0), (Var::KillStreak, 3)];
+    let mut env = track_point_env(nes, &dir.path().join("a"), "d3first_3_5bs_0", &point);
+    let mut endings = Vec::new();
+    for seed in 0..12 {
+        let (obs, info) = env.reset(Some(seed), None).unwrap();
+        assert!(info.start_state.as_deref().is_some_and(|n| n.ends_with("0001.state")), "{:?}", info.start_state);
+        let s = state(&env);
+        assert_eq!((s.world_kill_cycle(), s.help_drop_count(), s.kill_streak()), (1, 3, 3), "seed {seed}");
+        assert!(obs.entity_threat.iter().all(|row| row[row.len() - 1] == 0.0), "no carrier lit");
+        assert!(!objective(&env).carriers_first() && objective(&env).carriers().is_empty());
+        let infos = walk(&mut env, 80);
+        endings.push(infos.last().and_then(|i| i.ending().map(str::to_owned)));
+    }
+    assert!(endings.iter().all(|e| e.as_deref() != Some("carrier-left")), "{endings:?}");
+    assert!(endings.iter().any(|e| e.as_deref() == Some("exit-correct")), "{endings:?}");
+    let mut env = track_point_env(release(env), &dir.path().join("b"), "d3first_3_59n_0", &[(Var::Bombs, 6)]);
+    for seed in 0..12 {
+        env.reset(Some(seed), None).unwrap();
+        assert_eq!(state(&env).bombs(), 6, "seed {seed}: the track point's bag");
+    }
+    release(env);
+}
+
 // --- tests/test_nearby_items.py ---
 
 /// stalfos-keese-gel at 1_73s_v2 (one empty room) with Link hurt at (120, y) and `drops` (kind, x, y) placed in

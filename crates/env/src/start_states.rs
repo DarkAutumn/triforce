@@ -771,18 +771,13 @@ pub fn apply_drop_state<R: Rng + ?Sized>(
     values.push((Var::WorldKillCycle, rng.random_range(0..=9)));
 }
 
-/// A curriculum (track) start under `drop_state: real`: the counters and the cycle are the track state's own, so the
-/// `help_count` streak is taken out of `values` (its draw still made, the stream unchanged); an entry listed in
-/// `room_kill_cycle` keeps both as before (3:0x5b from S).
-pub fn keep_track_drop_state(
-    spec: &crate::config::RamRandomization,
-    at: MapLocation,
-    entry: Option<&str>,
-    values: &mut Vec<(Var, u8)>,
-) {
-    if spec.drop_state.is_some() && spec.room_kill_cycle_at(at, entry).is_none() {
-        values.retain(|(v, _)| !matches!(v, Var::KillStreak | Var::HelpDropCount | Var::HelpDropValue));
-    }
+/// A curriculum start past its track's first point (round 43, Tracks45; the lead: "a track start keeps its own
+/// mid-room state"): of the reset's family draws only the hearts stay (`hp`); the bag, the keys and the kill counters
+/// are the track state's own, and no room value or drop state is drawn for it. A 3:0x5b first-pass point after the
+/// kill keeps cycle 1 (no carrier lit, no second kill asked); a 3:0x59 point mid-fight keeps the bag its track held.
+/// The draws are still made (the random stream as a seed start's up to here); only their writes are dropped.
+pub fn track_point_values(values: &mut Vec<(Var, u8)>) {
+    values.retain(|(v, _)| matches!(v, Var::HeartsAndContainers | Var::PartialHearts));
 }
 
 /// A harvested start's values (round 43, Carrier43): it keeps the hearts, items and room its run handed over, but a
@@ -1493,14 +1488,12 @@ mod tests {
         }
         // Dungeon doors only: a forced drop armed as bombs ($51) is real at a dungeon door and never at an overworld one.
         assert!(table.dungeon.iter().any(|r| r.2 != 0) && table.overworld.iter().all(|r| r.2 == 0));
+        // A track point keeps its own state: only the hearts draw is written.
         let mut values = ram_randomization_values(&after, 3, &mut rng(), None);
-        keep_track_drop_state(&after, r4d, Some("W"), &mut values);
-        assert!([Var::KillStreak, Var::HelpDropCount, Var::HelpDropValue, Var::WorldKillCycle]
-            .iter()
-            .all(|v| one(&values, *v).is_none()), "a track start writes no counter: {values:?}");
-        let mut values = ram_randomization_values(&after, 3, &mut rng(), None);
-        keep_track_drop_state(&after, r5b, Some("S"), &mut values);
-        assert!(one(&values, Var::HelpDropCount).is_some(), "3:0x5b from S's track starts draw the streak as before");
+        assert!(one(&values, Var::HelpDropCount).is_some() && one(&values, Var::HeartsAndContainers).is_some());
+        track_point_values(&mut values);
+        assert!(values.iter().all(|(v, _)| matches!(v, Var::HeartsAndContainers | Var::PartialHearts)), "{values:?}");
+        assert!(one(&values, Var::HeartsAndContainers).is_some(), "the hearts draw stays");
         // A training reset that arms the bomb drop (`drop_bombs`): a real armed triple, at its real frequency.
         let armed: Vec<(u8, u8, u8, u32)> = table.armed().copied().collect();
         assert!(armed.iter().all(|r| r.1 == 10 && r.2 != 0 && r.0 >= 10), "{armed:?}");
