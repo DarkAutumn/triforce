@@ -855,7 +855,8 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 - Tag releases `vX.Y.Z.R` on `main`. **Models are not checked in** (too large; kept in `/backup/triforce`, "Backups").
 - **Replays are `TFREPLAY` files** (`crates/replay`, `triforce/replay.py`) with their own integer `REPLAY_VERSION`,
   independent of the repo version. Every format change bumps it (the owner, Nov 23: replays never need to be
-  readable by older readers; version 2 added TARGETS, MASKS and the always-on DECISIONS); a reader refuses a newer
+  readable by older readers; version 2 added TARGETS, MASKS and the always-on DECISIONS, version 3 (Nov 25) the RESET
+  event, the console's RESET button `zcore::ZCore::reset` pressed by `emu-zelda.py --reset`); a reader refuses a newer
   replay by name and
   keeps reading every earlier version it can. `corpus/replays/` must keep verifying (`tf replay verify`, a cargo
   test): a deliberate break moves those files to `corpus/replays/retired/`, bumps `REPLAY_VERSION` and records new
@@ -950,7 +951,7 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   (`triforce/states/power_on/idle_<frames>.state`, one every 2000 frames); the run is the same with or without
   them. **Regenerate them with `python -m triforce.entry_states idle` whenever the state format or the emulator's
   behaviour changes** (`cargo test -p env --test power_on_idle` fails until then). The name is 1 to 8 of A–Z, 0–9
-  and space; `ZELDA` is refused (it starts the second quest).
+  and space; a run refuses `ZELDA` (it starts the second quest; `emu-zelda.py --name ZELDA` plays it).
 
 ## Environment
 
