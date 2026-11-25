@@ -35,7 +35,11 @@
 # wanted drop lying in the room (bombs below Link's maximum, a heart or fairy below full health) replaces the exit as
 # the target until taken or gone (6:0x78, the ringleader room: a bomb pack its Wizzrobes drop is taken on the way).
 # `carriers: false` (round 40): where the route's `bomb_rules: {carrier_targets: true}` applies, this step aims at no
-# bomb carrier (3:0x69's line); inert on a route without the switch.
+# bomb carrier (3:0x69's line); inert on a route without the switch.  `carriers: fight` (round 43, the owner, Nov 25:
+# "it should force kill that darknut if the part of its observation is lit up"): while the observation names a
+# carrier (the switch's targets) the carriers are the only targets, the exit none; in training leaving then ends the
+# episode `carrier-left` (a failure), a chain goes on along the route (the exit stays correct).  Once the drop cycle
+# moves on (any kill), or the bag is full, the step is a plain crossing.
 # Round 31: leaving a level by its entrance room's S door is a step once (1:0x73 `exit: S`, game.yaml's one one-way
 # level exit): the next step is the overworld room entered from `cave`, left `cave` back into the level.
 # Round 29 (the leg to Dungeon 9, Dungeon 9, Ganon, Zelda): exit `end` = the game ends in this room (9:0x32: the
@@ -457,7 +461,7 @@ d3first:
   - {level: 3, room: '0x7c', specialist: zol, entry: S, exit: W, bomb_reserve: 6}
   - {level: 3, room: '0x7b', specialist: zol, entry: E, exit: N}
   - {level: 3, room: '0x6b', specialist: zol, entry: S, exit: N, treasure: skip}
-  - {level: 3, room: '0x5b', specialist: darknut, entry: S, exit: N, treasure: skip}
+  - {level: 3, room: '0x5b', specialist: darknut, entry: S, exit: N, treasure: skip, carriers: fight}
   - {level: 3, room: '0x4b', specialist: zol, entry: S, exit: W}
   - {level: 3, room: '0x4a', specialist: stalfos-keese-gel, entry: E, exit: W}
   - {level: 3, room: '0x49', specialist: zol, entry: E, exit: S}
