@@ -18,8 +18,10 @@ resolves to, one reset in the family's task) with its problems:
 - ``PROGRESS``: Link's triforce pieces, sword, bow, raft, ladder, recorder, red ring or silver arrow are the route's
   at no step of the room the name spells (``zelda::objectives::start_on_route``): a step leaving by stairs or a cave
   then has no target and no correct exit; one leaving by an edge is played with what the route never brings; an
-  entry the route never makes gets an off-route objective (0x2c from E won in one step by stepping back out).
-- ``CONTAINERS``: heart containers other than the route's at that step (``entry_states.RouteIndex.hearts``).
+  entry the route never makes gets an off-route objective (the first order's 0x0c from S, won in one step by stepping
+  back out S).
+- ``CONTAINERS``: heart containers other than the route's at that step (``entry_states.RouteIndex.hearts``); for an
+  entry the route never makes, at every step of the room (``ITEMS`` alike).
 - ``ITEMS``: an item the route does not hold at that step: a candle before 7:0x4a's cellar, arrows before the shop,
   food before 0x34's cave, a potion or the letter ever, more than 8 bombs or a bigger bag.
 - ``CLIPS-OFF``: the start fixes the run-time clips switch off (a plain-way-only entry) in a task with clips enabled.
@@ -105,9 +107,10 @@ def audit_family(args) -> list[dict]:
     steps = _native.route_steps(route)
     items_at = route_items(route)
     index = RouteIndex(route)
-    by_entry = defaultdict(list)
+    by_entry, by_room = defaultdict(list), defaultdict(list)
     for s in steps:
         by_entry[(s['level'], s['room'], s['in_cave'], s['entry'], s['visit'])].append(s['index'])
+        by_room[(s['level'], s['room'], s['in_cave'])].append(s['index'])
     env = _native.Env(config, explicit_starts=True)
     game = _native.Game(seed=0)
     rows = []
@@ -137,15 +140,18 @@ def audit_family(args) -> list[dict]:
         named_steps = by_entry.get((level, room, in_cave, entry, visit), [])
         if not named_steps:
             row['problems'].append('OFF-ENTRY')
-        if named_steps:
-            step = named_steps[0]
-            row['step'] = step
-            row['route_containers'] = index.hearts(step)
-            if containers != row['route_containers']:
+        # The hearts and items of the named step, or of one of the room's steps for an entry the route never makes.
+        candidates = named_steps or by_room.get((level, room, in_cave), [])
+        if candidates:
+            row['step'] = candidates[0]
+            route_containers = [index.hearts(step) for step in candidates]
+            if containers not in route_containers:
                 row['problems'].append('CONTAINERS')
-            held = items_at[step]
-            items = [name for name, addr in (('candle', INV_CANDLE), ('arrows', INV_ARROW), ('food', INV_FOOD))
-                     if read(addr) and name not in held]
+                row['route_containers'] = route_containers[0]
+            items = []
+            for name, addr in (('candle', INV_CANDLE), ('arrows', INV_ARROW), ('food', INV_FOOD)):
+                if read(addr) and all(name not in items_at[step] for step in candidates):
+                    items.append(name)
             items += [name for name, addr in (('potion', INV_POTION), ('letter', INV_LETTER)) if read(addr)]
             if row['bombs'] > 8 or row['max_bombs'] != 8:
                 items.append('bombs')
