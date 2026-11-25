@@ -4,7 +4,7 @@ over the environment's own actions; their won runs as demonstration rows (`train
 
     python scripts/experiments/r32p_rules.py ROOM [--runs N] [--chains 0,1,2] [--hearts own|reset|family|chain|H]
                                                 [--out FILE.npz] [--tracks DIR [--per-state N] [--max-loss H]]
-                                                [--verbose]
+                                                [--verbose] [--layout route|valid|N]
 
 ROOM plays its `d3first` route step from the route's installed states (`d3first_<stem>_<chain>`), N runs a state
 (seeds 1000..), through the environment of the family's `d3first` task (`lab.collect.task_yaml`: the generation's
@@ -106,6 +106,7 @@ DRAWS = {'darknut-59': {'bombs_share': 0.0},
          'garden-05': {'bombs': [8, 8], 'bombs_share': 1.0, 'room_kills_share': 0.0},
          'goriya-1b': {'bombs': [1, 1], 'bombs_share': 1.0, 'room_kills_share': 0.0}}
 ROOM = None                                                       # the room played (main)
+LAYOUT = None                       # --layout: the room's monster layout (`Env.set_layout`; round 45), else the draw
 
 
 def route_step(index, route=ROUTE):
@@ -144,7 +145,10 @@ def rule_env(family, state, hearts):
         config = config.replace(ram_randomization={'hp': [share, share], 'full_hp': 0.0, **draws})
     else:
         config = config.replace(ram_randomization=dict(config.to_dict()['ram_randomization'], **draws))
-    return Env(config, explicit_starts=True, strict_actions=False, seed=0)
+    env = Env(config, explicit_starts=True, strict_actions=False, seed=0)
+    if LAYOUT is not None:
+        env.set_layout(LAYOUT)
+    return env
 
 
 # ---- the fighters with bombs, asked once per action ------------------------------------------------------------------
@@ -484,8 +488,13 @@ RULES = {
 
 
 def main():
-    global ROOM                                                   # pylint: disable=global-statement
+    global ROOM, LAYOUT                                           # pylint: disable=global-statement
     ROOM = next((a for a in sys.argv[1:] if a in ROOMS), None)
+    if '--layout' in sys.argv:
+        at = sys.argv.index('--layout')
+        value = sys.argv[at + 1]
+        LAYOUT = int(value) if value.isdigit() else value
+        del sys.argv[at:at + 2]
     r29_demos.ROOMS = ROOMS
     r29_demos.RULES = RULES
     r29_demos.rule_env = rule_env
