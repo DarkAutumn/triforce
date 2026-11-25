@@ -696,12 +696,21 @@ impl DropStates {
                 return Err(fail(format!("{kind}: no triple with kill count {k}")));
             }
         }
+        if table.armed().next().is_none() {
+            return Err(fail("no triple with a bomb drop armed ($50 = $0A, $51 set): `drop_bombs` copies one".into()));
+        }
         Ok(table)
     }
 
     /// The triples of a kind of door.
     pub fn rows(&self, overworld: bool) -> &[(u8, u8, u8, u32)] {
         if overworld { &self.overworld } else { &self.dungeon }
+    }
+
+    /// The triples with a forced bomb drop armed (`$50` = $0A, `$51` set), of both kinds of door: what a training
+    /// reset copies when the task arms that drop (`drop_bombs`, [`armed_drop_values`]).
+    pub fn armed(&self) -> impl Iterator<Item = &(u8, u8, u8, u32)> + Clone {
+        self.dungeon.iter().chain(&self.overworld).filter(|r| r.1 >= 10 && r.2 != 0)
     }
 }
 
@@ -711,16 +720,32 @@ impl DropStates {
 pub fn drop_state_values<R: Rng + ?Sized>(table: &DropStates, overworld: bool, rng: &mut R) -> [(Var, u8); 3] {
     let rows = table.rows(overworld);
     let kills = (rng.random::<f64>() >= DROP_STATE_REAL_SHARE).then(|| rng.random_range(0..=DROP_STATE_UNIFORM_KILLS));
-    let pool = || rows.iter().filter(move |r| kills.is_none_or(|k| r.0 == k));
-    let mut pick = rng.random_range(0..pool().map(|r| u64::from(r.3)).sum::<u64>());
-    let row = pool()
+    let pool = rows.iter().filter(move |r| kills.is_none_or(|k| r.0 == k));
+    let row = pick_by_count(pool, rng);
+    [(Var::KillStreak, row.0), (Var::HelpDropCount, row.1), (Var::HelpDropValue, row.2)]
+}
+
+/// A real triple with a bomb drop armed ([`DropStates::armed`], at its real frequency among them), for a training reset
+/// whose task arms that drop (`drop_bombs`; round 43, the owner: "nothing unreal"): `$627` comes with `$50` = $0A and
+/// `$51` as the game held them, never a drawn kill count under two written bytes. The writes: `$627`, `$50`, `$51`.
+pub fn armed_drop_values<R: Rng + ?Sized>(table: &DropStates, rng: &mut R) -> [(Var, u8); 3] {
+    let row = pick_by_count(table.armed(), rng);
+    [(Var::KillStreak, row.0), (Var::HelpDropCount, row.1), (Var::HelpDropValue, row.2)]
+}
+
+/// One of `rows`, each as likely as its count.
+fn pick_by_count<'a, R: Rng + ?Sized>(
+    rows: impl Iterator<Item = &'a (u8, u8, u8, u32)> + Clone,
+    rng: &mut R,
+) -> &'a (u8, u8, u8, u32) {
+    let mut pick = rng.random_range(0..rows.clone().map(|r| u64::from(r.3)).sum::<u64>());
+    rows.into_iter()
         .find(|r| {
             let take = pick < u64::from(r.3);
             pick = pick.saturating_sub(u64::from(r.3));
             take
         })
-        .expect("the pick lies within the counts");
-    [(Var::KillStreak, row.0), (Var::HelpDropCount, row.1), (Var::HelpDropValue, row.2)]
+        .expect("the pick lies within the counts")
 }
 
 /// `drop_state: real` at a seed reset into `at` from `entry` (round 43; the owner: every room but 3:0x5b from S
@@ -1476,5 +1501,19 @@ mod tests {
         let mut values = ram_randomization_values(&after, 3, &mut rng(), None);
         keep_track_drop_state(&after, r5b, Some("S"), &mut values);
         assert!(one(&values, Var::HelpDropCount).is_some(), "3:0x5b from S's track starts draw the streak as before");
+        // A training reset that arms the bomb drop (`drop_bombs`): a real armed triple, at its real frequency.
+        let armed: Vec<(u8, u8, u8, u32)> = table.armed().copied().collect();
+        assert!(armed.iter().all(|r| r.1 == 10 && r.2 != 0 && r.0 >= 10), "{armed:?}");
+        let commonest = *armed.iter().max_by_key(|r| r.3).unwrap();
+        let mut r = rng();
+        let mut hits = 0;
+        for _ in 0..5_000 {
+            let [(k, kv), (h, hv), (b, bv)] = armed_drop_values(&table, &mut r);
+            assert_eq!((k, h, b), (Var::KillStreak, Var::HelpDropCount, Var::HelpDropValue));
+            assert!(armed.iter().any(|row| (row.0, row.1, row.2) == (kv, hv, bv)), "{kv} {hv} {bv} is no real armed triple");
+            hits += u32::from((kv, hv, bv) == (commonest.0, commonest.1, commonest.2));
+        }
+        let share = f64::from(commonest.3) / f64::from(armed.iter().map(|r| r.3).sum::<u32>());
+        assert!((f64::from(hits) / 5_000.0 - share).abs() < 0.03, "{hits} of 5000 against {share:.3}");
     }
 }

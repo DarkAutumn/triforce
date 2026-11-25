@@ -4851,10 +4851,15 @@ removed, 21 files; the bare tasks, `d2first` and the product trainer untouched).
 - *A track start* (curriculum) keeps the counters and the cycle its state holds: it is a point inside the room's play,
   after kills or hits the track made, so a draw would rewrite a fight's own history (today `help_count` did); 3:0x5b
   from S's track starts draw as before.
-- *The values the game can hold*: every triple was held by the game; the cycle is independent of them. Manhandla's
-  and Dodongo's `drop_bombs` then write `$50` = 10 and `$51` = 1 over the drawn triple (the armed bomb drop),
-  leaving `$627` as drawn: a pair the game holds after ten unhurt kills in a row whatever `$627` read, as long as it
-  reads 10 or more; below that it is the one non-game pair a reset writes, and `$627` matters only for the fairy at 16.
+- *The values the game can hold*: every triple was held by the game; the cycle is independent of them. Where
+  Manhandla's and Dodongo's `drop_bombs` arm the bomb drop (at the reset, and again after a hit cleared it) the three
+  counters are a real armed triple copied from the table (`start_states::armed_drop_values`; the lead's follow-up, Nov
+  25): 18 distinct triples, all dungeon (no overworld entry held one), all `$50` = 10 and `$51` = 1 with `$627` from 10
+  to 61; by count (135 entries) (10, 10, 1) 41, (11, 10, 1) 25, (20, 10, 1) 18, (13, 10, 1) 13, (16, 10, 1) 12, the
+  other thirteen 1-4 each. Before, the two bytes were written over the drawn `$627`, which could read below 10, a
+  triple no game holds. Tests: `armed_drop_values` draws only those triples at their counts; a Manhandla training
+  reset and its re-arm hold one (`an_armed_bomb_drop_is_a_real_armed_triple`). `d2first`'s tasks (no `drop_state`) arm
+  the two bytes as before.
 
 **(B) `drops-left`, Manhandla (3x4d) and Dodongo (2x0e)**: a task that names `endings: {drops-left: soft-failure}`
 ends an episode whose correct exit leaves wanted bombs lying (`objective::bombs_left_behind`: the bag has room, the

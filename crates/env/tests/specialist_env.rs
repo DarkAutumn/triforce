@@ -1968,6 +1968,37 @@ fn forced_bomb_drop_arms_the_help_drop_in_training_envs_only() {
     }
 }
 
+/// Round 43 (`drop_state: real`, the owner: "nothing unreal"): a training reset that arms the bomb drop copies a real
+/// armed triple (`$627`, `$50` = $0A, `$51`) from the table, never a drawn kill count under the two written bytes; the
+/// re-arm after a step does the same.
+#[test]
+fn an_armed_bomb_drop_is_a_real_armed_triple() {
+    let Some(nes) = open_core() else { return };
+    let table = data().drop_states.clone().expect("triforce/drop_state.json");
+    let armed: BTreeSet<(u8, u8, u8)> = table.armed().map(|r| (r.0, r.1, r.2)).collect();
+    let opts = EnvOptions { start_state: Some("3_4dw_0".to_owned()), forced_drops: true, ..Default::default() };
+    let mut env = make_env_with(nes, "boss-manhandla", opts, |c| {
+        c.ram_randomization.drop_bombs = Some(1.0);
+        c.ram_randomization.drop_state = Some("real".into());
+    });
+    let triple = |env: &Env| {
+        let s = state(env);
+        (s.peek(0x627), s.peek(0x50), s.peek(0x51))
+    };
+    let mut seen = BTreeSet::new();
+    for seed in 0..40 {
+        env.reset(Some(seed), None).unwrap();
+        assert!(armed.contains(&triple(&env)), "seed {seed}: {:?} is no real armed triple", triple(&env));
+        seen.insert(triple(&env));
+        act(&mut env, "MOVE E 8");
+        if !state(&env).enemies.is_empty() {
+            assert!(armed.contains(&triple(&env)), "after a step: {:?}", triple(&env));
+        }
+    }
+    assert!(seen.len() >= 3, "several armed triples drawn: {seen:?}");
+    release(env);
+}
+
 /// `reward.heal_targets` (round 25): a heart pulls while Link is hurt, not at full health; a rupee never does.
 #[test]
 fn heal_targets_take_only_healing_drops_while_hurt() {

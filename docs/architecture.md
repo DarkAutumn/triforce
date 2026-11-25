@@ -2051,6 +2051,8 @@ every step, so following an enemy that moves away pays again, and knockback rese
   after every step while a monster is in the room (harm to Link clears both), so the room's next drop (Manhandla's
   last hand) is 4 bombs, unless it is the 16th damage-free kill (a fairy). Only a training env draws it
   (`EnvOptions::forced_drops`, set by the training pool; Python `Env(..., forced_drops=True)`, `Env.drop_bombs`).
+  Under `drop_state: real` (round 43) each arming writes a real armed triple (`$627`, `$50` = $0A, `$51`) copied from
+  `triforce/drop_state.json` (`start_states::armed_drop_values`) instead of the two bytes alone.
 - Staged starts (round 24; darknut): `ram_randomization: {room_kills: {'(5, 0x05)': [1, 5]}, room_kills_share: 0.5}`
   banks k kills in `LevelKillCounts` before a pre-entry start's dungeon room is entered (`LoadOptions::banked_kills`,
   asm:RoomHistory_ModifyObjCountUW), so the game makes k fewer monsters and clearing the rest clears the room. Only a

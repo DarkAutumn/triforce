@@ -789,14 +789,8 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             if self.curriculum_tag.is_some() {
                 crate::start_states::keep_track_drop_state(spec, at, entry, &mut values);
             } else if spec.drop_state.is_some() {
-                let table = self.data.drop_states.as_deref().ok_or_else(|| {
-                    EnvError::Config(crate::config::ConfigError(format!(
-                        "{}: ram_randomization.drop_state needs {} (scripts/experiments/r43_drop_state.py build)",
-                        self.config.name,
-                        crate::config::DROP_STATE_FILE
-                    )))
-                })?;
-                crate::start_states::apply_drop_state(spec, table, at, entry, &mut self.rng, &mut values);
+                let table = self.drop_table()?;
+                crate::start_states::apply_drop_state(spec, &table, at, entry, &mut self.rng, &mut values);
             }
             values
         };
@@ -807,7 +801,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         let spec = &self.config.ram_randomization;
         self.drop_bombs = self.forced_drops
             && spec.drop_bombs.is_some_and(|p| rand::RngExt::random::<f64>(&mut self.rng) < p);
-        if let Some(armed) = self.arm_bomb_drop() {
+        if let Some(armed) = self.arm_bomb_drop()? {
             state = armed;
         }
         let entry_name = entry_name.as_deref().unwrap_or(&name);
@@ -897,17 +891,37 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
 
     /// With the episode's forced bomb drop ([`SpecialistEnv::drop_bombs`]) and a monster left in the room (alive or
     /// dying: the last hand's death sparkle ends in the drop, asm:Obj_EndMetastate), arms the game's help drop as
-    /// bombs (`HelpDropCount` $0A, `IsHelpDropBomb` 1; asm:Drop_SetUpItem) unless it is; any harm to Link clears both
-    /// (asm:Link_BeHarmed), so this runs after every step. The state written, None when nothing was.
-    fn arm_bomb_drop(&mut self) -> Option<Arc<GameView>> {
+    /// bombs (`HelpDropCount` $0A, `IsHelpDropBomb` set; asm:Drop_SetUpItem) unless it is; any harm to Link clears both
+    /// (asm:Link_BeHarmed), so this runs after every step. Under `drop_state: real` (round 43, the owner: "nothing
+    /// unreal") the three counters are a real armed triple (`start_states::armed_drop_values`: `$627` with them as the
+    /// game held it when a bomb drop was armed), at the reset and at every re-arm; without it the two bytes alone, as
+    /// before (`d2first`'s tasks). The state written, None when nothing was.
+    fn arm_bomb_drop(&mut self) -> Result<Option<Arc<GameView>>, EnvError> {
         let state = self.session.state();
         if !self.drop_bombs
             || state.enemies.is_empty()
             || (state.help_drop_count() == 10 && state.help_drop_is_bombs())
         {
-            return None;
+            return Ok(None);
         }
-        Some(self.session.apply_ram(&[(Var::HelpDropCount, 10), (Var::HelpDropValue, 1)]).clone())
+        let values = if self.config.ram_randomization.drop_state.is_some() {
+            let table = self.drop_table()?;
+            crate::start_states::armed_drop_values(&table, &mut self.rng).to_vec()
+        } else {
+            vec![(Var::HelpDropCount, 10), (Var::HelpDropValue, 1)]
+        };
+        Ok(Some(self.session.apply_ram(&values).clone()))
+    }
+
+    /// The table `drop_state: real` draws from ([`GameData::drop_states`]); refused when the checkout has none.
+    fn drop_table(&self) -> Result<Arc<crate::start_states::DropStates>, EnvError> {
+        self.data.drop_states.clone().ok_or_else(|| {
+            EnvError::Config(crate::config::ConfigError(format!(
+                "{}: ram_randomization.drop_state needs {} (scripts/experiments/r43_drop_state.py build)",
+                self.config.name,
+                crate::config::DROP_STATE_FILE
+            )))
+        })
     }
 
     /// The session's disabled kinds for Link's state: the config's `items` (bombs by [`crate::config::BombUse`],
@@ -1146,7 +1160,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             self.objectives.as_ref().expect("episode started"),
             change.previous.full_location(),
         );
-        let state = self.arm_bomb_drop().unwrap_or(state);
+        let state = self.arm_bomb_drop()?.unwrap_or(state);
         self.left_with = cheats.left_with;
         let taken = self.hearts.taken;
         self.hearts.follow(&HeartView::of(&state), &change);
