@@ -4482,6 +4482,80 @@ time at load 25; not measured with graphs). Cheap steps, none built or measured 
   danger records do).
 Past that the emulator is the floor: 85% of a teacher's CPU, twice the frames a decision with the look-ahead.
 
+### The second step (`r43-serve2`): one staged copy a batch, no hit logits; the niceness not kept
+
+The lead (Nov 25, after the first fix): the three cheap steps above, each measured and proven to change no action.
+One training of mine at a time (other agents' scripts beside it), capped at 40% of the card, never while a suite held
+a tools place; 6 iterations, the first left out; "plain" is the graphs as merged that morning (`TRIFORCE_SERVE_STAGING=0
+TRIFORCE_SERVE_HITS=1`). Steps a second moved with the other agents' jobs more than with any of the steps (the same
+pair in the other order flips its winner), so the server's own time a batch and the games' sleep share decide:
+
+| run | load | steps/s (a game) | server ms a batch | games asleep | waiting for a CPU |
+|---|---:|---:|---:|---:|---:|
+| 20 games plain, `r51` | 18 | 1,378 (68.9) | 2.05 | 43% | 7% |
+| 20 games staged + no hits, `r51` | 16 | 1,411 (70.6) | 1.52 | 40% | 9% |
+| 20 games niced game threads (+3), `r51` | 22 | 1,008 (50.4) | 2.18 | 37% | 22% |
+| 20 games plain, `r52` | 28 | 903 (45.2) | 2.40 | 31% | 26% |
+| 20 games staged + no hits, `r52` | 29 | 932 (46.6) | 1.70 | 34% | 29% |
+| 20 games niced game threads (+3), `r52` | 29 | 940 (47.0) | 2.36 | 34% | 28% |
+| 8 games plain, `r51` / `r52` / `r54` / `r55` (r54, r55 second) | 16 / 15 / 35 / 19 | 702 / 776 / 275 / 568 | 1.31 / 1.38 / 1.85 / 1.68 | 35% / 34% / 35% / 35% | 6% / 0% / 45% / 10% |
+| 8 games staged + no hits, `r51` / `r52` / `r54` / `r55` (r54, r55 first) | 18 / 20 / 24 / 25 | 446 / 392 / 531 / 586 | 1.14 / 1.28 / 1.12 / 1.07 | 26% / 27% / 25% / 30% | 33% / 32% / 16% / 9% |
+
+- **Kept: the staged copy and no hit logits** (on by default in the lab trainer; recorded as `training.serve.staged`
+  and `.hits`; the log's start line says "one staged copy a batch, no hit logits answered"): the server's time a batch
+  falls by a quarter or more (20 games 2.05-2.40 to 1.52-1.70 ms; 8 games 1.31-1.85 to 1.12-1.28), and an 8-game
+  teacher's games sleep 25-30% of their time instead of 34-35% in every pair. Steps a second: +2-3% for 20 games in
+  both pairs and for 8 games in the one pair at a like load (r55: 586 against 568); the other 8-game pairs went with
+  their load.
+- **Not kept: the niceness.** Raising the game threads' niceness 3 steps above the server did nothing to the server's
+  time a batch (2.18, 2.36 ms) and lost the games to everything else on the machine at nice 15 or below (r51: 22% of
+  their time waiting for a CPU, -27% steps a second); removed.
+- **The same actions**: an audit run of the kept steps (`TRIFORCE_SERVE_AUDIT=1`, darknut, 20 games, 6 iterations):
+  98,319 staged graph answers against the eager forward on the same rows: the largest difference of a logit or value
+  7.6e-6, 0 picks changed. The hit logits a training no longer gets are read only by a play's records
+  (`Decided.danger`, `crates/pool/src/pool.rs`), never by a rollout.
+- **Next, for later** (the lead's question; none built): a second server thread would share the GIL and the server is
+  busy only a third to a half of a rollout, so [INFERENCE] 10% at most, about half a day; one server for several
+  teachers (another process, observations through shared memory) batches nothing (each teacher its own network) and
+  shares the same GPU, days of work for no gain I can measure. What is left of the games' sleep is the round trip
+  itself (the 1 ms window, the replay, the answer through the queue); past it the emulator is the floor.
+
+### GPU memory a teacher holds (the lead's question before the restart)
+
+One training at a time (r43-serve2's code), 4 iterations, the whole process as `nvidia-smi` reports it (CUDA
+context, torch's cache, the graphs' pools), capped at 40% of the card (`TRIFORCE_GPU_FRACTION=0.4`) so the suites
+beside it kept their memory:
+
+| teacher's shape | graphs | eager | torch's peak reserved (graphs) |
+|---|---:|---:|---:|
+| 8-game boss (`boss-gohma`, 4,096 steps an update) | 1.85 GB | 1.66 GB | 1.30 GB |
+| 10-game `others` (8,192) | 2.65 GB | 2.46 GB | 2.09 GB |
+| 18-game `walkers` (14,742) | 5.85 GB | 5.50 GB | 5.21 GB |
+| 20-game `darknut` (16,384) | 7.10 GB | 7.12 GB | 6.44 GB |
+| 20-game `overworld` (16,384) | 5.85 GB | not run | 5.21 GB |
+
+- **The graphs are bounded and small**: exactly 7 a served network (batches of 1, 2, 4, ..., 64 rows), captured once
+  at the first rollout and never again (a batch above 64 rows is served eagerly), 166 MB measured in every shape
+  (each training's log now says so at its capture); 0-0.35 GB in all against eager.
+- **The learner is the bulk**, and it grows with the minibatch (the update's steps over its 4 minibatches: 1,024 rows
+  for a boss, 4,096 for darknut): about 0.8 GB plus 1.5 GB a thousand rows. Darknut's extra over walkers is most
+  likely ([INFERENCE], not separated) its demonstration term's own minibatch (4,096 more rows through the network each
+  step), not the demonstrations themselves: its 384,327 rows (4.2 GiB) stay in host memory (`ppo.DEMO_DEVICE_BYTES`,
+  4 GiB, `PPO._demo_rows`) and each update moves a minibatch's sample. `gen1-darknut/s1` held 6.9 GB after 8.7
+  hours eager: no growth over a day. Moving them to the host would save nothing: they are there.
+- So three of the big teachers at once (darknut 7.1, walkers 5.85, overworld 5.85 GB) take 18.8 GB of the 24 with
+  the desktop's 1-5 GB: no room for a suite or an evaluation. The lead sequences the restart accordingly.
+- The same runs, one training of mine at a time (the "alone" rows: other agents' scripts beside it), steps a second
+  with graphs (and the second step's staging, no hit logits) against eager, and the games' sleep: 8-game boss 720 (90
+  a game, load 12) against 389 (49, load 10), asleep
+  34% against 59%; 10-game others 484 (load 29) against 427 (load 25); 18-game walkers 1,406 (78 a game, load 18)
+  against 883 (49, load 13), asleep 35% against 65%; 20-game darknut 1,461 (73 a game, load 16) against 972 (49,
+  load 15), asleep 39% against 61%; overworld (graphs only) 1,131 (57 a game, load 25).
+- A capture that cannot get its memory serves that network eagerly from then on, with the one warning line, and the
+  run goes on (`tests/test_lab_nets.py`: an out-of-memory error inside the capture; the capture ends, the answers are
+  the eager forward's). A training's GPU memory and its peak are in its record (`jobs.Speed` reads `nvidia-smi` every
+  30 s): `triforce job speed` prints `GPU memory peak 7.1 GB (last 7.0 GB)` and the last line carries the peak.
+
 ### Steps a second on record (`r43-perf`: `triforce/jobspeed.py`, `triforce/jobs.py`, `triforce/job.py`)
 
 The owner: "I want the resulting steps per second to be visible to the agent that started the training and waits on

@@ -67,7 +67,12 @@ eagerly (`serve.learner_process()`), and **the lab trainer captures only while n
 `serve.learner_process(graphs=True)`, round40.md "Where a teacher's time goes"): every bucket of a network at its
 first batch (the training's first rollout, while the learner waits for it), never later; each later rollout copies
 the new weights into the same served copy (`Server.serve_copy`), whose graphs read them in place. Its manifest
-records it (`training.serve`); `TRIFORCE_SERVE_GRAPHS=0` serves eagerly as before.
+records it (`training.serve`); `TRIFORCE_SERVE_GRAPHS=0` serves eagerly as before. The lab trainer's server also
+copies a batch's observation arrays to the GPU in one copy from a pinned buffer (`_Graph` `staged`;
+`TRIFORCE_SERVE_STAGING=0`: one copy an array) and answers no hit logits (a training never reads them, a play's
+records do; `TRIFORCE_SERVE_HITS=1` keeps them): about a quarter less of the server thread's time a batch (round40.md
+"The second step"). A capture that fails, out of memory included, serves that network eagerly from then on with one
+warning line; the captures' memory is logged (7 graphs, about 166 MB for the generation's 768-wide `hitnet`).
 With graphs the batch window drops from 5 ms to 1 ms (`GRAPH_GATHER`; `TRIFORCE_SERVE_GATHER` overrides): a
 forward is cheap, so answering sooner beats a fuller batch. The 200-run `d3first` chain from `3_7cs_0` with four
 `hitshift` networks (106,936 decisions, every run identical across the three):

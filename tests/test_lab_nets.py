@@ -508,35 +508,6 @@ def test_a_capture_that_runs_out_of_gpu_memory_serves_eagerly_and_the_run_goes_o
     assert len(warnings) == 1 and 'OutOfMemoryError' in warnings[0] and 'the run goes on' in warnings[0]
 
 
-def test_the_game_threads_are_niced_above_the_server():
-    """``lab.collect.nice_game_threads``: the pools' game threads (``pool-N``) are raised the given steps above the
-    calling thread (the server and the learner stay where they are); a thread already there is left alone."""
-    import ctypes
-    import os
-    import threading
-    from triforce.lab.collect import nice_game_threads
-    ready, done, tids = threading.Event(), threading.Event(), []
-
-    def game():
-        ctypes.CDLL(None).prctl(15, b'pool-test', 0, 0, 0)       # PR_SET_NAME: as the pool names its workers
-        tids.append(threading.get_native_id())
-        ready.set()
-        done.wait()
-    thread = threading.Thread(target=game)
-    thread.start()
-    ready.wait()
-    base = os.getpriority(os.PRIO_PROCESS, 0)
-    try:
-        assert nice_game_threads(0) == 0
-        assert nice_game_threads(2) == 1
-        assert os.getpriority(os.PRIO_PROCESS, tids[0]) == min(19, base + 2)
-        assert os.getpriority(os.PRIO_PROCESS, 0) == base
-        assert nice_game_threads(2) == 0
-    finally:
-        done.set()
-        thread.join()
-
-
 def test_networks_served_from_temporaries_never_share_an_index():
     """``load_model(path)[0].to_native()`` in a loop (``runner.Policies``): each temporary dies at once, and a later
     network may reuse its id; each must keep its own index and weights (Nov 22: chains with several served
