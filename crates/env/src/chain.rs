@@ -108,6 +108,9 @@ pub struct Route {
     pub clips: bool,
     /// Turn the switch off here during each run (None: never).
     pub clips_off_from: Option<ClipsFlip>,
+    /// Round 43 (default off): a run from a start state draws its first room's spawn cycle, edge cell and chase
+    /// state from the real entries of that door (`GameData::entry_draws`) instead of uniformly.
+    pub natural_entries: bool,
 }
 
 impl Route {
@@ -156,6 +159,7 @@ impl Route {
             final_end,
             clips: true,
             clips_off_from: None,
+            natural_entries: false,
         };
         if let Some(stop) = stop_at {
             let start = start_step(map, name, start_state, true);
@@ -966,6 +970,11 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
             randomize_rng: true,
             fresh_room: true,
             banked_kills,
+            entry_draws: if self.route.natural_entries {
+                self.data.entry_draws(self.data.map.namespace(&self.route.name))
+            } else {
+                None
+            },
             ..Default::default()
         };
         self.session.load(&machine, &opts, rng)?;

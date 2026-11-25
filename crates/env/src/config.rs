@@ -23,6 +23,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use zelda::enums::ActionKind;
+use zelda::room_entry::{EntryDraws, EntryRecord};
 use zelda::{GameMap, MapLocation};
 
 /// A config, game data or state-file problem (`ConfigError(ValueError)` in Python).
@@ -1029,6 +1030,12 @@ pub struct SpecialistConfig {
     pub ram_randomization: RamRandomization,
     #[serde(default = "yes", deserialize_with = "de_bool")]
     pub fresh_rooms: bool,
+    /// `natural_entries:` (round 43; default false, the uniform spawn draw): a reset of a pre-entry start state draws
+    /// the door's spawn cycle, edge cell, chase state and long-timer divider from the real entries of its route
+    /// (`triforce/entry_draws.<ns>.json`, [`GameData::entry_draws`]) instead of uniformly; a door without real entries
+    /// keeps the uniform draw.
+    #[serde(default, deserialize_with = "de_bool")]
+    pub natural_entries: bool,
     #[serde(default)]
     pub items: ItemsConfig,
     /// `clips:` (round 21; round 22: the training mix): `true`/`false`, or `{enabled: BOOL, off_share: SHARE}`.
@@ -1508,6 +1515,10 @@ pub struct GameData {
     pub chain_specialists: HashMap<String, IndexMap<String, ChainConfigs>>,
     pub states_dir: PathBuf,
     pub trajectories_dir: PathBuf,
+    /// Round 43: per route state namespace ("" for bare names) the real entries of its doors
+    /// (`triforce/entry_draws.<ns>.json`, written by `scripts/experiments/r43_seeds.py draws` from power-on runs), the
+    /// table `natural_entries` resets draw from.
+    pub entry_draws: HashMap<String, Arc<EntryDraws>>,
 }
 
 /// The repo root of this checkout (`crates/env/../..`).
@@ -1623,6 +1634,44 @@ fn chain_specialists(
     Ok(out)
 }
 
+/// `triforce/entry_draws.<ns>.json`: `{"doors": [{"level", "room", "facing", "entries": [[spawn_cycle, edge_cell,
+/// chase_flag, chase_x, chase_y, chase_timer, long_timer_cycle], ...]}, ...]}` (other keys say where it came from).
+fn parse_entry_draws(text: &str, rel: &str) -> Result<EntryDraws, ConfigError> {
+    let bad = |what: &str| ConfigError(format!("{rel}: {what}"));
+    let value: serde_json::Value = serde_json::from_str(text).map_err(|e| bad(&e.to_string()))?;
+    let byte = |v: &serde_json::Value, what: &str| -> Result<u8, ConfigError> {
+        v.as_u64().and_then(|n| u8::try_from(n).ok()).ok_or_else(|| bad(&format!("{what}: not a byte: {v}")))
+    };
+    let mut out = Vec::new();
+    for door in value.get("doors").and_then(|d| d.as_array()).ok_or_else(|| bad("no doors list"))? {
+        let key = (
+            byte(&door["level"], "level")?,
+            byte(&door["room"], "room")?,
+            byte(&door["facing"], "facing")?,
+        );
+        for entry in door["entries"].as_array().ok_or_else(|| bad("a door without an entries list"))? {
+            let b: Vec<u8> = match entry.as_array() {
+                Some(row) if row.len() == 7 => row.iter().map(|v| byte(v, "entry")).collect::<Result<_, _>>()?,
+                _ => return Err(bad(&format!("an entry is 7 bytes: {entry}"))),
+            };
+            let record = EntryRecord {
+                spawn_cycle: b[0],
+                edge_cell: b[1],
+                chase_flag: b[2],
+                chase_x: b[3],
+                chase_y: b[4],
+                chase_timer: b[5],
+                long_timer_cycle: b[6],
+            };
+            if record.spawn_cycle >= zelda::room_entry::SPAWN_CYCLE_LENGTH || record.chase_flag > 1 {
+                return Err(bad(&format!("not a value the game holds: {entry}")));
+            }
+            out.push((key, record));
+        }
+    }
+    Ok(EntryDraws::new(out))
+}
+
 impl GameData {
     /// Loads everything under `root` and validates it.
     pub fn load(root: &Path) -> Result<Arc<GameData>, ConfigError> {
@@ -1691,6 +1740,13 @@ impl GameData {
             specialists.insert(name, Arc::new(config));
         }
         let chain_specialists = chain_specialists(root, &map, &specialists)?;
+        let mut entry_draws = HashMap::new();
+        for ns in std::iter::once(None).chain(namespaces.iter().copied().map(Some)) {
+            let rel = namespace_file("entry_draws", ns);
+            if root.join(&rel).exists() {
+                entry_draws.insert(ns.unwrap_or("").to_owned(), Arc::new(parse_entry_draws(&read(&rel)?, &rel)?));
+            }
+        }
         let data = GameData {
             root: root.to_path_buf(),
             map: Arc::new(map),
@@ -1702,6 +1758,7 @@ impl GameData {
             chain_specialists,
             states_dir: root.join(STATES_DIR),
             trajectories_dir: paths::data_dir("trajectories", &root.join("trajectories")),
+            entry_draws,
         };
         data.cross_check()?;
         Ok(Arc::new(data))
@@ -1812,6 +1869,12 @@ impl GameData {
     /// when unknown).
     pub fn chain_profile(&self, ns: Option<&str>, location: MapLocation) -> Option<&[f64]> {
         self.chain_hp.get(&chain_key(ns, location)).map(Vec::as_slice)
+    }
+
+    /// The real entries a start in namespace `ns` (None: bare names) draws from with `natural_entries` (None when
+    /// the namespace has no `entry_draws` file).
+    pub fn entry_draws(&self, ns: Option<&str>) -> Option<Arc<EntryDraws>> {
+        self.entry_draws.get(ns.unwrap_or("")).cloned()
     }
 
     /// The route a start state in namespace `ns` plays for `config` (phase X): the family's `route:` when its states

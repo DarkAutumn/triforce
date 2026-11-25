@@ -28,6 +28,8 @@ struct Inner {
     store: PoolStore<TfzStore>,
     loaded: bool,
     seed: u64,
+    /// Round 43 (`natural_entries=True`): the route's real entries, drawn from instead of the uniform spawn draw.
+    entry_draws: Option<Arc<zelda::room_entry::EntryDraws>>,
     /// The sound device, opened the first time sound is turned on (None: never, or it failed: `sound_error`).
     speaker: Option<Speaker>,
     sound_error: Option<String>,
@@ -89,10 +91,12 @@ pub struct PyLiveGame {
 #[pymethods]
 impl PyLiveGame {
     /// `route`: the rooms as that route plays them (game.yaml; None: the rooms every route plays alike);
-    /// `states_dir` overrides where bare state names resolve.
+    /// `states_dir` overrides where bare state names resolve.  `natural_entries` (round 43, default off): a load
+    /// draws the door's spawn cycle and chase state from the route's real entries (`triforce/entry_draws.<ns>.json`)
+    /// instead of uniformly.
     #[new]
-    #[pyo3(signature = (route=None, states_dir=None))]
-    fn new(py: Python<'_>, route: Option<&str>, states_dir: Option<PathBuf>) -> PyResult<Self> {
+    #[pyo3(signature = (route=None, states_dir=None, natural_entries=false))]
+    fn new(py: Python<'_>, route: Option<&str>, states_dir: Option<PathBuf>, natural_entries: bool) -> PyResult<Self> {
         let rom = context::rom(py)?;
         let data = context::data(py, states_dir.as_deref())?;
         let map = match route {
@@ -110,12 +114,17 @@ impl PyLiveGame {
         let mut session = Session::new(PoolNes::new(ZCore::power_on(rom.clone()), Some(control)), map);
         session.set_render(true);
         session.look_ahead = zelda::LookAhead::Off;
+        let entry_draws = match route {
+            Some(route) if natural_entries => data.entry_draws(data.map.namespace(route)),
+            _ => None,
+        };
         Ok(PyLiveGame {
             inner: Mutex::new(Inner {
                 session,
                 store: PoolStore(TfzStore::new(&data, rom)),
                 loaded: false,
                 seed: 0,
+                entry_draws,
                 speaker: None,
                 sound_error: None,
                 hear: false,
@@ -147,6 +156,7 @@ impl PyLiveGame {
             controllable: false,
             overrides: overrides(ram_overrides)?,
             banked_kills,
+            entry_draws: self.inner.lock().entry_draws.clone(),
         };
         let (name, bytes) = if let Ok(b) = state.cast::<PyBytes>() {
             (None, b.as_bytes().to_vec())

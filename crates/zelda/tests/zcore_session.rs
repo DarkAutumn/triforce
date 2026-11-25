@@ -78,6 +78,7 @@ fn darknut_front_clink_is_not_a_block_or_a_hit() {
         controllable: true,
         overrides: Vec::new(),
         banked_kills: Vec::new(),
+        entry_draws: None,
     };
     // A Darknut well inside the room, so Link fits on either side of him, and on a grid point: one caught between two
     // squares walks on to the next and turns, stunned or not, and the stab lands on his side. The state's layout

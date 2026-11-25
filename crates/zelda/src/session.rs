@@ -33,6 +33,10 @@ pub struct LoadOptions {
     /// ((level, room), kills), that many kills banked in `LevelKillCounts` after `fresh_room`, so the game makes that
     /// many fewer monsters (asm:RoomHistory_ModifyObjCountUW); clearing the rest clears the room.
     pub banked_kills: Vec<((u8, u8), u8)>,
+    /// Round 43, switched off unless set: with `randomize_rng`, a pre-entry state of a door the table knows takes one
+    /// of the door's real entries (`room_entry::EntryDraws`: spawn cycle, edge cell, chase state, long-timer
+    /// divider) instead of the uniform spawn draw; other doors keep the uniform draw.
+    pub entry_draws: Option<Arc<crate::room_entry::EntryDraws>>,
 }
 
 /// Everything needed to resume a session exactly.
@@ -428,7 +432,10 @@ impl<N: Nes> Session<N> {
         }
         if is_pre_entry(|a| nes.peek(a)) {
             if opts.randomize_rng {
-                randomize_spawn(nes, rng);
+                let drawn = opts.entry_draws.as_ref().is_some_and(|table| table.draw(nes, rng));
+                if !drawn {
+                    randomize_spawn(nes, rng);
+                }
             }
             let pending = if opts.fresh_room {
                 pending_room(|a| nes.peek(a))

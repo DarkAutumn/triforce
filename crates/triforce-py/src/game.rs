@@ -1021,6 +1021,7 @@ impl PyGame {
             controllable,
             overrides: overrides(ram_overrides)?,
             banked_kills: Vec::new(),
+            entry_draws: None,
         };
         if let Some(seed) = seed {
             g.rng = ChaCha8Rng::seed_from_u64(seed);

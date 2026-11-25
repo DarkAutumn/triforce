@@ -741,6 +741,9 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             controllable: self.curriculum_tag.is_some(),
             overrides: Vec::new(),
             banked_kills,
+            // Round 43 (off unless the task sets `natural_entries`): the door's real entries instead of the uniform
+            // spawn draw.
+            entry_draws: if self.config.natural_entries { self.data.entry_draws(ns.as_deref()) } else { None },
         };
         let mut state = self.session.load(&machine, &opts, &mut self.rng)?.clone();
         let here = (state.level(), state.location());

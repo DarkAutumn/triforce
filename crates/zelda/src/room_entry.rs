@@ -8,6 +8,7 @@
 
 use crate::nes::Nes;
 use rand::{Rng, RngExt};
+use std::collections::HashMap;
 
 pub const MODE: u16 = 0x12;
 pub const IS_UPDATING_MODE: u16 = 0x11;
@@ -70,6 +71,86 @@ pub fn pending_room(read: impl Fn(u16) -> u8) -> Option<(u8, u8)> {
 pub fn randomize_spawn<N: Nes, R: Rng + ?Sized>(nes: &mut N, rng: &mut R) {
     nes.poke(SPAWN_CYCLE, rng.random_range(0..SPAWN_CYCLE_LENGTH));
     nes.poke(EDGE_SPAWN_CELL, EDGE_SPAWN_CELLS[rng.random_range(0..EDGE_SPAWN_CELLS.len())]);
+}
+
+/// `ChaseLongTimer`, `LongTimerCycle` and the chase flag and target (asm:Mode5Play_UpdateWorld@CheckChaseTarget):
+/// with the spawn cycle, what a room entry reads that decides how its monsters start (zelda-asm `mechanics.md`
+/// "Timers", "Who chases what").
+pub const CHASE_LONG_TIMER: u16 = 0x4A;
+pub const LONG_TIMER_CYCLE: u16 = 0x26;
+pub const CHASE_FLAG: u16 = 0x60;
+pub const CHASE_X: u16 = 0x61;
+pub const CHASE_Y: u16 = 0x62;
+/// Link's facing (`ObjDir[0]`): on the frame before an entry, the side he comes in by (up = from the south).
+pub const LINK_DIR: u16 = 0x98;
+
+/// What the game held on the frame before it placed one real entry's monsters (a power-on run's pre-entry frame).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct EntryRecord {
+    pub spawn_cycle: u8,
+    pub edge_cell: u8,
+    pub chase_flag: u8,
+    pub chase_x: u8,
+    pub chase_y: u8,
+    pub chase_timer: u8,
+    pub long_timer_cycle: u8,
+}
+
+/// A door: (level, room, Link's facing on the frame before the entry).
+pub type Door = (u8, u8, u8);
+
+/// The natural entry draw (round 43): per door the entries real play made there (power-on runs of a route, no
+/// memory written), drawn from as they came.  The spawn cycle a door gets in real play depends on every room the run
+/// entered before it (asm:Spawn_AssignPositions moves it at each entry and nothing but reset clears it), so a
+/// uniform draw ([`randomize_spawn`]) gives most doors layouts the route never shows there; this table gives them
+/// the route's own.
+#[derive(Clone, Debug, Default)]
+pub struct EntryDraws {
+    doors: HashMap<Door, Vec<EntryRecord>>,
+}
+
+impl EntryDraws {
+    pub fn new(entries: impl IntoIterator<Item = (Door, EntryRecord)>) -> Self {
+        let mut doors: HashMap<Door, Vec<EntryRecord>> = HashMap::new();
+        for (door, record) in entries {
+            doors.entry(door).or_default().push(record);
+        }
+        EntryDraws { doors }
+    }
+
+    /// The real entries of `door` (empty for a door the table has none of).
+    pub fn records(&self, door: Door) -> &[EntryRecord] {
+        self.doors.get(&door).map_or(&[], Vec::as_slice)
+    }
+
+    pub fn doors(&self) -> usize {
+        self.doors.len()
+    }
+
+    /// The door a pre-entry state is about to enter ([`pending_room`] and Link's facing), None when RAM doesn't tell.
+    pub fn door_of<N: Nes>(nes: &N) -> Option<Door> {
+        pending_room(|a| nes.peek(a)).map(|(level, room)| (level, room, nes.peek(LINK_DIR)))
+    }
+
+    /// For a pre-entry state of a door the table knows: one of its real entries, drawn uniformly, written (spawn
+    /// cycle, edge cell, chase flag, target and timer, the long-timer divider).  False (nothing written) for any
+    /// other door.
+    pub fn draw<N: Nes, R: Rng + ?Sized>(&self, nes: &mut N, rng: &mut R) -> bool {
+        let Some(door) = Self::door_of(nes) else { return false };
+        let records = self.records(door);
+        if records.is_empty() {
+            return false;
+        }
+        let r = records[rng.random_range(0..records.len())];
+        nes.poke(SPAWN_CYCLE, r.spawn_cycle);
+        nes.poke(EDGE_SPAWN_CELL, r.edge_cell);
+        nes.poke(CHASE_FLAG, r.chase_flag);
+        nes.poke(CHASE_X, r.chase_x);
+        nes.poke(CHASE_Y, r.chase_y);
+        nes.poke(CHASE_LONG_TIMER, r.chase_timer);
+        nes.poke(LONG_TIMER_CYCLE, r.long_timer_cycle);
+        true
+    }
 }
 
 /// Where `level`'s room flags start: the level block's pointer when it is set (it is in every state that reaches
@@ -264,6 +345,54 @@ mod tests {
         assert_eq!(pending(&nes), None);
         nes.0[MODE as usize] = 0x05;
         assert_eq!(pending(&nes), None);
+    }
+
+    fn record(spawn_cycle: u8, chase_flag: u8) -> EntryRecord {
+        EntryRecord {
+            spawn_cycle,
+            edge_cell: 0x4E,
+            chase_flag,
+            chase_x: 0x87,
+            chase_y: 0x33,
+            chase_timer: 0,
+            long_timer_cycle: 7,
+        }
+    }
+
+    /// A known door takes one of its real entries (each of them over enough draws, nothing else); a door the table
+    /// has no entries of, or a state that is not about to enter a room, is left alone.
+    #[test]
+    fn entry_draws_write_a_real_entry_of_the_door() {
+        use rand::SeedableRng;
+        let door = (5, 0x47, 8);
+        let table = EntryDraws::new([(door, record(6, 0)), (door, record(7, 1)), ((5, 0x37, 8), record(2, 1))]);
+        let mut nes = ram();
+        let at = [LEVEL, ROOM, MODE, LINK_DIR];
+        for (a, v) in at.into_iter().zip([5, 0x47, 0x04, 8]) {
+            nes.0[a as usize] = v;
+        }
+        let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(0);
+        let mut seen = std::collections::BTreeSet::new();
+        for _ in 0..64 {
+            assert!(table.draw(&mut nes, &mut rng));
+            let got = (nes.peek(SPAWN_CYCLE), nes.peek(CHASE_FLAG));
+            assert!(got == (6, 0) || got == (7, 1), "{got:?}");
+            assert_eq!((nes.peek(EDGE_SPAWN_CELL), nes.peek(CHASE_X), nes.peek(CHASE_Y)), (0x4E, 0x87, 0x33));
+            assert_eq!((nes.peek(CHASE_LONG_TIMER), nes.peek(LONG_TIMER_CYCLE)), (0, 7));
+            seen.insert(got);
+        }
+        assert_eq!(seen.len(), 2);
+        // Another side of the same room, another room, or no entry pending: nothing written.
+        nes.0[SPAWN_CYCLE as usize] = 3;
+        nes.0[LINK_DIR as usize] = 4;
+        assert!(!table.draw(&mut nes, &mut rng));
+        (nes.0[LINK_DIR as usize], nes.0[ROOM as usize]) = (8, 0x57);
+        assert!(!table.draw(&mut nes, &mut rng));
+        (nes.0[ROOM as usize], nes.0[MODE as usize]) = (0x47, 0x05);
+        assert!(!table.draw(&mut nes, &mut rng));
+        assert_eq!(nes.peek(SPAWN_CYCLE), 3);
+        assert_eq!(table.doors(), 2);
+        assert_eq!(table.records((5, 0x37, 8)), &[record(2, 1)]);
     }
 
     #[test]

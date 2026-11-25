@@ -417,6 +417,19 @@ Stored start states were built by the old loads: 132 of the 364 hold `$FF` in th
 compared with room ids, so inert) and 120 an off-ring or corner edge cell (`$E0` in 109; `$10`, `$1F`, `$3F` in
 11): a randomized load replaces the cell, a load without it keeps it. Their own RNG registers are all on the cycle.
 
+**The natural entry draw (round 43, switched off by default).** In a dungeon (and in an overworld room with spawn
+spots) the monsters' positions come from `$524` alone (asm:Spawn_AssignPositions walks a 9-spot list from it; no
+random byte); `$524` is zeroed only at reset and moved only by that routine, by a fixed map per door, and those maps
+fold the nine values onto few, so power-on runs of a route bring one value (rarely two) to almost every door. The
+uniform draw above gives most doors layouts real play never shows there (5x47 from S: 6 layouts served, 1 real). The
+chase flag `$60` (real: 50/50; a stored state: one fixed value) decides whether the monsters first head for Link or
+his mirror point, and the divider `$26` shifts every long timer. `natural_entries: true` in a task (training resets),
+`ChainTask(natural_entries=True)` (a chain's first room), `LiveGame(natural_entries=True)` / `emu-zelda.py
+--natural-entries` draw one real entry of the door instead (`room_entry::EntryDraws`: `$524`, `$525`, `$60-$62`,
+`$4A`, `$26`; door = level, room and Link's facing on the pre-entry frame) from `triforce/entry_draws.<ns>.json`
+(`scripts/experiments/r43_seeds.py scan` over the archive's power-on runs, then `draws`); the phase stays uniform
+(every phase is reachable at a door). A door without real entries keeps the uniform draw.
+
 ### Attacks by buttons (`crates/zelda/src/attack.rs`, `submenu.rs`; round 21)
 
 The executor never writes Link's facing (`$98`) or the selected item (`$656`): an attack is the button sequence a

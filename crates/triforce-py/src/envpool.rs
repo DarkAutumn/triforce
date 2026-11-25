@@ -244,7 +244,7 @@ impl PyChainTask {
     #[pyo3(signature = (configs, route, seeds, stop_at=None, start_from=None, max_steps=50000, missing=None,
                         states_dir=None, stall_steps=None, hold_finished_frame=false, harvest=None,
                         stop_step=None, power_on=None, checkpoint=None, clips=true, clips_off_from=None,
-                        clips_live=false, policies=None, harvest_every_room=false))]
+                        clips_live=false, policies=None, harvest_every_room=false, natural_entries=false))]
     #[allow(clippy::too_many_arguments)]
     fn new(
         py: Python<'_>,
@@ -267,6 +267,7 @@ impl PyChainTask {
         clips_live: bool,
         policies: Option<Vec<String>>,
         harvest_every_room: bool,
+        natural_entries: bool,
     ) -> PyResult<Self> {
         check_seeds(seeds.iter().copied())?;
         let configs = configs
@@ -310,6 +311,8 @@ impl PyChainTask {
             }
         };
         route = route.with_clips(&data.map, clips, off_from).map_err(config_err)?;
+        // Round 43 (off by default): the first room's spawn cycle and chase state from the door's real entries.
+        route.natural_entries = natural_entries;
         let names = match policies {
             None => configs.iter().map(|c| c.name.clone()).collect(),
             Some(names) => names,
