@@ -5,6 +5,7 @@ import fnmatch
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 from argparse import Namespace
@@ -192,6 +193,29 @@ def test_every_generation_task_trains_from_scratch_with_the_generations_inputs()
     assert wallmaster.items.boomerang and wallmaster.items.candle
     wizzrobe = load_specialist(str(ROOT / 'specialists' / 'd3first' / 'wizzrobe.yaml'))       # 6:0x38
     assert wizzrobe.items.boomerang and not wizzrobe.items.candle
+
+
+def test_every_generation_task_draws_the_drop_state_by_one_rule_and_the_bosses_keep_their_bombs():
+    """Round 43 (the owner, Nov 25): one rule in `_generation.yaml` for every teacher's task, no task file with a
+    counter draw of its own: the forced-drop counters as real play holds them at a door (`drop_state: real`) and the
+    `help_count` streak only where a room states its own drop cycle (darknut's 3:0x5b from S, 0 or 1, as before).
+    Manhandla's and Dodongo's tasks end an exit that leaves their bombs lying (`drops-left`), point at the drops, and
+    arm the bomb drop in training (0.75 and 0.5 of the resets); no other task names the ending."""
+    require_rom()
+    folder = ROOT / 'specialists' / 'd3first'
+    for family in GENERATION:
+        text = (folder / f'{family}.yaml').read_text(encoding='utf-8')
+        assert not re.search(r'^\s*(help_count|drop_state)\s*:|[{,]\s*help_count\s*:', text, re.M), family
+        rr = load_specialist(str(folder / f'{family}.yaml')).to_dict()['ram_randomization']
+        assert rr['drop_state'] == 'real' and list(rr['help_count']) == [0, 9], family
+        endings = load_specialist(str(folder / f'{family}.yaml')).to_dict()['endings']
+        assert ('drops-left' in endings) == (family in ('boss-manhandla', 'boss-dodongo')), family
+    darknut = load_specialist(str(folder / 'darknut.yaml')).to_dict()['ram_randomization']
+    assert {k: list(v) for k, v in darknut['room_kill_cycle'].items()} == {'(3, 0x5b, S)': [0, 1]}
+    for family, share in (('boss-manhandla', 0.75), ('boss-dodongo', 0.5)):
+        task = load_specialist(str(folder / f'{family}.yaml')).to_dict()
+        assert task['endings']['drops-left'] == 'soft-failure', family
+        assert task['reward']['drops_first'] and task['ram_randomization']['drop_bombs'] == share, family
 
 
 def test_the_generations_tasks_change_no_bare_task_and_no_d2first_chain():

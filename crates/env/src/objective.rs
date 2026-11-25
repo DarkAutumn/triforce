@@ -73,6 +73,13 @@ pub fn wanted_drop(state: &GameView, own_bombs: i32, id: i16) -> bool {
     }
 }
 
+/// The wanted bomb drops lying in `state`'s room that are not about to vanish (16 or more lifetime ticks left, about 32
+/// frames; the critic's `penalty-left-drop` counts the same): what an exit leaves behind under the task's
+/// `endings: {drops-left: ...}` (round 43, Manhandla's and Dodongo's bombs). None while Link's own bombs fill the bag.
+pub fn bombs_left_behind(state: &GameView, own_bombs: i32) -> usize {
+    state.items.iter().filter(|it| it.id == item::BOMBS && it.timer >= 16 && wanted_drop(state, own_bombs, it.id)).count()
+}
+
 /// Whether the wanted drops come first for `objective`: the family's `reward.drops_first` (round 25) or the route
 /// step's `drops: first` (round 31, 6:0x78: `Objective::drops_first`).
 fn drops_first(reward: &RewardConfig, objective: &Objective) -> bool {
