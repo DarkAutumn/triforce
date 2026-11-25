@@ -645,6 +645,10 @@ def sparkle_fight(source: str, kills: Optional[int], out_dir: str, states_dir: s
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, os.path.basename(source if source.endswith('.state') else f'{source}.state'))
     game.save_state_file(path)
+    # A boss the sparkle cannot end the game's way leaves Link frozen (Ganon, who dies only by the silver arrow:
+    # at 9x42 Link stays stunned past the 2000-frame wait): the load that waits for control raises here, so the walk
+    # goes on to the next stage.
+    Game(seed=0, states_dir=str(states_dir)).load(path, randomize_rng=False, fresh_room=False, controllable=False)
     return path
 
 

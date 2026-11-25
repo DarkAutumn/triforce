@@ -3974,7 +3974,7 @@ mod tests {
         assert!(e.contains("no earlier step of the route is in this room"), "{e}");
         let e = swap("exit: S, banked_kills: 5, clear: true}", "exit: S, banked_kills: 16, clear: true}");
         assert!(e.contains("banked_kills must be 1-15"), "{e}");
-        let e = swap("exit: N, waypoint: ring, clear: true}", "exit: N, waypoint: silver-arrow, clear: true}");
+        let e = swap("exit: N, waypoint: ring, clear: false}", "exit: N, waypoint: silver-arrow, clear: false}");
         assert!(e.contains("waypoint silver-arrow takes silver-arrow in the cellar"), "{e}");
         let e = swap("exit: W, sword: false", "exit: W, sword: no thanks");
         assert!(e.contains("sword must be true or false"), "{e}");
@@ -4034,9 +4034,9 @@ mod tests {
         assert!(e.contains("entry recorder needs the step before it to exit recorder"), "{e}");
         let e = d7("exit: S, waypoint: arrows", "exit: S, waypoint: food");
         assert!(e.contains("waypoint food buys food"), "{e}");
-        let e = d7("exit: N, waypoint: candle, clear: true}", "exit: N, waypoint: arrows, clear: true}");
+        let e = d7("exit: N, waypoint: candle, clear: false}", "exit: N, waypoint: arrows, clear: false}");
         assert!(e.contains("waypoint arrows buys wood-arrow in an overworld cave"), "{e}");
-        let e = d7("exit: N, waypoint: candle, clear: true}", "exit: N, waypoint: candle, rupee_reserve: 300, clear: true}");
+        let e = d7("exit: N, waypoint: candle, clear: false}", "exit: N, waypoint: candle, rupee_reserve: 300, clear: false}");
         assert!(e.contains("rupee_reserve"), "{e}");
     }
 

@@ -101,7 +101,7 @@ def test_the_fighter_clears_the_garden_with_no_bomb_unhit(fighter):
     stairs, no hit. (Seed 101 was pinned first; since the fighter may back out of a doorway and no longer models a
     sideways step there, its entry from the E door times differently and at frame 971 a Darknut walks into a swing:
     one hit. Seeds 103-105 and 107-111 are unhit.)"""
-    # round 44: d3first has one state per door (chain 0); seed 104 was pinned on chain 1's state
+    # round 44: one state per door, from the real walk; seed 104 (pinned on chain 1's old state) passes on the walk's
     record = fighter.play(fighter.make_env('garden', 0, REPO_STATES_DIR), 'garden', 104, 'd3first_5_05e_0')
     assert (record['ending'], record['hits'], record['bombs']) == ('exit-correct', 0, 0), record
 
