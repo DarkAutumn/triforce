@@ -12953,14 +12953,16 @@
   "entry": "S",
   "exit": "end",
   "alternate": false,
-  "steps": 159,
+  "steps": 152,
   "health": 15.0,
   "ending": "exit-correct",
-  "env_steps": 159,
+  "env_steps": 152,
   "attempts": 1,
   "seconds": 0.0,
   "played_by": "scripts/experiments/r29_demos.py ganon (seed 1000)",
-  "command": "python scripts/experiments/r29_demos.py ganon --route d3first --chains 0 --runs 20 --harvest target/entry-states/r32c-s5b/302-9_42s"
+  "command": "python scripts/experiments/r29_demos.py ganon --route d3first --chains 0 --runs 20 --hearts own --harvest target/r44/ganon",
+  "walk": "ganon-r29-s288",
+  "how": "r29 ganon rule"
  },
  {
   "file": "8_4cc_0.state",
