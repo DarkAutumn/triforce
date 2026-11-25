@@ -185,6 +185,7 @@ All of the glitch knowledge is the owner's; the agents made the agent able to us
 | Nov 22 | Bombs left on the floor in 8:0x3f | Owner (watching) | Fixed | r37 |
 | Nov 23 | Pay rupees once a pickup, sized by amount | Owner | Built; the opening network not yet retrained | r38 |
 | Nov 23 | Flag "the next kill may drop bombs" and point the target at it | Owner | Open | bl |
+| Nov 25 | **Force the carrier kill where the observation lights it** (3x5b's first pass: `carriers: fight`, the exit no target while a carrier is named, leaving then a training failure, a chain goes on); a task's room values hold for harvested starts too; why the teacher crossed (the kill paid nothing, a hit cost 6-10, half the room's starts dark) | Owner (the ruling: "force kill that darknut if the part of its observation is lit up"); the lead (the harvested-starts rule, the chain cautions); Carrier43 (the reward table, the stale harvests found, the flag, the ending, the room list) | Built (r43-carrier); arms not run (training stopped) | r40 "Why the Darknut teacher walks past 3x5b's bomb carriers" |
 
 ## Observation
 

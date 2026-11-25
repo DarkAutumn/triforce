@@ -4303,3 +4303,181 @@ two solo runs 20 a state, 60 a room entry; `triforce-gen2/target/darknut-curve/*
   188 of 188; runs end in 3:0x4d 17.3% (today's Manhandla), 3:0x59 13.0%, 3:0x69 12.0%.
 - Open: the first-pass kill the owner's Dungeon 3 plan wants (nothing in the task pays for the bombs against the
   risk); the Olive Garden's ceiling (0.43 at 9.3M; the fighter script 0.95).
+
+## Why the Darknut teacher walks past 3x5b's bomb carriers, and the forced kill (Carrier43, branch `r43-carrier`)
+
+anthropic/claude-opus-5-5 (Carrier43), on `r40-int` at f8da9361. **The ask** (the owner, Nov 25: "Yes it should force
+kill that darknut if the part of its observation is lit up that the darknut could drop bombs [...] that darknut room
+is the perfect room for this"; the lead's brief): why `gen1-darknut/s1` does not kill a Red Darknut on 3x5b's first
+pass, a design that makes the kill the learned play where the observation says it pays, measured against a control.
+*Where it came from:* the ruling is the owner's; the harvested-starts rule and the chain cautions the lead's; the
+measurements, the `carriers: fight` flag and its ending the agent's.
+
+### 1. What the network is told and paid in 3x5b from S
+
+The route arrives with 3 hearts or fewer, **0 bombs** (chain it570: 300 of 300; `3_5bs` seed states 0) and the drop
+cycle (`$52A`) at 0. Measured in darknut@d3first's training env on `d3first_3_5bs_0..2` with the cycle fixed
+(`specialists/experiments/r43-carrier/5bs-c0.yaml`, `-c1.yaml`: the task's hearts, bag and help-count draws), 300
+visits a case: it570 by `triforce evaluate --act sample --replays --streams rewards` (every reward term a step),
+the owner's fighter (Darknut40's `r40_darknut_fighter.py`, room `5b`: one kill, the drop, out N) through the same
+env with every term summed (`scripts/experiments/r43_fighter_rewards.py`). Outputs in the worktree's `target/r43/`.
+
+- **Told:** `entity_threat` column 14, `bomb_carrier`, **per monster**: 1 on each of the three Red Darknuts at cycle
+  0, 0 at cycle 1; also 0 at cycle 0 when the help count reads 9 (a 10th damage-free kill would force a drop) or
+  Link's own bag is full (33 of the 300 cycle-0 resets). The link block shows the streak (`help_count`,
+  `next_kill_arms`, `drop_is_bombs`), not the cycle. The objective names the three Darknuts as targets beside the N
+  exit (replay TARGETS: `obs: true`, `reward_only: false`; the PBRS wavefront leads to the nearest).
+- **Paid:** nothing for a kill as such. A sword hit 0.25, a beam hit 0.5, bombs picked up 0.5 (halved on a step
+  that loses health); the exit 1 and the terminal 20 × (0.5 + 0.5 × V(hearts)/V(max)), V the route's heart value; a
+  hit −0.25 a half heart plus 20 × ΔV; death −20 with the step's rewards dropped. The bombs carried out are worth
+  nothing at the exit.
+
+| case (lit visits, cycle 0) | n | out | deaths | hits a visit | kills | reward a visit |
+|---|---:|---:|---:|---:|---:|---:|
+| it570, crossed | 237 | 96.6% | 7 | 0.23 | 0 | 15.49 |
+| it570, killed one | 30 | 96.7% | 1 | 0.43 | 30 | 17.90 |
+| fighter, killed, drop taken | 120 | 100% | 0 | 0.008 | 120 | 20.64 |
+| fighter, killed, no drop | 147 | 99.3% | 1 | 0.020 | 147 | 19.18 |
+| it570 at cycle 1 (all) | 300 | 98.3% | 5 | 0.22 | 4 visits | 16.43 |
+
+By the hearts Link comes in with (clean exits only, it570; the fighter in brackets):
+
+| hearts in | crossed, no hit | crossed, one hit | killed, no hit | killed, one hit | died |
+|---:|---:|---:|---:|---:|---:|
+| 3.0 | 22.1 (n 99) | 11.6 (20) | 24.4 (16) [23.1 / 23.8 no drop / drop] | 13.2 (2) | −26.5 |
+| 2.5 | 18.0 | 10.1 | 20.0 | 11.7 | |
+| 2.0 | 15.5 | 9.9 | 16.3 | 12.6 | −21.5 |
+| 1.5 | 13.3 | 11.0 | | 12.1 | |
+| 0.5-1.0 | 11.7-11.9 | | 13.2 | | −20.1 to −20.3 |
+
+**Why walking through is the better policy today:** a clean kill is worth +2.2 at full hearts (+0.8 to +2.0 lower),
+of which the drop is 0.5 × 41% = 0.2; one hit costs about 10.5 at full hearts (the beams and the heart value) and
+6-8 at 2-2.5 hearts, and a death about 46 against a clean crossing. The teacher's own kills take 0.43 hits a visit
+against its crossings' 0.23: +0.2 hits at 6-10 a hit eats the +2.2. Paid per hit and not per kill, it **strikes and
+leaves**: 165 of its 237 lit crossings hit a Darknut (2.4 hits dealt, about 0.8 paid) and went out without the kill;
+in the 300-run chain 166 visits hit a Darknut 434 times for 20 kills. The fighter shows the kill is cheap when played
+well (0.015 hits a visit, 266 of 267 out).
+
+### 2. What the training showed it (`gen1-darknut/s1` to it570)
+
+- **Half of the room's starts were never lit.** All 1,792 harvested `d3first_3_5bs_h*` states (harvested 261124-gen2)
+  hold drop cycle 4, 0 bombs, and 1,098 of them help count 10 (a forced 5-rupee drop armed): chains of the older
+  route that killed in 3x7c, 3x7b or 3x6b on the way in (seeds 10xxx, 40xx, 60xx-64xx; States40 zeroed the kill
+  counters of the seed states only). A harvested start keeps its RAM (no `ram_randomization`, no `room_kill_cycle`),
+  so there the column is dark and the room a plain crossing. Since Harvest42's stratified draw they are half of the
+  room entry's starts: to it570, 5,247 episodes from S, 2,582 harvested and 2,665 seed or curriculum, of which half at
+  cycle 0: about 1,330 episodes (25%) saw the carriers lit, less the help-9 and full-bag tenth.
+- The room's training success rose 0.60 → 0.98 and hits an episode 1.18 → 0.17 from iteration 1 to 570 (then 0.99 and
+  0.07 by 1,541): learning to cross cleanly is the whole of what its rewards ask.
+- **Demonstrations:** the 5b-first group (Darknut40's 300 kill visits, 39,893 rows, all at cycle 0) is one seventh
+  of the demonstration rows a minibatch draws, at coefficient 0.05: a cloning weight of about 0.007 on this room
+  against PPO's whole loss; every row shows the kill.
+
+### 3. The design: the starts as the route arrives, and `carriers: fight`
+
+**(a) A listed room's values hold for harvested starts too** (`start_states::harvested_room_values`, called from
+`SpecialistEnv::reset`; the lead's call to weigh against rejecting them). A harvested start of an entry the task
+lists keeps its hearts, items, position and monsters, but takes the room's `room_kill_cycle`, `room_bomb_counts` and
+`room_bombs` draws as a seed start does, and with a listed `room_kill_cycle` the task's `help_count` draw (the kill
+counters go with the cycle). Chosen over the audit rejecting them: the rejection would empty 3x5b-from-S's
+harvested entry (all 1,792 fail) and leave 3x59 from N at 4 bombs in 1,448 of 1,464 states (the 8-bomb case the
+task asks for half the time is in one), while applying the values keeps the chain's hearts and keeps the owner's
+50-50 draw on every start. What changes per entry of darknut@d3first (harvested 261124-gen2; a reset of 400 starts
+on the built code read back): 3x5b from S, 1,792 states, all of them (cycle 0/1, help 0-9, 0 bombs as before);
+3x59 from N, 1,464 states drawn 4 or 8 bombs (about 730 change, the 15 off the set among them); 3x5b's last pass,
+813 states, half drawn to a full bag (`room_bombs`, share 0.5; 684 of them hold 0-3 bombs, which the route cannot
+bring there after the reserve of 5, and keep them in the other half, as the family's bag draw gives seed starts).
+No other family's task lists a room value. Unit test `a_harvested_start_holds_its_listed_rooms_values`.
+
+**(b) `carriers: fight` on a route step** (routes.yaml; `RouteStep::carrier_fight`; the owner's "force kill [...] if
+the part of its observation is lit"): while the observation names a carrier (the carrier targets of
+`bomb_rules: {carrier_targets: true}`, one list with `bomb_carrier`), the carriers are the step's only targets and
+the exit none (no aim, no PBRS); the exit stays a correct room (`next_rooms`). `Objective::carriers_first` says so;
+in training, leaving then ends the episode **`carrier-left`** (a soft failure, −20, no exit reward,
+`end_conditions::CARRIER_LEFT`); a chain goes on along the route as if the room were crossed (its goals count the
+carrier not killed). Any kill moves the cycle (sword, bomb, with a drop or none) and the step is a plain crossing:
+the drop, if any, is a target under `bag_drops`, then the exit. At cycle 1, a help count of 9 or a full bag nothing
+changes. Only 3x5b's first pass carries it (step 9). Played: walking straight N at cycle 0 ends `carrier-left` 22 of
+30, at cycle 1 `exit-correct` 23 of 30 (the rest deaths). Test `with_carriers_fight_the_kill_comes_before_the_door`
+(the Darknuts the only targets, 0x4b still the correct room, the cycle written to 1 gives the exit back; cycle 1 and a
+full bag unchanged); `d3first_walks.rs`' walk, which kills nothing, takes the edge to the correct room.
+
+**Rejected, with their numbers:**
+- *The carrier kill paid by its drop chance* (`reward × 0.41`): to beat the +0.2 hits the teacher's fights cost (2-3
+  at 6-10 a hit) a kill would need about 5-7 in expected value, so a drop worth 12-17: ten to twenty times a bomb
+  pickup and near the exit's terminal. It leaves the choice to the network, which the owner's ruling does not want
+  here, and a reward that size would pull every family toward every carrier the observation names.
+- *An ending rule alone* (success only with the kill or the bombs): the same force in training, but the objective
+  would still aim the target block at the door; the flag tells the network the same thing at play that it was paid
+  for in training.
+- *More weight on the 5b-first demonstrations*: their rows already all show the kill; cloning at 0.007 of the loss
+  lost to a reward that pays the crossing, and raising it raises every demonstrated room or skews the groups.
+- *The 50-50 cycle draw changed*: kept; with the harvested starts drawn too it now holds for the whole room.
+- *A hearts floor* (below it the room a plain crossing): not built (the lead's default). The fighter kills and
+  leaves at cycle 0 in 28 of 28 visits at half a heart and 29 of 30 at one heart (one death); the harvested starts
+  of this room hold 1 heart or less in 84 of 1,792 (4.7%), the chain arrives so in 3 of 300.
+
+### 4. The chain goes on (the lead's caution)
+
+it570 beside walkers it912 on the fight code, Dungeon 3 from `3_7cs_0`, 100 runs (seeds 0-99,
+`target/r43/chains/fight-proof-it000570-d3.jsonl`): **all 100 first passes end `exit-correct` and go on into 3x4b,
+none comes back into 3x5b, wrong exits 4 in all (seeds 39, 40, 59: the same seeds and counts but one as the first
+100 of the it570 chain without the flag, 5)**; carrier kills 12 (6), drops 8 (4), taken 6 (3), hits a visit 0.06
+(0.03). The rate to the triforce 24 of 100 (36): not paired after 3x5b (its target block differs, every later room
+plays on), deaths in 3x59 21 (14), 3x4d 21 (18); within two standard errors.
+
+### 5. The other rooms the rule would touch
+
+Every `d3first` step whose goals expect carriers (`goals::step_goals`: the switch applies and the room's data names
+a group-2 type) and whose objective on entering is a crossing (MOVE), read from each step's chain-0 state in its
+family's task (`target/r43/carrier-steps.json`; the cycle the state holds in brackets; "lit" where the column was on
+there). A step that fights (FIGHT or TREASURE: 3x59 N→S, 4x31 W→E, 1x23 S→W, 1x44, 2x1e, 5x65 W→E, 5x66 W→N,
+5x27, 6x38, 6x29, 6x39, 6x3a, 6x2d, 8x3f, 9x05, 9x10 S, 9x30) kills them anyway. Whether a room lights depends on the
+cycle the route brings (0, 5 or 7) and the bag; only 3x5b's first pass is planned at 0.
+
+- Dungeon 3: 3x59 S→E (after its fight; [9]), 3x5b W→E (the last pass while it crosses to its wall; [1]), 3x5c W→N
+  (Red Darknuts; [4]).
+- Dungeon 4: 4x61, 4x50, 4x30 (twice), 4x31 E→N and E→W, 4x20: Vires, which are carriers only to the magic sword or
+  a weapon bomb, so never lit on the wood sword's crossings.
+- Dungeon 1: 1x23 W→S (Red Goriyas; [9]). Dungeon 2: 2x5e S→N (Red Goriyas; [5], **lit 5**).
+- Dungeon 5: 5x66 S→W, 5x65 E→W, 5x47 S→N, 5x26 E→W (Gibdos; 5x26 [5], **lit 4**), 5x37 S→N (Red Darknuts, the
+  no-hit ladder line; [4]).
+- Dungeon 7: 7x59 S→N, 7x38 E→N, 7x1a W→cave and cave→E, 7x29 cave→E (Red Goriyas).
+- Dungeon 6: 6x78 E→N (the Red Wizzrobes' snipe, `drops: first`), 6x28 S→E, 6x2c E→N.
+- Dungeon 8: 8x4e S→N (a Red Darknut and Gibdos among the Blue Darknuts).
+- Dungeon 9: 9x17 both ways, 9x07 S→cave and cave→S (two), 9x20 cave→N (two, [5], **lit 2**) and N→cave (two),
+  9x10 cave→S, 9x31 S→W, 9x04 cave→W (Red Wizzrobes).
+
+None is marked; the list is for the owner's decision whether this is a Darknut rule or every family's.
+
+**What a from-scratch Darknut teacher trains with** (unmeasured: the arms did not run). The task file is unchanged
+(`specialists/d3first/darknut.yaml` already says `room_kill_cycle: {(3, 0x5b, S): [0, 1]}` and `room_bomb_counts:
+{(3, 0x59, N): [4, 8]}`; the code now holds them for harvested starts too); the route step and the code are this
+branch's:
+
+```diff
+-  - {level: 3, room: '0x5b', specialist: darknut, entry: S, exit: N, treasure: skip}
++  - {level: 3, room: '0x5b', specialist: darknut, entry: S, exit: N, treasure: skip, carriers: fight}
+```
+
+No reward line changes: the kill is forced by the ending (`carrier-left`, −20, as a wrong exit) and taught by the
+target block, while the hits, the drop's 0.5 and the hearts are paid as before. Seeds43's spawn-cycle fix belongs
+with it (one rule for what a start holds, 6 below).
+
+### 6. The arms: not run
+
+Three continuations of `gen1-darknut/s1-it000570` were queued (Darknuts alone, the group file's network, 20 games,
+92 iterations × 16,384 = 1.5M steps, seed 4301, `--name r43-carrier`, never promoted): `control` (the generation's
+code, worktree `triforce-r43-carrier-base`), `starts` (only (a), `triforce-r43-carrier-a` at d33e80bf) and `fight`
+((a) and (b), this branch). The owner stopped all training on Nov 25 before any started (Seeds43: every training
+reset redraws the spawn cycle `$524`, so most resets of 3x5b, 3x59 and the Olive Garden put the monsters where play
+from the route never does); they were withdrawn and none has run. `scripts/experiments/r43_arm_eval.sh ARM WORKTREE
+room|seeds|chain` measures an arm from the worktree it trained on (3x5b's first pass at cycle 0 and 1, 300 visits
+each; the seed states, 20 a state; Dungeon 3 from its entrance, 300 runs beside walkers it912).
+
+**For the merge with Seeds43's fix** (one rule, "a start holds what the route arrives with"): (a) writes, at a
+harvested start only, after the state's load and before the forced-drop arm, the clips draw and the route step, for
+an entry the task lists: with `room_kill_cycle`, `$050` HelpDropCount = n, `$051` = 0, `$627` = n (the task's
+`help_count` draw) and `$52A` = a listed cycle; with `room_bombs`, `$658` from the range at its share; with
+`room_bomb_counts`, `$658` = a listed count. Nothing else (no hearts, keys, `$524`, positions); an entry not listed
+draws nothing. Seed and curriculum starts are as before.
