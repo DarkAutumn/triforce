@@ -19,12 +19,12 @@ The whole game (no LEVEL and ROOM): the console powers on, the name (--name, LIN
 and the game starts, all by controller inputs and all in the recording; you take over on the first screen, 0x77,
 paused.  --reset [DELAY] then presses the console's RESET, as the real button does (RAM and the battery-saved file
 kept; the game's own reset code seeds its random bytes), presses START on the title screen as soon as it takes it,
-waits DELAY frames (0 if none is given) on the file-select screen once it takes input, and starts slot 1: the
-random bytes depend only on the frames since the reset, so the same name and delay always start the same game.  The
-frame and the thirteen random bytes $18-$24 at the hand-over are printed and shown under the picture.  A name is 1
-to 8 of A-Z, 0-9 and space; one that starts with ZELDA plays the second quest, as on the console.  The take is DONE
-only at the ending, on the frame after Link touches Zelda; dying is the game's own (CONTINUE, SAVE, RETRY: Select
-and Start).  Its replay is named start_<name>[_reset<delay>][_<cheats>]_<time>.tfreplay.
+waits DELAY frames (0 if none is given) on the file-select screen once it takes input, and starts slot 1: the game
+restarts its random bytes from the same seed at every reset, so the delay alone decides them (the same delay, the
+same game, whatever the name).  The frame and the thirteen random bytes $18-$24 at the hand-over are printed and
+shown under the picture.  A name is 1 to 8 of A-Z, 0-9 and space; one that starts with ZELDA plays the second quest,
+as on the console.  The take is DONE only at the ending, on the frame after Link touches Zelda; dying is the game's
+own (CONTINUE, SAVE, RETRY: Select and Start).  Its replay: start_<name>[_reset<delay>][_<cheats>]_<time>.tfreplay.
 
 One room (LEVEL ROOM): LEVEL is 0 (or o) for the overworld, 1-9 for a dungeon; ROOM the room id in hex without 0x.
 Link walks in with the route's own start state for the room (--route, default d3first: its first visit, from the

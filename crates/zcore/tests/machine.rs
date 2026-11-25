@@ -252,8 +252,10 @@ fn restore_drops_the_frame_and_rewinds_the_cycle_count() {
 /// (`asm:Reset_RunGame`) reaches `asm:Save_InitSaveRam` with both save-RAM markers present ($6001 = $5A, $7FFF =
 /// $A5), so the registered file is kept (the warm start; at power on the battery RAM is 0 and is cleared), and
 /// `asm:Reset_ClearRam`, which seeds `Random` ($18) with $40 and the other twelve bytes with 0: from then on the
-/// thirteen random bytes step once a frame through the same sequence as after power on.  A snapshot taken right
-/// after the press plays on frame for frame like the machine that was reset.
+/// thirteen random bytes step once an NMI through the same sequence as after power on (with no button pressed,
+/// 8 frames sooner here: measured, Nov 25; a frame whose work overruns the next vertical blank loses that NMI and
+/// its step, `asm:Nmi_Isr`, so the offset between two paths depends on what their screens did).  A
+/// snapshot taken right after the press plays on frame for frame like the machine that was reset.
 #[test]
 fn reset_keeps_ram_and_restarts_the_game_as_the_console_does() {
     let Some(rom) = rom() else { return };
@@ -288,22 +290,22 @@ fn reset_keeps_ram_and_restarts_the_game_as_the_console_does() {
         nes.run_frame(0, false);
         after_rng.push(nes.ram()[0x18..0x25].to_vec());
     }
+    assert_eq!(after_rng[1], [0x40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], "Random seeded by Reset_ClearRam");
     assert_eq!(nes.ram()[0x12], 0, "back on the title screen (GameMode 0)");
     assert_eq!(nes.prg_ram()[..0x0530], prg_ram[..0x0530], "the saved files are kept (warm start)");
-    // Random restarts at $40, 0 x 12 and steps once a frame, whatever the buttons: frames 300-599 after the
-    // press hold the bytes of the same frames after power on, at most a frame or two apart (the two paths to
-    // the first vertical blank differ: at power on Save_InitSaveRam clears the battery RAM).
+    // Random steps once an NMI, whatever the buttons: frames 300-599 after the press hold the bytes of power on's
+    // frames 308-607, both idle on the title screen.
     let mut fresh = ZCore::power_on(rom.clone());
-    let power_on_rng: Vec<Vec<u8>> = (0..610)
+    let power_on_rng: Vec<Vec<u8>> = (0..700)
         .map(|_| {
             fresh.run_frame(0, false);
             fresh.ram()[0x18..0x25].to_vec()
         })
         .collect();
-    let apart = (-5i64..=5)
-        .find(|&d| (300..600).all(|k| after_rng[k] == power_on_rng[(k as i64 + d) as usize]))
+    let apart = (0..=60)
+        .find(|&d| (300..600).all(|k| after_rng[k] == power_on_rng[k + d]))
         .expect("the random bytes after a reset follow the power-on sequence");
-    assert!(apart.abs() <= 2, "the sequences are {apart} frames apart");
+    assert_eq!(apart, 8, "the random bytes run 8 frames ahead of power on's");
 
     let mut twin = ZCore::power_on(rom);
     twin.restore(&pressed);

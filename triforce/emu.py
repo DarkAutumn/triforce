@@ -522,6 +522,11 @@ SCRIPT_FRAMES = 600                     # frames a scripted stretch (to the titl
 ENDED = 'the ending: Link touched Zelda'
 
 
+def ended(ram) -> bool:
+    """The ending has begun: GameMode $13, set one frame after Link touches Zelda (asm:Zelda_State1WaitForEnding)."""
+    return ram[GAME_MODE] == ENDING_MODE
+
+
 @dataclass(frozen=True)
 class GameSpec:
     """The whole game from console power on: ``name`` registered in slot 1 (1 to 8 of A-Z, 0-9 and space; a name
@@ -571,8 +576,9 @@ def start_after_reset(game, delay: int) -> None:
     """After the console's RESET (the game's reset code, asm:Reset_Handler, runs from the next frame and seeds the
     random bytes, asm:Reset_ClearRam): the title screen until it takes START, START for one frame; the file-select
     screen until it takes input, ``delay`` frames there with nothing pressed, START on slot 1 (the cursor's place,
-    checked) for one frame; then on to the first gameplay frame.  The random bytes step once a frame whatever the
-    screen, so ``delay`` frames anywhere before the START on slot 1 give the same game."""
+    checked) for one frame; then on to the first gameplay frame.  The random bytes restart from the same seed and step
+    once a vertical blank (asm:Nmi_Isr), so the hand-over's random bytes depend on ``delay`` alone (not on the name:
+    tests/test_emu_game.py)."""
     run_until(game, takes_input(0), 'the title screen taking START')
     game.step(START)
     run_until(game, takes_input(1), 'the file-select screen taking input')
@@ -643,7 +649,7 @@ class GameSession(Played):
             raise RuntimeError(f"the take is DONE ({self.done}): start again first")
         self.game.step(buttons)
         self.hold()
-        self.done = ENDED if self.game.state.ram[GAME_MODE] == ENDING_MODE else None
+        self.done = ENDED if ended(self.game.state.ram) else None
         return self.done
 
     def meta(self) -> dict:

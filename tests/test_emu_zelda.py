@@ -311,3 +311,55 @@ def test_the_status_line_counts_the_enemies_left(qapp, tmp_path):
     assert 'enemies 2 of 6' in window.status_text()
     plain, _ = window_of(qapp, emu.Spec(5, 0x05), 1, tmp_path)
     assert 'enemies' not in plain.status_text()
+
+
+def test_the_command_line_of_the_whole_game(capsys):
+    parser = emu_zelda.build_parser()
+    args = parser.parse_args([])
+    assert (args.level, args.room, args.name, args.reset, args.invincible) == (None, None, None, None, False)
+    args = parser.parse_args(['--name', '--reset', '--invincible', '--bombs', 'infinite', '--rupees', '200'])
+    assert (args.name, args.reset, args.bombs, args.rupees) == (emu.DEFAULT_NAME, 0, emu.INFINITE, 200)
+    args = parser.parse_args(['--name', 'zelda', '--reset', '120', '--keys', 'inf'])
+    assert (args.name, args.reset, args.keys) == ('zelda', 120, emu.INFINITE)
+    for one_room in (['--hearts', '2'], ['--seed', '3'], ['--entry', 'N']):
+        with pytest.raises(SystemExit):
+            emu_zelda.session_of(parser, parser.parse_args(one_room))
+    for whole in (['3', '59', '--name', 'LINK'], ['3', '59', '--reset', '5']):
+        with pytest.raises(SystemExit):
+            emu_zelda.session_of(parser, parser.parse_args(whole))
+    with pytest.raises(SystemExit):
+        emu_zelda.session_of(parser, parser.parse_args(['3']))
+    with pytest.raises(SystemExit):
+        parser.parse_args(['--bombs', 'lots'])
+    help_text = parser.format_help()
+    for words in ('the whole game from console power on', '--reset', '--invincible', 'L1 = save the machine state',
+                  'F5 = save the state', '.state'):
+        assert words in help_text
+    require_rom()
+    assert emu_zelda.main(['--name', 'A-B']) == 2
+    assert 'only A-Z, 0-9 and spaces' in capsys.readouterr().err
+    session = emu_zelda.session_of(parser, parser.parse_args(['--name', 'zelda']))
+    assert isinstance(session, emu.GameSession) and 'the name ZELDA plays the second quest' in capsys.readouterr().out
+
+
+def test_the_whole_game_in_the_window(qapp, tmp_path):
+    """The title, the state key while playing, no start over while paused (only DONE), the take saved on closing."""
+    require_rom()
+    session = emu.GameSession(emu.GameSpec(reset=3, invincible=True))
+    session.set_sound = Heard()
+    window = emu_view.Window(session, emu_view.Options(scale=2, sound=False, played_dir=tmp_path / 'played'),
+                             timer=False)
+    assert window.windowTitle() == 'emu-zelda start LINK reset 3 - 60.1 fps - paused'
+    assert session.hand_over.text() in window.status_text()
+    window.press('UP')
+    frames(window, 20)
+    window.press('STATE')
+    assert window.machine.state == PLAYING and window.state_saved.name.startswith(f'ox77_frame{session.frames}_')
+    window.press('PAUSE')
+    assert window.machine.press('RESET_NEW') is None and window.machine.state == PAUSED
+    played = session.frames
+    window.close()
+    assert window.saved is not None and window.saved.name.startswith('start_LINK_reset3_invincible_')
+    assert _native.replay_verify(window.saved.read_bytes())['frames'] == played
+    window.saved_frames = played
+    assert window.autosave() is None                                   # nothing new to save

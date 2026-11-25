@@ -236,7 +236,7 @@ fn changes<T: Framed>(records: impl Iterator<Item = T>) -> Vec<T> {
 #[test]
 fn a_recording_reads_back_every_stream() {
     let replay = recorded(100, &[40, 80], true, true, 9);
-    assert_eq!((replay.version(), replay.frames(), replay.ending_name()), (2, 100, "win"));
+    assert_eq!((replay.version(), replay.frames(), replay.ending_name()), (3, 100, "win"));
     assert_eq!(replay.rom_sha1(), [0xAB; 20]);
     assert_eq!(
         replay.source().unwrap(),
@@ -576,17 +576,17 @@ fn newer_and_damaged_files_are_refused_without_a_panic() {
 
     assert_eq!(Replay::parse(b"TFMOVIE\0 not one of ours, but long enough to hold a header".to_vec()).unwrap_err().to_string(), "not a TFREPLAY file");
     let mut newer = bytes.clone();
-    newer[8] = 3;
+    newer[8] = 4;
     let error = Replay::parse(newer.clone()).unwrap_err();
-    assert_eq!(error, ReplayError::Version { found: 3, recorded_by: Some("1.3.1.0".into()) });
+    assert_eq!(error, ReplayError::Version { found: 4, recorded_by: Some("1.3.1.0".into()) });
     assert_eq!(
         error.to_string(),
-        "replay version 3 (recorded by triforce 1.3.1.0); this reader reads up to 2: update"
+        "replay version 4 (recorded by triforce 1.3.1.0); this reader reads up to 3: update"
     );
     newer.truncate(60);
     assert_eq!(
         Replay::parse(newer).unwrap_err().to_string(),
-        "replay version 3; this reader reads up to 2: update"
+        "replay version 4; this reader reads up to 3: update"
     );
 
     for cut in (0..bytes.len()).step_by(97) {
