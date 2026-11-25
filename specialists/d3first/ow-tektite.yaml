@@ -43,7 +43,7 @@ ram_randomization:
   - 9
 items:
   bombs: required
-clips: true
+clips: {enabled: true, off_share: 0}     # 2.0.1.0 trains clips on only (the owner, Nov 18 and Nov 24)
 one_room: true
 max_steps: 600
 warm_start: null

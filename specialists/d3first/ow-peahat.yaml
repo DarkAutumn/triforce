@@ -4,3 +4,4 @@
 # f"{family}@d3first" (lab.collect.task_yaml).
 extends: [../ow-peahat.yaml, _generation.yaml]
 state_routes: [d3first]
+clips: {enabled: true, off_share: 0}     # 2.0.1.0 trains clips on only (the owner, Nov 18 and Nov 24)
