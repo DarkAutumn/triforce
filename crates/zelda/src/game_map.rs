@@ -2327,13 +2327,17 @@ const NOT_ROOM_MONSTERS: [&str; 18] = [
     "Unknown_75", "Unknown_76", "Unknown_77", "Unknown_78", "Unknown_79", "Unknown_80", "Unknown_81", "Unknown_82",
 ];
 
-/// The monsters a room's game.yaml list makes on a fresh entry (none in a cellar or a cave).
+/// The monsters a room makes on a fresh entry: its game.yaml list; none in an overworld cave; four blue Keese in a
+/// dungeon cellar, whatever its list (zelda-asm `mechanics.md`: mode 9 discards the list, asm:Spawn_AssignPositions).
 fn room_monsters(location: MapLocation, room: &GameRoom) -> i64 {
     if location.in_cave {
-        return 0;
+        return if location.level == 0 { 0 } else { CELLAR_KEESE };
     }
     room.enemies.iter().filter(|(name, _)| !NOT_ROOM_MONSTERS.contains(&name.as_str())).map(|(_, n)| *n).sum()
 }
+
+/// The blue Keese every dungeon cellar makes (asm:Spawn_AssignPositions@AssignSpecialPositions).
+const CELLAR_KEESE: i64 = 4;
 
 /// A step's `clear:` against what the route data already says (round 44): a room without monsters is `true` (the game
 /// saves it as all dead); a step leaving through a shutter (opened by the kills, or by a block that moves only in an
