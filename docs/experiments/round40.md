@@ -4268,3 +4268,37 @@ the three bosses, others, `gen1-walkers/s1b` and `gen1-overworld/s1b` (#1372-#13
 turned the store's `harvested/261124-gen1` files from 0444 to 0644 through the hard links for about a minute
 (contents untouched; restored with `find -perm 644 -exec chmod 444`). A linked copy of a store folder must never be
 chmod-ed; `triforce-lead data install` takes a plain copy.
+
+### Darknut alone against the group (Nov 25, 00:00-04:00)
+
+Seed states in the training environment, `--act sample` (the group: 30 episodes a state, Harvest42's curve; the
+two solo runs 20 a state, 60 a room entry; `triforce-gen2/target/darknut-curve/*-curve.md`,
+`scripts/experiments/r42_skill_curve.py`). Darknut steps: the group's are a tenth of its total.
+
+| room entry | group it912 (1.49M Darknut steps, 14.9M total) | `gen1-darknut/s1` it114 (1.87M) | it456 (7.47M) | it570 (9.34M) | `gen1x-darknut/solo-seeds-s1` it114 (1.87M) | it418 (6.85M) | it608 (9.96M) |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 3_59n | 0.23 | 0.25 | 0.55 | 0.80 | 0.12 | 0.67 | 0.67 |
+| 3_5bw | 0.36 | 0.17 | 0.75 | 0.88 | 0.20 | 0.80 | 0.90 |
+| 5_05e | 0.08 | 0.00 | 0.27 | 0.43 | 0.00 | 0.28 | 0.43 |
+| 3_5bs | 0.73 | 0.78 | 0.98 | 0.97 | 0.80 | 0.98 | 0.98 |
+| 3_69n | 0.80 | 0.72 | 0.82 | 0.85 | 0.65 | 0.80 | 0.88 |
+| 8_3es | 0.63 | 0.23 | 0.72 | 0.77 | 0.37 | 0.67 | 0.83 |
+| 8_5es | 0.70 | 0.40 | 0.78 | 0.68 | 0.32 | 0.60 | 0.80 |
+| all | 0.78 | 0.67 | 0.87 | 0.90 | 0.67 | 0.86 | 0.90 |
+
+- `gen1-darknut/s1`: the group file's `darknut` teacher from `triforce-gen2` (the fixed draw, harvested
+  `261124-gen2`, fraction 0.33). `gen1x-darknut/solo-seeds-s1`: the same task with `harvested_fraction` 0 on the old
+  draw (`triforce-gen1`), 611 iterations. Its evaluations at it228, it342 (`s1`) and it304, it532 (`solo-seeds`)
+  were lost to the fast place's 10-minute limit under load.
+- Per Darknut step the group was ahead early (0.64 at 0.19M Darknut steps; the solo run 0.56 at 0.62M and 0.64 at
+  1.24M), per hour of machine time level (about 0.65 after an hour each); from there the group's hard rooms
+  flattened and the solo runs' did not.
+- Dungeon 3 from its entrance, 300 runs, seeds 0-299 (`triforce judge checkpoints darknut=gen1-darknut/s1 --its
+  570 --scopes d3 --runs 300 --with walkers=gen1-walkers/s1@it912`, jobs #1393, #1394): **28.7% ± 2.6**, against
+  6.7% for today's Darknut network beside the same walkers' checkpoint on this route (+22.0 ± 2.9 paired) and 44.7%
+  for today's team on its own route; the group's teacher 0.7% at it684. 3:0x5b's first pass 298 of 300 out at 0.09
+  hits a visit, the Darknut killed 20 times and its bombs taken 8 (the teacher crosses: `crossed_kills` 2.82 a
+  run against 0.65 is elsewhere); 3:0x59 from N with 4 bombs 246 of 288; 3:0x69 in 218 of 254 at 0.74 hits, out
+  188 of 188; runs end in 3:0x4d 17.3% (today's Manhandla), 3:0x59 13.0%, 3:0x69 12.0%.
+- Open: the first-pass kill the owner's Dungeon 3 plan wants (nothing in the task pays for the bombs against the
+  risk); the Olive Garden's ceiling (0.43 at 9.3M; the fighter script 0.95).
