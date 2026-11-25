@@ -380,7 +380,9 @@ def test_data_is_the_callers_folder_else_the_stores_snapshot_else_refused_naming
     import re
     from triforce.inputs import MissingInput, check_curriculum, check_harvested
     from triforce.specialist import load_specialist
-    zol = load_specialist(str(Path(__file__).resolve().parents[1] / 'specialists' / 'd3first' / 'zol.yaml'))
+    # The generation draws no harvested state since round 43 (the reset rule); the test's task sets a share.
+    zol = load_specialist(str(Path(__file__).resolve().parents[1] / 'specialists' / 'd3first' / 'zol.yaml')).replace(
+        harvested_fraction=0.25)
     states = tmp_path / 'states'
     states.mkdir()
     shared = tmp_path / 'empty-store'
