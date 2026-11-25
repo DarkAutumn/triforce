@@ -444,6 +444,17 @@ reset load its state's machine exactly as saved: none of the writes above, no ba
 (`entry_states walk`, "Entry states") uses it: its explorer searches and replays each room from the carried machine
 itself, so the state carried on is the one real play of that room produced.
 
+Round 45 (curriculum tracks in the route's layout): `room_entry::Layout` is `Valid` (the training draw above),
+`Route` (the planned `$524` at every door the rule knows) or `Cycle(v)` (one reachable value; one the door cannot
+hold is not written). `SpecialistEnv::set_layout` (default `Valid`), `Explorer::set_layout` (refuses a `Cycle` the
+start's door lacks), `Env.set_layout`, `python -m triforce.explore --layout route|valid|N` (default `route`; `N` writes
+`<state>~c<N>`). Every pre-entry load reads back what it left for the room entry (`room_entry::EntryValues`,
+`Session::entry_values`: `$524` judged planned and reachable against the door's rule, the chase state, `$4A`, `$26`,
+`$525`, the source), which a track's `trajectory.json` keeps as `layout` (`env::explore::layout_json`) beside
+`start` (`start_json`: the bag, `$52A`, `$50`, `$51`, `$627`, the hearts of its first decision: what a track point
+past the first keeps), `Env.entry` gives a script, and a terminal info carries as `route_layout` (training's
+`room/<room>/<entry>/route_*` and `other_*`).
+
 ### Attacks by buttons (`crates/zelda/src/attack.rs`, `submenu.rs`; round 21)
 
 The executor never writes Link's facing (`$98`) or the selected item (`$656`): an attack is the button sequence a

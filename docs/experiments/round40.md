@@ -4892,3 +4892,178 @@ task's observation switches only (`for_chain`), and its room records count `bomb
   taken; no wrong exit, every run goes on. The stage-1 teachers on their tasks (`triforce evaluate`, 50 a state, no
   forced drop in evaluation): Manhandla 243 of 300 (`3_4dw` 96 of 150, 56 deaths), drops in 56 episodes, 55 taken, 0
   left; Dodongo 148 of 150, drops in 127, all taken: neither leaves bombs today, so the ending never fired there.
+
+## Tracks in the route's layout, and the Darknut demonstrations again (Tracks45, branch `r45-tracks`)
+
+anthropic/claude-opus-5-5 (Tracks45), on `r40-int` (9bd42720, then c0f7381a) with States44's walked states merged
+(83a99a3c, then Dungeon 3's final 329bbfab). The decision of Nov 25 ("Only real starts"): every `d3first` curriculum
+track and the Darknut demonstrations again from the real start states, in the route's layout. This section is
+Dungeon 3's block (route steps 0-30: 0x77 to Dungeon 3 and out to 0x45); the rest of the route follows as States44's
+segments land. Status file `local://r45-tracks-status.md`.
+
+### 1. The explorer plays the route's layout
+
+- **The load.** `zelda::room_entry::Layout` gains `Cycle(v)` (one reachable `$524` value; a value the door's rule
+  does not hold is not written) beside `Route` and `Valid`. `SpecialistEnv::set_layout` (default `Valid`, the
+  training draw) and `Explorer::set_layout` choose what a reset's reset rule serves; `Explorer::explore` refuses a
+  `Cycle` the start's door cannot hold. Python: `Explorer(..., layout=)`, `explore_states(..., layout=)`,
+  `Env.set_layout(...)`; **`python -m triforce.explore --layout route|valid|N`, default `route`** (`N` writes the
+  track `<state>~c<N>`). The route's planned `$524` equals the walked state's own at all 18 Dungeon 3 doors.
+- **What a track says.** `Session::entry_values` reads back, at every pre-entry load, the bytes the room entry reads
+  (`room_entry::EntryValues`: `$524`, `$525`, the chase flag and target `$60-$62`, `$4A`, the divider `$26`, the
+  door, the source (the rule's draw, the uniform draw or the state's own bytes) and, against the door's rule, whether
+  `$524` is the route's planned value and whether it is reachable). A track's `trajectory.json` holds them as
+  `layout: {asked, rng_phase, entry}` (`env::explore::layout_json`), and what its first decision holds of the values
+  a track point keeps as `start: {bombs, drop_cycle, help_count, help_value, kill_streak, health}`
+  (`env::explore::start_json`; the fighter's tracks also say what their reset wrote, `start.written`). `Env.entry`
+  gives the same to a script; training logs each room's starts by layout (`room/<room>/<entry>/route_*`, `other_*`,
+  `info['route_layout']`) and its curriculum starts by room (`.../curriculum_episodes`, `curriculum_success_rate`).
+- **What a track start keeps** (the rule merged in c0f7381a, Carrier43 after this branch's finding: "a track point
+  keeps its own mid-room state"). A curriculum start loads a track's `NNNN.state` (a decision inside the room) through
+  `SpecialistEnv::reset`: `randomize_rng` writes a new random phase; the reset rule's draw, the fresh room and the
+  banked kills act on pre-entry states only, which no `NNNN.state` is; the hearts are drawn; the bag, the kill
+  counters and the drop cycle stay the track's. So every point keeps the track's layout, monsters, bag and counters,
+  and the random phase is redrawn. A track's `0000.state` is never a curriculum start (a point moves a stride earlier
+  per stage and the track is complete, never drawn again, once it reaches 0).
+- **The proof** (`scripts/experiments/r45_tracks.py replay`): for every track, a real curriculum env of the family's
+  task pinned to a point (a progress file at that point, `stages` = the track's length) is reset with 3 seeds at 4
+  points spread over decisions 1 to the last, on the explorer's config (no draws, as the tracks were made). (a) The
+  RAM after the reset equals the state file's but for the RNG registers `$18-$24`: **822 of 822 resets** (explorer
+  282, fighter 540), so a track start in the route's layout is in the route's layout. (b) The track's remaining
+  actions, played open-loop after the new phase, reach the track's own ending from its last decision in **210 of
+  210**; from earlier points less, as monsters that walk by the random numbers part from the recorded play (explorer
+  tracks by the share of the track left: up to 10% 60 of 60, 10-40% 50 of 72, 40-70% 31 of 72, over 70% 19 of 66;
+  the fighter's long fights 81 of 81, 37 of 81, 2 of 81, 0 of 81). The exact replay (the explorer's own, the phase
+  kept) is every track's `success: true`. A training does not replay a track: it starts the network at a point, so
+  (a) is the property the curriculum needs; (b) says how far a point's monsters stay as recorded.
+
+### 2. Every `d3first` track of Dungeon 3's block again
+
+From the walked state of each door (chain 0), in the route's layout, with the generation's tasks (`explore --layout
+route`, 20,000 iterations, patience 3,000; the fighter by `r41_tracks.py fighter`, its unhit visits). Every state
+was solved; no rule track was needed (3x4b, which needed zol-4b before, fell to the explorer, 253 steps unhit).
+
+| family | door | tracks (new) | made by | notes |
+|---|---|---|---|---|
+| darknut | 3x59 from N | 19 | explorer (route, 4 bombs, 2 hits); fighter at 4 bombs and at 8 bombs, each in the route's layout and the 8 others | the 8-bomb tracks: the bag the first Darknut's drop brings (`--bombs 8`) |
+| | 3x5b from S (first pass) | 19 | explorer (route, cycle 0: one kill, 1 hit); fighter at drop cycle 0 (one kill) and at cycle 1 (walk through), route + 8 others | `carriers: fight`: every cycle-0 track shows the kill |
+| | 3x5b from W (last pass) | 10 | explorer (route); fighter route + 8 others | enters at cycle 1 (329bbfab) |
+| | 3x59 from S, 3x5c, 3x69 from N, 3x69 out of the cellar | 4 | explorer | crossings |
+| zol | 3x7c, 3x7b, 3x6b, 3x4b, 3x49, 3x3d | 6 | explorer | all unhit |
+| boss-manhandla | 3x4d | 1 | explorer | |
+| trap-room | 3x4c, 3x5a | 2 | explorer | declared untracked before; now tracked, the declaration left (harmless) |
+| equipment-room | the raft cellar 3x0f | 1 | explorer | declared untracked; tracked, the declaration left |
+| ow-leever | 0x75 from E | 2 | explorer, route and its one other layout (5) | |
+| ow-moblin | 0x73 from E, 0x63 from S | 2 | explorer | |
+| ow-zora | 0x65 from W, 0x55 from S | 4 | explorer; 0x55 also in its two other layouts (0, 8) | |
+
+70 tracks (52 darknut). **Still declared untracked, with the reason**: ow-start 0x77 and its cave (the start, a walk
+with no monster on the way), ow-peahat 0x45 from S (a walk to the dungeon's mouth), ow-tektite 0x76 from E (the
+lead's ruling, Nov 24: its tracks walk across and kill). **Curriculum off, no track** (their old `d3first` tracks of
+these doors dropped): ow-tektite 0x74, ow-octorok 0x64, stalfos-keese-gel 3x4a.
+
+**The staged snapshot: `/home/leculver/git/triforce-r45-tracks/target/trajectories-gen3`** (`r45_tracks.py
+compose`): the store's `261124-gen2` as hard links without every `d3first` track of the 30 walked doors (61, all
+chains), plus the 70 above (copies): **1,426 tracks, 123,311 files, 1,393,045,932 bytes**; `d2first`'s tracks
+untouched. The compose record is `target/trajectories-gen3.compose.json`. For the lead, once the whole route is in:
+
+    triforce-lead data install trajectories <NAME> --from /home/leculver/git/triforce-r45-tracks/target/trajectories-gen3
+
+**Checks** (this worktree's `trajectories -> target/trajectories-gen3`, `TRIFORCE_STATES_DIR` a copy of the states
+without the walked doors' `_1`/`_2` files, which States44 removes at the end): `r40_tracks.py proof` (every task
+loaded as `triforce train` loads it, `Curriculum::new` built): **88 task files, none refused, no red flag**.
+
+### 3. The other reachable layouts: how the hard rooms fare without a track, and the extra tracks
+
+**What the reset serves.** Of the rule's 249 doors (`triforce/entry_rule.d3first.json`), 133 dungeon doors hold all
+nine spawn cycles (the route's on half the resets, each other on 1/16), the other dungeon doors 0-7 others; the
+overworld's doors were measured, 0-5 others (0x75 from E: one, served on half its resets; 0x55 from S: two, a quarter
+each). In Dungeon 3 every door but 3x7c from S (one other) holds all nine.
+
+**The old runs answer it.** Every training reset of the generation's first teachers drew `$524` uniformly from nine,
+and each door's tracks were explored in one layout, so their room starts were (8 times in 9) starts in a layout no
+track of theirs held. Every `d3first` track of those runs completed (the Darknut teacher's 21 by iteration 172 of
+1,627; the walkers' and the overworld's likewise), while the room starts of a few rooms stayed low for hundreds of
+iterations: the skill of a tracked layout did not carry to the others there. Room-start success, first 50 iterations
+/ 50-200 / 200-500 / last 300 (`metrics.jsonl` `room/<room>/<entry>/seed_success_rate`, or `success_rate` where the
+run predates the split; harvested starts mixed in where the task drew them):
+
+| teacher | room entry | its tracks then | room starts |
+|---|---|---|---|
+| darknut `gen1-darknut/s1` | 3x59 from N | 3 (1 explorer, 2 fighter) | 0.00 / 0.19 / 0.50 / 0.92 |
+| | 3x5b from W (last pass) | 3 | 0.18 / 0.43 / 0.74 / 0.96 |
+| | the Olive Garden from E | none | 0.00 / 0.05 / 0.40 / 0.86 |
+| | 8x3e from S | none | 0.16 / 0.37 / 0.64 / 0.97 |
+| | 8x5e from S | none | 0.13 / 0.40 / 0.70 / 0.97 |
+| | 5x64 from the cellar | none | 0.22 / 0.66 / 0.89 / 0.97 |
+| | 3x69 from N | 3 | 0.49 / 0.67 / 0.83 / 0.93 |
+| | 3x5b from S (first pass) | 3 (fighter) | 0.45 / 0.79 / 0.94 / 0.99 |
+| | every other entry | | 0.55-0.85 at the start, 0.97-1.00 by 200 |
+| walkers `gen1-walkers/s1` | 3x59 N / 3x5b W / the Garden E (Darknuts then) | 3 / 3 / none | at the end 0.27; 0.51; 0.16 |
+| | the Breakfast Room 4x32 from W | 3 (rule) | 0.15 / 0.30 / 0.65 / 0.81 |
+| | 7x1b from W | 3 (rule) | 0.20 / 0.32 / 0.52 / 0.71 |
+| | 7x49 from S | none | 0.07 / 0.53 / 0.72 / 0.85 |
+| | 4x12 from N | 3 (rule) | 0.10 / 0.79 / 0.86 / 0.92 |
+| | 5x66 from W | none | 0.00 / 0.50 / 0.81 / 0.92 |
+| | 3x4b from S | 3 (2 rule, 1 explorer) | 0.53 / 0.94 / 0.96 / 0.98 |
+| overworld `gen1-overworld/s1` | 0x55 from N | 3 a visit | 0.05 / 0.48 / 0.66 / 0.65 |
+| | 0x0c from E (ow-tektite) | none (curriculum off) | 0.42 / 0.51 / 0.49 / 0.49 |
+| rooms `gen1-rooms/s1` | 3x4c from S; 3x5a from W (blade traps) | none | 0.01 / 0.44 / 0.83 / 0.93; 0.01 / 0.12 / 0.91 / 0.95 |
+| boss-manhandla `gen1-boss-manhandla/s1` | 3x4d from W | 3 | 0.25 / 0.53 / 0.62 / 0.64 |
+
+**Per family.** *darknut*: the fights lag in the other layouts (3x59 from N, both passes of 3x5b, the Olive Garden
+from E, 8x3e, 8x5e, 5x64 from the cellar); the crossings (3x59 from S, 3x5c, 3x69 out of the cellar, 5x06, 5x37)
+were learned in any layout within 200 iterations. *walkers*: the slow rooms are the Breakfast Room 4x32 from W, 7x1b,
+7x49, 4x12 from N, 5x66 from W, and 5x47 from S (the owner's case: the other layouts put a Gibdo in Link's column in
+55-68% of the phases); the rest learned in any layout. *overworld*: its doors hold few other values, each on a
+quarter to a half of the resets, so a track per value is cheap and covers every start; 0x55 from N (the dock) is the
+slow room. *rooms*: the blade-trap rooms learned without any track. *bosses*: [INFERENCE] a boss is placed by its own
+code, not the spawn list, so the layout question does not arise there (not checked in the ASM here).
+
+**Proposed** (the lead's call): a track in each other reachable layout of the hard Darknut doors (built here for
+Dungeon 3: 3x59 from N at 4 and at 8 bombs, 3x5b from S at cycle 0 and cycle 1, 3x5b from W; the Olive Garden from
+E, 8x3e, 8x5e and 5x64 from the cellar when their walked states land); two or three other layouts each (the fighter's
+or the rule's hardest) for 4x32 W, 7x1b, 7x49, 4x12 N, 5x66 W, 5x47 S; every other value of the overworld doors with
+three or fewer (built here for 0x75 E and 0x55 S). A curriculum draws its incomplete tracks uniformly, so nine tracks
+weigh a door nine times until they complete; every track of the old runs completed early (the Darknut teacher's by
+iteration 172), so that weight is spent while the room is not yet learned.
+
+### 4. The Darknut demonstrations again
+
+The same builders, cases, visits, seeds and groups as Tasks41's (round40.md "The demonstrations again, with the
+inputs on"), from the walked states, under the merged load rule (the reset rule's training draw: the route's layout
+on about half the visits, the door's eight other layouts on the rest; c0f7381a's drop state: `$52A` 0-9 and a real
+counter triple at every seed reset, 3x5b from S keeping its own 0 or 1). 3x5b's first-pass cases now draw the drop
+cycle 0 or 1 as the task does, and the fighter walks through when the carriers are dark (cycle 1, a help count of 9
+or a full bag: `Fighter.carriers_lit`). 3x69's way out draws no harvested handoff (retired). Only hit-free visits
+leaving by the right exit are kept, as before.
+
+| file | case | visits kept / played | in the route's layout (kept) | rows | sha256 (12) |
+|---|---|---:|---:|---:|---|
+| r45-darknut-5b-low.npz | 3x5b first pass, 0 bombs, hearts 0.5-3 | 150 / 150 | 74 | 15,566 | bf1bb2d08758 |
+| r45-darknut-5b-full.npz | 3x5b first pass, 0 bombs, full hearts | 150 / 150 | 74 | 14,214 | fd1ff0f6d513 |
+| r45-darknut-59-b4.npz | 3x59 from N, 4 bombs | 146 / 150 (4 `no-damage`) | 71 | 59,798 | ef13852a01ff |
+| r45-darknut-59-b8.npz | 3x59 from N, 8 bombs | 146 / 150 (4 `no-damage`) | 71 | 47,550 | 9b4d4ed5907c |
+| r45-d3-69-out.npz | 3x69 out of the cellar | 480 / 480 | 233 | 9,824 | c1a97272bba4 |
+| r45-d3-69-in.npz | 3x69 from N (the search; the rule with its look-ahead in 7) | 319 / 320 (1 hit) | 156 | 13,523 | 16c328818783 |
+
+3x5b's first pass: at cycle 0 one kill in 79 and 63 visits (low, full; one visit each killed two, a Darknut walking
+into a swing), at cycle 1 none, a walk through, in 70 and 86. **The Olive Garden's three files wait for Dungeon 5's
+walked states**; `specialists/d3first/darknut.yaml` names the six new files and, until then, the Garden's old three.
+
+**The staged snapshot: `/home/leculver/git/triforce-r45-tracks/target/demos-gen4`**: the store's `261124-gen3` as hard
+links (226 files) plus the new files (copies). For the lead: `triforce-lead data install demos 261125-gen4 --from
+/home/leculver/git/triforce-r45-tracks/target/demos-gen4` (the Garden's files join it when built).
+
+**The fighter's own rates** (`r40_darknut_fighter.py measure`, look 0, seeds 0-299, 300 visits a case on the walked
+state; measured before the drop-state merge, so the counters were the state's own and the task's streak draw):
+
+| case | in the route's layout | under the training draw (the route's 151, the others 149) | Darknut40 on the old starts |
+|---|---:|---:|---:|
+| 3x59 from N, 4 bombs | 98.3% (5 deaths) | 98.0% (route 98.7%, others 97.3%) | 98.0% |
+| 3x59 from N, 8 bombs | 99.0% | 98.3% (98.7%, 98.0%) | 95.7% |
+| 3x5b first pass, hearts 0.5-3 | 99.7% | 99.0% (98.7%, 99.3%) | - |
+| 3x5b first pass, full hearts | 100% | 100% | - |
+
+So the fighter is still 98-100% in Dungeon 3's Darknut rooms, in the route's layout and in the others alike.
+
