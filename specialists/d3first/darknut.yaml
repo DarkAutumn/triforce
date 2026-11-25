@@ -101,15 +101,8 @@ clips:
 curriculum:
   enabled: true
   untracked:                              # round 40: the seed states that train without a track (triforce.inputs);
-  - d3first_5_05c_[0-9]                   # 3:0x59 from N with 4 and 0x5b's last pass have the fighter's (Tracks41)
-  - d3first_5_05e_[0-9]
-  - d3first_5_06c_[0-9]
-  - d3first_5_06w_[0-9]
-  - d3first_5_37s_[0-9]
-  - d3first_5_64c_[0-9]
-  - d3first_5_64e_[0-9]
-  - d3first_8_3es_[0-9]
-  - d3first_8_3fw_[0-9]
+  - d3first_8_3es_[0-9]                   # round 45: Dungeon 3's and 5's doors have tracks from the walked states;
+  - d3first_8_3fw_[0-9]                   # Dungeon 8's wait for theirs (Tracks45)
   - d3first_8_4es_[0-9]
   - d3first_8_5es_[0-9]
 # Round 40 (Line40, Line40b; decisions 2026-11-23 "3:0x69 is crossed by a line"): 3:0x69's line taught by the
@@ -128,11 +121,12 @@ curriculum:
 # recorded again from States44's walked states under the reset rule (the route's layout on about half the visits, the
 # door's other reachable layouts on the rest, as training serves them), the same cases, visits, seeds and groups;
 # 3:0x5b's first pass draws its drop cycle 0 or 1 (`carriers: fight`: the one kill at 0, the walk through at 1); no
-# harvested handoff on 3:0x69's way out. Store snapshot `261125-gen4` (`triforce-lead data install demos`).
+# harvested handoff on 3:0x69's way out; the Olive Garden at 8 bombs in one file (it was two pieces). Store snapshot
+# `261125-gen4` (`triforce-lead data install demos`).
 demos:
   files: [r45-d3-69-in.npz, r45-d3-69-out.npz, r45-darknut-5b-low.npz, r45-darknut-5b-full.npz, r45-darknut-59-b4.npz,
-    r45-darknut-59-b8.npz, r40-darknut-garden-b0.npz, r40-darknut-garden-b8.npz, r40-darknut-garden-b8-p2.npz]
-  groups: [69-in, 69-out, 5b-first, 5b-first, 59-b4, 59-b8, garden-b0, garden-b8, garden-b8]
+    r45-darknut-59-b8.npz, r45-darknut-garden-b0.npz, r45-darknut-garden-b8.npz]
+  groups: [69-in, 69-out, 5b-first, 5b-first, 59-b4, 59-b8, garden-b0, garden-b8]
   coeff: 0.05
 one_room: true
 max_steps: 2000
