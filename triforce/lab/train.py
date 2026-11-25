@@ -53,6 +53,7 @@ from ..events import EventLog, logged_job, write_json_atomic
 from ..jobs import Speed, announce, work
 from ..jobspeed import lookahead_text, network_name
 from ..jobs import progress as job_progress
+from ..nets.base import LabNet
 from ..nets.serve import learner_process, serve_mode
 from ..metrics import MetricsLogger, format_summary
 from ..ppo import PPO, IterationResult, PPOConfig, joint_kl, minibatch_forward
@@ -533,6 +534,17 @@ def training_settings(args, cfg: PPOConfig, tried, steps_per_env: int, recurrent
             'serve': serve_mode()}
 
 
+def serving_text(network, served: dict) -> str:
+    """How the run's rollouts get their actions, for its log's start (``[lab] serving: ...``)."""
+    if not isinstance(network, LabNet):
+        return "the Rust actor plays the network (nothing served)"
+    window = f"{served['gather'] * 1000:g} ms batch window"
+    if served['forward'] == 'graphs':
+        return (f"CUDA graphs on {served['device']}, each batch size captured at the first rollout ({window}; "
+                f"TRIFORCE_SERVE_GRAPHS=0 serves eagerly)")
+    return f"the eager forward on {served['device']} ({window})"
+
+
 def cli(argv=None) -> int:
     """``python -m triforce.lab.train`` (a job: ``triforce job run -- ...``): trains, then exits 0, ``EXIT_INTERRUPTED``
     when the run was interrupted (SIGTERM, the queue's stop: its checkpoint and summary saved, ``--resume`` continues
@@ -742,6 +754,7 @@ def main(argv=None) -> Path:
         arch = nets.arch_of(network.config.to_dict())
         print(f"[lab] {args.name} run={run_id} dir={out_dir} arch={arch} "
               f"parameters={network.parameter_count():,} envs={collector.shares} mode={args.mode}", flush=True)
+        print(f"[lab] serving: {serving_text(network, recipe['training']['serve'])}", flush=True)
         logger = MetricsLogger(str(out_dir))
         state = {'iteration': start_iteration, 'steps': start_steps, 'metrics': {}, 'stopped_early': False,
                  'rollout_steps': 0.0, 'rollout_seconds': 0.0}

@@ -333,6 +333,87 @@ def test_a_learner_process_serves_eagerly_beside_its_own_gpu_work(observations, 
     assert not server.graphs and not errors and not server._graphs
 
 
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA graphs need the GPU")
+def test_a_lab_trainer_captures_every_bucket_at_its_first_batch_then_replays_beside_its_learner(observations,
+                                                                                                monkeypatch):
+    """The lab trainer (``learner_process(graphs=True)``, round40.md "Where a teacher's time goes"): the network's
+    every batch bucket is captured at its first batch, while nothing else uses the GPU; later batches replay beside
+    the learner's own GPU work on another thread and answer as the eager forward does; a later rollout's
+    ``serve_copy`` copies the new weights into the same served copy (its graphs kept and reading them), and never
+    captures again.  ``TRIFORCE_SERVE_GRAPHS=0`` still serves eagerly."""
+    import threading
+    monkeypatch.setattr(serve_module, '_LEARNER', {'on': False, 'graphs': False})
+    serve_module.learner_process(graphs=True)
+    torch.manual_seed(11)
+    learner_net = nets.create('wide', native_spec(), hidden_dim=64, depth=2).to('cuda')
+    answered = []
+
+    class Queue:
+        logits_size = 11 * 13
+
+        @staticmethod
+        def answer(slots, logits, values, hit):
+            answered.append(logits.copy())
+
+        @staticmethod
+        def policy(index, weights):
+            return index
+
+    def ask(server, n):
+        obs = {k: v[:n] for k, v in observations.items()}
+        server.answer({'obs': obs, 'slot': np.arange(n), 'model': np.zeros(n, dtype=np.int64), 'job': np.arange(n),
+                       'step': np.zeros(n, dtype=np.int64), 'bootstrap': np.zeros(n, dtype=bool)})
+        return answered[-1]
+
+    server = Server(device='cuda')
+    assert server.graphs and server.capture_all and server.gather == serve_module.GRAPH_GATHER
+    server.queue = Queue()
+    server._start = lambda: None
+    server.serve_copy(learner_net, key='student')
+    served = server.models[0]
+    first = ask(server, 3)                       # the first rollout: every bucket captured now
+    assert {size for _, size in server._graphs} == set(serve_module.GRAPH_BUCKETS)
+    eager = Server(device='cuda', graphs=False)
+    eager.queue = Queue()
+    eager.models[0] = served
+    assert np.allclose(first, ask(eager, 3), atol=1e-5)
+    batch = {k: torch.as_tensor(v).to('cuda') for k, v in observations.items()}
+    stop, errors = threading.Event(), []
+
+    def learner():
+        try:
+            optimizer = torch.optim.Adam(learner_net.parameters(), lr=1e-2)
+            while not stop.is_set():
+                heads = learner_net.heads(batch)[0]
+                loss = heads.flat().pow(2).mean() + heads.value.pow(2).mean()
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+                torch.cuda.synchronize()
+        except Exception as error:     # pylint: disable=broad-exception-caught
+            errors.append(error)
+    thread = threading.Thread(target=learner)
+    thread.start()
+    try:
+        graphs = dict(server._graphs)
+        for n in (1, 2, 5, 8, 3):                # replays beside the learner: no capture, no failure
+            assert np.allclose(ask(server, n), ask(eager, n), atol=1e-5)
+    finally:
+        stop.set()
+        thread.join()
+    assert not errors and not server._eager and server._graphs == graphs
+    # The next rollout: the learner's new weights copied into the same served copy, its graphs kept and current.
+    with torch.no_grad():
+        for parameter in learner_net.parameters():
+            parameter.add_(0.05)
+    server.serve_copy(learner_net, key='student')
+    assert server.models[0] is served and server._graphs == graphs
+    assert all(torch.equal(a, b) for a, b in zip(served.state_dict().values(), learner_net.state_dict().values()))
+    assert not np.allclose(ask(server, 3), first, atol=1e-5) and np.allclose(ask(server, 3), ask(eager, 3), atol=1e-5)
+    monkeypatch.setenv('TRIFORCE_SERVE_GRAPHS', '0')
+    assert not Server(device='cuda').graphs and serve_module.serve_mode()['forward'] == 'eager'
+
+
 def test_networks_served_from_temporaries_never_share_an_index():
     """``load_model(path)[0].to_native()`` in a loop (``runner.Policies``): each temporary dies at once, and a later
     network may reuse its id; each must keep its own index and weights (Nov 22: chains with several served

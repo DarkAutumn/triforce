@@ -325,8 +325,8 @@ class Server:
         except Exception as error:     # pylint: disable=broad-exception-caught
             self._eager.add(model)
             self._graphs = {k: v for k, v in self._graphs.items() if k[0] != model}
-            print(f"triforce: warning: served network {model} runs without CUDA graphs: "
-                  f"{type(error).__name__}: {error}", flush=True)
+            print(f"triforce: warning: served network {model} runs without CUDA graphs from now on (served eagerly, "
+                  f"the run goes on): {type(error).__name__}: {error}", flush=True)
             return None
 
     def _audit(self, network, batch: dict, rows, graphed: torch.Tensor):
