@@ -4062,3 +4062,32 @@ also for training!" are ever reachable by playing the game.
 - **Power-on memory** (the owner's second question): no value a real console holds at power on in the bytes
   asm:Reset_ClearRam skips can change the random sequence, the spawn cycle or anything a run sees
   (asm:Reset_RunGame writes or hides each before use); zcore's all-zero power-on RAM is equivalent.
+
+## 2026-11-25 — The drop counters at a reset: real triples, between real play and uniform (the owner's directive, the lead's shares)
+
+The owner, on finding that 13 tasks kept the start state's own forced-drop counter and every task its drop cycle:
+"Everything else needs to not take in the state's streak count, fairy count, OR global kill count which affects
+drop tables. It should be a distribution of those things and nothing 'unreal'", then: "something closer to real
+values than uniform [...] somewhere between uniform and what we see in practice [...] make the decision, record the
+reasoning behind it and go", from runs "from power on or 0x77 only".
+
+- **The game** (asm:Drop_SetUpItem, asm:Link_BeHarmed): `$627` counts kills since Link was last hit, uncapped, and
+  a death that ends while it reads 16 gives a fairy; `$50` counts the same kills capped at 10, forces a drop at 10
+  (a bomb if that kill was a bomb kill, `$51`) and is zeroed by each forced drop or fairy; `$52A`, the drop cycle
+  0-9, steps with every death and is untouched by a hit. So "fairy count = streak + a random 0-5" (the owner's
+  first thought) is not a pair the game holds.
+- **Measured**: 507 power-on runs, 77,465 room entries (Seeds43's scan). Kills since the last hit at a room entry:
+  dungeons 0: 23.0%, 1-3: 34.4%, 4-9: 23.4%, 10-15: 9.2%, 16+: 10.0%; overworld 0: 53.7%, 1-3: 29.9%, 4-9: 6.9%,
+  10-15: 2.8%, 16+: 6.6%; by level from Dungeon 3's 25.7% at 16+ to Dungeon 7's 61.2% at 0. The drop cycle is
+  close to even. 9% of real entries do not fit a simple formula between `$50` and `$627`.
+- **The rule**: a reset draws the triple (`$627`, `$50`, `$51`) from the triples real play held, never computed;
+  the kills value with probability 2/3 from the real distribution of its kind of door (dungeon or overworld) and
+  1/3 uniform over 0-15; the drop cycle uniform 0-9. For dungeons: 0: 17%, 1-3: 29%, 4-9: 28%, 10-15: 19%, 16+: 7%.
+- **Why these shares**: closer to real than to uniform, as asked; the band where a fairy is one to six unhurt kills
+  away at twice real play's share (and half of uniform's) because a better network goes unhurt longer than the old
+  ones did, and should not meet its first fairy in a chain; pooled by kind of door and not per door, since a door's
+  own distribution is the old networks' habit there (Dungeon 7: hit on entry six times in ten).
+- **Exceptions, the owner's**: 3:0x5b's first pass keeps its draw (cycle 0 or 1: "to train what to do");
+  Manhandla's and Dodongo's rooms get rules of their own so bombs are never left on the floor ("we need to teach
+  it to not skip the bombs [...] and we need to make sure training runs see manhandla drop bombs"): leaving with
+  bombs on the floor and room in the bag fails the training episode, and the armed bomb drop stays frequent there.
