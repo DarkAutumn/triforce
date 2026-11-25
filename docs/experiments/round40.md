@@ -4356,9 +4356,10 @@ of which the drop is 0.5 × 41% = 0.2; one hit costs about 10.5 at full hearts (
 against its crossings' 0.23: +0.2 hits at 6-10 a hit eats the +2.2. Paid per hit and not per kill, it **strikes and
 leaves**: 165 of its 237 lit crossings hit a Darknut (2.4 hits dealt, about 0.8 paid) and went out without the kill;
 in the 300-run chain 166 visits hit a Darknut 434 times for 20 kills. The fighter shows the kill is cheap when played
-well (0.015 hits a visit, 266 of 267 out).
+well (0.015 hits a visit, 266 of 267 out). Every measurement here ran on resets that redraw the spawn cycle `$524`
+(Seeds43), as the training did: they say what the network was paid on the starts it trained on.
 
-### 2. What the training showed it (`gen1-darknut/s1` to it570)
+### 2. What the training showed it (`gen1-darknut/s1`)
 
 - **Half of the room's starts were never lit.** All 1,792 harvested `d3first_3_5bs_h*` states (harvested 261124-gen2)
   hold drop cycle 4, 0 bombs, and 1,098 of them help count 10 (a forced 5-rupee drop armed): chains of the older
@@ -4371,7 +4372,29 @@ well (0.015 hits a visit, 266 of 267 out).
   0.07 by 1,541): learning to cross cleanly is the whole of what its rewards ask.
 - **Demonstrations:** the 5b-first group (Darknut40's 300 kill visits, 39,893 rows, all at cycle 0) is one seventh
   of the demonstration rows a minibatch draws, at coefficient 0.05: a cloning weight of about 0.007 on this room
-  against PPO's whole loss; every row shows the kill.
+  against PPO's whole loss; every row shows the kill. How well each checkpoint plays those rows (argmax agreement
+  and mean log-prob of the fighter's action, `scripts/experiments/r43_demo_fit.py`, job #1425): 0.475 / −1.37 at
+  it114, 0.567 / −1.12 at it570, 0.650 / −0.93 at it1482, the same slow climb as 3x59's and the Olive Garden's groups
+  (3x69 out 0.95-0.98 throughout): the cloning moves, but it never decided the room.
+- **The kill by checkpoint** (the sealed checkpoints on the cycle-0 task, 300 visits each, `--act sample`, 267 lit;
+  kills read from each replay's end cycle; jobs #1403, #1423, #1424): it did not stop killing; it killed little
+  throughout, least at it228 and it570, and more as its fights got cheaper.
+
+| checkpoint | out | deaths | hits a visit | killed one | struck and left | bombs taken |
+|---:|---:|---:|---:|---:|---:|---:|
+| 114 | 70.8% | 72 | 1.16 | 19 | 180 | 6 |
+| 228 | 91.0% | 13 | 0.42 | 6 | 129 | 0 |
+| 342 | 94.0% | 16 | 0.51 | 34 | 154 | 9 |
+| 456 | 94.0% | 14 | 0.28 | 39 | 158 | 10 |
+| 570 | 96.6% | 8 | 0.25 | 30 | 165 | 13 |
+| 798 | 96.3% | 3 | 0.20 | 76 | 129 | 27 |
+| 1026 | 98.5% | 4 | 0.14 | 77 | 135 | 27 |
+| 1254 | 98.9% | 3 | 0.09 | 58 | 161 | 14 |
+| 1482 | 98.5% | 4 | 0.13 | 88 | 136 | 34 |
+
+  The group's teacher had killed more at its it570 (153 kills in 300 chain visits) and died more (197 out): it fought
+  the room on the old draw before it learned to cross. This one learned the crossing first; with the kill paying
+  little and costing hits, it kills about a third of the lit visits at best, and leaves after a strike in half.
 
 ### 3. The design: the starts as the route arrives, and `carriers: fight`
 
