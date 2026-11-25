@@ -36,7 +36,7 @@ def test_the_data_section_counts_and_hashes_each_input(tmp_path):
     harvested = tmp_path / 'harvested'
     harvested.mkdir()
     (harvested / 'd3first_3_7cs_h1_0.state').write_text('x')
-    config = config.replace(harvested_states=str(harvested))
+    config = config.replace(harvested_states=str(harvested), harvested_fraction=0.25)
     data = manifest.data(config, REPO_STATES_DIR)
     assert set(data['start_states']['patterns']) == set(config.start_states)
     assert data['start_states']['count'] == sum(p['count'] for p in data['start_states']['patterns'].values())

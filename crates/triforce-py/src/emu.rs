@@ -28,6 +28,8 @@ struct Inner {
     store: PoolStore<TfzStore>,
     loaded: bool,
     seed: u64,
+    /// Round 43, the reset rule of the route's doors (None: no route, or a route without an `entry_rule` file).
+    entry_rule: Option<Arc<zelda::room_entry::EntryRule>>,
     /// The sound device, opened the first time sound is turned on (None: never, or it failed: `sound_error`).
     speaker: Option<Speaker>,
     sound_error: Option<String>,
@@ -110,12 +112,14 @@ impl PyLiveGame {
         let mut session = Session::new(PoolNes::new(ZCore::power_on(rom.clone()), Some(control)), map);
         session.set_render(true);
         session.look_ahead = zelda::LookAhead::Off;
+        let entry_rule = route.and_then(|route| data.entry_rule(data.map.namespace(route)));
         Ok(PyLiveGame {
             inner: Mutex::new(Inner {
                 session,
                 store: PoolStore(TfzStore::new(&data, rom)),
                 loaded: false,
                 seed: 0,
+                entry_rule,
                 speaker: None,
                 sound_error: None,
                 hear: false,
@@ -131,8 +135,11 @@ impl PyLiveGame {
     /// (`Game.set_value` names) are its frame-0 edits, the frames until Link is controllable its first inputs.
     /// `banked_kills` ((level, room), kills): the kills the game keeps for the room about to be entered
     /// (`LoadOptions::banked_kills`, as a staged training reset banks them), so it makes that many monsters fewer.
-    /// The previous recording is dropped.
-    #[pyo3(signature = (state, seed, ram_overrides=None, banked_kills=Vec::new()))]
+    /// `layout` (round 43, the reset rule of the route's doors): 'route' (default) the layout the route's plan
+    /// brings to the door, 'valid' any layout some play of the game can bring there (the route's own on half the
+    /// seeds, as training draws them); the chase state, `$4A`, the divider and the edge cell as the rule draws them,
+    /// all from `seed`.  The previous recording is dropped.
+    #[pyo3(signature = (state, seed, ram_overrides=None, banked_kills=Vec::new(), layout="route"))]
     fn load(
         &self,
         py: Python<'_>,
@@ -140,13 +147,20 @@ impl PyLiveGame {
         seed: u64,
         ram_overrides: Option<&Bound<'_, PyDict>>,
         banked_kills: Vec<((u8, u8), u8)>,
+        layout: &str,
     ) -> PyResult<PyGameState> {
+        let layout = match layout {
+            "route" => zelda::room_entry::Layout::Route,
+            "valid" => zelda::room_entry::Layout::Valid,
+            other => return Err(PyValueError::new_err(format!("layout {other:?}: 'route' or 'valid'"))),
+        };
         let opts = LoadOptions {
             randomize_rng: true,
             fresh_room: false,
             controllable: false,
             overrides: overrides(ram_overrides)?,
             banked_kills,
+            entry: self.inner.lock().entry_rule.clone().map(|rule| zelda::room_entry::EntryDraw::new(rule, layout)),
         };
         let (name, bytes) = if let Ok(b) = state.cast::<PyBytes>() {
             (None, b.as_bytes().to_vec())

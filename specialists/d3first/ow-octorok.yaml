@@ -63,4 +63,3 @@ notes: '0x37 (first visit) and 0x3c exit through the dungeon stairs: enter-room 
   docs/routes/d5-leg.md): 0x57 and 0x58 from W leave E; their states fix the switch off.'
 state_routes:
 - d3first
-harvested_fraction: 0.25

@@ -16,7 +16,6 @@ clips: {enabled: true, off_share: 0}    # round 21: the screen wrap (W/E; none i
 curriculum: {enabled: true}             # round 24: 0x60's wrap exit (CLIP E on Y $85/$8D only), 0x0a's sword cave
 one_room: true                          # round 5: per-room episodes
 max_steps: 600
-harvested_fraction: 0
 warm_start: null
 state_routes:
 - d3first

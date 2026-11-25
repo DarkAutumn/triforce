@@ -59,7 +59,6 @@ items:
 clips:
   enabled: true
   off_share: 0
-harvested_fraction: 0.4
 curriculum:
   enabled: true
   untracked:                              # round 40: the seed states that train without a track (triforce.inputs);

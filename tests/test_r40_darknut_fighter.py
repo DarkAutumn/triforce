@@ -180,10 +180,11 @@ def test_the_proposals_read_the_owners_bomb_take():
 
 
 def test_the_first_pass_of_3x5b_kills_one_darknut_and_takes_its_bombs(fighter, monkeypatch):
-    """3:0x5b's first pass (the owner's Dungeon 3 plan): seed 9 on `d3first_3_5bs_2` at 2 hearts, the drop cycle at 0:
-    one Red Darknut killed by the sword, its bombs (the table's drop) taken, out by the N door, no hit, no second kill."""
+    """3:0x5b's first pass (the owner's Dungeon 3 plan): seed 1 on `d3first_3_5bs_2` at 2 hearts, the drop cycle at 0
+    (chosen under round 43's reset rule, `room_entry::EntryRule`): one Red Darknut killed by the sword, its bombs (the
+    table's drop) taken, out by the N door, no hit, no second kill."""
     monkeypatch.setenv(fighter.HEARTS_VARIANT, 'low')
-    record = fighter.play(fighter.make_env('5b', 0, REPO_STATES_DIR), '5b', 9, 'd3first_3_5bs_2')
+    record = fighter.play(fighter.make_env('5b', 0, REPO_STATES_DIR), '5b', 1, 'd3first_3_5bs_2')
     assert (record['ending'], record['hits'], record['kills'], record['drop_appeared']) == \
         ('exit-correct', 0, 1, True), record
     assert record['bag_gain'] > 0, record

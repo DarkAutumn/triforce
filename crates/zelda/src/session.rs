@@ -33,6 +33,10 @@ pub struct LoadOptions {
     /// ((level, room), kills), that many kills banked in `LevelKillCounts` after `fresh_room`, so the game makes that
     /// many fewer monsters (asm:RoomHistory_ModifyObjCountUW); clearing the rest clears the room.
     pub banked_kills: Vec<((u8, u8), u8)>,
+    /// Round 43, the reset rule: with `randomize_rng`, a pre-entry state of a door the rule knows takes only values
+    /// some play can bring there (`room_entry::EntryRule`: `$524` by the layout asked for, the chase state, `$4A`,
+    /// the divider `$26`, `$525`, dealt from the env's decks); other doors keep the uniform spawn draw.
+    pub entry: Option<crate::room_entry::EntryDraw>,
 }
 
 /// Everything needed to resume a session exactly.
@@ -428,7 +432,10 @@ impl<N: Nes> Session<N> {
         }
         if is_pre_entry(|a| nes.peek(a)) {
             if opts.randomize_rng {
-                randomize_spawn(nes, rng);
+                let drawn = opts.entry.as_ref().is_some_and(|entry| entry.draw(nes, rng));
+                if !drawn {
+                    randomize_spawn(nes, rng);
+                }
             }
             let pending = if opts.fresh_room {
                 pending_room(|a| nes.peek(a))

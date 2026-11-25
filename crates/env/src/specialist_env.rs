@@ -351,6 +351,9 @@ pub struct SpecialistEnv<N: Nes, St: StateStore<N::State>> {
     staged_kills: bool,
     /// The kills the last reset banked in its start room (`ram_randomization.room_kills`), 0 if none.
     pub banked_kills: u8,
+    /// Round 43: this env's decks of the reset rule (`zelda::room_entry::Decks`): each door's few-valued factors
+    /// dealt evenly across this env's resets.
+    entry_decks: std::sync::Arc<std::sync::Mutex<zelda::room_entry::Decks>>,
     /// Training: `ram_randomization.drop_bombs` forces the room's next drop to be bombs (`EnvOptions::forced_drops`).
     forced_drops: bool,
     /// This episode forces it (drawn at reset).
@@ -505,6 +508,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             decision: None,
             staged_kills: opts.staged_kills,
             banked_kills: 0,
+            entry_decks: Default::default(),
             forced_drops: opts.forced_drops,
             drop_bombs: false,
             fixed_kills: None,
@@ -741,6 +745,15 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             controllable: self.curriculum_tag.is_some(),
             overrides: Vec::new(),
             banked_kills,
+            // Round 43, the reset rule: a door of a route with an `entry_rule` file takes only values some play can
+            // bring there (any valid layout, the route's own on half the resets); other starts the uniform draw.
+            // Training's unseeded resets deal from this env's decks (even shares over a handful of resets); a seeded
+            // reset (evaluation: seed for seed the same start in every run, paired arms alike) draws from its seed alone.
+            entry: self.data.entry_rule(ns.as_deref()).map(|rule| zelda::room_entry::EntryDraw {
+                rule,
+                decks: if seed.is_some() { Default::default() } else { self.entry_decks.clone() },
+                layout: zelda::room_entry::Layout::Valid,
+            }),
         };
         let mut state = self.session.load(&machine, &opts, &mut self.rng)?.clone();
         let here = (state.level(), state.location());

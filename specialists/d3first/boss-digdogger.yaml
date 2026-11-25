@@ -58,4 +58,3 @@ notes: 'Digdogger (Dungeon 5, round 24; docs/routes/d5.md): the big body (32x32,
   only crossed to the W door past the big one (RECORDER never offered there: the split would fill a room Link walks through).'
 state_routes:
 - d3first
-harvested_fraction: 0.5

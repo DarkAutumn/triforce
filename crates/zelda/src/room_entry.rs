@@ -8,6 +8,8 @@
 
 use crate::nes::Nes;
 use rand::{Rng, RngExt};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 pub const MODE: u16 = 0x12;
 pub const IS_UPDATING_MODE: u16 = 0x11;
@@ -70,6 +72,186 @@ pub fn pending_room(read: impl Fn(u16) -> u8) -> Option<(u8, u8)> {
 pub fn randomize_spawn<N: Nes, R: Rng + ?Sized>(nes: &mut N, rng: &mut R) {
     nes.poke(SPAWN_CYCLE, rng.random_range(0..SPAWN_CYCLE_LENGTH));
     nes.poke(EDGE_SPAWN_CELL, EDGE_SPAWN_CELLS[rng.random_range(0..EDGE_SPAWN_CELLS.len())]);
+}
+
+/// `ChaseLongTimer`, `LongTimerCycle` and the chase flag and target (asm:Mode5Play_UpdateWorld@CheckChaseTarget):
+/// with the spawn cycle, what a room entry reads that decides how its monsters start (zelda-asm `mechanics.md`
+/// "Timers", "Who chases what").
+pub const CHASE_LONG_TIMER: u16 = 0x4A;
+pub const LONG_TIMER_CYCLE: u16 = 0x26;
+pub const CHASE_FLAG: u16 = 0x60;
+pub const CHASE_X: u16 = 0x61;
+pub const CHASE_Y: u16 = 0x62;
+/// Link's facing (`ObjDir[0]`): on the frame before an entry, the side he comes in by (up = from the south).
+pub const LINK_DIR: u16 = 0x98;
+
+/// The share of resets that take the route's planned `$524` at a door with other reachable values (round 43): the
+/// owner, Nov 25, "I don't want you to train on the planned layout exclusively at all [...] I want all valid starting
+/// positions something we train on [...] the more generic version of the model this go around"; he allowed weighting
+/// the route's own layout more strongly, and the lead set it at one half.
+pub const PLANNED_SHARE: f64 = 0.5;
+/// `LongTimerCycle` counts 9 down to 0 (asm:Nmi_Isr@UpdateTimers): every value is held at some door in real play
+/// (3,407 dungeon entries of power-on runs spread over all ten), and pausing moves it against the random register.
+pub const LONG_TIMER_CYCLE_VALUES: u8 = 10;
+
+/// A door: (level, room, Link's facing on the frame before the entry, whether he comes up a stair or out of a cave
+/// (`true`: he stands inside the room) rather than across a screen edge).
+pub type Door = (u8, u8, u8, bool);
+
+/// Whether Link, on an entry's pre-entry frame, stands inside the room (up a stair, out of a cave) rather than on the
+/// screen edge he crossed: facing up he is at the bottom (Y $C0 and below), down at the top (Y $50 and above), right
+/// or left on either side edge (X $10 and left, $E0 and right: the frame before a dungeon room is entered from the W
+/// Link's X is sometimes still the room he left's, $EF).  Measured on 66,000 entries of power-on runs: every
+/// stair, cave and screen-edge entry but the game start sorted right.
+pub fn enters_inside(x: u8, y: u8, facing: u8) -> bool {
+    !match facing {
+        8 => y >= 0xC0,
+        4 => y <= 0x50,
+        1 | 2 => x <= 0x10 || x >= 0xE0,
+        _ => false,
+    }
+}
+
+/// What a reset may write at one door: values some play of the game can bring there and nothing else.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DoorRule {
+    /// `$524` as the route plans to arrive (every earlier room fought or crossed as its steps say).
+    pub planned: u8,
+    /// Every other `$524` value some play can bring to the door (proven by the game's maps of the dungeon's doors, or
+    /// seen in power-on runs where the proof cannot reach).
+    pub others: Vec<u8>,
+    /// `$525` values real play holds there (empty: the state's own is kept).
+    pub edge_cells: Vec<u8>,
+    /// (`$61`, `$62`) held with the chase flag set on real entries of the door (empty: Link's position mirrored, the
+    /// point the flag's flip aims at, asm:Mode5Play_UpdateWorld).
+    pub chase_targets: Vec<(u8, u8)>,
+    /// `$4A` values real play holds there (empty: 0, what every real dungeon entry holds: the scroll outlasts it).
+    pub chase_timers: Vec<u8>,
+}
+
+/// Which `$524` a load takes: the route's planned value (the emulator tool's default), or any valid one by the
+/// training share ([`PLANNED_SHARE`] on the planned value, the rest evenly over the door's others).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Layout {
+    Route,
+    #[default]
+    Valid,
+}
+
+/// The reset rule (round 43): per door the values a load may write.  A value no play of the game can bring to the
+/// door is never written: the uniform draw ([`randomize_spawn`]) gave most doors layouts no game shows there.
+#[derive(Clone, Debug, Default)]
+pub struct EntryRule {
+    doors: HashMap<Door, DoorRule>,
+}
+
+/// Even shuffles for the few-valued factors: each env deals each door's values from a shuffled deck and shuffles a
+/// new one when it is empty, so a handful of resets already holds them in their shares.
+#[derive(Debug, Default)]
+pub struct Decks {
+    decks: HashMap<(Door, u8), Vec<u8>>,
+}
+
+impl Decks {
+    fn deal<R: Rng + ?Sized>(&mut self, key: (Door, u8), fill: impl FnOnce() -> Vec<u8>, rng: &mut R) -> Option<u8> {
+        let deck = self.decks.entry(key).or_default();
+        if deck.is_empty() {
+            *deck = fill();
+            rand::seq::SliceRandom::shuffle(deck.as_mut_slice(), rng);
+        }
+        deck.pop()
+    }
+}
+
+const SPAWN_DECK: u8 = 0;
+const CHASE_DECK: u8 = 1;
+const DIVIDER_DECK: u8 = 2;
+const EDGE_DECK: u8 = 3;
+
+impl EntryRule {
+    pub fn new(doors: impl IntoIterator<Item = (Door, DoorRule)>) -> Self {
+        EntryRule { doors: doors.into_iter().collect() }
+    }
+
+    pub fn door(&self, door: Door) -> Option<&DoorRule> {
+        self.doors.get(&door)
+    }
+
+    pub fn doors(&self) -> usize {
+        self.doors.len()
+    }
+
+    /// The door a pre-entry state is about to enter ([`pending_room`], Link's facing and [`enters_inside`]), None
+    /// when RAM doesn't tell.
+    pub fn door_of<N: Nes>(nes: &N) -> Option<Door> {
+        let facing = nes.peek(LINK_DIR);
+        let inside = enters_inside(nes.peek(0x70), nes.peek(0x84), facing);
+        pending_room(|a| nes.peek(a)).map(|(level, room)| (level, room, facing, inside))
+    }
+
+    /// The `$524` deck of a door: the planned value `PLANNED_SHARE` of the cards, each other value once.
+    fn spawn_deck(rule: &DoorRule, layout: Layout) -> Vec<u8> {
+        if layout == Layout::Route || rule.others.is_empty() {
+            return vec![rule.planned];
+        }
+        let planned = (rule.others.len() as f64 * PLANNED_SHARE / (1.0 - PLANNED_SHARE)).round().max(1.0) as usize;
+        let mut deck = vec![rule.planned; planned];
+        deck.extend(&rule.others);
+        deck
+    }
+
+    /// For a pre-entry state of a door the rule knows: `$524` (`layout`), the chase flag 50/50 and its target, `$4A`
+    /// from the door's real values, the divider `$26` evenly over its ten values, `$525` from the door's real cells,
+    /// dealt from `decks`.  False, nothing written, for any other state.
+    pub fn draw<N: Nes, R: Rng + ?Sized>(&self, nes: &mut N, rng: &mut R, decks: &mut Decks, layout: Layout) -> bool {
+        let Some(door) = Self::door_of(nes) else { return false };
+        let Some(rule) = self.doors.get(&door) else { return false };
+        let spawn = decks.deal((door, SPAWN_DECK), || Self::spawn_deck(rule, layout), rng);
+        nes.poke(SPAWN_CYCLE, spawn.unwrap_or(rule.planned));
+        let flag = decks.deal((door, CHASE_DECK), || vec![0, 1], rng).unwrap_or(0);
+        nes.poke(CHASE_FLAG, flag);
+        if flag == 1 {
+            let (x, y) = if rule.chase_targets.is_empty() {
+                (nes.peek(0x70) ^ 0xFF, nes.peek(0x84) ^ 0xFF)
+            } else {
+                rule.chase_targets[rng.random_range(0..rule.chase_targets.len())]
+            };
+            nes.poke(CHASE_X, x);
+            nes.poke(CHASE_Y, y);
+        }
+        let timer = match rule.chase_timers.as_slice() {
+            [] => 0,
+            timers => timers[rng.random_range(0..timers.len())],
+        };
+        nes.poke(CHASE_LONG_TIMER, timer);
+        let divider = decks.deal((door, DIVIDER_DECK), || (0..LONG_TIMER_CYCLE_VALUES).collect(), rng);
+        nes.poke(LONG_TIMER_CYCLE, divider.unwrap_or(0));
+        if !rule.edge_cells.is_empty()
+            && let Some(cell) = decks.deal((door, EDGE_DECK), || rule.edge_cells.clone(), rng)
+        {
+            nes.poke(EDGE_SPAWN_CELL, cell);
+        }
+        true
+    }
+}
+
+/// A load's use of the rule: the table, the env's decks and the layout it serves.
+#[derive(Clone, Debug)]
+pub struct EntryDraw {
+    pub rule: Arc<EntryRule>,
+    pub decks: Arc<Mutex<Decks>>,
+    pub layout: Layout,
+}
+
+impl EntryDraw {
+    pub fn new(rule: Arc<EntryRule>, layout: Layout) -> Self {
+        EntryDraw { rule, decks: Arc::new(Mutex::new(Decks::default())), layout }
+    }
+
+    pub fn draw<N: Nes, R: Rng + ?Sized>(&self, nes: &mut N, rng: &mut R) -> bool {
+        let mut decks = self.decks.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        self.rule.draw(nes, rng, &mut decks, self.layout)
+    }
 }
 
 /// Where `level`'s room flags start: the level block's pointer when it is set (it is in every state that reaches
@@ -264,6 +446,80 @@ mod tests {
         assert_eq!(pending(&nes), None);
         nes.0[MODE as usize] = 0x05;
         assert_eq!(pending(&nes), None);
+    }
+
+    fn door_rule(planned: u8, others: &[u8]) -> DoorRule {
+        DoorRule {
+            planned,
+            others: others.to_vec(),
+            edge_cells: vec![0x4E, 0x8F],
+            chase_targets: vec![(0x87, 0x33)],
+            chase_timers: vec![],
+        }
+    }
+
+    /// A state about to enter `room` across its edge (`inside` false: Link on the edge he crossed) or up a stair.
+    fn at_door(level: u8, room: u8, facing: u8, inside: bool) -> Ram {
+        let mut nes = ram();
+        let (x, y) = if inside { (0x60, 0x9D) } else { (0x78, if facing == 8 { 0xDD } else { 0x3D }) };
+        for (a, v) in [LEVEL, ROOM, MODE, LINK_DIR, 0x70, 0x84].into_iter().zip([level, room, 0x04, facing, x, y]) {
+            nes.0[a as usize] = v;
+        }
+        nes
+    }
+
+    /// The rule writes only the door's values: `$524` the planned value on half the resets and each other value
+    /// equally often on the rest (a deck: exact shares every 2(k-1) resets), every one on the route layout; the chase
+    /// flag in halves, the divider over its ten values, `$4A` 0, the edge cell from the door's cells.  A door the rule
+    /// lacks, or a state not about to enter a room, is left alone.
+    #[test]
+    fn the_rule_deals_the_doors_values_in_their_shares() {
+        use rand::SeedableRng;
+        let rule = EntryRule::new([
+            ((5, 0x47, 8, false), door_rule(6, &[2, 7])),
+            ((5, 0x37, 8, false), door_rule(2, &[])),
+        ]);
+        let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(0);
+        let mut decks = Decks::default();
+        let mut nes = at_door(5, 0x47, 8, false);
+        let mut spawn = std::collections::BTreeMap::new();
+        let mut flags = [0; 2];
+        let mut dividers = [0; 10];
+        for _ in 0..40 {
+            nes.0[CHASE_LONG_TIMER as usize] = 5;
+            assert!(rule.draw(&mut nes, &mut rng, &mut decks, Layout::Valid));
+            *spawn.entry(nes.peek(SPAWN_CYCLE)).or_insert(0) += 1;
+            flags[nes.peek(CHASE_FLAG) as usize] += 1;
+            dividers[nes.peek(LONG_TIMER_CYCLE) as usize] += 1;
+            if nes.peek(CHASE_FLAG) == 1 {
+                assert_eq!((nes.peek(CHASE_X), nes.peek(CHASE_Y)), (0x87, 0x33));
+            }
+            assert_eq!(nes.peek(CHASE_LONG_TIMER), 0);
+            assert!([0x4E, 0x8F].contains(&nes.peek(EDGE_SPAWN_CELL)));
+        }
+        assert_eq!(spawn, [(2, 10), (6, 20), (7, 10)].into_iter().collect());
+        assert_eq!((flags, dividers), ([20, 20], [4; 10]));
+        let mut route = Decks::default();
+        for _ in 0..8 {
+            assert!(rule.draw(&mut nes, &mut rng, &mut route, Layout::Route));
+            assert_eq!(nes.peek(SPAWN_CYCLE), 6);
+        }
+        let mut only = at_door(5, 0x37, 8, false);
+        for _ in 0..4 {
+            assert!(rule.draw(&mut only, &mut rng, &mut decks, Layout::Valid));
+            assert_eq!(only.peek(SPAWN_CYCLE), 2);
+        }
+        // Another side of the same room, up a stair, another room, or no entry pending: nothing written.
+        for (room, facing, inside, mode) in
+            [(0x47, 4, false, 0x04), (0x47, 8, true, 0x04), (0x57, 8, false, 0x04), (0x47, 8, false, 0x05)]
+        {
+            let mut other = at_door(5, room, facing, inside);
+            other.0[MODE as usize] = mode;
+            other.0[SPAWN_CYCLE as usize] = 3;
+            assert!(!rule.draw(&mut other, &mut rng, &mut decks, Layout::Valid));
+            assert_eq!(other.peek(SPAWN_CYCLE), 3);
+        }
+        assert_eq!(rule.doors(), 2);
     }
 
     #[test]

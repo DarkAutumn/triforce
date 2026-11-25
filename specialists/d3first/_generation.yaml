@@ -13,3 +13,13 @@ warm_start: null            # from scratch: no family's run under it
 # "9x61 is VERY clippable with a patra in it"; no boss room has a clip, so it changes nothing there). The one
 # exception is the owner's: "I definitely don't want clipping in the equipment rooms" (equipment-room.yaml turns it off).
 clips: {enabled: true, off_share: 0}
+# No harvested arrival states (round 43, the owner, Nov 25: "one save state per door"): a stored arrival holds the
+# drawn spawn cycle of the chain that harvested it and the kills and drops of its own play (Seeds43: 30.5% of the
+# 261124-gen2 snapshot's dungeon states hold a $524 no power-on run brought to their door), and every reset draws its
+# door's values by the reset rule anyway. The pool code stays for the product trainer.
+harvested_fraction: 0
+# The room memory as saved (round 43): the seed states are walked from power on (States44) and hold what real play
+# leaves in a room the route comes back to (3:0x5b's last pass two Darknuts, 1:0x23 from W none); refilling it at the
+# load would serve a room no play brings there. The reset rule writes the door's spawn cycle, chase state, divider
+# and edge cell, never a kill.
+fresh_rooms: false
