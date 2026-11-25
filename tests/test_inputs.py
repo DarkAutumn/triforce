@@ -5,6 +5,7 @@ import fnmatch
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 from argparse import Namespace
@@ -28,9 +29,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 @pytest.fixture
 def zol():
-    """zol@d3first's task (ten start-state globs, harvested states at 0.25, a curriculum)."""
+    """zol@d3first's task (ten start-state globs, a curriculum) with harvested states at 0.25 (the generation draws
+    none since round 43, the reset rule; the machinery stands for a task that sets a share)."""
     require_rom()
-    return load_specialist(str(ROOT / 'specialists' / 'd3first' / 'zol.yaml'))
+    return load_specialist(str(ROOT / 'specialists' / 'd3first' / 'zol.yaml')).replace(harvested_fraction=0.25)
 
 
 def _harvested(directory: Path, names) -> Path:
@@ -194,6 +196,29 @@ def test_every_generation_task_trains_from_scratch_with_the_generations_inputs()
     assert wizzrobe.items.boomerang and not wizzrobe.items.candle
 
 
+def test_every_generation_task_draws_the_drop_state_by_one_rule_and_the_bosses_keep_their_bombs():
+    """Round 43 (the owner, Nov 25): one rule in `_generation.yaml` for every teacher's task, no task file with a
+    counter draw of its own: the forced-drop counters as real play holds them at a door (`drop_state: real`) and the
+    `help_count` streak only where a room states its own drop cycle (darknut's 3:0x5b from S, 0 or 1, as before).
+    Manhandla's and Dodongo's tasks end an exit that leaves their bombs lying (`drops-left`), point at the drops, and
+    arm the bomb drop in training (0.75 and 0.5 of the resets); no other task names the ending."""
+    require_rom()
+    folder = ROOT / 'specialists' / 'd3first'
+    for family in GENERATION:
+        text = (folder / f'{family}.yaml').read_text(encoding='utf-8')
+        assert not re.search(r'^\s*(help_count|drop_state)\s*:|[{,]\s*help_count\s*:', text, re.M), family
+        rr = load_specialist(str(folder / f'{family}.yaml')).to_dict()['ram_randomization']
+        assert rr['drop_state'] == 'real' and list(rr['help_count']) == [0, 9], family
+        endings = load_specialist(str(folder / f'{family}.yaml')).to_dict()['endings']
+        assert ('drops-left' in endings) == (family in ('boss-manhandla', 'boss-dodongo')), family
+    darknut = load_specialist(str(folder / 'darknut.yaml')).to_dict()['ram_randomization']
+    assert {k: list(v) for k, v in darknut['room_kill_cycle'].items()} == {'(3, 0x5b, S)': [0, 1]}
+    for family, share in (('boss-manhandla', 0.75), ('boss-dodongo', 0.5)):
+        task = load_specialist(str(folder / f'{family}.yaml')).to_dict()
+        assert task['endings']['drops-left'] == 'soft-failure', family
+        assert task['reward']['drops_first'] and task['ram_randomization']['drop_bombs'] == share, family
+
+
 def test_the_generations_tasks_change_no_bare_task_and_no_d2first_chain():
     """The bare task files (today's team, `d2first`) are as `r40-gen` had them, and a `d2first` chain plays every
     family with its bare task; the common block is no family."""
@@ -338,7 +363,8 @@ def test_the_lab_refuses_missing_harvested_states(tmp_path):
     # zol@d3first's task plus the one line (round 40: the task extends `_generation.yaml` beside it, so a copy of its
     # text elsewhere no longer loads; the test's task extends it instead, as an experiment's file does).
     task = tmp_path / 'zol.yaml'
-    task.write_text(f"extends: {ROOT / 'specialists' / 'd3first' / 'zol.yaml'}\nharvested_states: {tmp_path / 'none'}\n")
+    task.write_text(f"extends: {ROOT / 'specialists' / 'd3first' / 'zol.yaml'}\nharvested_fraction: 0.25\n"
+                    f"harvested_states: {tmp_path / 'none'}\n")
     with pytest.raises(SystemExit, match='holds none'):
         parse_families([f'zol@d3first={task}'], 1, curriculum=False, states_dir=REPO_STATES_DIR)
 

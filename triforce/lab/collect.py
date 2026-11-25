@@ -291,6 +291,8 @@ class MultiCollector:
         self._threads: list[threading.Thread] = []
         self._errors: list[BaseException] = []
         self._began = 0.0
+        self._served: Optional[tuple] = None      # the network server's counters when the rollout started
+        self.serve_stats: dict = {}
 
     @property
     def shares(self) -> dict[str, int]:
@@ -312,6 +314,7 @@ class MultiCollector:
             collector.resize(steps)
         self._errors = []
         self._began = time.time()
+        self._served = self._server_counters()
         extra = {} if self.tried is None else {'tried': self.tried}
 
         def run(collector, index, policy):
@@ -336,9 +339,32 @@ class MultiCollector:
         if self._errors:
             raise self._errors[0]
 
+    @staticmethod
+    def _server_counters() -> Optional[tuple]:
+        """(batches, rows, busy seconds, graphs replayed) of the process's network server, None when none serves
+        (``nets.serve``)."""
+        from ..nets import serve  # pylint: disable=import-outside-toplevel
+        server = serve._DEFAULT  # pylint: disable=protected-access
+        return None if server is None else (server.batches, server.rows, server.busy,
+                                            float(server.graphs and server.replaying))
+
     def take(self):
         self.wait()
         self.rollout_seconds = time.time() - self._began
+        now, began = self._server_counters(), self._served
+        self.serve_stats = {}
+        if now is not None and began is not None and self.rollout_seconds > 0:
+            batches, rows, busy = (a - b for a, b in zip(now[:3], began[:3]))
+            # The served network's side of the rollout: rows a batch, batches a second, the share of the rollout's
+            # wall time the server thread spent answering (the rest it gathered rows or waited), and whether it
+            # replayed CUDA graphs (1) or ran the eager forward (0).
+            self.serve_stats = {'charts/serve_rows_per_batch': rows / batches if batches else 0.0,
+                                'charts/serve_batches_per_second': batches / self.rollout_seconds,
+                                'charts/serve_busy': busy / self.rollout_seconds, 'charts/serve_graphs': began[3]}
+            from ..nets import serve  # pylint: disable=import-outside-toplevel
+            audit = serve._DEFAULT.audit  # pylint: disable=protected-access
+            if audit is not None:       # ``$TRIFORCE_SERVE_AUDIT``: the run's graphed answers so far against eager
+                self.serve_stats.update({f'charts/serve_audit_{key}': value for key, value in audit.items()})
         self.episodes = []
         for i, collector in enumerate(self.collectors):
             collector._result = {'seconds': self.rollout_seconds}  # pylint: disable=protected-access

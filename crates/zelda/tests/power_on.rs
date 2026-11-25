@@ -146,6 +146,21 @@ fn only_registrable_names_boot() {
     }
 }
 
+/// A person may type ZELDA (`emu-zelda.py --name ZELDA`): the board takes it (`board_cells`, which a run's
+/// `name_cells` refuses), and the game starts slot 1 in the second quest (`QuestNumbers` $062D = 1).
+#[test]
+fn zelda_is_typed_and_starts_the_second_quest() {
+    assert!(power_on::name_cells("ZELDA").is_err());
+    assert_eq!(power_on::board_cells("zelda").unwrap(), [25, 4, 11, 3, 0]);
+    let Some(core) = open_core() else { return };
+    let mut nes = Logged(core, Vec::new());
+    power_on::to_file_select(&mut nes).unwrap();
+    power_on::register_and_start(&mut nes, "ZELDA").unwrap();
+    assert_eq!((nes.peek(0x12), nes.peek(0x10), nes.peek(0xEB)), (5, 0, 0x77));
+    assert_eq!(registered(&nes), "ZELDA   ");
+    assert_eq!(nes.peek(0x062D), 1, "the second quest");
+}
+
 #[test]
 fn idle_states_are_named_by_their_frames() {
     assert_eq!([0, 1999, 2000, 30000, 32766].map(power_on::nearest_idle), [0, 0, 2000, 30000, 30000]);

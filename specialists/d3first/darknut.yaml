@@ -62,9 +62,6 @@ ram_randomization:
   - 0
   - 8
   bombs_share: 0.5
-  help_count:
-  - 0
-  - 9
   room_kills:
     (3, 0x5b, W):
     - 1
@@ -115,7 +112,6 @@ curriculum:
   - d3first_8_3fw_[0-9]
   - d3first_8_4es_[0-9]
   - d3first_8_5es_[0-9]
-harvested_fraction: 0.33
 # Round 40 (Line40, Line40b; decisions 2026-11-23 "3:0x69 is crossed by a line"): 3:0x69's line taught by the
 # demonstration builder's hit-free visits of each pass (scripts/experiments/r40_d3_69_line.py demos: a search over the
 # env's actions per visit, the rule timed by its look-ahead where none is found; the room's rows only, 4 or 8 bombs,

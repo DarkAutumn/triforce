@@ -133,18 +133,28 @@ _COLUMNS = {
     # ``queues_aware`` set by a wrapper that reads the queues' file (1; None: a wrapper of older code, which knows only
     # its constants, ``LEGACY``, and is reckoned by them: ``options``).  Code of Nov 24 morning wrote ``places_aware``
     # instead (the ``places`` file, gone): it is older code too.
-    'queues_aware': 'INTEGER'}
-_JSON = ('command', 'work', 'steps', 'progress', 'flags')
+    'queues_aware': 'INTEGER',
+    # A training's steps a second (``jobspeed``, round40.md "Steps a second on record"): ``speed`` the tool's last
+    # report (``jobs.speed``: steps, the last iteration's, the run's mean and the rollout's rates, its shape), and
+    # ``speed_mark`` the wrapper's judgement of it against its normal (``jobspeed.judge``).
+    'speed': 'TEXT', 'speed_mark': 'TEXT'}
+_JSON = ('command', 'work', 'steps', 'progress', 'flags', 'speed', 'speed_mark')
 _HISTORY_COLUMNS = {'moved': 'INTEGER'}     # added to ``history`` after it was first made: 1 for a moved job
 # ``settings``: what every wrapper shares besides the jobs: 'load' (the load average's last reading, ``load_reading``)
 # and 'queues' (the text of the queues' configuration last in force, ``load_config``), each with its time.
+# ``speed_samples``: a training's time series, one row every ``jobspeed.SAMPLE_SECONDS`` (``jobspeed.sample``): its
+# steps, its rates, the load average and the other jobs running then (``others``: their ids, JSON; ``trainings``:
+# how many of them were trainings).
 SCHEMA = (f"CREATE TABLE IF NOT EXISTS jobs (id INTEGER PRIMARY KEY AUTOINCREMENT, "
           f"{', '.join(f'{name} {kind}' for name, kind in _COLUMNS.items())});"
           "CREATE TABLE IF NOT EXISTS history (job INTEGER, kind TEXT, work TEXT, estimate REAL, actual REAL, "
           "status TEXT, finished_ts REAL);"
           "CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT, ts REAL);"
+          "CREATE TABLE IF NOT EXISTS speed_samples (job INTEGER, ts REAL, steps REAL, sps REAL, mean REAL, "
+          "rollout REAL, rate REAL, load REAL, trainings INTEGER, others TEXT);"
           "CREATE INDEX IF NOT EXISTS jobs_status ON jobs (status);"
-          "CREATE INDEX IF NOT EXISTS jobs_finished ON jobs (finished_ts);")
+          "CREATE INDEX IF NOT EXISTS jobs_finished ON jobs (finished_ts);"
+          "CREATE INDEX IF NOT EXISTS speed_samples_job ON speed_samples (job, ts);")
 
 
 def queue_dir() -> Path:

@@ -28,7 +28,13 @@ number and rate), its steps (a build's and a test's, each with its state), what 
 a place in regular (2 of 2 running); spare is closed: load 22.4 above 15"), then its verb, kind, branch and
 command.  Over the list (window and web view) a line names the queues of the queues' file in force with their
 places taken ("QUEUES express 1/1 · regular 2/2 · spare 0/1 closed: ... · tools 1/2"), and, while that file is
-ignored, why, in the warning colour (``read_queue``, ``jobqueue.survey``).
+ignored, why, in the warning colour (``read_queue``, ``jobqueue.survey``).  A running job's card shows at the right
+of its first line what it costs the machine, cut before anything else on a narrow card (``job_load``, sampled every
+3 s by this process from the job's cgroup: ``triforce.jobload``): ``CPU 13.4 cores (67%) · load 21.8 · waiting
+38%`` (the cores it uses now, its runnable threads smoothed as the load average, the share of time it waited for a
+CPU); an ended one its CPU time and mean cores.  Under the queues' line: those summed beside the machine's, and
+what is outside the queue (``loads_line``; the warning colour while over 3 cores for a minute).  Every rate is a
+number of one or more (``fmt_rate``: ``4.5 tests/s`` or ``4.0 s/test``).
 A job whose log folder holds its plan (``training.json``) shows that plan's full view under its card (its header,
 its runs' rows, its eval-chain card: the runs by how they ended, the triforces taken, the furthest step); one
 without is drawn from its row alone.  The running jobs are on top, the one that began to run last first (a job that
@@ -46,8 +52,8 @@ up; 'Clear finished' hides them at once, leaving the live ones, and jobs that st
 
 Reads ``training.json`` (the plan, rewritten atomically) and tails ``round.jsonl`` plus every ``<specialist>.jsonl``
 twice a second; see ``triforce/events.py`` for the format.  Self-contained (PEP 723 inline dependencies) but for
-``triforce.jobqueue`` (standard library only), imported from the checkout it sits in: it needs no project
-virtualenv.
+``triforce.jobqueue``, ``triforce.jobspeed`` and ``triforce.jobload`` (standard library only), imported from the
+checkout it sits in: it needs no project virtualenv.
 """
 
 import argparse
@@ -60,6 +66,7 @@ import socket
 import subprocess
 import sqlite3
 import sys
+import textwrap
 import threading
 import time
 from datetime import datetime
@@ -74,7 +81,7 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, 
                                QMainWindow, QMenu, QPlainTextEdit, QPushButton, QScrollArea, QSplitter,
                                QStackedWidget, QTabWidget, QVBoxLayout, QWidget)
 
-from triforce import jobqueue
+from triforce import jobload, jobqueue, jobspeed
 
 PLAN_FILE = 'training.json'
 LOGS_DIR_ENV = 'TRIFORCE_LOGS_DIR'
@@ -1094,11 +1101,9 @@ class Training:
 
 
 def fmt_episode_rate(episodes: float, seconds: float) -> str:
-    """Throughput: 'N ep/s', or 'N s/ep' when below one episode a second ('' without a measurement)."""
-    if episodes <= 0 or seconds <= 0:
-        return ''
-    rate = episodes / seconds
-    return f"{rate:.1f} ep/s" if rate >= 1 else f"{1 / rate:.1f} s/ep"
+    """Throughput in episodes (``fmt_rate``: ``12.5 ep/s``, or ``4.0 s/ep`` below one a second; '' without a
+    measurement)."""
+    return fmt_rate(episodes / seconds, 'ep') if episodes > 0 and seconds > 0 else ''
 
 
 def chain_speed(chain: dict) -> str:
@@ -1369,11 +1374,39 @@ def fmt_amount(value) -> str:
     return fmt_steps(value) if abs(value) >= 10_000 else f"{value:g}"
 
 
+SINGULAR = {'batches': 'batch', 'series': 'series', 'status': 'status', 'statuses': 'status', 'passes': 'pass',
+            'classes': 'class', 'processes': 'process', 'boxes': 'box', 'analyses': 'analysis', 'entries': 'entry',
+            'replies': 'reply'}
+
+
+def singular(unit: str) -> str:
+    """A unit's singular, for a time per one (``s/test``): its last word without a final ``s`` (``rust tests`` ->
+    ``rust test``), a few by ``SINGULAR``; a unit already singular (``ep``, ``test``, ``process``) as it is."""
+    head, _, last = unit.rpartition(' ')
+    if last in SINGULAR:
+        last = SINGULAR[last]
+    elif last.endswith('s') and not last.endswith('ss') and len(last) > 1:
+        last = last[:-1]
+    return f"{head} {last}" if head else last
+
+
 def fmt_rate(rate, unit: str) -> str:
-    """``0.78 runs/s``, ``45.2 steps/s``, ``1,234 steps/s`` ('' without a rate)."""
-    if not rate:
+    """A rate a second as a number of 1 or more (the owner, Nov 25: "make all ratio above one [...] we might have
+    3.2 sec/test or 4.5 tests/sec, but never 0.23 tests/sec"): ``2 runs/s``, ``45.2 steps/s``, ``1,234 steps/s`` at
+    one a second or more; below it the time one takes, ``4.0 s/test`` (``singular``), ``2.5 min/chain`` past 90 s,
+    ``1.6 h/chain`` past 90 minutes.  '' without a rate (0 or None).  Every rate the GUI prints for a job's counter,
+    a chain's runs and an evaluation's episodes is this; a training's steps a second stay ``sps`` (``jobspeed``)."""
+    if not rate or rate <= 0:
         return ''
-    return f"{rate:,.0f} {unit}/s" if rate >= 100 else f"{rate:.3g} {unit}/s"
+    if rate >= 1:
+        return f"{rate:,.0f} {unit}/s" if rate >= 100 else f"{rate:.3g} {unit}/s"
+    seconds = 1 / rate
+    per = f"/{singular(unit)}" if unit else ' each'
+    if seconds < 90:
+        return f"{seconds:.1f} s{per}"
+    if seconds < 90 * 60:
+        return f"{seconds / 60:.1f} min{per}"
+    return f"{seconds / 3600:.1f} h{per}"
 
 
 def job_counters(job: dict, now: float, has_plan: bool = False) -> list[dict]:
@@ -1405,15 +1438,115 @@ def job_counters(job: dict, now: float, has_plan: bool = False) -> list[dict]:
     return counters
 
 
-def job_view(job: dict, now: float, place: int | None = None, has_plan: bool = False) -> dict:
+def job_speed(job: dict) -> list[tuple[str, QColor]]:
+    """A running training's steps a second, one line under its counters (``jobspeed``, round40.md "Steps a second on
+    record"): ``jobspeed.speed_line`` (its mean, last iteration, rollout, shape, normal and state), and while its
+    mark is SLOW also ``jobspeed.slow_line`` (how far below, since when, what runs beside it) in the warning colour;
+    [] for a job that is not running or reports no speed."""
+    line = jobspeed.speed_line(job) if job.get('status') == 'running' else None
+    if line is None:
+        return []
+    slow = jobspeed.slow_line(None, job)
+    return [(line, C.muted)] + ([(slow, C.warn)] if slow else [])
+
+
+# Each running job's CPU and load (``triforce.jobload``: sampled by this process alone every ``jobload.INTERVAL``
+# seconds from the job's cgroup and /proc; a job is never asked anything).  On its card's first line at the right,
+# the first thing cut when the card is narrow (the owner, Nov 25: "if the card shrinks too small I want the cpu and
+# load average clipped, not anything else on the card currently").
+LOAD_MEANINGS = (
+    "CPU: the cores the job's processes use now (its systemd unit's cgroup, cpu.stat usage_usec between two "
+    "samples), and that as a share of the machine's threads.",
+    "load: what the job adds to the load average: its threads that are runnable (running or waiting for a CPU, "
+    "state R), smoothed over a minute as the kernel smooths its own 1-minute load average.",
+    "waiting: the share of the last 10 seconds in which some of its threads were ready to run and got no CPU "
+    "(its cgroup's cpu.pressure, some avg10): a starved job, which its cores alone do not show.")
+LOAD_TIP = '\n'.join(LOAD_MEANINGS) + f"\nSampled every {jobload.INTERVAL:g} s by the GUI alone."
+ASIDE_GAP = 16      # the least room between a card's first line and its load text
+
+
+def job_load(job: dict, loads) -> dict | None:
+    """A job's CPU and load as its card shows them at its first line's right (``jobload.JobLoads``' last sample):
+    {'variants': the texts longest first, each one part less, cut in that order when the card is narrow (the
+    waiting share, then the load, then the CPU's share of the machine, then everything), 'tip'}.  A running job:
+    ``CPU 13.4 cores (67%) · load 21.8 · waiting 38%`` (CPU once two samples are in; waiting where its cgroup has
+    ``cpu.pressure``); an ended one whose cgroup's last sample came at its end: ``CPU time 2h14m · mean 8.3 cores``;
+    None for a queued job or one never sampled."""
+    sample = loads.get(job.get('id')) if loads is not None else None
+    if sample is None:
+        return None
+    status = job.get('status')
+    if status == 'running':
+        cores = '' if sample.cores is None else f"CPU {sample.cores:.1f} cores"
+        share = '' if sample.cores is None else f"{cores} ({sample.cores / loads.threads:.0%})"
+        load = f"load {sample.load:.1f}"
+        waiting = '' if sample.waiting is None else f"waiting {sample.waiting:.0f}%"
+        variants = [' · '.join(part for part in parts if part)
+                    for parts in ((share, load, waiting), (share, load), (share,), (cores,))]
+    elif status in jobqueue.ENDED:
+        total = jobload.final(sample, job)
+        if total is None:
+            return None
+        variants = [f"CPU time {jobqueue.short(total[0])} · mean {total[1]:.1f} cores",
+                    f"CPU time {jobqueue.short(total[0])}"]
+    else:
+        return None
+    variants = [text for text in dict.fromkeys(variants) if text]
+    return {'variants': variants, 'tip': LOAD_TIP} if variants else None
+
+
+def loads_line(summary) -> dict | None:
+    """The line over the list beside the queues' (``jobload.Summary``): {'jobs': ``jobs: 18.7 cores · load 63.7``,
+    'machine': ``machine: 20.0 of 20 cores · load 63.8``, 'outside': ``outside the queue: 1.3 cores · load 0.2``
+    (and, while more than ``jobload.OUTSIDE_CORES`` cores have been busy outside the queue for
+    ``jobload.OUTSIDE_SECONDS``: for how long and the busiest process there), 'warn' (that), 'top' (the busiest
+    process outside the queue while it is looked for, else '')}; None before a sample."""
+    if summary is None:
+        return None
+    number = lambda value, fmt: '–' if value is None else format(value, fmt)   # noqa: E731
+    jobs = f"jobs: {summary.jobs_cores:.1f} cores · load {summary.jobs_load:.1f}"
+    machine = (f"machine: {number(summary.machine_cores, '.1f')} of {summary.threads} cores · "
+               f"load {number(summary.machine_load, '.1f')}")
+    outside = (f"outside the queue: {number(summary.outside_cores, '.1f')} cores · "
+               f"load {number(summary.outside_load, '.1f')}")
+    if summary.warn:
+        outside += f" for {jobqueue.short(time.time() - summary.outside_since)}"
+        if summary.top:
+            outside += f" · top {summary.top}"
+    return {'jobs': jobs, 'machine': machine, 'outside': outside, 'warn': summary.warn, 'top': summary.top}
+
+
+def loads_html(line: dict | None) -> str:
+    """The window's load line (``loads_line``): ``LOAD  jobs: ... · machine: ... · outside the queue: ...`` in the
+    muted colour, what is outside the queue in the warning colour while it warns; '' before a sample."""
+    if not line:
+        return ''
+    outside = html.escape(line['outside'])
+    if line['warn']:
+        outside = f"<span style='color:{C.warn.name()}; font-weight:700'>{outside}</span>"
+    return (f"<span style='color:{C.muted.name()}'><b>LOAD</b>&nbsp;&nbsp;{html.escape(line['jobs'])}"
+            f"&nbsp;&nbsp;·&nbsp;&nbsp;{html.escape(line['machine'])}&nbsp;&nbsp;·&nbsp;&nbsp;{outside}</span>")
+
+
+def loads_tip(line: dict | None) -> str:
+    """The load line's tooltip: what the numbers are, and the busiest process outside the queue while known."""
+    if not line:
+        return ''
+    return ('jobs: the running jobs\' CPU and load summed (each job\'s, as its card shows it); machine: its busy '
+            'cores (/proc/stat) and its 1-minute load average; outside the queue: what is left.'
+            + (f"\nBusiest outside the queue: {line['top']}" if line['top'] else ''))
+
+
+def job_view(job: dict, now: float, place: int | None = None, has_plan: bool = False, loads=None) -> dict:
     """A job's card, as the window draws it with its widgets (``JobCard``) and the web view with its elements (the
     ASCII bar is ``triforce job list``'s alone): 'headline' (agent, task, sub-task), 'description', 'state'
     (``jobqueue.tags`` without the running step, which the steps' list shows) in 'color' (``job_color``),
-    'counters' (``job_counters``), 'steps' (a build's and a test's: [{'name', 'status'}], status pending, running,
-    completed or failed), 'note' (a running job that reports nothing and has no plan: 'no progress reported' and its
-    time against its estimate; a waiting job: what it waits for, ``read_queue``'s 'waits'), 'flags' (``jobs.flag``:
-    [{'level', 'code', 'text', 'color'}], red ones in the bad colour, notes in the in-between one) and 'command' (its
-    verb and kind, where it runs, its command)."""
+    'counters' (``job_counters``), 'speed' (``job_speed``: [(line, colour)] under the counters), 'steps' (a build's
+    and a test's: [{'name', 'status'}], status pending, running, completed or failed), 'note' (a running job that
+    reports nothing and has no plan: 'no progress reported' and its time against its estimate; a waiting job: what
+    it waits for, ``read_queue``'s 'waits'), 'flags' (``jobs.flag``: [{'level', 'code', 'text', 'color'}], red ones
+    in the bad colour, notes in the in-between one), 'command' (its verb and kind, where it runs, its command) and
+    'load' (``job_load`` from ``loads``, a ``jobload.JobLoads``: its CPU and load at its first line's right)."""
     steps = [{'name': str(step.get('name') or '?'), 'status': str(step.get('status') or 'pending')}
              for step in job.get('steps') or []]
     note = (job.get('waits') or '') if job.get('status') == 'queued' else ''
@@ -1425,8 +1558,8 @@ def job_view(job: dict, now: float, place: int | None = None, has_plan: bool = F
              for flag in job.get('flags') or []]
     return {'headline': jobqueue.headline(job), 'description': job.get('description') or '',
             'state': jobqueue.tags({**job, 'steps': None}, now, place), 'color': job_color(job, now),
-            'counters': job_counters(job, now, has_plan), 'steps': steps, 'note': note, 'flags': flags,
-            'command': job_command(job)}
+            'counters': job_counters(job, now, has_plan), 'speed': job_speed(job), 'steps': steps, 'note': note,
+            'flags': flags, 'command': job_command(job), 'load': job_load(job, loads)}
 
 
 def job_command(job: dict) -> str:
@@ -1463,14 +1596,16 @@ def move_job(job_id: int, undo: bool = False) -> dict:
 
 
 def job_sections(view: dict) -> list:
-    """The detail pane's sections of a job without a log folder (``job_view``): its counters as bars, its steps,
-    then who, what and where."""
+    """The detail pane's sections of a job without a log folder (``job_view``): its counters as bars, its speed (a
+    running training's, ``job_speed``), its steps, then who, what and where."""
     sections = []
     if view['counters']:
         sections.append(('bars', 'Progress', [
             (counter['label'] or counter['unit'], counter['fraction'],
              ' · '.join(part for part in (counter['numbers'], counter['speed'], counter['time']) if part),
              view['color']) for counter in view['counters']]))
+    if view['speed']:
+        sections.append(('text', 'Speed', view['speed']))
     if view['steps']:
         sections.append(('text', 'Steps', [(f"{step['name']}: {STATUS[step['status']][1]}", STATUS[step['status']][0])
                                            for step in view['steps'] if step['status'] in STATUS]))
@@ -1543,7 +1678,7 @@ def job_timing(job: dict, now: float) -> str:
     return f"after {jobqueue.short(ran)}{tilde}{code}" + (f" · {job['result']}" if job.get('result') else '')
 
 
-def job_box(job: dict, model: Training, now: float, place: int | None = None) -> dict:
+def job_box(job: dict, model: Training, now: float, place: int | None = None, loads=None) -> dict:
     """The one box of a job that has a plan (the owner, Nov 23: the job's card and its plan's header were two boxes
     saying the same things "all over the place"), as the window's ``Header`` and the web view draw it:
     'headline' (the job's ``Agent: A   Task: T   Sub-task: S``; the plan's combined name is gone), 'pills' ([(text,
@@ -1558,7 +1693,9 @@ def job_box(job: dict, model: Training, now: float, place: int | None = None) ->
     still going, a step of the job that no row of its plan shows: the 250 test's ``bomb metrics`` over its replays
     once its runs are done; the owner, Nov 24: the job read RUNNING for ten minutes under a finished chain with
     nothing saying what it was doing.  A counter named for its unit, ``runs`` or ``steps``, is the plan's rows'
-    progress and is not drawn twice)."""
+    progress and is not drawn twice), then 'speed' (``job_speed``: [(line, colour)], a running training's steps a
+    second under the counters, SLOW in the warning colour), and 'load' (``job_load``: its CPU and load at the right
+    of its first line, the first thing cut when the box is narrow)."""
     status = job.get('status')
     color = job_color(job, now)
     state = (f"QUEUED #{place}" if place else 'QUEUED') if status == 'queued' else (
@@ -1576,7 +1713,7 @@ def job_box(job: dict, model: Training, now: float, place: int | None = None) ->
     counters = [counter for counter in job_counters(job, now, has_plan=True) if counter['label']]
     return {'headline': jobqueue.headline(job), 'pills': [(text, pill) for text, pill in pills if text],
             'description': job.get('description') or '', 'facts': facts, 'flags': flags, 'bar': len(model.runs) > 1,
-            'counters': counters, 'command': job_command(job)}
+            'counters': counters, 'speed': job_speed(job), 'command': job_command(job), 'load': job_load(job, loads)}
 
 
 def row_fraction(run: Run, status: str, now: float) -> float:
@@ -1896,6 +2033,18 @@ def startup_skip(run: Run, status: str, skip_startup: bool) -> tuple[int, str]:
     return skip, overlay
 
 
+def wasted_series(run: Run, skip: int) -> list[tuple[float, float]]:
+    """The health chart's ``total (+wasted)`` points: from the run's first iteration whose total differs from its
+    real change on (every later one kept, even where the two agree again); [] for a run whose total never differs
+    (the chart then shows 'real' alone)."""
+    real = dict(run.series('health_change'))
+    first = next((iteration for iteration, total in run.series('health_change_total')
+                  if iteration not in real or not math.isclose(total, real[iteration], abs_tol=1e-9)), None)
+    if first is None:
+        return []
+    return [point for point in run.series('health_change_total', skip) if point[0] >= first]
+
+
 def run_chart_data(run: Run, skip: int) -> dict[str, tuple[list[dict], list[tuple]]]:
     """Each training chart's (series, horizontal lines) for a run, leaving out its first ``skip`` iterations."""
     stop = (run.start or {}).get('stop_success')
@@ -1911,6 +2060,7 @@ def run_chart_data(run: Run, skip: int) -> dict[str, tuple[list[dict], list[tupl
                                                               ('off', 'clips off', C.text))
                    ] if clips_split_matters(episodes['on'], episodes['off']) else []
     earned, cost, net = bomb_reward_series(run, skip)
+    wasted = wasted_series(run, skip)
     return {
         # Curriculum first: the legend drops entries from the left when the chart is small, so 'success' stays (the
         # owner, Nov 24, saw only 'curriculum').
@@ -1924,11 +2074,11 @@ def run_chart_data(run: Run, skip: int) -> dict[str, tuple[list[dict], list[tupl
         ], hlines),
         'reward': ([{'label': 'total', 'color': C.accent, 'points': run.series('reward/total', skip), 'area': True}],
                    []),
-        # hearts at exit - entry; total adds the dropped hearts picked up at full health (absent in older logs).
+        # hearts at exit - entry; total adds the dropped hearts picked up at full health (absent in older logs), drawn
+        # only from the run's first iteration where it differs from real (``wasted_series``).
         # Total first: the legend drops entries from the left when the title leaves no room, so 'real' stays.
         'health': ([
-            {'label': 'total (+wasted)', 'color': C.accent, 'points': run.series('health_change_total', skip),
-             'width': 1.4},
+            *([{'label': 'total (+wasted)', 'color': C.accent, 'points': wasted, 'width': 1.4}] if wasted else []),
             {'label': 'real', 'color': C.ok, 'points': run.series('health_change', skip), 'area': True},
         ], [(0.0, C.faint, 'no change (exit = entry)')]),
         'length': ([{'label': 'steps', 'color': C.warn, 'points': run.series('episode_steps', skip), 'area': True}],
@@ -2096,6 +2246,12 @@ def bar_label_text(text: str, width: float, size: float = 8.5) -> str:
     row's centred label once lost both ends: '000 runs · 282 reached ... · 3')."""
     return QFontMetrics(font(size, QFont.Weight.Bold)).elidedText(text, Qt.TextElideMode.ElideRight,
                                                                    max(0, int(width - 12)))
+
+
+def fit_aside(variants: list[str], room: float, metrics: QFontMetrics) -> str:
+    """The longest of ``variants`` (longest first) that fits ``room`` pixels, '' when none does: a card's load text
+    (``job_load``) gives way before anything else on the card."""
+    return next((text for text in variants if metrics.horizontalAdvance(text) <= room), '')
 
 
 def paint_bar_label(p: QPainter, rect: QRectF, text: str, size: float = 8.5):
@@ -2270,6 +2426,7 @@ class Header(Clickable):
         self.shown = {}
         self.settled = False        # nothing left to animate until the folder's data changes (FolderView.poll)
         self.box: dict | None = None    # the job's box (``job_box``) as last drawn, None for a folder no job owns
+        self.aside = ''                 # its load text (``job_load``) as last drawn: the variant that fit, or ''
 
     def contextMenuEvent(self, event):
         self.view.context_menu(event.globalPos())       # a job's box: the same menu as its card
@@ -2279,19 +2436,21 @@ class Header(Clickable):
         view = self.view
         if view.job is None or view.model is None:
             return None
-        return job_box(view.job, view.model, now, view.place)
+        return job_box(view.job, view.model, now, view.place, getattr(view.owner, 'loads', None))
 
     def refresh(self):
-        """Reads the box and fits the header to it (its description, its counters and its plan's bar come and go)."""
+        """Reads the box and fits the header to it (its description, its counters, its speed and its plan's bar come
+        and go)."""
         self.box = self.read_box(time.time())
         box = self.box
         if box is None:
             self.setFixedHeight(self.HEIGHT)
         else:
             self.setFixedHeight(self.BOX_TOP + self.BOX_ROW + self.BOX_LINE * (2 + bool(box['description'])
-                                                                               + len(box['flags']))
+                                                                               + len(box['flags']) + len(box['speed']))
                                 + self.BOX_COUNTER * len(box['counters'])
                                 + (self.BOX_BAR if box['bar'] else 0) + self.BOX_BOTTOM)
+        self.setToolTip(box['load']['tip'] if box is not None and box['load'] else '')
         self.update()
 
     def targets(self) -> dict:
@@ -2409,6 +2568,13 @@ class Header(Clickable):
             if x + pill_metrics.horizontalAdvance(text) + 16 > right:
                 break
             x += paint_pill(p, x, y + 5, text, color) + 6
+        self.aside = ''
+        if box['load']:                             # its CPU and load at the right: cut first when the box is narrow
+            p.setFont(font(9))
+            self.aside = fit_aside(box['load']['variants'], right - x - ASIDE_GAP + 6, p.fontMetrics())
+            p.setPen(C.muted)
+            p.drawText(QRectF(left, y + 5, right - left, pill_metrics.height() + 4),
+                       Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, self.aside)
         y += self.BOX_ROW
         if box['description']:
             p.setFont(font(9.5))
@@ -2434,6 +2600,11 @@ class Header(Clickable):
             paint_counter(p, QRectF(left, y + 2, right - left, CounterBar.HEIGHT), counter,
                           job_color(self.view.job, now))
             y += self.BOX_COUNTER
+        p.setFont(font(9))
+        for text, color in box['speed']:
+            p.setPen(color)
+            p.drawText(QPointF(left, y + 14), p.fontMetrics().elidedText(text, Qt.TextElideMode.ElideRight, width))
+            y += self.BOX_LINE
         if box['bar']:
             self._paint_bar(p, QRectF(left, y + 6, right - left, 22), model, now, t)
             y += self.BOX_BAR
@@ -2444,11 +2615,15 @@ class Header(Clickable):
 
 
 class TextLines(QWidget):
-    """Lines of text one under another, each (text, colour, font), elided to the width; empty ones left out."""
+    """Lines of text one under another, each (text, colour, font), elided to the width; empty ones left out.  The
+    first line may have an aside at its right (``set_aside``: a job's load text), drawn only in the room its line's
+    text leaves whole, so it is what a narrow card loses first."""
 
     def __init__(self):
         super().__init__()
         self.lines: list[tuple[str, QColor, QFont]] = []
+        self.aside: list[str] = []          # the first line's right-hand text, longest first (``fit_aside``)
+        self.aside_font = font(9)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
 
     @staticmethod
@@ -2461,15 +2636,34 @@ class TextLines(QWidget):
         self.setVisible(bool(self.lines))
         self.update()
 
+    def set_aside(self, variants: list[str]):
+        self.aside = list(variants)
+        self.update()
+
+    def aside_text(self, width: float | None = None) -> str:
+        """The aside as drawn at ``width`` (the widget's own by default): the longest variant that fits beside the
+        first line's text whole, '' when none does."""
+        if not self.aside or not self.lines:
+            return ''
+        text, _, line_font = self.lines[0]
+        room = (self.width() if width is None else width) - QFontMetrics(line_font).horizontalAdvance(text)
+        return fit_aside(self.aside, room - ASIDE_GAP, QFontMetrics(self.aside_font))
+
     def paintEvent(self, _event):
         p = QPainter(self)
         y = 0
-        for text, color, line_font in self.lines:
+        for index, (text, color, line_font) in enumerate(self.lines):
             height = self.line_height(line_font)
             p.setFont(line_font)
             p.setPen(color)
             p.drawText(QRectF(0, y, self.width(), height), Qt.AlignmentFlag.AlignVCenter,
                        p.fontMetrics().elidedText(text, Qt.TextElideMode.ElideRight, self.width()))
+            aside = self.aside_text() if index == 0 else ''
+            if aside:
+                p.setFont(self.aside_font)
+                p.setPen(C.muted)
+                p.drawText(QRectF(0, y, self.width(), height),
+                           Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, aside)
             y += height
 
 
@@ -2554,8 +2748,8 @@ class StepList(QWidget):
 
 class JobCard(Clickable):
     """A queue job's card (``job_view``), drawn with widgets: who asked for it, its description and its state, a
-    progress bar a counter (``CounterBar``), its steps (``StepList``), then what it is and where it runs; above its
-    log folder's header and rows when it has one."""
+    progress bar a counter (``CounterBar``), a running training's speed (``job_speed``), its steps (``StepList``), then
+    what it is and where it runs; above its log folder's header and rows when it has one."""
 
     MARGIN, SPACING = 10, 3
 
@@ -2570,10 +2764,12 @@ class JobCard(Clickable):
         self.head = TextLines()
         self.counters = QVBoxLayout()
         self.counters.setSpacing(self.SPACING)
+        self.speed = TextLines()
         self.steps = StepList(view)
         self.foot = TextLines()
         layout.addWidget(self.head)
         layout.addLayout(self.counters)
+        layout.addWidget(self.speed)
         layout.addWidget(self.steps)
         layout.addWidget(self.foot)
         self.bars: list[CounterBar] = []
@@ -2583,7 +2779,8 @@ class JobCard(Clickable):
         """Reads its job's row as of the queue's last read into its widgets and fits the card to them."""
         job = self.view.job
         shown = self.shown = ({} if job is None else
-                              job_view(job, time.time(), self.view.place, has_plan=self.view.model is not None))
+                              job_view(job, time.time(), self.view.place, has_plan=self.view.model is not None,
+                                       loads=getattr(self.view.owner, 'loads', None)))
         counters = shown.get('counters') or []
         while len(self.bars) > len(counters):
             bar = self.bars.pop()
@@ -2601,10 +2798,13 @@ class JobCard(Clickable):
             (shown['state'], shown['color'], font(9.5, QFont.Weight.Bold)),
             *[(line, flag['color'], font(9.5, QFont.Weight.Bold) if index == 0 else font(9))
               for flag in shown.get('flags') or [] for index, line in enumerate(flag_lines(flag))]])
+        self.head.set_aside((shown.get('load') or {}).get('variants') or [])
+        self.setToolTip((shown.get('load') or {}).get('tip') or '')
+        self.speed.set_lines([(text, color, font(9)) for text, color in shown.get('speed') or []])
         self.steps.set_steps(shown.get('steps') or [])
         self.foot.set_lines([] if not shown else [(shown['note'], C.muted, font(9)),
                                                   (shown['command'], C.faint, font(8.5, mono=True))])
-        parts = [widget.minimumHeight() for widget in (self.head, *self.bars, self.steps, self.foot)
+        parts = [widget.minimumHeight() for widget in (self.head, *self.bars, self.speed, self.steps, self.foot)
                  if not widget.isHidden()]
         self.setFixedHeight(2 * self.MARGIN + sum(parts) + self.SPACING * max(0, len(parts) - 1))
         self.update()
@@ -3777,9 +3977,11 @@ class Window(QMainWindow):
     cleared by picking a folder) keeps [currently running] selected: it shows the live jobs and folders and the
     finished ones not cleared yet, and nothing while none is live; a job that starts appears by itself."""
 
-    def __init__(self, root: Path, initial: Path | None):
+    def __init__(self, root: Path, initial: Path | None, loads: 'jobload.JobLoads | None' = None):
         super().__init__()
         self.root = root
+        # The running jobs' CPU and load (``jobload``), shared with the web view's thread when one runs (``main``).
+        self.loads = loads if loads is not None else jobload.JobLoads()
         self.views: list[FolderView] = []
         self.auto_live = initial is None
         self.live_mode = False
@@ -3840,6 +4042,12 @@ class Window(QMainWindow):
         self.queues_label.setTextFormat(Qt.TextFormat.RichText)
         self.queues_label.hide()
         outer.addWidget(self.queues_label)
+        # The running jobs' CPU and load summed beside the machine's, and what is outside the queue (``loads_line``).
+        self.loads_label = QLabel()
+        self.loads_label.setWordWrap(True)
+        self.loads_label.setTextFormat(Qt.TextFormat.RichText)
+        self.loads_label.hide()
+        outer.addWidget(self.loads_label)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
         outer.addWidget(splitter, 1)
@@ -3889,6 +4097,23 @@ class Window(QMainWindow):
         self.machine_timer = QTimer(self)
         self.machine_timer.timeout.connect(self.machine.sample)
         self.machine_timer.start(MACHINE_MS)
+        self._sample_loads()
+        self.load_timer = QTimer(self)
+        self.load_timer.timeout.connect(self._sample_loads)
+        self.load_timer.start(int(jobload.INTERVAL * 1000))
+
+    def _sample_loads(self):
+        """Samples the running jobs' CPU and load (``jobload.JobLoads.sample``: at most every ``jobload.INTERVAL``
+        seconds, whichever of the window and the web view asks), shows the line over the list and refreshes the
+        running jobs' cards and boxes with them."""
+        self.loads.sample([job for job, _ in self.queue_rows.values()])
+        line = loads_line(self.loads.summary)
+        self.loads_label.setText(loads_html(line))
+        self.loads_label.setToolTip(loads_tip(line))
+        self.loads_label.setVisible(bool(line))
+        for view in self.views:
+            if view.job is not None and view.job.get('status') == 'running':
+                (view.job_card if view.model is None else view.header).refresh()
 
     # -- folders and modes
 
@@ -4297,28 +4522,33 @@ def css_color(color: QColor) -> str:
     return f"rgba({color.red()},{color.green()},{color.blue()},{color.alphaF():.3f})"
 
 
-def web_job(job: dict, place: int | None, now: float, model: Training | None = None) -> dict:
+def web_job(job: dict, place: int | None, now: float, model: Training | None = None, loads=None) -> dict:
     """A queue job as the page lists it, as the window draws it: {'id': its key, 'status', 'color', 'place' (in line,
     while queued), 'ended', 'folder': its log folder ('' without one), 'plan': its folder's plan line while it runs
-    (``WebState``), else None, 'box': the one box of a job whose plan is read (``model``: ``job_box``, its pills and
-    facts as [text, colour]), else None; and its card (``job_view``), which the page draws for a job without a box:
-    'headline', 'description', 'state', 'counters' (``job_counters``: the page draws each one's bar), 'steps'
-    ([{'name', 'status', 'label', 'color'}]), 'note', 'command'}."""
+    (``WebState``), else None, 'box': the one box of a job whose plan is read (``model``: ``job_box``, its pills,
+    facts, flags and speed as [text, colour]), else None; and its card (``job_view``), which the page draws for a job
+    without a box: 'headline', 'description', 'state', 'counters' (``job_counters``: the page draws each one's bar),
+    'speed' ([text, colour], ``job_speed``), 'steps' ([{'name', 'status', 'label', 'color'}]), 'note', 'command'};
+    'load' ({'text', 'tip'}: its CPU and load at the right of its first line, ``job_load``'s longest variant, which
+    the page cuts first when the card is narrow; None without one)."""
     folder = job_folder(job)
-    view = job_view(job, now, place, has_plan=folder is not None)
+    view = job_view(job, now, place, has_plan=folder is not None, loads=loads)
     box = None
     if model is not None and model.plan:
-        box = job_box(job, model, now, place)
+        box = job_box(job, model, now, place, loads)
         box = {**box, 'pills': [[text, color.name()] for text, color in box['pills']],
                'facts': [[text, color.name()] for text, color in box['facts']],
-               'flags': [[text, color.name()] for text, color in box['flags']]}
+               'flags': [[text, color.name()] for text, color in box['flags']],
+               'speed': [[text, color.name()] for text, color in box['speed']]}
     return {'id': job_key(job), 'status': job.get('status') or '', 'color': view['color'].name(),
             'place': place, 'ended': job.get('status') in jobqueue.ENDED, 'headline': view['headline'],
             'description': view['description'], 'state': view['state'], 'counters': view['counters'],
+            'speed': [[text, color.name()] for text, color in view['speed']],
             'steps': [{**step, 'label': STATUS.get(step['status'], (C.muted, step['status']))[1],
                        'color': STATUS.get(step['status'], (C.muted, ''))[0].name()} for step in view['steps']],
             'note': view['note'], 'command': view['command'], 'folder': str(folder) if folder else '', 'plan': None,
             'box': box,
+            'load': {'text': view['load']['variants'][0], 'tip': view['load']['tip']} if view['load'] else None,
             'flags': [{'level': flag['level'], 'code': flag['code'], 'text': flag['text'],
                        'color': flag['color'].name()} for flag in view['flags']]}
 
@@ -4455,14 +4685,16 @@ class WebState:
     in their plan's line.  A run that ended stays ``expire`` seconds after its end (the time its events or plan
     record; a run seen running that ended without one, e.g. its process died, from when it was seen ended), so runs
     that ended before the server started never show.  ``clock`` is the time source (tests inject one); ``machine``
-    returns the machine line."""
+    returns the machine line; ``loads`` samples the running jobs' CPU and load (``jobload.JobLoads``, the window's
+    when both run: one sampler in the process)."""
 
     def __init__(self, root: Path, *, clock=time.time, expire: float = WEB_EXPIRE, machine=None,
-                 scan_every: float = WEB_SCAN):
+                 scan_every: float = WEB_SCAN, loads: 'jobload.JobLoads | None' = None):
         self.root = root
         self.clock = clock
         self.expire = expire
         self.machine = machine if machine is not None else MachineSampler().line
+        self.loads = loads if loads is not None else jobload.JobLoads()
         self.scan_every = scan_every
         self.scanner = LiveScanner()
         self.models: dict[Path, Training] = {}
@@ -4577,7 +4809,8 @@ class WebState:
             plan_only = self.plan_only.setdefault(key, Training(folder))
             plan_only._load_plan()      # pylint: disable=protected-access
             return plan_only
-        jobs = [web_job(job, place, now, model_of(job)) for job, place in live + [(job, None) for job in ended]]
+        jobs = [web_job(job, place, now, model_of(job), self.loads)
+                for job, place in live + [(job, None) for job in ended]]
         listed = {str(Path(job['folder']).resolve()) for job in jobs if job['folder']}
         self.plan_only = {key: model for key, model in self.plan_only.items() if key in listed}
         for job in jobs:
@@ -4608,10 +4841,11 @@ class WebState:
         cards.sort(key=lambda card: (not card['active'], -(card['started_ts'] if card['active'] else card['ended_ts']),
                                      card['id']))
         plans.sort(key=lambda plan: (-(plan['created_ts'] or 0), plan['id']))
+        self.loads.sample(self.jobs)
         jobs = self._jobs(plans, now)
         snapshot = json_safe({'now': now, 'clock': fmt_clock(now), 'host': socket.gethostname(),
                               'machine': self.machine(), 'expire': self.expire, 'queues': self.queues, 'jobs': jobs,
-                              'plans': plans, 'cards': cards})
+                              'loads': loads_line(self.loads.summary), 'plans': plans, 'cards': cards})
         body = json.dumps(snapshot, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
         with self._lock:
             self.snapshot, self._body = snapshot, body
@@ -4652,7 +4886,10 @@ main{padding:12px 16px 48px;max-width:2600px;margin:0 auto}
 .job{background:var(--card);border:1px solid var(--border);border-left:3px solid var(--c);border-radius:10px;
   padding:7px 12px;min-width:0}
 .job.ended{opacity:.8}
-.jhd{font-weight:700;font-size:14px;overflow-wrap:anywhere}
+.jhd{font-weight:700;font-size:14px;display:flex;align-items:baseline;gap:0 12px}
+.jhl{flex:0 1 auto;min-width:0;overflow-wrap:anywhere}
+.jload{flex:0 100000 auto;min-width:0;margin-left:auto;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;
+  color:var(--muted);font-weight:400;font-size:12.5px;font-variant-numeric:tabular-nums}
 .jdesc{color:var(--muted);font-size:13px;overflow-wrap:anywhere}
 .jstate{color:var(--c);font-weight:700;font-size:13px;font-variant-numeric:tabular-nums}
 .jnote{color:var(--muted);font-size:12.5px}
@@ -4689,6 +4926,10 @@ main{padding:12px 16px 48px;max-width:2600px;margin:0 auto}
 #queues{color:var(--muted);font-size:12.5px;margin:0 2px 10px;overflow-wrap:anywhere}
 #queues b{letter-spacing:.04em;margin-right:8px}
 #queues .qwarn{color:var(--warn);font-weight:700}
+#loads{color:var(--muted);font-size:12.5px;margin:-6px 2px 10px;overflow-wrap:anywhere;
+  font-variant-numeric:tabular-nums}
+#loads b{letter-spacing:.04em;margin-right:8px}
+#loads .qwarn{color:var(--warn);font-weight:700}
 .plan{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:7px 12px;display:flex;
   flex-wrap:wrap;gap:3px 12px;align-items:center;font-size:13px}
 .plan .pname{font-weight:700;font-size:14px}
@@ -4787,7 +5028,8 @@ pre.log{margin:6px 0 0;background:#11141a;border-radius:8px;padding:8px 10px;col
 <body>
 <header><span class="brand">&#9650; Triforce<small>training monitor &middot; currently running</small></span>
 <span class="machine" id="machine"></span><span class="conn" id="conn">connecting…</span></header>
-<main><div id="queues"></div><div id="jobs"></div><div id="plans"></div><div id="empty" hidden></div>
+<main><div id="queues"></div><div id="loads"></div><div id="jobs"></div><div id="plans"></div>
+<div id="empty" hidden></div>
 <div id="cards"></div></main>
 <script>
 'use strict';
@@ -5026,37 +5268,49 @@ function flagsHtml(job) {
     `<div class="jflagt">${esc(flag.text)}</div></div>`).join('');
 }
 
+// A running training's steps a second under its counters (``job_speed``), SLOW in the warning colour.
+function speedHtml(lines) {
+  return lines.map(([text, color]) => `<div class="jnote" style="color:${color}">${esc(text)}</div>`).join('');
+}
+
+// A job's headline row: who (and a box's state and badges) at the left, its CPU and load at the right
+// (``job_load``), which alone is cut when the row is narrow: nothing else on the card gives way for it.
+function headHtml(job, left) {
+  return `<div class="jhd"><span class="jhl">${left}</span>` + (job.load ?
+    `<span class="jload" title="${esc(job.load.tip)}">${esc(job.load.text)}</span>` : '') + '</div>';
+}
+
 // A job with a plan, as the window draws its one box (``job_box``): who with the state and the plan's badges, the
 // description, one line of facts, the plan's bar when it has several runs (its line's share done and counts), the
 // command. Its runs' cards follow below with every other card.
 function boxHtml(job) {
   const box = job.box, plan = job.plan;
   return `<div class="job${job.ended ? ' ended' : ''}" style="--c:${job.color}">` +
-    `<div class="jhd">${esc(box.headline)} ` + box.pills.map(([text, color]) =>
-      `<span class="pill" style="color:${color}">${esc(text)}</span>`).join(' ') + '</div>' +
+    headHtml(job, `${esc(box.headline)} ` + box.pills.map(([text, color]) =>
+      `<span class="pill" style="color:${color}">${esc(text)}</span>`).join(' ')) +
     (box.description ? `<div class="jdesc">${esc(box.description)}</div>` : '') +
     '<div class="jfacts">' + box.facts.map(([text, color]) => `<span style="color:${color}">${esc(text)}</span>`)
       .join('<i>·</i>') + '</div>' + flagsHtml(job) +
     (box.counters.length ? '<div class="ctrs">' + box.counters.map(counter => counterHtml(counter, job.color))
-      .join('') + '</div>' : '') +
+      .join('') + '</div>' : '') + speedHtml(box.speed) +
     (box.bar && plan ? '<div class="ctr">' + barHtml(plan.fraction, job.color, `${Math.floor(pct(plan.fraction))}%`) +
       `<span class="cr">${esc(plan.counts.join('  ·  '))}</span></div>` : '') +
     `<div class="jcmd">${esc(box.command)}</div></div>`;
 }
 
 // A job of the queue: its one box when it has a plan, else its card as the window draws it (``job_view``): who, its
-// description and state, a bar a counter, its steps, its command.
+// description and state, a bar a counter, a running training's speed, its steps, its command.
 function jobHtml(job) {
   if (job.box) return boxHtml(job);
   const steps = job.steps.map(step => `<span class="step ${esc(step.status)}" style="--s:${step.color}">` +
     `<span class="sdot"></span>${esc(step.name)}<i>${esc(step.label)}</i></span>`).join('');
   return `<div class="job${job.ended ? ' ended' : ''}" style="--c:${job.color}">` +
-    `<div class="jhd">${esc(job.headline)}</div>` +
+    headHtml(job, esc(job.headline)) +
     (job.description ? `<div class="jdesc">${esc(job.description)}</div>` : '') +
     `<div class="jstate">${esc(job.state)}</div>` +
     flagsHtml(job) +
     (job.counters.length ? '<div class="ctrs">' + job.counters.map(counter => counterHtml(counter, job.color))
-      .join('') + '</div>' : '') +
+      .join('') + '</div>' : '') + speedHtml(job.speed) +
     (steps ? `<div class="steps">${steps}</div>` : '') +
     (job.note ? `<div class="jnote">${esc(job.note)}</div>` : '') +
     `<div class="jcmd">${esc(job.command)}</div>` + (job.plan ? planHtml(job.plan, true) : '') + '</div>';
@@ -5076,6 +5330,11 @@ function render(state) {
   const queues = state.queues || {};
   setHTML($('#queues'), queues.summary ? `<b>QUEUES</b>${esc(queues.summary)}` +
     (queues.warning ? `<div class="qwarn">${esc(queues.warning)}</div>` : '') : '');
+  // The running jobs' CPU and load summed beside the machine's, and what is outside the queue (``loads_line``).
+  const loads = state.loads;
+  const top = loads && loads.top ? 'Busiest outside the queue: ' + loads.top : '';
+  setHTML($('#loads'), loads ? `<b>LOAD</b>${esc(loads.jobs)} &middot; ${esc(loads.machine)} &middot; ` +
+    `<span class="${loads.warn ? 'qwarn' : ''}" title="${esc(top)}">${esc(loads.outside)}</span>` : '');
   // The queue's jobs, as [currently running] lists them: the live ones, then the ones that ended under a heading.
   const jobs = state.jobs || [];
   const ended = jobs.findIndex(job => job.ended);
@@ -5233,7 +5492,14 @@ def resolve(path_arg) -> tuple[Path, Path | None]:
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
+    parser = argparse.ArgumentParser(
+        description=__doc__.split('\n\n')[0], formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="Each running job's card shows at its top right (cut first when the card is narrow):\n"
+               + '\n'.join(textwrap.fill(text, 100, initial_indent='  ', subsequent_indent='    ')
+                           for text in LOAD_MEANINGS)
+               + "\nThe line over the list sums them over the running jobs beside the machine's busy cores and load "
+                 "average;\nwhat is left is outside the queue (in the warning colour while more than "
+                 f"{jobload.OUTSIDE_CORES:g} cores are, for a minute).")
     parser.add_argument('path', nargs='?', help=f"log folder (has {PLAN_FILE}) or logs root "
                                                 f"(default ${LOGS_DIR_ENV} or logs/ next to this script)")
     parser.add_argument('--web-port', type=int, default=WEB_PORT, metavar='N',
@@ -5247,9 +5513,10 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
     root, initial = resolve(args.path)
     server = None
+    loads = jobload.JobLoads()          # one sampler for the window and the web view
     if not args.no_web:
         try:
-            server = WebServer(WebState(root, expire=args.web_expire), args.web_host, args.web_port)
+            server = WebServer(WebState(root, expire=args.web_expire, loads=loads), args.web_host, args.web_port)
         except OSError as error:
             print(f"training-gui: the web view's port {args.web_host}:{args.web_port} is unavailable "
                   f"({error.strerror or error}): is another training-gui running?  "
@@ -5268,7 +5535,7 @@ def main(argv=None) -> int:
     app = QApplication(sys.argv[:1])
     app.setApplicationName('Triforce training')
     apply_theme(app)
-    window = Window(root, initial)
+    window = Window(root, initial, loads)
     window.show()
     code = app.exec()
     if server is not None:

@@ -44,9 +44,6 @@ ram_randomization:
   - 0
   - 8
   bombs_share: 0.5
-  help_count:
-  - 0
-  - 9
   room_kills:
     (9, 0x14):
     - 1
@@ -69,7 +66,6 @@ curriculum:
 one_room: true
 max_steps: 2000
 warm_start: null
-harvested_fraction: 0.4
 notes: 'Like Like rooms (Dungeon 4, Nov 11-12): a Like Like swallows Link and eats his magic shield. Dungeon 4''s Breakfast
   Room 0x32 (the owner''s name: two Like Likes, two Zols, two Bubbles): in from W, kill the Like Likes and Zols (the Bubbles don''t
   count), push the block (any way; it moves only once the room is clear) so the stairs appear at tiles (26-27, 4-5), and

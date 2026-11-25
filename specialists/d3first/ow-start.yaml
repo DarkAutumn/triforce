@@ -14,7 +14,7 @@ success: [exit-correct]
 reward_profile: default
 reward: {pbrs: true}
 obs: {objective: true, target: true}
-ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}
+ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5}
 items: {bombs: tenth}
 clips: {enabled: true, off_share: 0}     # 2.0.1.0 trains clips on only (the owner, Nov 18 and Nov 24)
 curriculum:

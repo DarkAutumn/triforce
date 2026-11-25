@@ -49,9 +49,6 @@ ram_randomization:
   - 0
   - 8
   bombs_share: 0.5
-  help_count:
-  - 0
-  - 9
 items:
   bombs: tenth
 curriculum:
@@ -77,4 +74,3 @@ notes: 'Zol rooms (Nov 9; Zols split into Gels when hit, hop like them): Dungeon
   zero-shot 20 of 20).'
 state_routes:
 - d3first
-harvested_fraction: 0.25

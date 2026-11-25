@@ -250,6 +250,8 @@ def test_a_served_batch_comes_back_in_one_copy_and_half_precision_only_on_the_gp
 def test_cuda_graphs_answer_as_the_eager_forward_and_fall_back_when_they_disagree(observations, monkeypatch, capsys):
     """A graphed answer is the eager forward's for every batch size (rows padded to the bucket), a replaced network
     drops its graphs, and a graph that disagrees with the eager forward turns the network eager for good."""
+    # A chain's server: no learner in this process (a lab training test before this one in the worker marks it one).
+    monkeypatch.setattr(serve_module, '_LEARNER', {'on': False, 'graphs': False})
     torch.manual_seed(5)
     networks = [nets.create('wide', native_spec(), hidden_dim=64, depth=2) for _ in range(2)]
     answered = []
@@ -292,7 +294,7 @@ def test_a_learner_process_serves_eagerly_beside_its_own_gpu_work(observations, 
     capture on the server thread and the learner's forwards failed each other, in every capture mode): a learner
     process (``serve.learner_process``) serves eagerly, and both threads finish."""
     import threading
-    monkeypatch.setitem(serve_module._LEARNER, 'on', False)
+    monkeypatch.setattr(serve_module, '_LEARNER', {'on': False, 'graphs': False})
     assert Server(device='cuda').graphs
     serve_module.learner_process()
     torch.manual_seed(7)
@@ -331,6 +333,179 @@ def test_a_learner_process_serves_eagerly_beside_its_own_gpu_work(observations, 
         stop.set()
         thread.join()
     assert not server.graphs and not errors and not server._graphs
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA graphs need the GPU")
+def test_a_lab_trainer_captures_every_bucket_at_its_first_batch_then_replays_beside_its_learner(observations,
+                                                                                                monkeypatch):
+    """The lab trainer (``learner_process(graphs=True)``, round40.md "Where a teacher's time goes"): the network's
+    every batch bucket is captured at its first batch, while nothing else uses the GPU; later batches replay beside
+    the learner's own GPU work on another thread and answer as the eager forward does; a later rollout's
+    ``serve_copy`` copies the new weights into the same served copy (its graphs kept and reading them), and never
+    captures again.  ``TRIFORCE_SERVE_GRAPHS=0`` still serves eagerly."""
+    import threading
+    monkeypatch.setattr(serve_module, '_LEARNER', {'on': False, 'graphs': False})
+    serve_module.learner_process(graphs=True)
+    torch.manual_seed(11)
+    learner_net = nets.create('wide', native_spec(), hidden_dim=64, depth=2).to('cuda')
+    answered = []
+
+    class Queue:
+        logits_size = 11 * 13
+
+        @staticmethod
+        def answer(slots, logits, values, hit):
+            answered.append(logits.copy())
+
+        @staticmethod
+        def policy(index, weights):
+            return index
+
+    def ask(server, n):
+        obs = {k: v[:n] for k, v in observations.items()}
+        server.answer({'obs': obs, 'slot': np.arange(n), 'model': np.zeros(n, dtype=np.int64), 'job': np.arange(n),
+                       'step': np.zeros(n, dtype=np.int64), 'bootstrap': np.zeros(n, dtype=bool)})
+        return answered[-1]
+
+    server = Server(device='cuda')
+    assert server.graphs and server.capture_all and server.gather == serve_module.GRAPH_GATHER
+    server.queue = Queue()
+    server._start = lambda: None
+    server.serve_copy(learner_net, key='student')
+    served = server.models[0]
+    first = ask(server, 3)                       # the first rollout: every bucket captured now
+    assert {size for _, size in server._graphs} == set(serve_module.GRAPH_BUCKETS)
+    eager = Server(device='cuda', graphs=False)
+    eager.queue = Queue()
+    eager.models[0] = served
+    assert np.allclose(first, ask(eager, 3), atol=1e-5)
+    batch = {k: torch.as_tensor(v).to('cuda') for k, v in observations.items()}
+    stop, errors = threading.Event(), []
+
+    def learner():
+        try:
+            optimizer = torch.optim.Adam(learner_net.parameters(), lr=1e-2)
+            while not stop.is_set():
+                heads = learner_net.heads(batch)[0]
+                loss = heads.flat().pow(2).mean() + heads.value.pow(2).mean()
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+                torch.cuda.synchronize()
+        except Exception as error:     # pylint: disable=broad-exception-caught
+            errors.append(error)
+    thread = threading.Thread(target=learner)
+    thread.start()
+    try:
+        graphs = dict(server._graphs)
+        for n in (1, 2, 5, 8, 3):                # replays beside the learner: no capture, no failure
+            assert np.allclose(ask(server, n), ask(eager, n), atol=1e-5)
+    finally:
+        stop.set()
+        thread.join()
+    assert not errors and not server._eager and server._graphs == graphs
+    # The next rollout: the learner's new weights copied into the same served copy, its graphs kept and current.
+    with torch.no_grad():
+        for parameter in learner_net.parameters():
+            parameter.add_(0.05)
+    server.serve_copy(learner_net, key='student')
+    assert server.models[0] is served and server._graphs == graphs
+    assert all(torch.equal(a, b) for a, b in zip(served.state_dict().values(), learner_net.state_dict().values()))
+    assert not np.allclose(ask(server, 3), first, atol=1e-5) and np.allclose(ask(server, 3), ask(eager, 3), atol=1e-5)
+    monkeypatch.setenv('TRIFORCE_SERVE_GRAPHS', '0')
+    assert not Server(device='cuda').graphs and serve_module.serve_mode()['forward'] == 'eager'
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA graphs need the GPU")
+def test_a_lab_trainers_server_stages_one_copy_a_batch_and_answers_no_hit_logits(observations, monkeypatch):
+    """The lab trainer's server (round40.md "Where a teacher's time goes", the second step): a batch's observation
+    arrays go to the GPU as one copy from a pinned buffer (``_Graph`` ``staged``), and it answers no hit logits (a
+    training never reads them); the logits and values are the eager forward's, staged or not, for every batch size.
+    A chain's server (no learner) answers the hit logits; ``TRIFORCE_SERVE_HITS=1`` keeps them in a training."""
+    monkeypatch.setattr(serve_module, '_LEARNER', {'on': False, 'graphs': False})
+    eager = Server(device='cuda', graphs=False)
+    serve_module.learner_process(graphs=True)
+    torch.manual_seed(13)
+    network = nets.create('wide', native_spec(), hidden_dim=64, depth=2).to('cuda').eval()
+
+    def server(**env):
+        for key, value in env.items():
+            monkeypatch.setenv(key, value)
+        made = Server(device='cuda')
+        for key in env:
+            monkeypatch.delenv(key)
+        return made
+    servers = {'staged': server(), 'unstaged': server(TRIFORCE_SERVE_STAGING='0'),
+               'hits': server(TRIFORCE_SERVE_HITS='1'), 'eager': eager}
+    assert servers['staged'].staged and not servers['staged'].hits
+    assert not servers['unstaged'].staged and servers['hits'].hits and eager.hits
+    answered = {}
+    for name, each in servers.items():
+        class Queue:            # pylint: disable=too-few-public-methods
+            logits_size = 11 * 13
+
+            @staticmethod
+            def answer(slots, logits, values, hit, name=name):
+                answered[name] = (logits.copy(), values.copy(), None if hit is None else hit.copy())
+        each.queue = Queue()
+        each.models[0] = network
+    total = observations['action_mask'].shape[0]
+    for n in sorted({1, 3, min(5, total), total}):
+        for _ in range(4):          # past the checked replays
+            obs = {k: v[:n] for k, v in observations.items()}
+            for each in servers.values():
+                each.answer({'obs': obs, 'slot': np.arange(n), 'model': np.zeros(n, dtype=np.int64),
+                             'job': np.arange(n), 'step': np.zeros(n, dtype=np.int64),
+                             'bootstrap': np.zeros(n, dtype=bool)})
+            for name in ('staged', 'unstaged', 'hits'):
+                assert np.allclose(answered[name][0], answered['eager'][0], atol=1e-5)
+                assert np.allclose(answered[name][1], answered['eager'][1], atol=1e-5)
+            assert answered['staged'][2] is None and answered['unstaged'][2] is None
+            assert answered['hits'][2].shape == answered['eager'][2].shape == (n, serve_module.JOINT)
+    assert all(each._graphs and not each._eager for name, each in servers.items() if name != 'eager')
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA graphs need the GPU")
+def test_a_capture_that_runs_out_of_gpu_memory_serves_eagerly_and_the_run_goes_on(observations, monkeypatch,
+                                                                                   capsys):
+    """A training whose first capture cannot get its GPU memory (the restart's three trainings beside a suite, the
+    lead's question of Nov 25): the network is served eagerly from then on with one warning line, the answers are the
+    eager forward's, and the GPU stays usable (the capture ended)."""
+    monkeypatch.setattr(serve_module, '_LEARNER', {'on': False, 'graphs': False})
+    eager = Server(device='cuda', graphs=False)
+    serve_module.learner_process(graphs=True)
+    torch.manual_seed(17)
+    network = nets.create('wide', native_spec(), hidden_dim=64, depth=2).to('cuda').eval()
+    heads, calls = network.heads, []
+
+    def short_of_memory(obs, state=None):
+        calls.append(torch.cuda.is_current_stream_capturing())
+        if calls[-1]:
+            raise torch.OutOfMemoryError("CUDA out of memory (the test's)")
+        return heads(obs, state)
+    monkeypatch.setattr(network, 'heads', short_of_memory)
+    server = Server(device='cuda')
+    answered = {}
+    for name, each in (('server', server), ('eager', eager)):
+        class Queue:            # pylint: disable=too-few-public-methods
+            logits_size = 11 * 13
+
+            @staticmethod
+            def answer(slots, logits, values, hit, name=name):
+                answered[name] = logits.copy()
+        each.queue = Queue()
+        each.models[0] = network
+    for n in (3, 5, 1):
+        obs = {k: v[:n] for k, v in observations.items()}
+        for each in (server, eager):
+            each.answer({'obs': obs, 'slot': np.arange(n), 'model': np.zeros(n, dtype=np.int64), 'job': np.arange(n),
+                         'step': np.zeros(n, dtype=np.int64), 'bootstrap': np.zeros(n, dtype=bool)})
+        assert np.allclose(answered['server'], answered['eager'], atol=1e-5)
+    assert any(calls) and 0 in server._eager and not server._graphs
+    assert not torch.cuda.is_current_stream_capturing()
+    assert (torch.ones(4, device='cuda') * 2).sum().item() == 8.0
+    warnings = [line for line in capsys.readouterr().out.splitlines() if 'runs without CUDA graphs' in line]
+    assert len(warnings) == 1 and 'OutOfMemoryError' in warnings[0] and 'the run goes on' in warnings[0]
 
 
 def test_networks_served_from_temporaries_never_share_an_index():

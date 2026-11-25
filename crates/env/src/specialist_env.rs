@@ -351,6 +351,9 @@ pub struct SpecialistEnv<N: Nes, St: StateStore<N::State>> {
     staged_kills: bool,
     /// The kills the last reset banked in its start room (`ram_randomization.room_kills`), 0 if none.
     pub banked_kills: u8,
+    /// Round 43: this env's decks of the reset rule (`zelda::room_entry::Decks`): each door's few-valued factors
+    /// dealt evenly across this env's resets.
+    entry_decks: std::sync::Arc<std::sync::Mutex<zelda::room_entry::Decks>>,
     /// Training: `ram_randomization.drop_bombs` forces the room's next drop to be bombs (`EnvOptions::forced_drops`).
     forced_drops: bool,
     /// This episode forces it (drawn at reset).
@@ -512,6 +515,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             staged_kills: opts.staged_kills,
             exact_starts: opts.exact_starts,
             banked_kills: 0,
+            entry_decks: Default::default(),
             forced_drops: opts.forced_drops,
             drop_bombs: false,
             fixed_kills: None,
@@ -743,7 +747,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             }
         }
         // Round 44 (`EnvOptions::exact_starts`, the real walk's builds): the machine as the file holds it, no draw
-        // and no write: no RNG or spawn redraw, no fresh room, no banked kills.
+        // and no write: no RNG or spawn redraw, no fresh room, no banked kills, no entry-rule draw.
         if self.exact_starts {
             banked_kills.clear();
         }
@@ -753,6 +757,17 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             controllable: self.curriculum_tag.is_some(),
             overrides: Vec::new(),
             banked_kills,
+            // Round 43, the reset rule: a door of a route with an `entry_rule` file takes only values some play can
+            // bring there (any valid layout, the route's own on half the resets); other starts the uniform draw.
+            // Training's unseeded resets deal from this env's decks (even shares over a handful of resets); a seeded
+            // reset (evaluation: seed for seed the same start in every run, paired arms alike) draws from its seed alone.
+            entry: self.data.entry_rule(ns.as_deref()).filter(|_| !self.exact_starts).map(|rule| {
+                zelda::room_entry::EntryDraw {
+                    rule,
+                    decks: if seed.is_some() { Default::default() } else { self.entry_decks.clone() },
+                    layout: zelda::room_entry::Layout::Valid,
+                }
+            }),
         };
         let mut state = self.session.load(&machine, &opts, &mut self.rng)?.clone();
         let here = (state.level(), state.location());
@@ -779,9 +794,22 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
                     None
                 };
             let mut values = ram_randomization_values(spec, state.max_health(), &mut self.rng, chain);
-            // The room's own values (round 40: by the side the start enters from, its route entry: a curriculum
-            // start's is its track's seed state's).
-            apply_room_values(spec, state.full_location(), state_entry(seed_name), &mut self.rng, &mut values);
+            // A curriculum start past its track's first point is a moment inside the room's play (round 43, Tracks45):
+            // it keeps its bag, its kill counters and its drop cycle (a 3:0x5b first-pass point after the kill stays at
+            // cycle 1), and takes only the hearts draw (`start_states::track_point_values`). A seed start, or a track's
+            // first point (the room's entry), draws the room's own values (round 40: by the side the start enters
+            // from, its route entry: a track's is its seed state's), then the forced-drop counters and the drop cycle
+            // where the room states no cycle (round 43, `drop_state: real`), as real play brings them to a door.
+            if self.curriculum_tag.as_ref().is_some_and(|tag| tag.1 > 0) {
+                crate::start_states::track_point_values(&mut values);
+            } else {
+                let (at, entry) = (state.full_location(), state_entry(seed_name));
+                apply_room_values(spec, at, entry, &mut self.rng, &mut values);
+                if spec.drop_state.is_some() {
+                    let table = self.drop_table()?;
+                    crate::start_states::apply_drop_state(spec, &table, at, entry, &mut self.rng, &mut values);
+                }
+            }
             values
         };
         if !values.is_empty() {
@@ -791,7 +819,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         let spec = &self.config.ram_randomization;
         self.drop_bombs = self.forced_drops
             && spec.drop_bombs.is_some_and(|p| rand::RngExt::random::<f64>(&mut self.rng) < p);
-        if let Some(armed) = self.arm_bomb_drop() {
+        if let Some(armed) = self.arm_bomb_drop()? {
             state = armed;
         }
         let entry_name = entry_name.as_deref().unwrap_or(&name);
@@ -886,17 +914,37 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
 
     /// With the episode's forced bomb drop ([`SpecialistEnv::drop_bombs`]) and a monster left in the room (alive or
     /// dying: the last hand's death sparkle ends in the drop, asm:Obj_EndMetastate), arms the game's help drop as
-    /// bombs (`HelpDropCount` $0A, `IsHelpDropBomb` 1; asm:Drop_SetUpItem) unless it is; any harm to Link clears both
-    /// (asm:Link_BeHarmed), so this runs after every step. The state written, None when nothing was.
-    fn arm_bomb_drop(&mut self) -> Option<Arc<GameView>> {
+    /// bombs (`HelpDropCount` $0A, `IsHelpDropBomb` set; asm:Drop_SetUpItem) unless it is; any harm to Link clears both
+    /// (asm:Link_BeHarmed), so this runs after every step. Under `drop_state: real` (round 43, the owner: "nothing
+    /// unreal") the three counters are a real armed triple (`start_states::armed_drop_values`: `$627` with them as the
+    /// game held it when a bomb drop was armed), at the reset and at every re-arm; without it the two bytes alone, as
+    /// before (`d2first`'s tasks). The state written, None when nothing was.
+    fn arm_bomb_drop(&mut self) -> Result<Option<Arc<GameView>>, EnvError> {
         let state = self.session.state();
         if !self.drop_bombs
             || state.enemies.is_empty()
             || (state.help_drop_count() == 10 && state.help_drop_is_bombs())
         {
-            return None;
+            return Ok(None);
         }
-        Some(self.session.apply_ram(&[(Var::HelpDropCount, 10), (Var::HelpDropValue, 1)]).clone())
+        let values = if self.config.ram_randomization.drop_state.is_some() {
+            let table = self.drop_table()?;
+            crate::start_states::armed_drop_values(&table, &mut self.rng).to_vec()
+        } else {
+            vec![(Var::HelpDropCount, 10), (Var::HelpDropValue, 1)]
+        };
+        Ok(Some(self.session.apply_ram(&values).clone()))
+    }
+
+    /// The table `drop_state: real` draws from ([`GameData::drop_states`]); refused when the checkout has none.
+    fn drop_table(&self) -> Result<Arc<crate::start_states::DropStates>, EnvError> {
+        self.data.drop_states.clone().ok_or_else(|| {
+            EnvError::Config(crate::config::ConfigError(format!(
+                "{}: ram_randomization.drop_state needs {} (scripts/experiments/r43_drop_state.py build)",
+                self.config.name,
+                crate::config::DROP_STATE_FILE
+            )))
+        })
     }
 
     /// The session's disabled kinds for Link's state: the config's `items` (bombs by [`crate::config::BombUse`],
@@ -1135,7 +1183,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             self.objectives.as_ref().expect("episode started"),
             change.previous.full_location(),
         );
-        let state = self.arm_bomb_drop().unwrap_or(state);
+        let state = self.arm_bomb_drop()?.unwrap_or(state);
         self.left_with = cheats.left_with;
         let taken = self.hearts.taken;
         self.hearts.follow(&HeartView::of(&state), &change);

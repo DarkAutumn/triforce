@@ -38,9 +38,6 @@ ram_randomization:
   - 0
   - 8
   bombs_share: 0.5
-  help_count:
-  - 0
-  - 9
 items:
   bombs: required
 clips: {enabled: true, off_share: 0}     # 2.0.1.0 trains clips on only (the owner, Nov 18 and Nov 24)
@@ -63,4 +60,3 @@ curriculum:
                                           # objective's targets carry
 state_routes:
 - d3first
-harvested_fraction: 0.25

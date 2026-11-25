@@ -255,6 +255,17 @@ def logs_dir(tmp_path, monkeypatch):
     return path
 
 
+@pytest.fixture(autouse=True)
+def serve_state(monkeypatch):
+    """Each test starts as a fresh process would for served networks: not a learner, no default server yet.  A lab
+    training run in a test marks the worker's process a learner with graphs (``serve.learner_process``) and leaves
+    its default server behind; without this a later chain or server test in the same worker would serve as a
+    trainer does (no hit logits in its answers)."""
+    from triforce.nets import serve  # pylint: disable=import-outside-toplevel
+    monkeypatch.setattr(serve, '_LEARNER', {'on': False, 'graphs': False})
+    monkeypatch.setattr(serve, '_DEFAULT', None)
+
+
 TEST_TIMEOUT_ENV = 'TRIFORCE_TEST_TIMEOUT'
 DEFAULT_TEST_TIMEOUT = 900      # seconds per test; the slowest take about a minute on a loaded machine
 

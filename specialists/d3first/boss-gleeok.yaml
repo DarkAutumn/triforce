@@ -29,14 +29,10 @@ ram_randomization:
   - 0
   - 8
   bombs_share: 0.5
-  help_count:
-  - 0
-  - 9
 items:
   bombs: never
 curriculum:
   enabled: true
-harvested_fraction: 1.0
 one_room: true
 max_steps: 1000
 endings:

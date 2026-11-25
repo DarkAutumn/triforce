@@ -13,6 +13,13 @@ start_states:
 - 8_6e*_[0-9]
 success:
 - exit-correct
+# Round 43 (the owner, Nov 25: "we need to teach it to not skip the bombs [...] failing the room if they leave with
+# bombs on the floor"): a correct exit while his bombs lie in the room and the bag has room ends the episode
+# `drops-left`, a failure, no exit reward (training; a chain goes on). `drops_first` still makes them the target once he
+# is dead; `left_drop_penalty` still costs 3.0 a drop left (bombs, and a heart or fairy while hurt, which the ending
+# does not cover); `drop_bombs` 0.75 still arms his bomb drop.
+endings:
+  drops-left: soft-failure
 reward_profile: default
 reward:
   pbrs: true
@@ -31,9 +38,6 @@ ram_randomization:
   - 2
   - 8
   bombs_share: 0.5
-  help_count:
-  - 0
-  - 9
   drop_bombs: 0.75
 items:
   bombs: free
@@ -41,7 +45,6 @@ curriculum:
   enabled: true
   untracked:                              # round 40: the seed states that train without a track (triforce.inputs)
   - d3first_8_6es_[0-9]
-harvested_fraction: 0.25
 one_room: true
 max_steps: 1000
 warm_start: null

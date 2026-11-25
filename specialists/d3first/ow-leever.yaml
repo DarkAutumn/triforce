@@ -39,9 +39,6 @@ ram_randomization:
   - 0
   - 8
   bombs_share: 0.5
-  help_count:
-  - 0
-  - 9
 items:
   bombs: tenth
   recorder: true
@@ -62,4 +59,3 @@ notes: 'Leever rooms (Nov 9): Leevers burrow and surface next to Link, unlike an
   or from E by 0x0c''s wrap exit (the clip way, `0_0be`: switch on): down the stairs into 5:0x76 (`enter-room:5:0x76`).'
 state_routes:
 - d3first
-harvested_fraction: 0.25

@@ -51,9 +51,6 @@ ram_randomization:
   - 0
   - 8
   bombs_share: 0.5
-  help_count:
-  - 0
-  - 9
 items:
   bombs: tenth
   recorder: true
@@ -88,4 +85,3 @@ notes: 'Moblin rooms. 0x5b, 0x5c, 0x5d and 0x4d from S on the way to D2; 0x4d fr
   zero-shot 0 of 40.'
 state_routes:
 - d3first
-harvested_fraction: 0.25

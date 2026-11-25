@@ -108,6 +108,11 @@ def pill_texts(box):
     return [text for text, _ in box['pills']]
 
 
+def is_runs_rate(text):
+    """A chain's speed as ``fmt_rate`` says it, runs a second or the time a run takes (never a number below one)."""
+    return text.endswith((' runs/s', ' s/run', ' min/run', ' h/run'))
+
+
 def fact_texts(box):
     return [text for text, _ in box['facts']]
 
@@ -166,6 +171,36 @@ def test_chart_range_updates_when_switching_runs(qapp):
     assert chart.y_bounds() == (0.0, 1.0)
     chart.set_data([series([0.96, 0.99])])
     assert chart.y_bounds() == (0.90, 1.0)
+
+
+def health_run(tmp_path, pairs):
+    """A training run whose iterations 1, 2, ... log these (real, total) hearts changes."""
+    run = gui.Run(tmp_path, 0, {'specialist': 'ow-start'})
+    for iteration, (real, total) in enumerate(pairs, 1):
+        run.apply({'event': 'progress', 'iteration': iteration,
+                   'metrics': {'health_change': real, 'health_change_total': total}})
+    return run
+
+
+def health_series(run, skip=0):
+    series, _ = gui.run_chart_data(run, skip)['health']
+    return {s['label']: s['points'] for s in series}
+
+
+def test_hearts_chart_draws_total_only_from_where_it_first_differs_from_real(tmp_path):
+    """The health chart's 'total (+wasted)' says something only where hearts were wasted: a run whose total equals
+    its real change everywhere shows 'real' alone (no total series at all); one whose total first differs at
+    iteration 3 has it from iteration 3 on, every later iteration kept even where the two agree again."""
+    same = health_run(tmp_path, [(-0.5, -0.5), (0.0, 0.0), (0.25, 0.25)])
+    assert health_series(same) == {'real': [(1, -0.5), (2, 0.0), (3, 0.25)]}
+    assert [s['label'] for s in gui.run_chart_data(same, 0)['health'][0]] == ['real']
+    differs = health_run(tmp_path, [(-0.5, -0.5), (0.0, 0.0), (0.25, 0.5), (0.25, 0.25), (0.5, 0.75)])
+    shown = health_series(differs)
+    assert list(shown) == ['total (+wasted)', 'real']            # total first, as before
+    assert shown['total (+wasted)'] == [(3, 0.5), (4, 0.25), (5, 0.75)]
+    assert shown['real'] == [(1, -0.5), (2, 0.0), (3, 0.25), (4, 0.25), (5, 0.5)]
+    # skipping startup past the first difference keeps the rest of the total
+    assert health_series(differs, skip=3)['total (+wasted)'] == [(4, 0.25), (5, 0.75)]
 
 
 def iso(ts):
@@ -330,16 +365,16 @@ def test_a_real_process_and_its_plans_liveness(tmp_path):
 
 def test_eval_chain_throughput_reads_runs_a_second():
     """The owner watches a chain's runs a second (the 250-run test: 0.7 runs/s), not episodes or seconds an
-    episode."""
+    episode; below one run a second, the seconds (minutes) a run takes (``fmt_rate``: never a number below one)."""
     start = {'event': 'chain_start', 'ts': 100.0, 'runs': 1000}
     running = {'start': start, 'result': None, 'progress': {'ts': 110.0, 'done': 250, 'runs': 1000}}
     assert gui.chain_speed(running) == '25 runs/s'
     slow = {'start': start, 'result': {'ts': 400.0, 'runs': 120}, 'progress': {'ts': 390.0, 'done': 119}}
-    assert gui.chain_speed(slow) == '0.4 runs/s'                        # the result's count and time once done
+    assert gui.chain_speed(slow) == '2.5 s/run'                         # the result's count and time once done
     assert gui.chain_speed({'start': start, 'result': {'ts': 110.0, 'runs': 60}, 'progress': None}) == '6 runs/s'
-    assert gui.chain_speed({'start': start, 'result': {'ts': 400.0, 'runs': 250}, 'progress': None}) == '0.833 runs/s'
+    assert gui.chain_speed({'start': start, 'result': {'ts': 400.0, 'runs': 250}, 'progress': None}) == '1.2 s/run'
     assert gui.chain_speed({'start': start, 'result': {'ts': 100.0 + 3e4, 'runs': 300}, 'progress': None}) == (
-        '0.01 runs/s')
+        '1.7 min/run')
     assert gui.chain_speed({'start': start, 'result': None, 'progress': None}) == ''
     # where a chain starts is its card's caption (its bar's label says only where the runs got to)
     segment = {'status': 'running', 'runs': 250, 'parallel': 10, 'start': None, 'result': None,
@@ -855,7 +890,7 @@ def test_web_snapshot_shows_a_standalone_eval_chain(tmp_path):
                                 'parts': [[3, gui.css_color(gui.C.ok)],
                                           [1, gui.css_color(gui.with_alpha(gui.C.bad, 170))]]}
     assert card['bar_label'] == '4/10 runs · 3 reached the end' and card['tally'] is None    # the chain card's
-    assert card['numbers'] == '4 / 10 runs' and card['speed'] == '0.4 runs/s' and card['eta'] == '5s'
+    assert card['numbers'] == '4 / 10 runs' and card['speed'] == '2.5 s/run' and card['eta'] == '5s'
 
 
 def fetch(url):
@@ -915,7 +950,8 @@ def test_a_taken_port_stops_a_second_gui(tmp_path, monkeypatch, capsys):
         shown = []
         monkeypatch.setattr(gui, 'QApplication', App)
         monkeypatch.setattr(gui, 'apply_theme', lambda app: None)
-        monkeypatch.setattr(gui, 'Window', lambda root, initial: type('W', (), {'show': lambda _: shown.append(1)})())
+        monkeypatch.setattr(gui, 'Window',
+                            lambda root, initial, loads: type('W', (), {'show': lambda _: shown.append(1)})())
         args = ['--web-host', '127.0.0.1', '--web-port', str(port), str(tmp_path)]
         for mode in (['--web-only'], []):
             assert gui.main([*mode, *args]) == 1 and shown == []
@@ -1207,6 +1243,86 @@ def test_a_job_with_a_plan_is_one_box_over_its_runs(qapp, tmp_path, monkeypatch,
     web, = gui.WebState(root, machine=lambda: '', scan_every=0).refresh()['jobs']
     assert web['ended'] and web['box']['pills'][0] == ['COMPLETED', gui.C.ok.name()]
     assert [text for text, _ in web['box']['facts']][0].startswith('after ')
+
+
+def speed_report(now):
+    """A training's speed report (``jobs.speed``) as its tool writes it."""
+    return {'steps': 50_000, 'total': 1_000_000, 'sps': 1010.0, 'mean': 957.0, 'rollout': 1020.0, 'games': 20,
+            'network': 'hitnet-768', 'lookahead': '4:0.25', 'shape': 'hitnet-768, 20 games, look-ahead 4:0.25',
+            'ts': now}
+
+
+def test_a_running_trainings_speed_shows_under_its_counters_and_slow_in_the_warning_colour(qapp, tmp_path,
+                                                                                           monkeypatch, queue):
+    """A running training that reports its steps a second (``jobs.speed``, ``jobspeed``) shows
+    ``jobspeed.speed_line`` as one line under its counters, on its card, in the detail pane, on its one box and in
+    the web view; while its mark is SLOW also ``jobspeed.slow_line`` (the other jobs by id) in the warning colour, the
+    card and the box that much taller; a job without a report, or one that ended, shows nothing new."""
+    monkeypatch.setattr(gui.MachineStatus, 'sample', lambda self: None)
+    now = float(int(time_now()))
+    freeze_gui_clock(monkeypatch, now)
+    progress = {'steps': {'done': 50_000, 'total': 1_000_000, 'unit': 'steps', 'rate': 957.0, 'ts': now}}
+    ok_mark = {'state': 'ok', 'normal': '1,150 steps/s', 'normal_sps': 1150.0, 'rate': 1100.0}
+    fast = queue.add(subtask='fast', kind='train', progress=progress, speed=speed_report(now), speed_mark=ok_mark)
+    slow_mark = {'state': 'slow', 'normal': '1,460 steps/s', 'normal_sps': 1460.0, 'rate': 1010.0, 'below': 0.31,
+                 'since': now - 840, 'others': [fast], 'load': 27.1, 'slow_rate': 1010.0, 'ts': now}
+    slow = queue.add(subtask='slow', kind='train', progress=progress, speed=speed_report(now), speed_mark=slow_mark)
+    plain = queue.add(subtask='plain', kind='train', progress=progress)
+    ended = queue.add(subtask='ended', kind='train', status='completed', exit_code=0, finished_ts=now - 60,
+                      speed=speed_report(now), speed_mark=ok_mark)
+    fast_line = ('speed 957 steps/s mean (47.9 a game), last iteration 1,010, rollout 1,020, last 10 minutes 1,100 '
+                 '[hitnet-768, 20 games, look-ahead 4:0.25]; normal 1,150 steps/s: ok')
+    slow_line = ('speed 957 steps/s mean (47.9 a game), last iteration 1,010, rollout 1,020, last 10 minutes 1,010 '
+                 '[hitnet-768, 20 games, look-ahead 4:0.25]; normal 1,460 steps/s: SLOW')
+    slow_text = (f"SLOW: 31% below its normal (1,010 steps/s against 1,460) for 14 minutes since "
+                 f"{gui.jobspeed.clock(now - 840)}, beside #{fast}; load 27.1")
+    expected = {fast: [(fast_line, gui.C.muted)], slow: [(slow_line, gui.C.muted), (slow_text, gui.C.warn)],
+                plain: [], ended: []}
+    root = tmp_path / 'gui-root'
+    root.mkdir()
+    boxed, _ = checkout_job(queue, tmp_path / 'triforce-a', 'main', '261125_001_boxed')
+    window = gui.Window(root, None)
+    try:
+        views = {view.key: view for view in window.views}
+        cards = {job: views[gui.job_key({'id': job})].job_card for job in expected}
+        for job, lines in expected.items():
+            card = cards[job]
+            assert [(text, color) for text, color, _ in card.speed.lines] == lines, job
+            assert card.speed.isHidden() is (not lines)
+            card.grab()
+        # the speed is a line of the card's own: the card is that much taller, nothing overlaps
+        line = gui.TextLines.line_height(gui.font(9))
+        assert cards[fast].speed.minimumHeight() == line and cards[slow].speed.minimumHeight() == 2 * line
+        assert cards[fast].height() == cards[plain].height() + line + gui.JobCard.SPACING
+        assert cards[slow].height() == cards[fast].height() + line
+        window.select(views[gui.job_key({'id': slow})], 'round')        # the detail pane: under its progress
+        titles = [title for _, title, _ in window.detail.summary.sections]
+        assert titles.index('Speed') == titles.index('Progress') + 1
+        speed, = [rows for _, title, rows in window.detail.summary.sections if title == 'Speed']
+        assert speed == expected[slow]
+        window.select(views[gui.job_key({'id': plain})], 'round')
+        assert 'Speed' not in [title for _, title, _ in window.detail.summary.sections]
+        # a job with a plan: its one box draws the lines under its counters, a line's height each
+        view = views[boxed]
+        box = one_box(view)
+        assert box['speed'] == []
+        plain_height = view.header.height()
+        queue.update(view.job['id'], speed=speed_report(now), speed_mark=slow_mark)
+        window._scan_and_update()
+        box = one_box(view)
+        assert box['speed'] == expected[slow]
+        assert view.header.height() == plain_height + 2 * gui.Header.BOX_LINE
+        view.header.grab()
+    finally:
+        window.close()
+        window.deleteLater()
+    snapshot = gui.WebState(root, clock=lambda: now, machine=lambda: '', scan_every=0).refresh()
+    web = {job['id']: job for job in snapshot['jobs']}
+    for job, lines in expected.items():
+        assert web[gui.job_key({'id': job})]['speed'] == [[text, color.name()] for text, color in lines]
+    assert web[boxed]['box']['speed'] == [[text, color.name()] for text, color in expected[slow]]
+    page = gui.web_page().decode()
+    assert 'function speedHtml(lines)' in page and 'speedHtml(box.speed)' in page and 'speedHtml(job.speed)' in page
 
 
 def test_frames_repaint_only_what_animates(qapp, tmp_path, monkeypatch):
@@ -1586,7 +1702,7 @@ def test_a_running_250_test_shows_its_runs_so_far(qapp, queue, monkeypatch, job_
             assert not card.tiles.isHidden() and not card.reach.isHidden()
             assert card.height() > gui.ChainCard.TOP + gui.ChainCard.TILES + gui.ChainCard.REACH
             _, timing = gui.chain_caption(view.model.chain(), now)
-            assert timing[1].endswith(' runs/s') and timing[2].endswith(' left')
+            assert is_runs_rate(timing[1]) and timing[2].endswith(' left')
             window.select(view, 'round')
             titles = ['Runs so far (4 of 250)', 'Triforces taken', 'Furthest']
             assert section_titles(window.detail.evaluation)[:3] == titles
@@ -1610,7 +1726,7 @@ def test_a_running_250_test_shows_its_runs_so_far(qapp, queue, monkeypatch, job_
         assert chain_card['tally']['triforces'][:2] == [['D3', 2, 0.5, gui.rate_color(0.5).name()],
                                                         ['D4', 1, 0.25, gui.rate_color(0.25).name()]]
         assert chain_card['tally']['furthest'] == {'fraction': 60 / 290, 'label': 'step 60 of 290 · 0:0x37'}
-        assert chain_card['speed'].endswith(' runs/s') and chain_card['eta']
+        assert is_runs_rate(chain_card['speed']) and chain_card['eta']
         # a win: every triforce, Dungeon 9's the game's end, the furthest step the end
         progress(chain_result('d3first', 4, list(range(290)), result='success'))
         model = gui.Training(out)
@@ -1662,7 +1778,7 @@ def test_a_batch_chain_entry_shows_its_runs_so_far(qapp, queue, monkeypatch, job
             tally = gui.chain_tally(run.chain_progress)
             assert [(item['level'], item['runs']) for item in tally['triforces']] == [(3, 1)]
             assert tally['furthest']['label'] == 'step 23 of 290 · 3:0x3d'
-            assert gui.run_speed(run, 'evaluating').endswith(' runs/s')
+            assert is_runs_rate(gui.run_speed(run, 'evaluating'))
             window.select(view, 0)
             assert section_titles(window.detail.evaluation)[:3] == ['Runs so far (3 of 40)', 'Triforces taken',
                                                                     'Furthest']
@@ -1757,3 +1873,182 @@ def test_a_golden_race_and_a_build_with_its_tests_show_their_counters_and_steps(
     assert [(c['label'], c['done'], c['total']) for c in jobs[gui.job_key({'id': golden})]['counters']] == [
         ('segments won', 3, 9), ('runs played', 57, None)]
     assert [(step['name'], step['status']) for step in jobs[gui.job_key({'id': tests})]['steps']] == steps
+
+
+# --------------------------------------------------------------------------------- rates, each job's CPU and load
+
+def test_every_rate_is_a_number_of_one_or_more():
+    """The owner, Nov 25: "make all ratio above one [...] we might have 3.2 sec/test or 4.5 tests/sec, but never 0.23
+    tests/sec" (``fmt_rate``, the one function for every rate the GUI prints a job's counter, a chain's runs, an
+    evaluation's episodes): ``X unit/s`` from one a second, the time one takes below it (seconds, minutes past 90 s,
+    hours past 90 minutes), the unit made singular (a final ``s`` off, a few by table, one already singular as it
+    is); nothing for a rate of 0 or none."""
+    assert gui.fmt_rate(1.0, 'tests') == '1 tests/s' and gui.fmt_rate(4.5, 'tests') == '4.5 tests/s'
+    assert gui.fmt_rate(0.99, 'tests') == '1.0 s/test' and gui.fmt_rate(0.25, 'rust tests') == '4.0 s/rust test'
+    assert gui.fmt_rate(0, 'tests') == '' and gui.fmt_rate(None, 'tests') == ''
+    assert gui.fmt_rate(0.5, 'test') == '2.0 s/test' and gui.fmt_rate(0.5, 'ep') == '2.0 s/ep'
+    assert gui.fmt_rate(1 / 150, 'chains') == '2.5 min/chain' and gui.fmt_rate(1 / 6000, 'chains') == '1.7 h/chain'
+    assert gui.fmt_rate(1 / 89, 'runs') == '89.0 s/run' and gui.fmt_rate(1 / 91, 'runs') == '1.5 min/run'
+    assert gui.fmt_rate(1234.5, 'steps') == '1,234 steps/s' and gui.fmt_rate(0.5, '') == '2.0 s each'
+    assert [gui.singular(unit) for unit in ('runs', 'batches', 'processes', 'status', 'bomb metrics', 'ep')] == [
+        'run', 'batch', 'process', 'status', 'bomb metric', 'ep']
+    assert gui.fmt_episode_rate(3, 12) == '4.0 s/ep' and gui.fmt_episode_rate(30, 2) == '15 ep/s'
+    assert gui.fmt_episode_rate(0, 5) == ''
+
+
+def test_a_slow_counter_shows_the_time_one_takes_on_its_card(qapp, tmp_path, monkeypatch, queue):
+    """A test suite's counter at a quarter of a test a second reads ``4.0 s/rust test`` on its card, in its detail
+    pane's Progress row and in the web view, never ``0.25 rust tests/s``."""
+    monkeypatch.setattr(gui.MachineStatus, 'sample', lambda self: None)
+    now = time_now()
+    job = queue.add(subtask='rust', verb='test', kind='test', lane=gui.jobqueue.TOOLS_LANE, place='tools-1',
+                    progress={'rust tests': {'done': 10, 'total': 40, 'unit': 'rust tests', 'rate': 0.25, 'ts': now}})
+    (tmp_path / 'logs').mkdir()
+    window = gui.Window(tmp_path / 'logs', None)
+    try:
+        view, = window.views
+        assert [bar.counter['speed'] for bar in view.job_card.bars] == ['4.0 s/rust test']
+        window.select(view, 'round')
+        progress, = [rows for _, title, rows in window.detail.summary.sections if title == 'Progress']
+        assert '· 4.0 s/rust test ·' in progress[0][2]
+        view.job_card.grab()
+    finally:
+        window.close()
+        window.deleteLater()
+    web, = gui.WebState(tmp_path / 'logs', machine=lambda: '', scan_every=0).refresh()['jobs']
+    assert web['id'] == gui.job_key({'id': job}) and web['counters'][0]['speed'] == '4.0 s/rust test'
+
+
+def test_each_running_jobs_cpu_and_load_sit_at_its_cards_top_right_and_give_way_first(qapp, tmp_path, monkeypatch,
+                                                                                       queue):
+    """The owner, Nov 25: "have each running task in the gui tell me how much cpu and load average it's taking up"
+    and "Top right of card would be best. Though if the card shrinks too small I want the cpu and load average
+    clipped, not anything else on the card currently".  A running job's card (and a job's box with a plan) shows
+    ``CPU 13.4 cores (67%) · load 3.0 · waiting 38%`` at the right of its first line (``job_load``, from
+    ``jobload.JobLoads``' samples of its unit's cgroup), with what the numbers are in its tooltip; a narrow card
+    loses the waiting share first, then the load, then the CPU's share, then all of it, and every other line stays
+    whole and the card no taller.  A queued job shows nothing; an ended one its CPU time and mean cores.  Over the
+    list, beside the queues' line, the running jobs' sums beside the machine's and what is outside the queue
+    (``loads_line``), in the warning colour when that lasts.  The web view the same."""
+    from triforce import events, jobs
+    from tests.test_jobload import Clock, FakeMachine
+    monkeypatch.setattr(gui.MachineStatus, 'sample', lambda self: None)
+    machine = FakeMachine(tmp_path / 'machine')
+    ticks = gui.jobload.CLOCK_TICKS
+    unit = machine.unit('tfjob-r45-busy-1.service', {4100: {4100: 'R', 4101: 'R', 4102: 'R', 4103: 'S'}},
+                        pressure=38.4)
+    box_unit = machine.unit('tfjob-r45-box-1.service', {4300: {4300: 'R'}})
+    machine.machine(busy=0, idle=0)
+    machine.loadavg(6.0)
+    clock = Clock(100.0)
+    loads = gui.jobload.JobLoads(proc=machine.proc, cgroup_root=machine.cgroups, clock=clock, threads=20,
+                                 host='somewhere')
+    now = time_now()
+    busy = queue.add(subtask='busy', pid=4100, admitted_ts=now - 600)
+    waiting = queue.add(subtask='waiting', status='queued', pid=4200)
+    boxed = queue.add(subtask='box', pid=4300, admitted_ts=now - 30, place='regular-2')
+    logs, root = tmp_path / 'logs', tmp_path / 'gui-root'
+    logs.mkdir()
+    root.mkdir()
+    monkeypatch.setenv(jobs.JOB_ID_ENV, str(boxed))
+    plan = events.TrainingPlan(events.new_log_dir('r45-box', logs), 'r45-box', 'round', [{'specialist': 'ow-start'}])
+    full = 'CPU 13.4 cores (67%) · load 3.0 · waiting 38%'
+    variants = [full, 'CPU 13.4 cores (67%) · load 3.0', 'CPU 13.4 cores (67%)', 'CPU 13.4 cores']
+    window = gui.Window(root, None, loads)
+    try:
+        views = {view.key: view for view in window.views}
+        card = views[gui.job_key({'id': busy})].job_card
+        assert card.shown['load']['variants'] == ['load 3.0 · waiting 38%', 'load 3.0']     # one sample: no CPU yet
+        header = views[gui.job_key({'id': boxed})].header
+        plain_card, plain_header = card.height(), header.height()
+        clock.now += 3.0
+        machine.usage(unit, int(13.4 * 3e6))
+        machine.usage(box_unit, int(0.5 * 3e6))
+        machine.machine(busy=int(15.5 * 3 * ticks), idle=int(4.5 * 3 * ticks))
+        window._sample_loads()
+        card.refresh()
+        assert card.shown['load'] == {'variants': variants, 'tip': gui.LOAD_TIP}
+        assert card.head.aside == variants and card.toolTip() == gui.LOAD_TIP
+        assert all(meaning in gui.LOAD_TIP for meaning in gui.LOAD_MEANINGS)
+        head = ['Agent: r40   Task: queue   Sub-task: busy', 'Checks the GUI lists the queue.']
+        assert texts(card.head.lines)[:2] == head and card.height() == plain_card    # no taller for it
+        # Narrower and narrower: the waiting share goes first, then the load, the CPU's share, then all of it; the
+        # headline is never cut for it.
+        line_font, aside_font = card.head.lines[0][2], card.head.aside_font
+        headline = gui.QFontMetrics(line_font).horizontalAdvance(head[0])
+        for variant, expected in zip(variants + [''], variants + ['']):
+            room = headline + gui.ASIDE_GAP + (gui.QFontMetrics(aside_font).horizontalAdvance(variant) if variant
+                                               else 0) + 1
+            assert card.head.aside_text(room) == expected
+            assert card.head.aside_text(room - 2) != expected or not expected
+        window.resize(1400, 900)
+        window.show()
+        splitter = window.findChild(gui.QSplitter)
+        splitter.setSizes([int(headline) + 60, 1400 - int(headline) - 60])   # the list as narrow as a headline
+        qapp.processEvents()
+        assert card.head.width() < headline + gui.ASIDE_GAP + 40
+        card.grab()
+        assert card.head.aside_text() == '' and card.height() == plain_card
+        assert texts(card.head.lines)[:2] == head and gui.QFontMetrics(line_font).elidedText(
+            head[0], gui.Qt.TextElideMode.ElideRight, card.head.width()) == head[0]       # the headline whole
+        splitter.setSizes([1000, 400])
+        qapp.processEvents()
+        card.grab()
+        assert card.head.aside_text() == full and card.height() == plain_card
+        queued = views[gui.job_key({'id': waiting})].job_card
+        assert queued.shown['load'] is None and queued.head.aside == [] and queued.toolTip() == ''
+        # The job with a plan: its one box, the load at the right of its first line, after its badges.
+        window._scan_and_update()
+        view = views[gui.job_key({'id': boxed})]
+        box = one_box(view)
+        assert box['load']['variants'][0] == 'CPU 0.5 cores (2%) · load 0.4'
+        assert header.height() == plain_header and header.toolTip() == gui.LOAD_TIP
+        header.resize(1400, header.height())
+        header.grab()
+        assert header.aside == box['load']['variants'][0]
+        pill, bold = gui.QFontMetrics(gui.font(8.5, gui.QFont.Weight.Bold)), gui.font(12, gui.QFont.Weight.Bold)
+        pills = 18 + gui.QFontMetrics(bold).horizontalAdvance(box['headline']) + 14 + sum(
+            pill.horizontalAdvance(text) + 16 + 6 for text, _ in box['pills'])
+        header.resize(int(pills) + 30, header.height())                 # every badge fits, the load does not
+        header.grab()
+        assert header.aside == '' and header.height() == plain_header
+        # The line over the list: the jobs' sums, the machine's, what is outside the queue.
+        line = gui.loads_line(loads.summary)
+        assert line['jobs'] == 'jobs: 13.9 cores · load 3.4'
+        assert line['machine'] == 'machine: 15.5 of 20 cores · load 6.0'
+        assert line['outside'] == 'outside the queue: 1.6 cores · load 2.6' and not line['warn']
+        label = window.loads_label.text()
+        assert not window.loads_label.isHidden() and 'LOAD' in label and line['jobs'] in label
+        assert line['outside'] in label and gui.C.warn.name() not in label
+        snapshot = gui.WebState(root, machine=lambda: '', scan_every=0, loads=loads).refresh()
+        web = {job['id']: job for job in snapshot['jobs']}
+        assert web[gui.job_key({'id': busy})]['load'] == {'text': full, 'tip': gui.LOAD_TIP}
+        assert web[gui.job_key({'id': waiting})]['load'] is None
+        assert web[gui.job_key({'id': boxed})]['box'] and web[gui.job_key({'id': boxed})]['load']['text'] == (
+            'CPU 0.5 cores (2%) · load 0.4')
+        assert snapshot['loads'] == {**line, 'top': ''}
+        page = gui.web_page().decode()
+        assert 'function headHtml(job, left)' in page and '.jload{flex:0 100000 auto;min-width:0' in page
+        assert 'overflow:hidden;white-space:nowrap;text-overflow:ellipsis' in page and '<div id="loads">' in page
+        # It ends: its unit gone, its CPU time in all and its mean cores over its run.
+        machine.vanish(unit, pids=[4100, 4101, 4102, 4103])
+        clock.now += 3.0
+        window._sample_loads()
+        queue.update(busy, status='completed', exit_code=0, finished_ts=time_now())
+        queue.gone(busy)
+        window._scan_and_update()
+        card = {view.key: view for view in window.views}[gui.job_key({'id': busy})].job_card
+        assert card.shown['load']['variants'] == ['CPU time 40s · mean 0.1 cores', 'CPU time 40s']
+    finally:
+        window.close()
+        window.deleteLater()
+        plan.finish('completed')
+    # Outside the queue for a minute and more: the warning colour, and the busiest process there named.
+    summary = gui.jobload.Summary(jobs_cores=10.0, jobs_load=12.0, jobs=2, machine_cores=16.0, machine_load=20.0,
+                                  threads=20, outside_cores=6.0, outside_load=8.0, outside_since=time_now() - 125,
+                                  warn=True, top='pid 77 (5.8 cores): python stray.py')
+    line = gui.loads_line(summary)
+    assert line['warn'] and line['outside'] == ('outside the queue: 6.0 cores · load 8.0 for 2m · top pid 77 '
+                                                '(5.8 cores): python stray.py')
+    assert gui.C.warn.name() in gui.loads_html(line) and 'python stray.py' in gui.loads_tip(line)
+    assert gui.loads_line(None) is None and gui.loads_html(None) == ''

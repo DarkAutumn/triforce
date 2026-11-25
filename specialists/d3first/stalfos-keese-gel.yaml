@@ -73,9 +73,6 @@ ram_randomization:
   - 0
   - 8
   bombs_share: 0.5
-  help_count:
-  - 0
-  - 9
 items:
   bombs: required
 clips:
@@ -103,4 +100,3 @@ notes: 'Rooms whose enemies are Stalfos, Keese and Gels (was d1-melee): Dungeon 
   zero-shot 34-40 of 40.'
 state_routes:
 - d3first
-harvested_fraction: 0.25
