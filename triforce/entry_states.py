@@ -639,14 +639,15 @@ def sparkle_fight(source: str, kills: Optional[int], out_dir: str, states_dir: s
 
 def walk_crossing(step: RouteStep, target: RouteStep, source: str, route: str, rooms: dict, iterations: int,
                   patience: int, attempts: int, states_dir: str = STATES_DIR, clips: Optional[bool] = None,
-                  fights_dir: Optional[str] = None) -> tuple:
+                  fights_dir: Optional[str] = None, parallel: int = 3) -> tuple:
     """One room of the walk: from ``source`` (the carried machine, loaded exactly as saved) the explorer finds a
     way to the step's objective-correct exit that kills what the step's ``clear:`` says and no more (``KillSpec``);
     the replay of that way from the same machine gives the next door's pre-entry frame.  A fight to the end or a
     partial fight the explorer cannot end is ended by ``sparkle_fight`` first (``how: sparkle``) and crossed from
-    there.  A way that costs Link hearts is kept only if no attempt finds one costing fewer (an unhurt one is taken at
-    once): no refill on the walk, so the hearts a room costs are carried on.  Returns (pre-entry Snapshot or None,
-    stats)."""
+    there.  Attempts (each its own seed) run ``parallel`` at a time; after a batch with an unhurt way the most
+    healthy way of the attempts so far is kept (the lowest attempt on a tie), else the next batch runs: no refill on
+    the walk, so the hearts a room costs are carried on.  Deterministic whatever the threads' timing.  Returns
+    (pre-entry Snapshot or None, stats)."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
     stats = {'env_steps': 0, 'attempts': 0, 'seconds': 0.0, 'how': 'explorer'}
     kills = step.planned_kills()
@@ -654,6 +655,25 @@ def walk_crossing(step: RouteStep, target: RouteStep, source: str, route: str, r
     if step.clear is not False and fights_dir is not None:
         plan.append((None, kills, 'sparkle'))
     initial = Game(seed=0, states_dir=str(states_dir)).load(source, randomize_rng=False, fresh_room=False)
+    left = step.treasure in ('refuse', 'skip') and not room_flags(initial, step.room) & FLAG_ITEM_TAKEN
+
+    def attempt(start: str, spec: dict, how: str, number: int) -> tuple:
+        explorer = Explorer(step_config(step, start, route, rooms, fresh_rooms=False),
+                            seed=WALK_SEED * 100000 + step.index * 100 + number, states_dir=str(states_dir),
+                            exact_starts=True)
+        result = explorer.explore(start, iterations, 25, patience, clips=clips, **spec)
+        found = None
+        if result.success:
+            _, pre_entry = explorer.replay(result, capture_pre_entry=True)
+            state = explorer.state
+            if state.full_location != target.location:
+                pre_entry, state = follow_to(explorer.snapshot(), target.location, states_dir)
+            if pre_entry is not None and not (left and room_flags(state, step.room) & FLAG_ITEM_TAKEN):
+                found = (result.health, -number, pre_entry,
+                         dict(steps=len(result.actions), health=result.health, ending=result.ending, how=how,
+                              attempt=number))
+        return result, found
+
     for start, spec, how in plan:
         if start is None:
             try:
@@ -663,32 +683,22 @@ def walk_crossing(step: RouteStep, target: RouteStep, source: str, route: str, r
                 stats['sparkle_error'] = str(error)
                 break
         best = None
-        for attempt in range(attempts):
-            explorer = Explorer(step_config(step, start, route, rooms, fresh_rooms=False),
-                                seed=WALK_SEED * 100000 + step.index * 100 + attempt, states_dir=str(states_dir),
-                                exact_starts=True)
-            result = explorer.explore(start, iterations, 25, patience, clips=clips, **spec)
-            stats['env_steps'] += result.env_steps
-            stats['attempts'] += 1
-            stats['seconds'] += result.seconds
-            if not result.success:
-                stats.setdefault('failures', {}).update(dict(result.failures))
-                continue
-            _, pre_entry = explorer.replay(result, capture_pre_entry=True)
-            state = explorer.state
-            if state.full_location != target.location:
-                pre_entry, state = follow_to(explorer.snapshot(), target.location, states_dir)
-            left = step.treasure in ('refuse', 'skip') and not room_flags(initial, step.room) & FLAG_ITEM_TAKEN
-            if pre_entry is None or (left and room_flags(state, step.room) & FLAG_ITEM_TAKEN):
-                continue
-            if best is None or result.health > best[0]:
-                best = (result.health, pre_entry, dict(steps=len(result.actions), health=result.health,
-                                                       ending=result.ending, how=how, attempt=attempt))
-            if result.health >= initial.health:
-                break
+        with ThreadPoolExecutor(max_workers=parallel) as pool:
+            for first in range(0, attempts, parallel):
+                batch = range(first, min(first + parallel, attempts))
+                for result, found in pool.map(lambda n, s=start, p=spec, h=how: attempt(s, p, h, n), batch):
+                    stats['env_steps'] += result.env_steps
+                    stats['attempts'] += 1
+                    stats['seconds'] += result.seconds
+                    if not result.success:
+                        stats.setdefault('failures', {}).update(dict(result.failures))
+                    if found is not None and (best is None or found[:2] > best[:2]):
+                        best = found
+                if best is not None and best[0] >= initial.health:
+                    break
         if best is not None:
-            stats.update(best[2])
-            return best[1], stats
+            stats.update(best[3])
+            return best[2], stats
     return None, stats
 
 
@@ -729,16 +739,18 @@ def _stretch_parts(route: str) -> dict:
 
 def walk(route: str, out: str, iterations: int, patience: int, attempts: int = 6, start_step: int = 0,
          source: Optional[str] = None, last_step: Optional[int] = None, boot: tuple = WALK_BOOT,
-         states_dir: str = STATES_DIR, command: Optional[str] = None, log: Callable = print) -> tuple:
+         states_dir: str = STATES_DIR, command: Optional[str] = None, log: Callable = print,
+         parallel: int = 3) -> tuple:
     """Walks ``route`` once from console power on (``walk_boot``) or from ``source`` (a carried state of
     ``start_step`` from an earlier walk's ``<out>/carry``), carrying the machine from door to door with no redraw,
     no fresh room and no refill: at every door of the clip way (and of each stretch's plain way, walked as a branch
     from the door where the ways part) it saves the pre-entry frame as the game holds it (``<out>/carry/<name>``) and
     the state file ``<out>/<name>``, the same bytes with Link's hearts filled to his containers (the one write: a
     run arrives hurt, this is the valid upper end, and a training load draws them anyway).  Every room is played by
-    ``walk_crossing`` (the step's ``clear:`` kills).  ``<out>/walk.json`` records the power-on, the commit, the
-    command and every door's facts (``door_facts``) and file hash; ``<out>/entry_states.json`` the manifest entries.
-    Returns (manifest entries, the first file not built or None)."""
+    ``walk_crossing`` (the step's ``clear:`` kills, ``parallel`` attempts at a time).  ``<out>/walk.json`` records the
+    power-on, the commit, the command and every door's facts (``door_facts``) and file hash, and each resumption
+    (``resumed``: the step, commit and command it went on from a carried state with);
+    ``<out>/entry_states.json`` the manifest entries.  Returns (manifest entries, the first file not built or None)."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals, too-many-statements
     rooms, steps = route_rooms(route), route_steps(route)
     if any(s.clear is None for s in steps):
@@ -748,7 +760,13 @@ def walk(route: str, out: str, iterations: int, patience: int, attempts: int = 6
     if os.path.exists(record_path):
         with open(record_path, encoding='utf-8') as file:
             record = json.load(file)
+        if source is None:
+            raise ValueError(f"{out} holds a walk already: resume it with --start-step and --source (a carried state)")
+        record.setdefault('resumed', []).append({'start_step': start_step, 'source': os.path.basename(source),
+                                                 **_git_commit(), 'command': command})
     else:
+        if source is not None:
+            raise ValueError("a walk starts at power on: --source resumes an earlier walk's --out (its walk.json)")
         record = {'route': route, 'walk': time.strftime('%y%m%d-%H%M%S'), 'boot': {'name': boot[0], 'delay': boot[1]},
                   **_git_commit(), 'command': command, 'hearts': 'filled to the containers in each state file only',
                   'doors': {}}
@@ -765,7 +783,7 @@ def walk(route: str, out: str, iterations: int, patience: int, attempts: int = 6
     def door(step: RouteStep, target: RouteStep, at: str, clips: Optional[bool]) -> Optional[str]:
         started = time.time()
         pre_entry, stats = walk_crossing(step, target, at, route, rooms, iterations, patience, attempts, states_dir,
-                                         clips, os.path.join(out, 'fights'))
+                                         clips, os.path.join(out, 'fights'), parallel)
         label = f"step {step.index} {step.level}:0x{step.room:02x} {step.entry}->{step.exit} clear {step.clear}"
         if pre_entry is None:
             log(f"{label} -> {walk_state_name(target)}: FAILED ({stats})")
@@ -1382,6 +1400,9 @@ def build_parser() -> argparse.ArgumentParser:
     walk_parser.add_argument('--iterations', type=int, default=3000, help="Go-Explore iterations per attempt")
     walk_parser.add_argument('--patience', type=int, default=200)
     walk_parser.add_argument('--attempts', type=int, default=6, help="explorer attempts per room (seeds)")
+    walk_parser.add_argument('--parallel', type=int, default=3,
+                             help="attempts run at a time (threads); each batch ends the room once a way costs Link "
+                                  "no heart, so the batch size is part of what the walk did (the record keeps it)")
     walk_parser.add_argument('--out', default=None, help=out_help)
     walk_parser.add_argument('--delay', type=int, default=WALK_BOOT[1],
                              help="idle frames on the file-select screen at power on (default: the corpus's "
@@ -1442,7 +1463,7 @@ def main(argv=None):
         out = args.out or default_out()
         manifest, failed = walk(args.route, out, args.iterations, args.patience, args.attempts, args.start_step,
                                 args.source, args.last_step, (WALK_BOOT[0], args.delay), states_dir=states_dir,
-                                command=command, log=lambda text: print(text, flush=True))
+                                command=command, log=lambda text: print(text, flush=True), parallel=args.parallel)
         _write_build_record(out, command, manifest, [failed] if failed else [])
         print(f"{len(manifest)} walked states in {out}")
         if failed:
