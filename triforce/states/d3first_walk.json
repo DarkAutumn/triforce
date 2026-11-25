@@ -1,13 +1,5 @@
 {
  "route": "d3first",
- "walk": "261125-100336",
- "boot": {
-  "name": "LINK",
-  "delay": 16610
- },
- "commit": "8b10165708dd2b26fc61dbcf44edc5258585eeb4",
- "dirty": false,
- "command": "python -m triforce.entry_states walk --route d3first --out target/r44/walk4",
  "hearts": "filled to the containers in each state file only",
  "doors": {
   "d3first_0_77cave_0.state": {
@@ -44,7 +36,8 @@
    ],
    "bombs": 0,
    "keys": 0,
-   "rupees": 0
+   "rupees": 0,
+   "walk": "261125-100336"
   },
   "d3first_0_77c_0.state": {
    "route_step": 2,
@@ -85,7 +78,8 @@
    "pending_flags": 16,
    "bombs": 0,
    "keys": 0,
-   "rupees": 0
+   "rupees": 0,
+   "walk": "261125-100336"
   },
   "d3first_0_76e_0.state": {
    "route_step": 3,
@@ -126,7 +120,8 @@
    "pending_flags": 0,
    "bombs": 0,
    "keys": 0,
-   "rupees": 0
+   "rupees": 0,
+   "walk": "261125-100336"
   },
   "d3first_0_75e_0.state": {
    "route_step": 4,
@@ -167,7 +162,8 @@
    "pending_flags": 0,
    "bombs": 0,
    "keys": 0,
-   "rupees": 0
+   "rupees": 0,
+   "walk": "261125-100336"
   },
   "d3first_0_74e_0.state": {
    "route_step": 5,
@@ -208,7 +204,8 @@
    "pending_flags": 0,
    "bombs": 0,
    "keys": 0,
-   "rupees": 0
+   "rupees": 0,
+   "walk": "261125-100336"
   },
   "d3first_3_7cs_0.state": {
    "route_step": 6,
@@ -250,7 +247,8 @@
    "pending_flags": 0,
    "bombs": 0,
    "keys": 0,
-   "rupees": 0
+   "rupees": 0,
+   "walk": "261125-100336"
   },
   "d3first_3_7be_0.state": {
    "route_step": 7,
@@ -292,7 +290,8 @@
    "pending_flags": 0,
    "bombs": 0,
    "keys": 0,
-   "rupees": 0
+   "rupees": 0,
+   "walk": "261125-100336"
   },
   "d3first_3_6bs_0.state": {
    "route_step": 8,
@@ -334,7 +333,8 @@
    "pending_flags": 0,
    "bombs": 0,
    "keys": 1,
-   "rupees": 0
+   "rupees": 0,
+   "walk": "261125-100336"
   },
   "d3first_3_5bs_0.state": {
    "route_step": 9,
@@ -376,7 +376,8 @@
    "pending_flags": 0,
    "bombs": 0,
    "keys": 1,
-   "rupees": 0
+   "rupees": 0,
+   "walk": "261125-100336"
   },
   "d3first_3_4bs_0.state": {
    "route_step": 10,
@@ -420,7 +421,8 @@
    "pending_flags": 0,
    "bombs": 0,
    "keys": 1,
-   "rupees": 0
+   "rupees": 0,
+   "walk": "261125-100336"
   },
   "d3first_3_4ae_0.state": {
    "route_step": 11,
@@ -464,7 +466,8 @@
    "pending_flags": 1,
    "bombs": 0,
    "keys": 1,
-   "rupees": 0
+   "rupees": 0,
+   "walk": "261125-100336"
   },
   "d3first_3_49e_0.state": {
    "route_step": 12,
@@ -509,7 +512,8 @@
    "pending_flags": 0,
    "bombs": 4,
    "keys": 1,
-   "rupees": 0
+   "rupees": 0,
+   "walk": "261125-100336"
   },
   "d3first_3_59n_0.state": {
    "route_step": 13,
@@ -554,7 +558,8 @@
    "pending_flags": 0,
    "bombs": 4,
    "keys": 2,
-   "rupees": 0
+   "rupees": 0,
+   "walk": "261125-100336"
   },
   "d3first_3_69n_0.state": {
    "route_step": 14,
@@ -600,7 +605,8 @@
    "pending_flags": 0,
    "bombs": 4,
    "keys": 2,
-   "rupees": 0
+   "rupees": 0,
+   "walk": "261125-100336"
   },
   "d3first_3_0fcave_0.state": {
    "route_step": 15,
@@ -641,7 +647,8 @@
    },
    "bombs": 4,
    "keys": 2,
-   "rupees": 0
+   "rupees": 0,
+   "walk": "261125-100336"
   },
   "d3first_3_69c_0.state": {
    "route_step": 16,
@@ -687,7 +694,8 @@
    "pending_flags": 32,
    "bombs": 4,
    "keys": 2,
-   "rupees": 0
+   "rupees": 0,
+   "walk": "261125-100336"
   },
   "d3first_3_59s_0.state": {
    "route_step": 17,
@@ -733,7 +741,8 @@
    "pending_flags": 224,
    "bombs": 4,
    "keys": 2,
-   "rupees": 0
+   "rupees": 0,
+   "walk": "261125-100336"
   },
   "d3first_3_5aw_0.state": {
    "route_step": 18,
@@ -779,7 +788,8 @@
    "pending_flags": 2,
    "bombs": 4,
    "keys": 1,
-   "rupees": 0
+   "rupees": 0,
+   "walk": "261125-100336"
   },
   "d3first_3_5bw_0.state": {
    "route_step": 19,
@@ -825,7 +835,8 @@
    "pending_flags": 96,
    "bombs": 4,
    "keys": 1,
-   "rupees": 0
+   "rupees": 0,
+   "walk": "261125-100336"
   },
   "d3first_3_5cw_0.state": {
    "route_step": 20,
@@ -871,7 +882,8 @@
    "pending_flags": 2,
    "bombs": 7,
    "keys": 1,
-   "rupees": 0
+   "rupees": 0,
+   "walk": "261125-100336"
   },
   "d3first_3_4cs_0.state": {
    "route_step": 21,
@@ -917,7 +929,8 @@
    "pending_flags": 0,
    "bombs": 7,
    "keys": 1,
-   "rupees": 0
+   "rupees": 0,
+   "walk": "261125-100336"
   },
   "d3first_3_4dw_0.state": {
    "route_step": 22,
@@ -963,7 +976,8 @@
    "pending_flags": 2,
    "bombs": 6,
    "keys": 1,
-   "rupees": 0
+   "rupees": 0,
+   "walk": "261125-100336"
   },
   "d3first_3_3ds_0.state": {
    "route_step": 23,
@@ -1010,7 +1024,8 @@
    "pending_flags": 0,
    "bombs": 3,
    "keys": 1,
-   "rupees": 0
+   "rupees": 0,
+   "walk": "261125-100336"
   },
   "d3first_0_74c_0.state": {
    "route_step": 24,
@@ -1051,7 +1066,8 @@
    "pending_flags": 0,
    "bombs": 3,
    "keys": 1,
-   "rupees": 0
+   "rupees": 0,
+   "walk": "261125-100336"
   },
   "d3first_0_73e_0.state": {
    "route_step": 25,
@@ -1092,7 +1108,8 @@
    "pending_flags": 0,
    "bombs": 3,
    "keys": 1,
-   "rupees": 0
+   "rupees": 0,
+   "walk": "261125-100336"
   },
   "d3first_0_63s_0.state": {
    "route_step": 26,
@@ -1133,7 +1150,8 @@
    "pending_flags": 0,
    "bombs": 3,
    "keys": 1,
-   "rupees": 0
+   "rupees": 0,
+   "walk": "261125-100336"
   },
   "d3first_0_64w_0.state": {
    "route_step": 27,
@@ -1174,7 +1192,8 @@
    "pending_flags": 0,
    "bombs": 3,
    "keys": 1,
-   "rupees": 0
+   "rupees": 0,
+   "walk": "261125-100336"
   },
   "d3first_0_65w_0.state": {
    "route_step": 28,
@@ -1215,7 +1234,8 @@
    "pending_flags": 0,
    "bombs": 3,
    "keys": 1,
-   "rupees": 0
+   "rupees": 0,
+   "walk": "261125-100336"
   },
   "d3first_0_55s_0.state": {
    "route_step": 29,
@@ -1256,7 +1276,8 @@
    "pending_flags": 0,
    "bombs": 3,
    "keys": 1,
-   "rupees": 0
+   "rupees": 0,
+   "walk": "261125-100336"
   },
   "d3first_0_45s_0.state": {
    "route_step": 30,
@@ -1297,16 +1318,1014 @@
    "pending_flags": 0,
    "bombs": 3,
    "keys": 1,
-   "rupees": 0
+   "rupees": 0,
+   "walk": "261125-100336"
+  },
+  "d3first_4_71s_0.state": {
+   "route_step": 31,
+   "from_step": 30,
+   "how": "explorer",
+   "clear": false,
+   "sha256": "8458030863743a5b7be526e164ba3a39dbdd3b9be14a2b7ea01c86eccdd00e6b",
+   "spawn_cycle": 2,
+   "edge_cell": 159,
+   "drop_cycle": 4,
+   "help_drop_count": 1,
+   "help_drop_bomb": 0,
+   "world_kill_count": 1,
+   "room_history": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "long_timer_cycle": 2,
+   "frame_counter": 40,
+   "chase_flag": 0,
+   "chase_target": [
+    128,
+    126
+   ],
+   "chase_timer": 0,
+   "hearts": [
+    51,
+    127
+   ],
+   "level_kill_counts": {},
+   "pending": [
+    4,
+    113
+   ],
+   "pending_flags": 0,
+   "bombs": 3,
+   "keys": 1,
+   "rupees": 0,
+   "walk": "261125-100336"
+  },
+  "d3first_4_61s_0.state": {
+   "route_step": 32,
+   "from_step": 31,
+   "how": "explorer",
+   "clear": true,
+   "sha256": "b4643ff67f7a2afa2d706ccb1ff4313495c7fbdf4eef5bde56e322e2ed76d231",
+   "spawn_cycle": 2,
+   "edge_cell": 159,
+   "drop_cycle": 4,
+   "help_drop_count": 1,
+   "help_drop_bomb": 0,
+   "world_kill_count": 1,
+   "room_history": [
+    0,
+    0,
+    0,
+    113,
+    0,
+    0
+   ],
+   "long_timer_cycle": 6,
+   "frame_counter": 44,
+   "chase_flag": 0,
+   "chase_target": [
+    120,
+    61
+   ],
+   "chase_timer": 0,
+   "hearts": [
+    51,
+    127
+   ],
+   "level_kill_counts": {},
+   "pending": [
+    4,
+    97
+   ],
+   "pending_flags": 0,
+   "bombs": 3,
+   "keys": 1,
+   "rupees": 0,
+   "walk": "261125-100336"
+  },
+  "d3first_4_51s_0.state": {
+   "route_step": 33,
+   "from_step": 32,
+   "how": "explorer",
+   "clear": false,
+   "sha256": "2f71791e9438998c2c9f4c8e254e7b664bf49d147b2e6d61b6e43e6e9ac862b6",
+   "spawn_cycle": 2,
+   "edge_cell": 159,
+   "drop_cycle": 4,
+   "help_drop_count": 1,
+   "help_drop_bomb": 0,
+   "world_kill_count": 1,
+   "room_history": [
+    0,
+    0,
+    0,
+    113,
+    97,
+    0
+   ],
+   "long_timer_cycle": 8,
+   "frame_counter": 216,
+   "chase_flag": 1,
+   "chase_target": [
+    135,
+    164
+   ],
+   "chase_timer": 0,
+   "hearts": [
+    51,
+    127
+   ],
+   "level_kill_counts": {},
+   "pending": [
+    4,
+    81
+   ],
+   "pending_flags": 0,
+   "bombs": 3,
+   "keys": 1,
+   "rupees": 0,
+   "walk": "261125-100336"
+  },
+  "d3first_4_50e_0.state": {
+   "route_step": 34,
+   "from_step": 33,
+   "how": "explorer",
+   "clear": false,
+   "sha256": "c04efd5726569e2a49b15e70d16423e06f525212046303bd56976097b8404a06",
+   "spawn_cycle": 2,
+   "edge_cell": 159,
+   "drop_cycle": 4,
+   "help_drop_count": 0,
+   "help_drop_bomb": 0,
+   "world_kill_count": 0,
+   "room_history": [
+    0,
+    0,
+    0,
+    113,
+    97,
+    81
+   ],
+   "long_timer_cycle": 9,
+   "frame_counter": 227,
+   "chase_flag": 0,
+   "chase_target": [
+    0,
+    141
+   ],
+   "chase_timer": 0,
+   "hearts": [
+    50,
+    254
+   ],
+   "level_kill_counts": {},
+   "pending": [
+    4,
+    80
+   ],
+   "pending_flags": 0,
+   "bombs": 3,
+   "keys": 2,
+   "rupees": 0,
+   "walk": "261125-100336"
+  },
+  "d3first_4_40s_0.state": {
+   "route_step": 35,
+   "from_step": 34,
+   "how": "explorer",
+   "clear": false,
+   "sha256": "ffe6904f6b6c1591b50afe1a3ff8de4c3e64f25ba1d88f3a3571eed5cd8d4796",
+   "spawn_cycle": 5,
+   "edge_cell": 159,
+   "drop_cycle": 4,
+   "help_drop_count": 0,
+   "help_drop_bomb": 0,
+   "world_kill_count": 0,
+   "room_history": [
+    80,
+    0,
+    0,
+    113,
+    97,
+    81
+   ],
+   "long_timer_cycle": 4,
+   "frame_counter": 32,
+   "chase_flag": 0,
+   "chase_target": [
+    120,
+    61
+   ],
+   "chase_timer": 0,
+   "hearts": [
+    49,
+    126
+   ],
+   "level_kill_counts": {},
+   "pending": [
+    4,
+    64
+   ],
+   "pending_flags": 0,
+   "bombs": 3,
+   "keys": 2,
+   "rupees": 0,
+   "walk": "261125-100336"
+  },
+  "d3first_4_30s_0.state": {
+   "route_step": 36,
+   "from_step": 35,
+   "how": "explorer",
+   "clear": false,
+   "sha256": "085286a30ad27c8e52dda54c3e50c0e7503feb9a84fb582a1cf14ed810281954",
+   "spawn_cycle": 8,
+   "edge_cell": 159,
+   "drop_cycle": 4,
+   "help_drop_count": 1,
+   "help_drop_bomb": 0,
+   "world_kill_count": 1,
+   "room_history": [
+    80,
+    64,
+    0,
+    113,
+    97,
+    81
+   ],
+   "long_timer_cycle": 2,
+   "frame_counter": 160,
+   "chase_flag": 1,
+   "chase_target": [
+    128,
+    162
+   ],
+   "chase_timer": 0,
+   "hearts": [
+    49,
+    126
+   ],
+   "level_kill_counts": {},
+   "pending": [
+    4,
+    48
+   ],
+   "pending_flags": 0,
+   "bombs": 3,
+   "keys": 3,
+   "rupees": 0,
+   "walk": "261125-100336"
+  },
+  "d3first_4_31w_0.state": {
+   "route_step": 37,
+   "from_step": 36,
+   "how": "explorer",
+   "clear": false,
+   "sha256": "2ce3c2015738155d85a5eb29ff6dd621133a5c4027844c50684e414c9cd30a4f",
+   "spawn_cycle": 1,
+   "edge_cell": 159,
+   "drop_cycle": 4,
+   "help_drop_count": 0,
+   "help_drop_bomb": 0,
+   "world_kill_count": 0,
+   "room_history": [
+    80,
+    64,
+    48,
+    113,
+    97,
+    81
+   ],
+   "long_timer_cycle": 6,
+   "frame_counter": 174,
+   "chase_flag": 0,
+   "chase_target": [
+    240,
+    141
+   ],
+   "chase_timer": 0,
+   "hearts": [
+    48,
+    126
+   ],
+   "level_kill_counts": {},
+   "pending": [
+    4,
+    49
+   ],
+   "pending_flags": 2,
+   "bombs": 3,
+   "keys": 2,
+   "rupees": 0,
+   "walk": "261125-100336"
+  },
+  "d3first_4_32w_0.state": {
+   "route_step": 38,
+   "from_step": 37,
+   "how": "explorer",
+   "clear": true,
+   "sha256": "3646cd20e753f383d3e5d656b3fca80d4f516fa8328682f8b32b8a32db7dcb78",
+   "spawn_cycle": 6,
+   "edge_cell": 159,
+   "drop_cycle": 4,
+   "help_drop_count": 10,
+   "help_drop_bomb": 0,
+   "world_kill_count": 10,
+   "room_history": [
+    80,
+    64,
+    48,
+    49,
+    97,
+    81
+   ],
+   "long_timer_cycle": 5,
+   "frame_counter": 21,
+   "chase_flag": 1,
+   "chase_target": [
+    33,
+    114
+   ],
+   "chase_timer": 0,
+   "hearts": [
+    48,
+    126
+   ],
+   "level_kill_counts": {},
+   "pending": [
+    4,
+    50
+   ],
+   "pending_flags": 0,
+   "bombs": 3,
+   "keys": 1,
+   "rupees": 0,
+   "walk": "261125-100336"
+  },
+  "d3first_4_60cave_0.state": {
+   "route_step": 39,
+   "from_step": 38,
+   "how": "sparkle",
+   "clear": true,
+   "sha256": "784da36795b266b6a718447149f339b7b9e79a896cc8abe609f5660a3a002d73",
+   "spawn_cycle": 6,
+   "edge_cell": 159,
+   "drop_cycle": 6,
+   "help_drop_count": 0,
+   "help_drop_bomb": 0,
+   "world_kill_count": 0,
+   "room_history": [
+    80,
+    64,
+    48,
+    49,
+    50,
+    96
+   ],
+   "long_timer_cycle": 4,
+   "frame_counter": 100,
+   "chase_flag": 1,
+   "chase_target": [
+    72,
+    154
+   ],
+   "chase_timer": 0,
+   "hearts": [
+    48,
+    126
+   ],
+   "level_kill_counts": {
+    "0x32": 2
+   },
+   "bombs": 3,
+   "keys": 1,
+   "rupees": 0,
+   "walk": "261125-100336"
+  },
+  "d3first_4_32c_0.state": {
+   "route_step": 40,
+   "from_step": 39,
+   "how": "explorer",
+   "clear": false,
+   "sha256": "b88c9c0e27338a473b99b9a4f034b0dd94af04c6245dac34453cc602a3e80d7a",
+   "spawn_cycle": 6,
+   "edge_cell": 159,
+   "drop_cycle": 6,
+   "help_drop_count": 0,
+   "help_drop_bomb": 0,
+   "world_kill_count": 0,
+   "room_history": [
+    80,
+    64,
+    48,
+    49,
+    50,
+    96
+   ],
+   "long_timer_cycle": 1,
+   "frame_counter": 249,
+   "chase_flag": 1,
+   "chase_target": [
+    207,
+    155
+   ],
+   "chase_timer": 0,
+   "hearts": [
+    48,
+    126
+   ],
+   "level_kill_counts": {
+    "0x32": 2
+   },
+   "pending": [
+    4,
+    50
+   ],
+   "pending_flags": 160,
+   "bombs": 3,
+   "keys": 1,
+   "rupees": 0,
+   "walk": "261125-100336"
+  },
+  "d3first_4_31e_0.state": {
+   "route_step": 41,
+   "from_step": 40,
+   "how": "explorer",
+   "clear": false,
+   "sha256": "a87c47f13906de873a72b4ec2ba15ffe7f0fda965bc7cf9f61821e231adbd692",
+   "spawn_cycle": 1,
+   "edge_cell": 159,
+   "drop_cycle": 6,
+   "help_drop_count": 0,
+   "help_drop_bomb": 0,
+   "world_kill_count": 0,
+   "room_history": [
+    80,
+    64,
+    48,
+    49,
+    50,
+    96
+   ],
+   "long_timer_cycle": 6,
+   "frame_counter": 212,
+   "chase_flag": 1,
+   "chase_target": [
+    207,
+    118
+   ],
+   "chase_timer": 0,
+   "hearts": [
+    48,
+    126
+   ],
+   "level_kill_counts": {
+    "0x32": 2
+   },
+   "pending": [
+    4,
+    49
+   ],
+   "pending_flags": 42,
+   "bombs": 3,
+   "keys": 1,
+   "rupees": 0,
+   "walk": "261125-100336"
+  },
+  "d3first_4_30e_0.state": {
+   "route_step": 44,
+   "from_step": 43,
+   "how": "explorer",
+   "clear": false,
+   "sha256": "cd7082263bf03d0bf6a05def980b92969511e80673a98c4fc247f9d70960e446",
+   "spawn_cycle": 4,
+   "edge_cell": 159,
+   "drop_cycle": 6,
+   "help_drop_count": 0,
+   "help_drop_bomb": 0,
+   "world_kill_count": 0,
+   "room_history": [
+    80,
+    64,
+    48,
+    49,
+    50,
+    96
+   ],
+   "long_timer_cycle": 8,
+   "frame_counter": 148,
+   "chase_flag": 0,
+   "chase_target": [
+    0,
+    141
+   ],
+   "chase_timer": 0,
+   "hearts": [
+    48,
+    126
+   ],
+   "level_kill_counts": {
+    "0x32": 2
+   },
+   "pending": [
+    4,
+    48
+   ],
+   "pending_flags": 33,
+   "bombs": 3,
+   "keys": 1,
+   "rupees": 0,
+   "walk": "261125-100336"
+  },
+  "d3first_4_20s_0.state": {
+   "route_step": 45,
+   "from_step": 44,
+   "how": "explorer",
+   "clear": false,
+   "sha256": "87c0afb5d88b8e8482f385dcd90ea96051b6f95723aac2861fe1642d93044ce5",
+   "spawn_cycle": 7,
+   "edge_cell": 159,
+   "drop_cycle": 6,
+   "help_drop_count": 0,
+   "help_drop_bomb": 0,
+   "world_kill_count": 0,
+   "room_history": [
+    80,
+    64,
+    48,
+    49,
+    50,
+    96
+   ],
+   "long_timer_cycle": 7,
+   "frame_counter": 17,
+   "chase_flag": 1,
+   "chase_target": [
+    135,
+    184
+   ],
+   "chase_timer": 0,
+   "hearts": [
+    48,
+    126
+   ],
+   "level_kill_counts": {
+    "0x32": 2
+   },
+   "pending": [
+    4,
+    32
+   ],
+   "pending_flags": 4,
+   "bombs": 3,
+   "keys": 0,
+   "rupees": 0,
+   "walk": "261125-100336"
+  },
+  "d3first_4_21w_0.state": {
+   "route_step": 46,
+   "from_step": 45,
+   "how": "explorer",
+   "clear": false,
+   "sha256": "644a4f76fd3b4f3988842402217781b8c7b5d777f103ce980f16d3bf056b69f5",
+   "spawn_cycle": 3,
+   "edge_cell": 159,
+   "drop_cycle": 6,
+   "help_drop_count": 0,
+   "help_drop_bomb": 0,
+   "world_kill_count": 0,
+   "room_history": [
+    32,
+    64,
+    48,
+    49,
+    50,
+    96
+   ],
+   "long_timer_cycle": 9,
+   "frame_counter": 123,
+   "chase_flag": 0,
+   "chase_target": [
+    240,
+    141
+   ],
+   "chase_timer": 0,
+   "hearts": [
+    48,
+    126
+   ],
+   "level_kill_counts": {
+    "0x32": 2
+   },
+   "pending": [
+    4,
+    33
+   ],
+   "pending_flags": 4,
+   "bombs": 3,
+   "keys": 0,
+   "rupees": 0,
+   "walk": "261125-100336"
+  },
+  "d3first_4_21s_0.state": {
+   "route_step": 42,
+   "from_step": 41,
+   "how": "explorer",
+   "clear": false,
+   "sha256": "51ac57d37a6545967dc684640a5aa4453027a4366a67f62f185ef4aa4e5038f2",
+   "spawn_cycle": 4,
+   "edge_cell": 159,
+   "drop_cycle": 6,
+   "help_drop_count": 0,
+   "help_drop_bomb": 0,
+   "world_kill_count": 0,
+   "room_history": [
+    80,
+    64,
+    48,
+    49,
+    50,
+    96
+   ],
+   "long_timer_cycle": 6,
+   "frame_counter": 234,
+   "chase_flag": 0,
+   "chase_target": [
+    120,
+    61
+   ],
+   "chase_timer": 0,
+   "hearts": [
+    48,
+    126
+   ],
+   "level_kill_counts": {
+    "0x32": 2
+   },
+   "pending": [
+    4,
+    33
+   ],
+   "pending_flags": 4,
+   "bombs": 3,
+   "keys": 1,
+   "rupees": 0,
+   "walk": "261125-100336"
+  },
+  "d3first_4_11s_0.state": {
+   "route_step": 47,
+   "from_step": 42,
+   "how": "explorer",
+   "clear": false,
+   "sha256": "12271e4297e27007c60c234d137873ce1e571db4a86f869a4c8e30efa15c1fc7",
+   "spawn_cycle": 2,
+   "edge_cell": 159,
+   "drop_cycle": 6,
+   "help_drop_count": 0,
+   "help_drop_bomb": 0,
+   "world_kill_count": 0,
+   "room_history": [
+    33,
+    64,
+    48,
+    49,
+    50,
+    96
+   ],
+   "long_timer_cycle": 9,
+   "frame_counter": 45,
+   "chase_flag": 1,
+   "chase_target": [
+    139,
+    162
+   ],
+   "chase_timer": 0,
+   "hearts": [
+    48,
+    126
+   ],
+   "level_kill_counts": {
+    "0x32": 2
+   },
+   "pending": [
+    4,
+    17
+   ],
+   "pending_flags": 4,
+   "bombs": 2,
+   "keys": 1,
+   "rupees": 0,
+   "walk": "261125-100336"
+  },
+  "d3first_4_01s_0.state": {
+   "route_step": 48,
+   "from_step": 47,
+   "how": "explorer",
+   "clear": true,
+   "sha256": "81fc23a489ce5f55d3f3f741211561460eecbc318f99451966731360e49784aa",
+   "spawn_cycle": 2,
+   "edge_cell": 159,
+   "drop_cycle": 6,
+   "help_drop_count": 0,
+   "help_drop_bomb": 0,
+   "world_kill_count": 0,
+   "room_history": [
+    33,
+    17,
+    48,
+    49,
+    50,
+    96
+   ],
+   "long_timer_cycle": 3,
+   "frame_counter": 203,
+   "chase_flag": 0,
+   "chase_target": [
+    120,
+    93
+   ],
+   "chase_timer": 0,
+   "hearts": [
+    48,
+    126
+   ],
+   "level_kill_counts": {
+    "0x11": 15,
+    "0x32": 2
+   },
+   "pending": [
+    4,
+    1
+   ],
+   "pending_flags": 4,
+   "bombs": 1,
+   "keys": 1,
+   "rupees": 2,
+   "walk": "261125-100336"
+  },
+  "d3first_4_02w_0.state": {
+   "route_step": 49,
+   "from_step": 48,
+   "how": "explorer",
+   "clear": false,
+   "sha256": "f5f4881c2f7610164b492d63c85b6e35856cb3aa665e72ddd1d486ad4cb56258",
+   "spawn_cycle": 1,
+   "edge_cell": 159,
+   "drop_cycle": 6,
+   "help_drop_count": 0,
+   "help_drop_bomb": 0,
+   "world_kill_count": 0,
+   "room_history": [
+    33,
+    17,
+    1,
+    49,
+    50,
+    96
+   ],
+   "long_timer_cycle": 2,
+   "frame_counter": 252,
+   "chase_flag": 1,
+   "chase_target": [
+    28,
+    114
+   ],
+   "chase_timer": 0,
+   "hearts": [
+    48,
+    126
+   ],
+   "level_kill_counts": {
+    "0x11": 15,
+    "0x32": 2
+   },
+   "pending": [
+    4,
+    2
+   ],
+   "pending_flags": 0,
+   "bombs": 1,
+   "keys": 2,
+   "rupees": 2,
+   "walk": "261125-100336"
+  },
+  "d3first_4_12n_0.state": {
+   "route_step": 50,
+   "from_step": 49,
+   "how": "explorer",
+   "clear": true,
+   "sha256": "119fb29d66140cf2a7ec605d2adc99630d04cc962088076776514e072c75cf4a",
+   "spawn_cycle": 1,
+   "edge_cell": 159,
+   "drop_cycle": 6,
+   "help_drop_count": 0,
+   "help_drop_bomb": 0,
+   "world_kill_count": 0,
+   "room_history": [
+    33,
+    17,
+    1,
+    2,
+    50,
+    96
+   ],
+   "long_timer_cycle": 6,
+   "frame_counter": 106,
+   "chase_flag": 0,
+   "chase_target": [
+    120,
+    221
+   ],
+   "chase_timer": 0,
+   "hearts": [
+    48,
+    126
+   ],
+   "level_kill_counts": {
+    "0x11": 15,
+    "0x32": 2
+   },
+   "pending": [
+    4,
+    18
+   ],
+   "pending_flags": 0,
+   "bombs": 1,
+   "keys": 2,
+   "rupees": 2,
+   "walk": "261125-100336"
+  },
+  "d3first_4_13w_0.state": {
+   "route_step": 51,
+   "from_step": 50,
+   "how": "sparkle",
+   "clear": true,
+   "sha256": "28ef916bb94a505c471822a46c7e7b87c2c02dcb9f45ab622c8bf6fd4eeabb91",
+   "spawn_cycle": 1,
+   "edge_cell": 159,
+   "drop_cycle": 6,
+   "help_drop_count": 10,
+   "help_drop_bomb": 0,
+   "world_kill_count": 10,
+   "room_history": [
+    33,
+    17,
+    1,
+    2,
+    18,
+    96
+   ],
+   "long_timer_cycle": 4,
+   "frame_counter": 44,
+   "chase_flag": 0,
+   "chase_target": [
+    240,
+    141
+   ],
+   "chase_timer": 0,
+   "hearts": [
+    48,
+    126
+   ],
+   "level_kill_counts": {
+    "0x11": 15,
+    "0x32": 2
+   },
+   "pending": [
+    4,
+    19
+   ],
+   "pending_flags": 0,
+   "bombs": 1,
+   "keys": 2,
+   "rupees": 2,
+   "walk": "261125-100336"
+  },
+  "d3first_4_03s_0.state": {
+   "route_step": 52,
+   "from_step": 51,
+   "how": "explorer",
+   "clear": true,
+   "sha256": "5cadc5bfb639fa7782fa834a50cb99318284043ee59a4ca443c99f110a53e26d",
+   "spawn_cycle": 3,
+   "edge_cell": 159,
+   "drop_cycle": 7,
+   "help_drop_count": 2,
+   "help_drop_bomb": 0,
+   "world_kill_count": 2,
+   "room_history": [
+    33,
+    17,
+    1,
+    2,
+    18,
+    19
+   ],
+   "long_timer_cycle": 9,
+   "frame_counter": 31,
+   "chase_flag": 1,
+   "chase_target": [
+    135,
+    189
+   ],
+   "chase_timer": 0,
+   "hearts": [
+    66,
+    30
+   ],
+   "level_kill_counts": {
+    "0x11": 15,
+    "0x13": 15,
+    "0x32": 2
+   },
+   "pending": [
+    4,
+    3
+   ],
+   "pending_flags": 0,
+   "bombs": 1,
+   "keys": 2,
+   "rupees": 2,
+   "walk": "261125-100336"
+  },
+  "d3first_0_45c_0.state": {
+   "route_step": 53,
+   "from_step": 52,
+   "how": "explorer",
+   "clear": true,
+   "sha256": "dbea8182efab17f380a7a05c41e1e9ef9c4af62a96802e114cdb5036627cd1d9",
+   "spawn_cycle": 3,
+   "edge_cell": 159,
+   "drop_cycle": 7,
+   "help_drop_count": 2,
+   "help_drop_bomb": 0,
+   "world_kill_count": 2,
+   "room_history": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "long_timer_cycle": 3,
+   "frame_counter": 215,
+   "chase_flag": 0,
+   "chase_target": [
+    120,
+    149
+   ],
+   "chase_timer": 0,
+   "hearts": [
+    68,
+    255
+   ],
+   "pending": [
+    0,
+    69
+   ],
+   "pending_flags": 0,
+   "bombs": 1,
+   "keys": 2,
+   "rupees": 2,
+   "walk": "261125-100336"
   }
  },
- "resumed": [
-  {
-   "start_step": 15,
-   "source": "d3first_3_0fcave_0.state",
-   "commit": "3b64d0133b719053a0e9a07e00b37d4b02f77d53",
+ "walks": {
+  "261125-100336": {
+   "boot": {
+    "name": "LINK",
+    "delay": 16610
+   },
+   "commit": "8b10165708dd2b26fc61dbcf44edc5258585eeb4",
    "dirty": false,
-   "command": "python -m triforce.entry_states walk --route d3first --out target/r44/walk4 --start-step 15 --source target/r44/walk4/carry/d3first_3_0fcave_0.state --attempts 4"
+   "command": "python -m triforce.entry_states walk --route d3first --out target/r44/walk4",
+   "resumed": [
+    {
+     "start_step": 15,
+     "source": "d3first_3_0fcave_0.state",
+     "commit": "3b64d0133b719053a0e9a07e00b37d4b02f77d53",
+     "dirty": false,
+     "command": "python -m triforce.entry_states walk --route d3first --out target/r44/walk4 --start-step 15 --source target/r44/walk4/carry/d3first_3_0fcave_0.state --attempts 4"
+    },
+    {
+     "start_step": 51,
+     "source": "d3first_4_13w_0.state",
+     "commit": "ec890ebd54d726b47d7468a7930c6ad6e27309b1",
+     "dirty": true,
+     "command": "python -m triforce.entry_states walk --route d3first --out target/r44/walk4 --start-step 51 --source target/r44/walk4/carry/d3first_4_13w_0.state --attempts 7 --iterations 12000 --patience 600 --last-step 52"
+    },
+    {
+     "start_step": 52,
+     "source": "d3first_4_03s_0.state",
+     "commit": "6c106e228bbe719f181d4df4ca808b7052bc530f",
+     "dirty": false,
+     "command": "python -m triforce.entry_states walk --route d3first --out target/r44/walk4 --start-step 52 --source target/r44/walk4/carry/d3first_4_03s_0.state --attempts 4 --iterations 6000 --patience 300"
+    }
+   ]
   }
- ]
+ }
 }
