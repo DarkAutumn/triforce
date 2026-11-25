@@ -43,6 +43,7 @@ import os
 import re
 import shutil
 import signal
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -53,7 +54,7 @@ from typing import Callable, Optional, Union
 
 from . import build
 from . import jobqueue as q
-from . import jobs
+from . import jobs, jobspeed
 from .jobs import JOB_ESTIMATE_ENV, JOB_ID_ENV, JOB_LABEL_ENV
 
 RUN_NICE = 15               # trainings, evaluations, chains, golden races, scripts
@@ -62,6 +63,7 @@ CARGO_JOBS = 4
 GRACE_SECONDS = 30.0        # after a timeout's or a stop's SIGTERM, the command's group is killed
 STEP_POLL_SECONDS = 0.25    # how often a job with several commands running looks which of them ended
 WAIT_POLL_SECONDS = 5.0     # how often `triforce job wait` looks whether a detached job ended
+WAIT_REPORT_SECONDS = 300.0 # how often `triforce job wait` says a running job's progress and steps a second
 WAIT_TAIL_LINES = 40        # how much of a detached job's output `triforce job wait` shows when it ended
 DESC_LIMIT = 120
 GOLDEN_FLAGS = ('--golden', '--power-on', '--clips', 'on', '--act', 'model', '--parallel', '16')
@@ -511,6 +513,9 @@ def run_job(fields: dict, steps: list[Step], timeout: Optional[float] = None,
         stop = threading.Event()
         if lines is not None:
             threading.Thread(target=count_lines, args=(*lines, stop), daemon=True).start()
+        # A training's steps a second: sampled, judged against its normal, a notice when it turns SLOW (jobspeed).
+        watch = jobspeed.Watch(wrapper.id, say, wrapper.directory)
+        threading.Thread(target=watch.run, args=(stop,), daemon=True).start()
         try:
             code = wrapper.run_steps(steps, timeout)
         finally:
@@ -531,6 +536,12 @@ def run_job(fields: dict, steps: list[Step], timeout: Optional[float] = None,
         wrapper.finish(status, code, result)
         say(f"{wrapper.name} {status}{f' ({result})' if result else ''} after {q.duration(time.monotonic() - began)}"
             f" (exit {code})")
+        try:        # a training's last line: its mean steps a second against its normal, in or out of bounds
+            speed = watch.final()
+        except (OSError, sqlite3.Error):
+            speed = None
+        if speed:
+            say(speed)
         return code
     except Stopped as stop:
         if wrapper.id is not None:
@@ -621,6 +632,16 @@ def build_parser() -> argparse.ArgumentParser:
     wait.add_argument('units', nargs='+', metavar='UNIT', help="the unit names --detach printed")
     wait.add_argument('--timeout', type=parse_duration, default=None,
                       help="give up waiting after this long (exit 124; the jobs go on)")
+    speed = sub.add_parser('speed', help="trainings' steps a second from the record: shape, start, end, steps, mean, "
+                                         "normal, in or out of bounds, the jobs beside each")
+    speed.add_argument('jobs', nargs='*', type=int, metavar='JOB', help="these jobs (default: --last 10)")
+    speed.add_argument('--last', type=int, default=None, metavar='N', help="the N latest trainings (running too)")
+    speed.add_argument('--since', type=parse_duration, default=None, metavar='DURATION',
+                       help="the trainings that ran within this long (24h, 90m)")
+    speed.add_argument('--series', type=int, default=None, metavar='JOB', help="one training's samples")
+    speed.add_argument('--backfill', action='store_true',
+                       help="fill the record of trainings that ran before it from their logs' run folders "
+                            "(metrics.jsonl); again later, it adds what an older code's training ran since")
     return parser
 
 
@@ -659,13 +680,63 @@ def unit_active(unit: str) -> bool:
     return state.stdout.strip() in ('active', 'activating')
 
 
+UNIT_JOB = re.compile(r'^triforce job: #(\d+) ')
+
+
+def unit_job(unit: str) -> Optional[int]:
+    """The queue's id of a detached unit's job (its log's first ``triforce job: #ID`` line), None before it joined."""
+    try:
+        with open(detached_dir() / f'{unit}.log', encoding='utf-8', errors='replace') as file:
+            for line in file:
+                found = UNIT_JOB.match(line)
+                if found:
+                    return int(found.group(1))
+    except OSError:
+        return None
+    return None
+
+
+def wait_report(con, job_id: int, now: float) -> list[str]:
+    """What ``triforce job wait`` says of a running job every ``WAIT_REPORT_SECONDS``: its progress and, for a
+    training, its steps a second against its normal (``jobspeed.speed_line``) and the SLOW line when it is
+    (``jobspeed.slow_line``)."""
+    found = q.read_jobs(con, 'id = ?', (job_id,))
+    if not found or found[0]['status'] != 'running':
+        return []
+    job = found[0]
+    lines = [f"{q.label(job)} {q.tags(job, now)}", *(f"  {line}" for line in q.progress_lines(job, now))]
+    speed = jobspeed.speed_line(job)
+    if speed:
+        lines.append(f"  {speed}")
+    slow = jobspeed.slow_line(con, job)
+    if slow:
+        lines.append(f"  {slow}")
+    return lines
+
+
 def cmd_wait(args) -> int:
     """``triforce job wait UNIT...``: blocks until the detached jobs ended, shows the end of each one's output and
-    exits with the worst of their exit codes (1 for a job that ended without its closing line: killed).  Stopping
-    this command stops nothing: the jobs go on, and it can be run again."""
+    exits with the worst of their exit codes (1 for a job that ended without its closing line: killed).  Every
+    ``WAIT_REPORT_SECONDS`` it says each running job's progress, a training's steps a second against its normal and
+    SLOW when it is; a training's last line is its verdict (``jobspeed.final_line``: IN or OUT OF BOUNDS).
+    Stopping this command stops nothing: the jobs go on, and it can be run again."""
     deadline = None if args.timeout is None else time.monotonic() + args.timeout
     pending, worst = list(args.units), 0
+    reported = None
     while pending:
+        if reported is None or time.monotonic() - reported >= WAIT_REPORT_SECONDS:
+            reported = time.monotonic()
+            try:
+                con = q.connect()
+                try:
+                    for unit in pending:
+                        job_id = unit_job(unit)
+                        for line in [] if job_id is None else wait_report(con, job_id, time.time()):
+                            say(line)
+                finally:
+                    con.close()
+            except (OSError, sqlite3.Error):
+                pass
         for unit in list(pending):
             if unit_active(unit):
                 continue
@@ -682,12 +753,30 @@ def cmd_wait(args) -> int:
             if closing is None:
                 say(f"{unit} ended without its closing line (killed?); its output: {log}")
             worst = max(worst, 1 if closing is None else int(closing.group(1)))
+            verdict = final_speed(unit_job(unit))
+            if verdict:
+                say(verdict)
         if pending:
             if deadline is not None and time.monotonic() >= deadline:
                 say(f"still going: {', '.join(pending)}")
                 return 124
             time.sleep(WAIT_POLL_SECONDS)
     return worst
+
+
+def final_speed(job_id: Optional[int]) -> Optional[str]:
+    """A training's verdict from the record (``jobspeed.final_line``), None for another job or an unreadable db."""
+    if job_id is None:
+        return None
+    try:
+        con = q.connect()
+        try:
+            found = q.read_jobs(con, 'id = ?', (job_id,))
+            return jobspeed.final_line(con, found[0]) if found else None
+        finally:
+            con.close()
+    except (OSError, sqlite3.Error):
+        return None
 
 
 # What a legacy worktree reads through the links ``setup`` made (``docs/data-layout.md``).
@@ -1049,6 +1138,7 @@ def cmd_list(args) -> int:
             since = 0.0 if args.all else now - 3600
             jobs = q.read_jobs(con, "status IN ('queued', 'running') OR finished_ts >= ?", (since,))
             state = q.survey(con, q.queue_dir(), now, jobs)
+        speeds = {job['id']: speed_lines(con, job) for job in jobs if job.get('speed')}
     finally:
         con.close()
     running = [job for job in jobs if job['status'] == 'running']
@@ -1067,6 +1157,7 @@ def cmd_list(args) -> int:
             lines = q.describe(job, now, places.get(job['id']), state.config)
             if job['status'] == 'queued':
                 lines.insert(3, state.waits(job))
+            lines[3:3] = speeds.get(job['id'], [])
             print(f"  #{job['id']} {lines[0]}")
             for line in lines[1:]:
                 if line:
@@ -1074,6 +1165,17 @@ def cmd_list(args) -> int:
     if not jobs:
         print("the queue is empty")
     return 0
+
+
+def speed_lines(con, job: dict) -> list[str]:
+    """A training's speed in ``triforce job list``: running, its steps a second against its normal
+    (``jobspeed.speed_line``) and SLOW when it is; ended, its verdict (``jobspeed.final_line``)."""
+    if job['status'] == 'running':
+        return [line for line in (jobspeed.speed_line(job), jobspeed.slow_line(con, job)) if line]
+    if job['status'] in q.ENDED:
+        line = jobspeed.final_line(con, job)
+        return [f"speed {line.split(' speed: ', 1)[-1]}"] if line else []
+    return []
 
 
 def cmd_history(args) -> int:
@@ -1124,6 +1226,59 @@ def cmd_history(args) -> int:
             print(f"{'':5s} {line}")
         if row.get('moved_ts') is not None:
             print(f"{'':5s} {q.MOVED_MARK} at {(q.iso(row['moved_ts']) or '?')[:19]}")
+    return 0
+
+
+def cmd_speed(args) -> int:
+    """``triforce job speed [JOB...] [--last N] [--since DURATION] [--series JOB] [--backfill]``: trainings' steps a
+    second from the queue's db alone (round40.md "Steps a second on record"): per training its shape, start, end,
+    steps, mean steps a second (and a game), its normal, IN or OUT OF BOUNDS (a running one: SLOW now or not) and
+    the jobs beside it; ``--series``: one training's samples (time, steps, rates, load, the jobs running then)."""
+    con = q.connect()
+    try:
+        if args.backfill:
+            with q.transaction(con):
+                filled = jobspeed.backfill(con, detached_dir())
+            print(f"backfilled {filled} trainings")
+            return 0
+        if args.series is not None:
+            found = q.read_jobs(con, 'id = ?', (args.series,))
+            if not found:
+                raise JobError(f"no job #{args.series}")
+            job = found[0]
+            print(f"#{job['id']} {job.get('name')} [{(job.get('speed') or {}).get('shape', 'no speed reported')}]")
+            print(f"{'time':19s} {'steps':>11s} {'steps/s':>8s} {'iteration':>9s} {'mean':>7s} {'rollout':>7s} "
+                  f"{'load':>5s} {'trainings':>9s}  beside")
+            for row in jobspeed.samples(con, job['id']):
+                print(f"{(q.iso(row['ts']) or '?')[:19]:19s} {row['steps']:11,.0f} {jobspeed.sps(row['rate']):>8s} "
+                      f"{jobspeed.sps(row['sps']):>9s} {jobspeed.sps(row['mean']):>7s} "
+                      f"{jobspeed.sps(row['rollout']):>7s} {'?' if row['load'] is None else f'{row['load']:.1f}':>5s} "
+                      f"{row['trainings']:9d}  {' '.join(f'#{i}' for i in row['others'])}")
+            return 0
+        if args.jobs:
+            jobs = [job for job in q.read_jobs(con, f"id IN ({', '.join('?' * len(args.jobs))})", tuple(args.jobs))]
+        else:
+            since = None if args.since is None else time.time() - args.since
+            jobs = q.read_jobs(con, "speed IS NOT NULL" + ('' if since is None else
+                                                           " AND (finished_ts IS NULL OR finished_ts >= ?)"),
+                               () if since is None else (since,))
+            if args.since is None or args.last is not None:
+                jobs = jobs[-(args.last or 10):]
+        for job in jobs:
+            report = job.get('speed') or {}
+            if not report:
+                print(f"#{job['id']} {job.get('name')}: no steps a second on record (not a training, or older code)")
+                continue
+            end = 'running' if job['status'] == 'running' else (q.iso(job.get('finished_ts')) or '?')[:16]
+            print(f"#{job['id']} {job.get('name')} [{report.get('shape')}] {job['status']}")
+            print(f"    {(q.iso(job.get('admitted_ts')) or '?')[:16]} to {end}, {report.get('steps') or 0:,.0f} steps"
+                  + ('' if not report.get('backfilled') else ' (backfilled from its run folder: no load average)'))
+            line = jobspeed.final_line(con, job) or ''
+            print(f"    {line.split(' speed: ', 1)[-1]}")
+            if job['status'] == 'running':
+                print(f"    now: {jobspeed.slow_line(con, job) or jobspeed.speed_line(job)}")
+    finally:
+        con.close()
     return 0
 
 
@@ -1180,13 +1335,15 @@ def main(argv=None) -> int:
             return detach(args, head, extra)
         if args.verb == 'run':
             return cmd_run(args, extra)
-        if extra and args.verb in ('setup', 'list', 'progress', 'history', 'wait', 'doctor', 'top', 'queues'):
+        if extra and args.verb in ('setup', 'list', 'progress', 'history', 'wait', 'doctor', 'top', 'queues',
+                                   'speed'):
             raise JobError(f"{args.verb} takes nothing after --")
         verbs = {'golden': cmd_golden, 'build': cmd_build, 'test': cmd_test}
         if args.verb in verbs:
             return verbs[args.verb](args, extra)
         return {'setup': cmd_setup, 'list': cmd_list, 'progress': cmd_progress, 'history': cmd_history,
-                'wait': cmd_wait, 'doctor': cmd_doctor, 'top': cmd_top, 'queues': cmd_queues}[args.verb](args)
+                'wait': cmd_wait, 'doctor': cmd_doctor, 'top': cmd_top, 'queues': cmd_queues,
+                'speed': cmd_speed}[args.verb](args)
     except JobError as error:
         print(f"triforce job: error: {error}", file=sys.stderr)
         return 2
