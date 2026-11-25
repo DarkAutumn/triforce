@@ -32,9 +32,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-FAMILY = {'59': 'darknut', '5b': 'darknut', '5b-last': 'darknut'}
+FAMILY = {'59': 'darknut', '5b': 'darknut', '5b-last': 'darknut', 'garden': 'darknut'}
 # The room entry each fighter room is (a task's room key), for a start's drop cycle.
-ENTRY = {'59': '(3, 0x59, N)', '5b': '(3, 0x5b, S)', '5b-last': '(3, 0x5b, W)'}
+ENTRY = {'59': '(3, 0x59, N)', '5b': '(3, 0x5b, S)', '5b-last': '(3, 0x5b, W)', 'garden': '(5, 0x05, E)'}
 
 
 def explore_env(family: str, layout='route', start: dict | None = None):
