@@ -72,15 +72,15 @@ def test_every_seed_state_has_a_track_or_is_declared_untracked(zol, tmp_path):
     seeds = sorted(Path(p).stem for p in zol.resolve_start_states(str(REPO_STATES_DIR)))
     with pytest.raises(MissingInput, match='holds no track'):
         check_curriculum(zol, tmp_path / 'nothing', REPO_STATES_DIR)
-    tracked = _tracks(tmp_path / 'tracks', seeds[:-3])
-    assert set(track_starts(tracked).values()) == set(seeds[:-3])
+    tracked = _tracks(tmp_path / 'tracks', seeds[:-1])                  # round 44: one state per door
+    assert set(track_starts(tracked).values()) == set(seeds[:-1])
     bare = zol.replace(curriculum={'enabled': True})
-    with pytest.raises(MissingInput, match=r"3 of \d+ seed states have no curriculum track") as refused:
+    with pytest.raises(MissingInput, match=r"1 of \d+ seed states have no curriculum track") as refused:
         check_curriculum(bare, tracked, REPO_STATES_DIR)
     glob = seeds[-1][:-1] + '[0-9]'
     assert f"curriculum.untracked: ['{glob}']" in str(refused.value)
     declared = zol.replace(curriculum={'enabled': True, 'untracked': [glob]})
-    assert len(check_curriculum(declared, tracked, REPO_STATES_DIR)) == len(seeds) - 3
+    assert len(check_curriculum(declared, tracked, REPO_STATES_DIR)) == len(seeds) - 1
 
 
 def test_a_declaration_never_covers_a_tracked_state():
