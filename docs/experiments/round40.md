@@ -5151,7 +5151,8 @@ these doors dropped): ow-tektite 0x74, ow-octorok 0x64, stalfos-keese-gel 3x4a.
 
 **The staged snapshot: `/home/leculver/git/triforce-r45-tracks/target/trajectories-gen3`** (`r45_tracks.py
 compose`): the store's `261124-gen2` as hard links without every `d3first` track of the 30 walked doors (61, all
-chains), plus the 70 above (copies): **1,426 tracks, 123,311 files, 1,393,045,932 bytes**; `d2first`'s tracks
+chains), plus the 70 above (copies): **1,426 tracks, 123,311 files, 1,393,045,932 bytes** (recomposed over the whole
+walk in 5 below); `d2first`'s tracks
 untouched. The compose record is `target/trajectories-gen3.compose.json`. For the lead, once the whole route is in:
 
     triforce-lead data install trajectories <NAME> --from /home/leculver/git/triforce-r45-tracks/target/trajectories-gen3
@@ -5235,12 +5236,12 @@ leaving by the right exit are kept, as before.
 | r45-d3-69-in.npz | 3x69 from N (the search; the rule with its look-ahead in 7) | 319 / 320 (1 hit) | 156 | 13,523 | 16c328818783 |
 
 3x5b's first pass: at cycle 0 one kill in 79 and 63 visits (low, full; one visit each killed two, a Darknut walking
-into a swing), at cycle 1 none, a walk through, in 70 and 86. **The Olive Garden's three files wait for Dungeon 5's
-walked states**; `specialists/d3first/darknut.yaml` names the six new files and, until then, the Garden's old three.
+into a swing), at cycle 1 none, a walk through, in 70 and 86. The Olive Garden's two new files are in 5 below;
+`specialists/d3first/darknut.yaml` names the eight new files.
 
 **The staged snapshot: `/home/leculver/git/triforce-r45-tracks/target/demos-gen4`**: the store's `261124-gen3` as hard
-links (226 files) plus the new files (copies). For the lead: `triforce-lead data install demos 261125-gen4 --from
-/home/leculver/git/triforce-r45-tracks/target/demos-gen4` (the Garden's files join it when built).
+links (226 files) plus the eight new files (copies; 234). For the lead: `triforce-lead data install demos 261125-gen4
+--from /home/leculver/git/triforce-r45-tracks/target/demos-gen4`.
 
 **The fighter's own rates** (`r40_darknut_fighter.py measure`, look 0, seeds 0-299, 300 visits a case on the walked
 state; measured before the drop-state merge, so the counters were the state's own and the task's streak draw):
@@ -5254,3 +5255,26 @@ state; measured before the drop-state merge, so the counters were the state's ow
 
 So the fighter is still 98-100% in Dungeon 3's Darknut rooms, in the route's layout and in the others alike.
 
+### 5. The rest of the Darknut teacher: Dungeons 5 and 8 (r44-states 8e5a0fe7, 7b70e1f7; r40-int fedfd5b7)
+
+- **Tracks.** Every Darknut door of Dungeons 5 and 8 from its walked state, the explorer in the route's layout:
+  5x64 from E and from the cellar, the Olive Garden 5x05 from E (214 steps, 7 of 8 hearts: the explorer now solves
+  it from the walked state, 6 bombs) and from its cellar, 5x06 from W and the cellar, 5x37 from S; 8x5e, 8x4e, 8x3e,
+  8x3f.
+  The two Blue Darknut fights 8x5e and 8x3e also in each of their five other reachable layouts (0, 3, 4, 7, 8; the
+  planned is 5; every one solved, 129-226 steps). The Olive Garden by the fighter (`r41_tracks.py fighter --room
+  garden`, new): at the state's 6 bombs and at 0 bombs, each in the route's layout and the 8 others, 18 tracks, all
+  unhit. darknut@d3first declares nothing untracked any more: **91 new `d3first` tracks** (Dungeon 3 52, Dungeon 5 25,
+  Dungeon 8 14), 167 with the family's bare ones.
+- **Demonstrations.** The Olive Garden again (`--room garden`, 150 visits a case, the training draw): at 0 bombs
+  143 of 150 kept (7 hit, two of them ending `no-damage`), 71 of them in the route's layout, 123,797 rows
+  (47fd08c9a4ca); at 8 bombs 147 of 150 (3 hit), 71 in the route's layout, 89,889 rows in one file (3f4e3ba37e8b;
+  it was two pieces). darknut.yaml's `demos:` names the eight r45 files in the same seven groups.
+- **The staged snapshot** is recomposed over the whole walk record (285 doors): the store's `261124-gen2` without
+  every `d3first` track of those doors (their states are gone), plus the new tracks: 1,211 tracks, 114,388 files,
+  1,293,846,574 bytes. Until the other families' tracks join it, their generation tasks refuse it (34 task files).
+- **Checks.** `r40_tracks.py proof`: darknut@d3first and the bare darknut load, 167 tracks, no red flag. The replay
+  proof over the 91 new tracks: 1,086 of 1,086 curriculum resets hold the track's state but the RNG; 273 of 273
+  reach the track's end from the last decision. A 6-iteration lab training of the darknut group on the staged
+  folders (express, 8 games, 4,096 steps an update): completed, 809 steps a second, its log carrying each room's
+  seed starts by layout and its curriculum starts.
