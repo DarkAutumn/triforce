@@ -2,7 +2,10 @@
 
 import json
 
+import pytest
+
 from triforce import _native as native
+from triforce.explore import track_dir
 
 from ..conftest import REPO_STATES_DIR, require_rom
 
@@ -51,3 +54,24 @@ def test_an_unsolved_search_says_what_it_reached():
     assert result.enemies[0] == 3 and 0 <= result.enemies[1] <= 3          # 3:0x4b's three Zols
     assert 1 <= result.longest <= result.iterations * 10
     assert 0.0 <= result.closest <= 1.0
+
+
+def test_a_track_says_the_layout_it_was_explored_in(tmp_path):
+    """Round 45 (Tracks45): an explorer's resets serve the layout it is given under the reset rule (3:0x7c from S:
+    the route's spawn cycle 7, the door's one other reachable value 8), and its track's `trajectory.json` says what the
+    room was entered with; a cycle the door cannot hold is refused, and its track would be named `~c<N>`."""
+    require_rom()
+    for layout, asked, cycle, planned in (('route', 'route', 7, True), (8, 'cycle', 8, False)):
+        explorer = native.Explorer('zol', seed=0, states_dir=str(REPO_STATES_DIR), layout=layout)
+        result = explorer.explore('d3first_3_7cs_0', iterations=1, explore_steps=5, patience=1)
+        explorer.write(result, str(tmp_path / str(layout)))
+        meta = json.loads((tmp_path / str(layout) / 'trajectory.json').read_text())
+        entry = meta['layout']['entry']
+        assert meta['layout']['asked'] == asked and isinstance(meta['layout']['rng_phase'], int)
+        assert (entry['spawn_cycle'], entry['planned'], entry['reachable'], entry['source']) == \
+            (cycle, planned, True, 'rule')
+        assert entry['door'] == [3, 0x7c, 8, False] and entry['chase_flag'] in (0, 1)
+    refused = native.Explorer('zol', seed=0, states_dir=str(REPO_STATES_DIR), layout=3)
+    with pytest.raises(Exception, match="not a layout its door's reset rule holds"):
+        refused.explore('d3first_3_7cs_0', iterations=1, explore_steps=5, patience=1)
+    assert track_dir(tmp_path, 'zol', 'd3first_3_7cs_0', 0, False, cycle=8).name == 'd3first_3_7cs_0~c8'

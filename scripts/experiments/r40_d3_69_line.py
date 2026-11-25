@@ -43,9 +43,9 @@ look-ahead picks among the same actions the moment that works.
 
 `measure` plays the rule from the route step's entry states (`d3first_3_69n_0` in, `d3first_3_69c_0` out) through
 the darknut task's environment (`specialists/d3first/darknut.yaml`), seeds `--seed0`.. drawn as a training reset
-draws them (the start's random numbers and spawn draw, the task's hp draw), with 4 or 8 bombs (the route's: none is
-used here), and on the way out a third of the entries from the chains' harvested handoffs (the task's
-`harvested_fraction`; their own hearts and bombs).  Each visit is put in one situation: `clear` (only the line's
+draws them (the start's random numbers and the reset rule's layout, the task's hp draw), with 4 or 8 bombs (the
+route's: none is used here); no harvested handoff since round 45 (the generation draws none; before, a third of the
+way out's entries were the chains' handoffs).  Each visit is put in one situation: `clear` (only the line's
 moves), `sworded` (it struck a Darknut on the way) or `waited` (it held or stepped aside, no strike).  It prints and
 writes the success, the hits taken a visit and the frames, by situation, and where each hit was taken.
 
@@ -69,7 +69,6 @@ import heapq
 import itertools
 import json
 import multiprocessing
-import random
 import sys
 import time
 from pathlib import Path
@@ -394,12 +393,6 @@ def make_env(bombs: int, states_dir=None):
                states_dir=None if states_dir is None else str(states_dir))
 
 
-def harvested(which: str) -> list[str]:
-    from triforce import paths
-    folder = paths.data_dir('harvested') / 'darknut'
-    return sorted(str(p) for p in folder.glob(f'{STATES[which]}_h*.state'))
-
-
 def outlook(probe, snapshot, route, rule: Line, first: str, health: float, depth: int) -> int:
     """Training-time look-ahead (the owner, Nov 23: moving the emulator ahead and back is fine in training only):
     `probe` (a second env) plays `first` from `snapshot`, then goes on the same way (a strike: then along the line)
@@ -467,7 +460,14 @@ def play(env, which: str, seed: int, start: str, recorder=None, probe=None, dept
         (recorder.keep if success and hits == 0 else recorder.drop)()
     return {'seed': seed, 'start': Path(start).name, 'ending': info.get('ending'), 'success': success,
             'hits': hits, 'frames': frames, 'situation': situation, 'swings': swings, 'where': where,
-            'looked': looked}
+            'looked': looked, 'layout': layout_of(env)}
+
+
+def layout_of(env) -> dict:
+    """Round 45: what the visit's reset entered the room with (`Env.entry`): the spawn cycle `$524`, whether it is
+    the route's planned one (`triforce/entry_rule.d3first.json`) and reachable there, the chase flag, the source."""
+    entry = env.entry.get('entry') or {}
+    return {k: entry.get(k) for k in ('spawn_cycle', 'planned', 'reachable', 'chase_flag', 'source')}
 
 
 SEARCH_ACTIONS = ('MOVE N 4', 'MOVE S 4', 'MOVE W 4', 'MOVE E 4', 'WAIT 4', 'SWORD N', 'SWORD S', 'SWORD W', 'SWORD E')
@@ -549,7 +549,8 @@ def replay(env, which: str, seed: int, start: str, actions: list[str], recorder=
     return {'seed': seed, 'start': Path(start).name, 'ending': info.get('ending'), 'success': success, 'hits': hits,
             'frames': frames, 'situation': 'sworded' if swings else 'clear', 'swings': swings, 'where': [],
             'actions': len(actions), 'waits': sum(a.startswith('WAIT') for a in actions),
-            'way': ' '.join(a.replace('MOVE ', '').replace(' 4', '').replace(' ', '_') for a in actions)}
+            'way': ' '.join(a.replace('MOVE ', '').replace(' 4', '').replace(' ', '_') for a in actions),
+            'layout': layout_of(env)}
 
 
 def teach(env, which: str, seed: int, start: str, recorder=None, probe=None, depth: int = 4) -> dict:
@@ -575,15 +576,10 @@ def teach(env, which: str, seed: int, start: str, recorder=None, probe=None, dep
 
 
 def starts(which: str, seed0: int, runs: int):
-    """(seed, start state, bombs) per visit: the entry state (round 44: d3first has one state per door, chain 0), a
-    third of the out-pass from the harvested handoffs (drawn by the seed), 4 or 8 bombs by the seed's parity."""
-    pool = harvested(which) if which == 'out' else []
+    """(seed, start state, bombs) per visit: the entry state (round 44: d3first has one state per door, chain 0; round
+    45: no harvested handoff, the generation draws none), 4 or 8 bombs by the seed's parity."""
     for seed in range(seed0, seed0 + runs):
-        draw = random.Random(seed)
-        if pool and draw.random() < 0.33:
-            yield seed, draw.choice(pool), 4 + 4 * (seed % 2)
-        else:
-            yield seed, f'{STATES[which]}_0', 4 + 4 * (seed % 2)
+        yield seed, f'{STATES[which]}_0', 4 + 4 * (seed % 2)
 
 
 def _visits(task) -> list[dict]:
@@ -594,7 +590,7 @@ def _visits(task) -> list[dict]:
     out = []
     for seed, start, bombs in visits:
         record = play(envs[bombs], which, seed, start, probe=probes.get(bombs), depth=depth)
-        record.update(harvested=start.endswith('.state'), bombs=bombs, look=depth, which=which)
+        record.update(bombs=bombs, look=depth, which=which)
         out.append(record)
     return out
 
@@ -631,8 +627,8 @@ def summary(which: str, records: list[dict]) -> dict:
     out = {'pass': which, 'all': stats(records)}
     for situation in ('clear', 'sworded', 'waited'):
         out[situation] = stats([r for r in records if r['situation'] == situation])
-    out['harvested'] = stats([r for r in records if r['harvested']])
-    out['entry_states'] = stats([r for r in records if not r['harvested']])
+    out['route_layout'] = stats([r for r in records if (r.get('layout') or {}).get('planned')])
+    out['other_layouts'] = stats([r for r in records if (r.get('layout') or {}).get('planned') is False])
     taught = [r for r in records if 'teacher' in r]
     if taught:                                              # the demonstration builder's visits (`demos`)
         found = [r for r in taught if r['teacher'] == 'search']
@@ -664,7 +660,7 @@ def _taught(task) -> tuple[list[dict], list]:
     out = []
     for seed, start, bombs in visits:
         record = teach(envs[bombs], which, seed, start, recorder, probes[bombs], depth)
-        record.update(harvested=start.endswith('.state'), bombs=bombs, look=depth, which=which)
+        record.update(bombs=bombs, look=depth, which=which)
         out.append(record)
     return out, recorder.rows
 

@@ -29,6 +29,7 @@ use zelda::game::GameView;
 use zelda::objectives::FLAG_ITEM_TAKEN;
 use zelda::room::Wavefront;
 use zelda::room_state::room_flags;
+use zelda::room_entry::{EntrySource, EntryValues, Layout};
 use zelda::{Action, Nes, SessionSnapshot};
 
 /// MOVE weight in a random action (WAIT and every other legal kind: 1).
@@ -215,6 +216,27 @@ pub fn explore_config(config: &SpecialistConfig) -> SpecialistConfig {
     }
 }
 
+/// A track's `trajectory.json` `layout` (round 45): the layout asked for (`route`, `valid` or `cycle`), the RNG phase
+/// the reset wrote, and what the room is entered with (`entry`, the bytes the reset rule writes, read back before any
+/// frame runs: `$524` with whether it is the route's planned value and reachable at the door, the chase state, `$4A`,
+/// the divider `$26`, the edge cell `$525`; null for a start that is no pre-entry state: a cave, a cellar).
+pub fn layout_json(asked: Layout, phase: Option<u32>, entry: Option<EntryValues>) -> serde_json::Value {
+    let asked = match asked {
+        Layout::Route => "route",
+        Layout::Valid => "valid",
+        Layout::Cycle(_) => "cycle",
+    };
+    let entry = entry.map(|e| {
+        json!({
+            "door": e.door.map(|(level, room, facing, inside)| json!([level, room, facing, inside])),
+            "source": e.source.name(), "spawn_cycle": e.spawn_cycle, "planned": e.planned, "reachable": e.reachable,
+            "chase_flag": e.chase_flag, "chase_target": [e.chase_target.0, e.chase_target.1],
+            "chase_timer": e.chase_timer, "long_timer_cycle": e.long_timer_cycle, "edge_cell": e.edge_cell,
+        })
+    });
+    json!({"asked": asked, "rng_phase": phase, "entry": entry})
+}
+
 /// (health, -steps, actions, ending) of the best success so far.
 type Candidate = (f64, i64, Vec<[usize; 3]>, Option<String>);
 
@@ -268,6 +290,10 @@ pub struct Explorer<N: Nes, St: StateStore<N::State>> {
     stop: Option<Arc<AtomicBool>>,
     /// The kills a path may make in its room ([`KillSpec`]; None: any).
     kills: Option<KillSpec>,
+    /// The layout every `explore`'s reset serves (round 45; [`Explorer::set_layout`]).
+    layout: Layout,
+    /// The last `explore`'s reset: its RNG phase and what its room is entered with (`trajectory.json` `layout`).
+    start: (Option<u32>, Option<EntryValues>),
 }
 
 impl<N: Nes, St: StateStore<N::State>> Explorer<N, St> {
@@ -294,6 +320,8 @@ impl<N: Nes, St: StateStore<N::State>> Explorer<N, St> {
             root: None,
             stop: None,
             kills: None,
+            layout: Layout::Valid,
+            start: (None, None),
         })
     }
 
@@ -326,6 +354,14 @@ impl<N: Nes, St: StateStore<N::State>> Explorer<N, St> {
         self.kills = kills;
     }
 
+    /// The layout every later `explore`'s reset serves (round 45; default `Valid`, the training draw): `Route` for a
+    /// curriculum track (the route's planned `$524`), `Cycle(v)` for a track in another reachable layout (refused at
+    /// the reset where the start's door cannot hold `v`).
+    pub fn set_layout(&mut self, layout: Layout) {
+        self.layout = layout;
+        self.env.set_layout(layout);
+    }
+
     /// Searches for a successful path from `start_state`; returns the best (most health, then fewest steps).
     pub fn explore(
         &mut self,
@@ -337,6 +373,17 @@ impl<N: Nes, St: StateStore<N::State>> Explorer<N, St> {
     ) -> Result<ExploreResult, EnvError> {
         let started = Instant::now();
         self.env.reset(Some(self.seed), Some(start_state))?;
+        let entry = self.env.session().entry_values();
+        if let Layout::Cycle(value) = self.layout
+            && !entry.is_some_and(|e| e.source == EntrySource::Rule && e.spawn_cycle == value)
+        {
+            return Err(EnvError::StartState(format!(
+                "{start_state}: $524 = {value} is not a layout its door's reset rule holds (triforce/entry_rule.<ns>.json; \
+                 the reset wrote {:?})",
+                entry.map(|e| (e.source.name(), e.spawn_cycle))
+            )));
+        }
+        self.start = (self.env.session().rng_phase(), entry);
         let root = self.env.save();
         let mut archive: IndexMap<CellKey, Cell<N::State>> = IndexMap::new();
         {
@@ -510,6 +557,7 @@ impl<N: Nes, St: StateStore<N::State>> Explorer<N, St> {
             "steps": result.actions.len(), "health": result.health, "actions": actions,
             "explore": {"iterations": result.iterations, "env_steps": result.env_steps, "cells": result.cells,
                         "seconds": (result.seconds * 10.0).round() / 10.0, "seed": self.seed},
+            "layout": layout_json(self.layout, self.start.0, self.start.1),
         });
         let mut out = Vec::new();
         let formatter = serde_json::ser::PrettyFormatter::with_indent(b" ");

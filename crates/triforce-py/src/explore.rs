@@ -16,6 +16,27 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use zcore::{Rom, ZCore};
+use zelda::room_entry::Layout;
+
+/// A layout as Python names it (round 45): `'route'` (the route's planned `$524` at every door the reset rule knows),
+/// `'valid'` (the training draw: the planned value on half the resets, the door's other reachable values on the
+/// rest), or an int 0-8, one reachable `$524` value (`Layout::Cycle`).
+pub fn extract_layout(layout: &Bound<'_, PyAny>) -> PyResult<Layout> {
+    if let Ok(value) = layout.extract::<u8>() {
+        return if value < zelda::room_entry::SPAWN_CYCLE_LENGTH {
+            Ok(Layout::Cycle(value))
+        } else {
+            Err(pyo3::exceptions::PyValueError::new_err(format!("layout {value}: a spawn cycle is 0-8")))
+        };
+    }
+    match layout.extract::<String>()?.as_str() {
+        "route" => Ok(Layout::Route),
+        "valid" => Ok(Layout::Valid),
+        other => Err(pyo3::exceptions::PyValueError::new_err(format!(
+            "layout {other:?}: 'route', 'valid' or a spawn cycle 0-8"
+        ))),
+    }
+}
 
 /// Success for route-state builds: Link entered `target` (level, room, in_cave) holding at least `min_keys`,
 /// and (when set) the item of `item_taken_room` (level, room) is taken.
@@ -175,21 +196,25 @@ pub struct PyExplorer {
 #[pymethods]
 impl PyExplorer {
     /// `exact_starts` (round 44, the real walk): every `explore` starts from its state's machine exactly (no RNG or
-    /// spawn redraw, no fresh room, no banked kills).
+    /// spawn redraw, no fresh room, no banked kills). `layout` (round 45, `extract_layout`): the layout every reset's
+    /// reset rule serves (default `'valid'`, the training draw; curriculum tracks `'route'` or a spawn cycle).
     #[new]
-    #[pyo3(signature = (config, seed=0, states_dir=None, exact_starts=false))]
+    #[pyo3(signature = (config, seed=0, states_dir=None, exact_starts=false, layout=None))]
     fn new(
         py: Python<'_>,
         config: &Bound<'_, PyAny>,
         seed: u64,
         states_dir: Option<PathBuf>,
         exact_starts: bool,
+        layout: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Self> {
         let config = extract_config(py, config)?;
         let data = context::data(py, states_dir.as_deref())?;
         let rom = context::rom(py)?;
+        let layout = layout.map(extract_layout).transpose()?.unwrap_or_default();
         let mut explorer = new_explorer(&config, data, rom, seed).map_err(env_err)?;
         explorer.set_exact_starts(exact_starts);
+        explorer.set_layout(layout);
         Ok(PyExplorer {
             inner: Mutex::new(explorer),
         })
@@ -309,21 +334,27 @@ fn explore_one(
     stop: &Arc<AtomicBool>,
     room_kills: Option<&[((u8, u8), u8)]>,
     clips: Option<bool>,
+    layout: Layout,
 ) -> Explored {
     let mut explorer = new_explorer(config, data.clone(), rom.clone(), seed)?;
     explorer.set_stop(Some(stop.clone()));
     explorer.set_banked_kills(room_kills.map(<[_]>::to_vec));
     explorer.set_clips_allowed(clips);
+    explorer.set_layout(layout);
     let (iterations, explore_steps, patience) = budget;
     let result = explorer.explore(state, iterations, explore_steps, patience, None)?;
     // A staged start's track is `<state>~k<kills>`, beside the seed state's own (round 24).
     // A plain-way track (the clips switch off where the start leaves it free) is `<state>~plain`.
+    // A track in another reachable layout than the route's is `<state>~c<spawn cycle>` (round 45).
     let mut track = match room_kills.and_then(|r| r.first()) {
         Some((_, kills)) => format!("{state}~k{kills}"),
         None => state.to_owned(),
     };
     if clips == Some(false) {
         track.push_str("~plain");
+    }
+    if let Layout::Cycle(value) = layout {
+        track.push_str(&format!("~c{value}"));
     }
     let replayed = if result.success {
         explorer.write(&result, &out.join(track))?
@@ -339,11 +370,13 @@ fn explore_one(
 /// every worker at its next iteration (KeyboardInterrupt; states already written stay written). `room_kills`
 /// [(level, room, kills)] explores staged starts (kills banked before the entry, round 24) into
 /// `<out>/<specialist>/<state>~k<kills>`; `clips=False` explores with the run-time clips switch off (a plain-way
-/// track, `<state>[~k<kills>]~plain`). `progress(done, total)` is called on the calling thread with the states
-/// explored so far: at the start and whenever the count moves (an exception from it stops the search).
+/// track, `<state>[~k<kills>]~plain`). `layout` (round 45, `extract_layout`; default `'route'`): the layout the
+/// resets serve, a spawn cycle writing `<state>[...]~c<cycle>`. `progress(done, total)` is called on the calling
+/// thread with the states explored so far: at the start and whenever the count moves (an exception from it stops the
+/// search).
 #[pyfunction]
 #[pyo3(signature = (specialist, out, states=None, iterations=3000, explore_steps=25, patience=300, parallel=1,
-                    seed=0, states_dir=None, room_kills=None, clips=None, progress=None))]
+                    seed=0, states_dir=None, room_kills=None, clips=None, progress=None, layout=None))]
 #[allow(clippy::too_many_arguments)]
 pub fn explore_states(
     py: Python<'_>,
@@ -359,7 +392,9 @@ pub fn explore_states(
     room_kills: Option<Vec<(u8, u8, u8)>>,
     clips: Option<bool>,
     progress: Option<Bound<'_, PyAny>>,
+    layout: Option<Bound<'_, PyAny>>,
 ) -> PyResult<Vec<(PyExploreResult, bool)>> {
+    let layout = layout.as_ref().map(extract_layout).transpose()?.unwrap_or(Layout::Route);
     let room_kills: Option<Vec<((u8, u8), u8)>> =
         room_kills.map(|r| r.into_iter().map(|(l, room, k)| ((l, room), k)).collect());
     let config = extract_config(py, specialist)?;
@@ -405,7 +440,7 @@ pub fn explore_states(
                         while !stop.load(Ordering::Relaxed) {
                             let i = next.fetch_add(1, Ordering::Relaxed);
                             let Some(state) = states.get(i) else { break };
-                            let r = explore_one(&config, &data, &rom, state, &out, budget, seed, &stop, room_kills.as_deref(), clips);
+                            let r = explore_one(&config, &data, &rom, state, &out, budget, seed, &stop, room_kills.as_deref(), clips, layout);
                             *results[i].lock() = Some(r);
                             explored.fetch_add(1, Ordering::Relaxed);
                         }

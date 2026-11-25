@@ -317,6 +317,24 @@ impl PyEnv {
         self.inner.lock().env.clips_allowed()
     }
 
+    /// The layout every later reset's reset rule serves (round 45; `'valid'` unless set, the training draw):
+    /// `'route'` the route's planned `$524` at every door the rule knows, an int 0-8 one reachable spawn cycle (a
+    /// value the door cannot hold is not written: check `entry`).
+    fn set_layout(&self, layout: &Bound<'_, PyAny>) -> PyResult<()> {
+        self.inner.lock().env.set_layout(crate::explore::extract_layout(layout)?);
+        Ok(())
+    }
+
+    /// What the last reset's room is entered with (round 45, a track's `trajectory.json` `layout`): the layout asked
+    /// for, the RNG phase written, and `entry` (`$524`, whether planned and reachable, the chase state, `$4A`, `$26`,
+    /// `$525`; None for a start that is no pre-entry state).
+    #[getter]
+    fn entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let inner = self.inner.lock();
+        let session = inner.env.session();
+        json_to_py(py, &env::explore::layout_json(inner.env.layout(), session.rng_phase(), session.entry_values()))
+    }
+
     #[getter]
     fn get_render(&self) -> bool {
         self.inner.lock().render

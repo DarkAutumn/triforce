@@ -363,6 +363,9 @@ pub struct SpecialistEnv<N: Nes, St: StateStore<N::State>> {
     fixed_kills: Option<Vec<((u8, u8), u8)>>,
     /// Round 44: resets load the start state's machine exactly (`EnvOptions::exact_starts`).
     exact_starts: bool,
+    /// Round 45: the layout a reset's reset rule serves (`Valid` for training and evaluation; the curriculum
+    /// builders' `Route` or one reachable `Cycle`, [`SpecialistEnv::set_layout`]).
+    layout: zelda::room_entry::Layout,
     pool: Option<StartStatePool>,
     curriculum: Option<SharedCurriculum>,
     critic: GameplayCritic,
@@ -514,6 +517,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             decision: None,
             staged_kills: opts.staged_kills,
             exact_starts: opts.exact_starts,
+            layout: zelda::room_entry::Layout::Valid,
             banked_kills: 0,
             entry_decks: Default::default(),
             forced_drops: opts.forced_drops,
@@ -758,13 +762,14 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             overrides: Vec::new(),
             banked_kills,
             // Round 43, the reset rule: a door of a route with an `entry_rule` file takes only values some play can
-            // bring there (any valid layout, the route's own on half the resets); other starts the uniform draw.
+            // bring there (any valid layout, the route's own on half the resets; a curriculum builder's env the
+            // route's or one named, `set_layout`); other starts the uniform draw.
             // Training's unseeded resets deal from this env's decks (even shares over a handful of resets); a seeded
             // reset (evaluation: seed for seed the same start in every run, paired arms alike) draws from its seed alone.
             entry: self.data.entry_rule(ns.as_deref()).map(|rule| zelda::room_entry::EntryDraw {
                 rule,
                 decks: if seed.is_some() { Default::default() } else { self.entry_decks.clone() },
-                layout: zelda::room_entry::Layout::Valid,
+                layout: self.layout,
             }),
         };
         let mut state = self.session.load(&machine, &opts, &mut self.rng)?.clone();
@@ -877,6 +882,17 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
     /// Every later reset loads its start state exactly ([`EnvOptions::exact_starts`]; the explorer of the real walk).
     pub fn set_exact_starts(&mut self, exact: bool) {
         self.exact_starts = exact;
+    }
+
+    /// The layout every later reset's reset rule serves (round 45; `Valid` unless set): `Route`, the route's planned
+    /// `$524` at every door the rule knows, is how curriculum tracks are explored; `Cycle(v)` one reachable value.
+    pub fn set_layout(&mut self, layout: zelda::room_entry::Layout) {
+        self.layout = layout;
+    }
+
+    /// The layout resets serve ([`SpecialistEnv::set_layout`]).
+    pub fn layout(&self) -> zelda::room_entry::Layout {
+        self.layout
     }
 
     /// A reset's staged kills (`ram_randomization.room_kills`, training only, not for a curriculum start): with
