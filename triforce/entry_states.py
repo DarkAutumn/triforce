@@ -7,6 +7,8 @@ state, and install a finished build into the states dir.
                                           [--skip-fights 5:0x05:E,...]
     python -m triforce.entry_states path --source STATE --rooms 1:0x33,1:0x23,1:0x22 [--chain 2] [--route NAME]
                                          [--out DIR]
+    python -m triforce.entry_states walk --route NAME [--iterations 3000] [--patience 200] [--attempts 6]
+                                         [--delay 16610] [--out DIR] [--start-step N --source CARRIED] [--last-step N]
     python -m triforce.entry_states install DIR [--partial]
     python -m triforce.entry_states audit [--dir DIR | --specialist NAME ... | --states GLOB ...] [--loads 9]
     python -m triforce.entry_states idle [--out DIR]
@@ -46,6 +48,23 @@ route with a start-state namespace (routes.yaml ``states: NS``, ``d3first``) has
 route's (``--route d3first --source 3_7cs_0`` reads ``d3first_3_7cs_0``), and ``audit`` checks each state by its
 namespace's route (``--route R``: R's states only, and R's MISSING ones).  ``d2first`` keeps its bare names.
 
+``walk`` (round 44, the owner, Nov 25: "We should only need 1 save state per 'door/entry' to a room", "The layout
+that spawns should be real, not fake") builds a route with its own start states (``d3first``): ONE state per door,
+all from one walk of the whole route from console power on (``Game.boot``: controller inputs alone; the name and
+the file-select delay are the corpus golden's), the machine carried from door to door with no redraw, no fresh room
+and no refill.  Each room is crossed by the explorer started from the carried machine exactly as saved
+(``Explorer(exact_starts=True)``), its paths held to the step's routes.yaml ``clear:`` (``KillSpec``: no kill on a
+crossing, every monster on a fight to the end, N on a partial fight); a fight it cannot end is ended by the game's
+own deaths (``sparkle_fight``, with the sword kill's counters; never a Zol or Vire the sword splits); a crossing
+that costs hearts is kept only if no attempt costs fewer.  The replay of the found path from the same machine gives
+the next door's pre-entry frame: kept as ``<out>/carry/<name>`` and written as ``<out>/<name>`` (chain 0) with
+Link's hearts filled to his containers, the file's one write.  A stretch's plain way is walked as a branch from the
+door where the ways part.  ``<out>/walk.json`` records the power-on, the commit, the command and each door's
+bytes (``door_facts``: ``$524``, ``$525``, the chase state, the dividers, the drop cycle, the help-drop counters, the
+kills since the last hit, the room history, the level's banked kills, hearts, inventory) and file hash; ``install``
+puts it beside the states as ``<ns>_walk.json`` and removes the namespace's other states (and their manifest
+entries).  ``build`` and ``path`` refuse such a route.
+
 ``audit`` loads each start state several times the way training does (natural RNG state, spawn draws, fresh room).
 It reports the room each state really loads into, whether it was saved before entry, the monsters spawned versus
 the room's full count (``game.yaml``, Zoras excluded: they are not part of the room's monster list), the number
@@ -55,9 +74,14 @@ the owner's start-state rules: a name that isn't ``<level>_<room><entry>[_v<visi
 wrong room (MISNAMED) or entry side (ENTRY, Link's position and facing at the first controllable frame), saved after
 entry (POST-ENTRY), fewer monsters than the room's full count (SHORT), max hearts not the route's at that step (counted
 along the stretch way the step is on) or 16 (HEARTS), less than full health (HP), no route step and no manifest entry
-(OFFROUTE), a boss room entered other than by the route's fight entry (BOSS-ENTRY).  Auditing a whole directory (the
-default) also lists route states missing for a chain 0-2 (MISSING) and files no specialist uses (ORPHAN).  It exits 1
-when anything is flagged.
+(OFFROUTE), a boss room entered other than by the route's fight entry (BOSS-ENTRY), and (round 44) a state of a route
+with its own start states that its walk record does not list with these very bytes (UNWALKED: chain 1 or 2, a
+rebuilt or edited file).  A walked state loads with its room memory as saved, as its route's tasks load it, and is held
+to no full count.  Auditing a whole directory (the default) also lists route states missing for one of the route's
+chains (MISSING: 0-2 on ``d2first``, 0 alone on a walked route), a walked route without its record or one naming no
+commit or power-on (WALK-RECORD) and files no specialist uses (ORPHAN).  It exits 1 when anything is flagged.  What a
+reset draws on top of a state (the spawn cycle, the chase state, the dividers, the random phase) is the start rule's
+audit, not this one (round 43, ``crates/env/src/start_states.rs``).
 
 ``idle`` writes the power-on idle states (``<states>/power_on/idle_<frames>.state``: the machine after 2000,
 4000, ..., 30000 idle frames on the file-select screen), which let a power-on run skip most of its delay.
@@ -1170,14 +1194,16 @@ class RouteIndex:
 
 
 def audit_state(game: Game, path: str, loads: int = 9, full: Optional[dict] = None,
-                index: Optional[RouteIndex] = None) -> dict:
-    """Loads ``path`` ``loads`` times like training does; see module doc."""
-    # pylint: disable=too-many-locals
+                index: Optional[RouteIndex] = None, walked: Optional[bool] = None) -> dict:
+    """Loads ``path`` ``loads`` times like training does; see module doc.  A walked state (round 44: ``walked`` not
+    None, a route with its own start states) loads with its room memory as saved, as that route's tasks do
+    (``fresh_rooms: false``): the room makes what real play left in it, so it is held to no full count (SHORT)."""
+    # pylint: disable=too-many-locals, too-many-arguments, too-many-positional-arguments
     game.load(path, randomize_rng=False, controllable=True)
     pre_entry = is_pre_entry(game.read)
     layouts, counts, state = set(), set(), None
     for k in range(loads):
-        state = game.load(path, fresh_room=True, seed=k)
+        state = game.load(path, fresh_room=walked is None, seed=k)
         monsters = sorted((e['x'], e['y']) for e in state.enemies
                           if not e['dying'] and e['name'] not in NOT_ROOM_MONSTERS)
         layouts.add(tuple(monsters))
@@ -1197,7 +1223,8 @@ def audit_state(game: Game, path: str, loads: int = 9, full: Optional[dict] = No
             'named_room_matches': _named_room(label) in (None, (level, room)),
             'entry': side, 'entry_matches': parsed is None or parsed[2] == side,
             'pre_entry': pre_entry, 'monsters_min': min(counts), 'monsters_max': max(counts),
-            'full_count': expected, 'full': expected is None or min(counts) >= expected, 'layouts': len(layouts),
+            'full_count': expected, 'layouts': len(layouts),
+            'full': walked is not None or expected is None or min(counts) >= expected,
             'health': state.health, 'hearts': state.max_health, 'route_step': route_step,
             'expected_hearts': None if route_step is None else index.hearts(route_step),
             'max_route_hearts': index.max_hearts, 'boss_entry_ok': boss_entry_ok,
@@ -1207,11 +1234,36 @@ def audit_state(game: Game, path: str, loads: int = 9, full: Optional[dict] = No
 def audit(paths: List[str], loads: int = 9, states_dir: str = STATES_DIR, route: str = DEFAULT_ROUTE) -> List[dict]:
     """Audits many start states with one game (the states done are the job's progress)."""
     game, full, index = Game(seed=0, states_dir=str(states_dir)), full_monster_counts(), RouteIndex(route)
+    records = {}
     rows = []
     for path in paths:
-        rows.append(audit_state(game, path, loads, full, index))
+        walked = walked_state(path, records)
+        row = audit_state(game, path, loads, full, index, walked)
+        row['walked'] = walked
+        rows.append(row)
         jobs.progress(len(rows), len(paths), 'states')
     return rows
+
+
+def route_chains(route: str) -> tuple:
+    """The chains a route's doors have states for: one (``WALK_CHAIN``) on a route with its own start states (round
+    44: built by one real walk, ``walk``), 0-2 on a route of bare names (``d2first``, built by ``build``)."""
+    return (WALK_CHAIN,) if route in native_routes() and route_namespace(route) else CHAINS
+
+
+def walked_state(path: str, records: Optional[dict] = None) -> Optional[bool]:
+    """Round 44: whether a state of a route with its own start states is its walk's (the walk record beside it,
+    ``<ns>_walk.json``, lists it with these very bytes: ``sha256``); None for a bare name and the game start."""
+    label = state_label(path)
+    namespace = state_namespace(label) if label != START_STATE else None
+    if namespace is None:
+        return None
+    records = {} if records is None else records
+    key = (os.path.dirname(os.path.abspath(path)), namespace)
+    if key not in records:
+        records[key] = read_walk_record(namespace, key[0])
+    door = (records[key] or {}).get('doors', {}).get(os.path.basename(path))
+    return door is not None and door.get('sha256') == _sha256(path)
 
 
 def audit_problems(row: dict) -> List[str]:
@@ -1229,22 +1281,31 @@ def audit_problems(row: dict) -> List[str]:
                              ('HEARTS', bad_hearts),
                              ('HP', 'health' in row and row['health'] != hearts),
                              ('OFFROUTE', 'route_step' in row and row['route_step'] is None),
-                             ('BOSS-ENTRY', not row.get('boss_entry_ok', True))) if bad]
+                             ('BOSS-ENTRY', not row.get('boss_entry_ok', True)),
+                             ('UNWALKED', row.get('walked') is False)) if bad]
 
 
 def directory_problems(states_dir: str, route=DEFAULT_ROUTE) -> List[str]:
     """Whole-directory problems: ``MISSING <file>`` for a step of ``route`` (a name or a list of them; or an
-    alternate) without a state for some chain 0-2 (in the route's start-state namespace), ``ORPHAN <file>`` for a
-    state no specialist's ``start_states`` matches."""
+    alternate) without a state for one of its chains (``route_chains``: 0-2, one on a walked route), ``ORPHAN <file>``
+    for a state no specialist's ``start_states`` matches, ``WALK-RECORD <ns>`` for a route with its own start states
+    without its walk record or one naming no commit or power-on."""
     routes = [route] if isinstance(route, str) else list(route)
     present = {os.path.basename(p) for p in glob.glob(os.path.join(states_dir, '*.state'))}
-    wanted = []
+    wanted, records = [], []
     for name in routes:
         index = RouteIndex(name)
-        wanted += sorted({step.filename(chain) for step in index.steps[1:] + index.alternates for chain in CHAINS})
+        wanted += sorted({step.filename(chain) for step in index.steps[1:] + index.alternates
+                          for chain in route_chains(name)})
+        namespace = route_namespace(name) if name in native_routes() else None
+        if namespace:
+            record = read_walk_record(namespace, states_dir)
+            if record is None or not record.get('commit') or 'delay' not in record.get('boot', {}):
+                records.append(f"WALK-RECORD {namespace}: {walk_record_path(namespace, states_dir)} is missing or "
+                               "names no commit or power-on")
     configured = {os.path.basename(p) for name in list_specialists()
                   for p in load_specialist(name).resolve_start_states(str(states_dir))}
-    return ([f"MISSING {name}" for name in wanted if name not in present]
+    return (records + [f"MISSING {name}" for name in wanted if name not in present]
             + [f"ORPHAN {name}" for name in sorted(present - configured)])
 
 
@@ -1390,6 +1451,11 @@ def main(argv=None):
         return 0
 
     if args.command in ('path', 'build'):
+        if route_chains(args.route) == (WALK_CHAIN,):
+            print(f"{args.route} has its own start states, one per door, all from one real walk from power on "
+                  f"(round 44): `python -m triforce.entry_states walk --route {args.route}`; `{args.command}` "
+                  "redraws each room and would mix states no walk made", file=sys.stderr)
+            return 2
         out = args.out or default_out()
         # Phase X: a bare --source on a route with a start-state namespace is that route's state (os.sep: a path).
         if os.sep not in args.source:

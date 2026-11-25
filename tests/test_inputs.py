@@ -104,28 +104,29 @@ def test_the_shipped_tasks_declare_every_input_they_draw():
 # not solve in 3000 iterations (with darknut's 0x59 from N at 4 bombs, States40's), per family, beside the same
 # rooms' chains that do have a track. Both of the family's tasks draw them (its d3first part's and its own).
 # Tracks41 gave all 25 a track (round40.md "The untracked states' tracks": the scripted rules, Darknut40's fighter,
-# the explorer at a larger budget), so none is left and every one of them is a chain with a track now.
+# the explorer at a larger budget), so none is left and every one of them is a chain with a track now. Round 44:
+# d3first has one state per door (chain 0), so each room's seed is its `_0` state alone.
 LEFT_WITHOUT_A_TRACK = {
-    'darknut': (set(), {f'd3first_3_{room}_{c}' for room in ('59n', '5bw') for c in range(3)}),
-    'zol': (set(), {f'd3first_3_4bs_{c}' for c in range(3)}),
-    'vire': (set(), {f'd3first_4_{room}_{c}' for room in ('12n', '31w') for c in range(3)}),
-    'like-like': (set(), {*(f'd3first_4_32w_{c}' for c in range(3)), 'd3first_4_32c_0'}),
-    'boss-gleeok': (set(), {f'd3first_4_13w_{c}' for c in range(3)}),
-    'goriya': (set(), {f'd3first_{room}_{c}' for room in ('1_23s', '2_1es', '7_1bw') for c in range(3)}),
-    'boss-digdogger': (set(), {*(f'd3first_7_1cw_{c}' for c in range(3)), 'd3first_7_39s_0', 'd3first_5_24e_0'}),
+    'darknut': (set(), {f'd3first_3_{room}_0' for room in ('59n', '5bw')}),
+    'zol': (set(), {'d3first_3_4bs_0'}),
+    'vire': (set(), {f'd3first_4_{room}_0' for room in ('12n', '31w')}),
+    'like-like': (set(), {'d3first_4_32w_0', 'd3first_4_32c_0'}),
+    'boss-gleeok': (set(), {'d3first_4_13w_0'}),
+    'goriya': (set(), {f'd3first_{room}_0' for room in ('1_23s', '2_1es', '7_1bw')}),
+    'boss-digdogger': (set(), {'d3first_7_1cw_0', 'd3first_7_39s_0', 'd3first_5_24e_0'}),
 }
 
 
 def test_the_d3first_tasks_declare_the_rooms_left_without_a_track():
     """Round 40 (the lead, Nov 24): 0:0x76's explored tracks walk across and kill, so ow-tektite@d3first trains its
-    three seeds without one; and the states left without a track (`LEFT_WITHOUT_A_TRACK`: Tracks40's, all tracked
-    since Tracks41). The tasks load, and the declarations cover exactly those seeds: never a chain of the same room
-    that has a track."""
+    seed (round 44: one state per door, chain 0) without one; and the states left without a track
+    (`LEFT_WITHOUT_A_TRACK`: Tracks40's, all tracked since Tracks41). The tasks load, and the declarations cover
+    exactly those seeds: never a chain of the same room that has a track."""
     require_rom()
     tektite = load_specialist(str(ROOT / 'specialists' / 'd3first' / 'ow-tektite.yaml'))
     seeds = sorted(Path(p).stem for p in tektite.resolve_start_states(str(REPO_STATES_DIR)))
-    assert [s for s in seeds if s.startswith('d3first_0_76e_')] == [f'd3first_0_76e_{c}' for c in range(3)]
-    assert declaration([f'd3first_0_76e_{c}' for c in range(3)], seeds) == untracked(tektite)
+    assert [s for s in seeds if s.startswith('d3first_0_76e_')] == ['d3first_0_76e_0']
+    assert declaration(['d3first_0_76e_0'], seeds) == untracked(tektite)
     for family, (left, tracked) in LEFT_WITHOUT_A_TRACK.items():
         for path in (ROOT / 'specialists' / 'd3first' / f'{family}.yaml', ROOT / 'specialists' / f'{family}.yaml'):
             config = load_specialist(str(path))

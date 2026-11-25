@@ -77,9 +77,10 @@ def parse_room(text: str) -> int:
 @dataclass(frozen=True)
 class Spec:
     """What to play: ``level``/``room``; the route's start state for it (``entry`` one of ``ENTRIES`` or None for
-    the route's first, its ``visit`` from that side, ``chain`` 0-2); written over it: ``bombs``, ``hearts`` (half
-    hearts allowed; the containers grow to hold them), ``keys``, ``item`` (the B item selected, one of ``ITEMS``
-    Link holds); ``enemies``: at most that many monsters in the room (a dungeon room)."""
+    the route's first, its ``visit`` from that side, ``chain``: 0-2 on d2first, 0 on d3first, one state per door since
+    round 44); written over it: ``bombs``, ``hearts`` (half hearts allowed; the containers grow to hold them),
+    ``keys``, ``item`` (the B item selected, one of ``ITEMS`` Link holds); ``enemies``: at most that many monsters in
+    the room (a dungeon room)."""
     level: int
     room: int
     route: str = DEFAULT_ROUTE

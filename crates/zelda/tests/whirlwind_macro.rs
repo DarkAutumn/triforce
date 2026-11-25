@@ -185,7 +185,8 @@ fn the_switch_decides_who_plays_the_whirlwind() {
 #[test]
 fn the_whirlwind_macro_is_masked_by_position_only() {
     let map = map_on();
-    for (state, room) in [("d3first_0_0bc_0", 0x0b), ("d3first_0_22c_1", 0x22), ("d3first_0_0bc_2", 0x0b)] {
+    // round 44: d3first has one state per door (chain 0): each room's one state, no longer three chains' variety
+    for (state, room) in [("d3first_0_0bc_0", 0x0b), ("d3first_0_22c_0", 0x22)] {
         let Some(mut w) = Walk::start(&map, state, room) else { return };
         let mut offered = 0;
         for step in ["WAIT 4", "MOVE E 8", "MOVE E 8", "MOVE S 8", "WAIT 8", "MOVE W 8", "MOVE W 8", "MOVE W 8",

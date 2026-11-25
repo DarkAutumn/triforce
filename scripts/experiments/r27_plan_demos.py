@@ -14,8 +14,9 @@ pool records every decision's observation (with the action mask) and the action 
 (round 27's ow-lynel: ``registry.ACT_RULE``, a model's own clean runs as demonstrations; nothing is replaced then).
 ``--state-files`` adds start states played as named, ``--runs`` each (round 29's ow-zora: harvested state files,
 counted under their stem).  ``--route`` names the stems' route (round 32: ``--route d3first --states 3_6bs`` plays
-``d3first_3_6bs_0..2``, the route's start-state namespace; d2first's names are bare).  ``--family`` may be a yaml path
-(round 32: a config copy with ``state_routes: [d3first]`` and ``chain_hp: 1.0``, the hearts the route's chains bring).
+``d3first_3_6bs_0``, the route's start-state namespace, one state per door since round 44; d2first's names are bare,
+chains 0-2).  ``--family`` may be a yaml path (round 32: a config copy with ``state_routes: [d3first]`` and
+``chain_hp: 1.0``, the hearts the route's chains bring).
 
 Rows: every decision of the episodes that succeed with at most ``--max-loss`` hearts lost; a decision the planner
 replaced (``decisions.foresight.replaced`` of the episode's visit: the policy's draw would have been hit) is written
@@ -56,11 +57,12 @@ def replaced_indices(record: dict) -> set[int]:
 
 
 def state_names(stems: list[str], route: str | None = None) -> list[str]:
-    """The start states of ``stems``, chains 0-2, in ``route``'s start-state namespace (``d3first_3_6bs_0``; a route
-    without one, d2first, and no route: the bare ``3_6bs_0``)."""
+    """The start states of ``stems`` in ``route``'s start-state namespace (``d3first_3_6bs_0``: round 44, d3first has
+    one state per door, chain 0), or for a route without one, d2first, and no route the bare ``3_6bs_0..2``."""
     namespace = _native.route_namespace(route) if route else None
-    prefix = f'{namespace}_' if namespace else ''
-    return [f'{prefix}{stem}_{chain}' for stem in stems for chain in (0, 1, 2)]
+    if namespace:
+        return [f'{namespace}_{stem}_0' for stem in stems]
+    return [f'{stem}_{chain}' for stem in stems for chain in (0, 1, 2)]
 
 
 def record_demos(family: str, checkpoint: Path, out: Path, stems: list[str], runs: int, max_loss: float,
@@ -129,7 +131,8 @@ def main(argv) -> int:
     parser.add_argument('out', type=Path)
     parser.add_argument('--family', default=DEFAULT_FAMILY, help="the family's name or a yaml path (a config copy)")
     parser.add_argument('--act', default=registry.PLAN_ACT, help="the act mode played (default the planner's)")
-    parser.add_argument('--states', nargs='*', default=['6_38s', '6_3aw'], help="start state stems (chains 0-2)")
+    parser.add_argument('--states', nargs='*', default=['6_38s', '6_3aw'],
+                        help="start state stems (bare: chains 0-2; a namespaced route's, d3first: chain 0)")
     parser.add_argument('--state-files', nargs='+', default=[],
                         help="more start states played as named (e.g. harvested state files), --file-runs each")
     parser.add_argument('--runs', type=int, default=100, help="episodes a start state")
