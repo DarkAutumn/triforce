@@ -504,6 +504,13 @@ def test_a_clip_familys_evaluation_shows_each_switch_state():
     progress = {'event': 'progress', 'iteration': 3, 'iterations': 10, 'steps': 1000, 'sps': 50,
                 'metrics': {'success_rate': 0.5, 'clips/on/success_rate': 0.75, 'clips/off/success_rate': 0.25}}
     assert 'clips on 75% / off 25%' in gui.describe(progress)
+    # A run that plays clips off in a stray episode or two (the generation: clips always on) shows no split; half
+    # and half does.
+    rare = {'success_rate': 0.98, 'clips/on/success_rate': 0.98, 'clips/on/episodes': 368,
+            'clips/off/success_rate': 1.0, 'clips/off/episodes': 2}
+    assert 'clips' not in gui.describe({**progress, 'metrics': rare})
+    half = {**rare, 'clips/off/episodes': 368}
+    assert 'clips on 98% / off 100%' in gui.describe({**progress, 'metrics': half})
 
 
 def test_an_evaluations_act_mode_and_decision_statistics_show():

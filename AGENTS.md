@@ -618,6 +618,12 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   block clip, that is the way. What exists stays: the route's plain ways and `stretch:` forks, the run-time switch
   and `play-zelda.py`'s key `c` (turning clips off now plays ways no model is trained on from Dungeon 7 onward),
   the clips-off numbers of rounds 22-26 in their documents.
+  **Clips are a decision to make before any retrain starts** (the owner, Nov 24: "We always want to train with clips
+  on for 2.0.1.0 [...] the default choice is going to be clips=yes for all for 99% of the models unless I specify
+  otherwise"): every task trains with `clips: {enabled: true, off_share: 0}` unless the owner has named clips-off
+  training for it, and the lead confirms it for every task before the first training of a retrain (2.0.1.0's
+  first teachers inherited round 22's bare `clips: true`, half the episodes with CLIP masked, in five task files).
+  The lab trainer refuses a task with `off_share` above 0 unless `--allow-clips-off` (`lab.recipe.check_clips_off`).
 - **No potions, no CONTINUE** (the owner, Nov 19: "We aren't doing potions or continues, that's the call"): a run is one
   life from where it starts to the ending, and it never buys or takes a potion (0x47's take-any gives the heart
   container; the medicine shops are not on the route). A death ends the run; the game's CONTINUE is not modelled,
