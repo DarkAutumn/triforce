@@ -4226,7 +4226,8 @@ entry, standard error up to 0.05; jobs #1335-#1339, #1351, #1352, outputs `r42-h
 ### Not done, not tested
 
 - Suites on e1d960d0 (job #1356): pytest 1,236 passed, 12 skipped; zelda-asm 5; `asm.py check` ok; cargo all
-  programs ok. The follow-ups' suites: below in the report.
+  programs ok. With the follow-ups, on bf6c8b71 (job #1360): pytest 1,238 passed, 12 skipped; zelda-asm 5; `asm.py
+  check` ok; cargo all programs ok.
 - Boss-gleeok's 8:0x3c (68 states) now takes half its resets (24% by file counts before).
 - No VERSION bump: the change is to training code (REV), and the generation's number is the lead's.
 - The darknut reconstruction is an estimate from per-iteration room counts (no per-state log exists): the blocks and
