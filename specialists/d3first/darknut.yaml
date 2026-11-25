@@ -127,9 +127,14 @@ curriculum:
 # Garden (5:0x05 from E) at 0 bombs 148 of 150 and at 8 bombs 149 of 150 (two pieces). Weighed by room and pass
 # (the lead, Nov 24): seven groups, one seventh of the drawn rows each (pooled raw, the Olive Garden was 55% of
 # them and 3:0x69's line 6%).
+# Round 45 (Tracks45; decisions 2026-11-25 "Only real starts"; round40.md "Tracks in the route's layout"): every file
+# recorded again from States44's walked states under the reset rule (the route's layout on about half the visits, the
+# door's other reachable layouts on the rest, as training serves them), the same cases, visits, seeds and groups;
+# 3:0x5b's first pass draws its drop cycle 0 or 1 (`carriers: fight`: the one kill at 0, the walk through at 1); no
+# harvested handoff on 3:0x69's way out. Store snapshot `261125-gen4` (`triforce-lead data install demos`).
 demos:
-  files: [r40-d3-69-in.npz, r40-d3-69-out.npz, r40-darknut-5b-low.npz, r40-darknut-5b-full.npz, r40-darknut-59-b4.npz,
-    r40-darknut-59-b8.npz, r40-darknut-garden-b0.npz, r40-darknut-garden-b8.npz, r40-darknut-garden-b8-p2.npz]
+  files: [r45-d3-69-in.npz, r45-d3-69-out.npz, r45-darknut-5b-low.npz, r45-darknut-5b-full.npz, r45-darknut-59-b4.npz,
+    r45-darknut-59-b8.npz, r40-darknut-garden-b0.npz, r40-darknut-garden-b8.npz, r40-darknut-garden-b8-p2.npz]
   groups: [69-in, 69-out, 5b-first, 5b-first, 59-b4, 59-b8, garden-b0, garden-b8, garden-b8]
   coeff: 0.05
 one_room: true

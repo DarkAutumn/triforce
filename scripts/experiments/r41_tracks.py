@@ -33,16 +33,27 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 FAMILY = {'59': 'darknut', '5b': 'darknut', '5b-last': 'darknut'}
+# The room entry each fighter room is (a task's room key), for a start's drop cycle.
+ENTRY = {'59': '(3, 0x59, N)', '5b': '(3, 0x5b, S)', '5b-last': '(3, 0x5b, W)'}
 
 
-def explore_env(family: str, layout='route'):
+def explore_env(family: str, layout='route', start: dict | None = None):
     """The family's ``d3first`` task as the explorer plays it: no RAM randomization, clips on, its resets in
     ``layout`` (round 45: ``route``, the route's planned spawn cycle, as ``triforce.explore --layout`` defaults to; a
-    spawn cycle 0-8 for a track in another reachable layout)."""
+    spawn cycle 0-8 for a track in another reachable layout).  ``start`` (round 45): what the reset writes beside, the
+    values the route may arrive with at the door that the walked state holds only one of (``bombs``: the bag; ``drop``:
+    ``(room key, drop cycle)``), as the task's own draws write them; a track start keeps them (a curriculum start
+    draws none of a listed room's values)."""
     from triforce._native import Env  # pylint: disable=import-outside-toplevel
     from triforce.lab.collect import task_yaml  # pylint: disable=import-outside-toplevel
     from triforce.specialist import load_specialist  # pylint: disable=import-outside-toplevel
-    config = load_specialist(task_yaml(f'{family}@d3first')).replace(ram_randomization={})
+    draws = {}
+    if start and start.get('bombs') is not None:
+        draws.update(bombs=[start['bombs']] * 2, bombs_share=1.0)
+    if start and start.get('drop') is not None:
+        key, cycle = start['drop']
+        draws['room_kill_cycle'] = {key: [cycle, cycle]}
+    config = load_specialist(task_yaml(f'{family}@d3first')).replace(ram_randomization=draws)
     clips = config.to_dict()['clips']
     if clips['enabled']:
         config = config.replace(clips=dict(clips, off_share=0.0))
@@ -51,28 +62,33 @@ def explore_env(family: str, layout='route'):
     return env
 
 
-def track_name(state: str, how: str, seed: int, layout) -> str:
-    """``<state>~<how><seed>``, and ``~c<N>`` for a track in another reachable layout than the route's (round 45, as
-    ``triforce.explore`` names them)."""
-    return f'{state}~{how}{seed}' + (f'~c{layout}' if isinstance(layout, int) else '')
+def track_name(state: str, how: str, seed: int, layout, start: dict | None = None) -> str:
+    """``<state>~<how><seed>``, then ``~bombs<N>`` and ``~drop<N>`` for a start's written bag and drop cycle, and
+    ``~c<N>`` for a track in another reachable layout than the route's (round 45, as ``triforce.explore`` names it)."""
+    start = start or {}
+    return (f'{state}~{how}{seed}' + (f"~bombs{start['bombs']}" if start.get('bombs') is not None else '')
+            + (f"~drop{start['drop'][1]}" if start.get('drop') is not None else '')
+            + (f'~c{layout}' if isinstance(layout, int) else ''))
 
 
-def write_track(env, root: Path, family: str, state: str, seed: int, how: str, actions: list, crafted: str) -> dict:
+def write_track(env, root: Path, family: str, state: str, seed: int, how: str, actions: list, crafted: str,
+                start: dict | None = None) -> dict:
     """``actions`` played again from the reset of ``state`` with ``seed``, a state file before each one, as the
     explorer writes a track; returns its trajectory.json (``success`` the replay's; ``layout`` the reset's, round
-    45: ``Env.entry``, as ``Explorer::write`` records it)."""
+    45: ``Env.entry``, as ``Explorer::write`` records it; ``start`` the reset's written bag and drop cycle)."""
     env.reset(seed=seed, options={'start_state': state})
-    start = env.state.health
+    begin = bytes(env.state.ram)
+    start_health = env.state.health
     layout = env.entry
     entry = layout.get('entry') or {}
     if layout['asked'] == 'cycle' and entry.get('source') != 'rule':
         raise SystemExit(f"{state}: its door's reset rule holds no such spawn cycle ({entry})")
     track = root / family / track_name(state, how, seed, entry.get('spawn_cycle') if layout['asked'] == 'cycle'
-                                       else None)
+                                       else None, start)
     if track.exists():
         raise SystemExit(f'{track} exists')
     track.mkdir(parents=True)
-    info, played, hits, health = {}, [], 0, start
+    info, played, hits, health = {}, [], 0, start_health
     for index, text in enumerate(actions):
         (track / f'{index:04d}.state').write_bytes(env.snapshot().state_file())
         _, _, terminated, truncated, info = env.step(text)
@@ -84,7 +100,10 @@ def write_track(env, root: Path, family: str, state: str, seed: int, how: str, a
     meta = {'start_state': state, 'success': info.get('outcome') == 'success', 'ending': info.get('ending'),
             'steps': len(played), 'health': env.state.health, 'actions': played,
             'explore': {'iterations': 0, 'env_steps': len(played), 'cells': 0, 'seconds': 0.0, 'seed': seed},
-            'layout': layout, 'crafted': crafted, 'hits': hits, 'hearts_lost': start - env.state.health}
+            'layout': layout, 'start': {'bombs': begin[0x658], 'drop_cycle': begin[0x52A], 'help_count': begin[0x50],
+                                        'written': {k: (v[1] if k == 'drop' else v) for k, v in (start or {}).items()
+                                                    if v is not None}},
+            'crafted': crafted, 'hits': hits, 'hearts_lost': start_health - env.state.health}
     (track / 'trajectory.json').write_text(json.dumps(meta, indent=1), encoding='utf-8')
     return {'track': str(track), **{k: meta[k] for k in ('success', 'ending', 'steps', 'health', 'hits',
                                                           'hearts_lost')},
@@ -93,23 +112,23 @@ def write_track(env, root: Path, family: str, state: str, seed: int, how: str, a
 
 def _teach(task):
     import r40_darknut_fighter as fighter  # pylint: disable=import-outside-toplevel
-    room, state, seed, depth, layout = task
-    env, probe = explore_env(FAMILY[room], layout), explore_env(FAMILY[room], layout)
+    room, state, seed, depth, layout, start = task
+    env, probe = explore_env(FAMILY[room], layout, start), explore_env(FAMILY[room], layout, start)
     way = []
     rec = fighter.teach(env, room, seed, state, probe, depth, way=way)
     return state, seed, rec, way
 
 
 def fighter_tracks(room: str, states: list, root: Path, seeds: int, seed0: int, depth: int, workers: int,
-                   layout='route'):
+                   layout='route', start: dict | None = None):
     from triforce import jobs  # pylint: disable=import-outside-toplevel
     jobs.require_job()
     left = list(states)
     written = []
     with multiprocessing.get_context('spawn').Pool(workers) as pool:
-        for start in range(seed0, seed0 + seeds, workers):
-            tasks = [(room, s, seed, depth, layout) for s in left
-                     for seed in range(start, min(start + workers, seed0 + seeds))]
+        for first in range(seed0, seed0 + seeds, workers):
+            tasks = [(room, s, seed, depth, layout, start) for s in left
+                     for seed in range(first, min(first + workers, seed0 + seeds))]
             if not tasks:
                 break
             kept = {}
@@ -117,20 +136,22 @@ def fighter_tracks(room: str, states: list, root: Path, seeds: int, seed0: int, 
                 print(json.dumps({'state': state, 'seed': seed, 'ending': rec.get('ending'), 'success': rec['success'],
                                   'hits': rec['hits'], 'tries': rec.get('tries'), 'actions': len(way),
                                   'seconds': rec.get('seconds'), 'layout': rec.get('layout'),
-                                  'kills': rec.get('kills')}), flush=True)
+                                  'kills': rec.get('kills'), 'drop_cycle': rec.get('drop_cycle')}), flush=True)
                 if rec['success'] and rec['hits'] == 0 and state not in kept:
                     kept[state] = (seed, way)
             for state, (seed, way) in sorted(kept.items()):
-                out = write_track(explore_env(FAMILY[room], layout), root, FAMILY[room], state, seed, 'fighter', way,
+                out = write_track(explore_env(FAMILY[room], layout, start), root, FAMILY[room], state, seed,
+                                  'fighter', way,
                                   f"round 45 (Tracks45): Darknut40's fighter, room {room}, look-ahead {depth}, layout "
-                                  f"{layout} (scripts/experiments/r41_tracks.py fighter)")
+                                  f"{layout}, start {start or 'as the state holds it'} "
+                                  f"(scripts/experiments/r41_tracks.py fighter)", start)
                 print(json.dumps(out), flush=True)
                 written.append(out)
                 left.remove(state)
             jobs.progress(len(states) - len(left), len(states), 'states')
             if not left:
                 break
-    print(json.dumps({'room': room, 'layout': layout, 'tracks': len(written), 'without': left}))
+    print(json.dumps({'room': room, 'layout': layout, 'start': start, 'tracks': len(written), 'without': left}))
     return 0 if not left else 1
 
 
@@ -195,6 +216,11 @@ def main(argv=None):
     f.add_argument('--layout', default='route', metavar='route|N',
                    help="the layout the resets serve (round 45; default route: the route's planned spawn cycle; N: "
                         "that reachable spawn cycle, tracks <state>~fighter<seed>~c<N>)")
+    f.add_argument('--bombs', type=int, default=None,
+                   help="the bag the reset writes (round 45; default the state's own; track ~bombs<N>)")
+    f.add_argument('--drop-cycle', type=int, default=None,
+                   help="the drop cycle $52A the reset writes for the room's entry (round 45; default the state's own; "
+                        "track ~drop<N>)")
     t = sub.add_parser('trace')
     t.add_argument('--room', choices=sorted(FAMILY), required=True)
     t.add_argument('--state', required=True)
@@ -206,8 +232,10 @@ def main(argv=None):
         return trace(args.room, args.state, args.seed)
     if args.command == 'table':
         return table(args.roots)
+    start = {'bombs': args.bombs, 'drop': None if args.drop_cycle is None else (ENTRY[args.room], args.drop_cycle)}
     return fighter_tracks(args.room, args.states.split(','), args.out, args.seeds, args.seed0, args.depth,
-                          args.workers, int(args.layout) if args.layout.isdigit() else args.layout)
+                          args.workers, int(args.layout) if args.layout.isdigit() else args.layout,
+                          start if any(v is not None for v in start.values()) else None)
 
 
 if __name__ == '__main__':
