@@ -12550,13 +12550,6 @@
    "command": "python -m triforce.entry_states walk --route d3first --out target/r44/walk4",
    "resumed": [
     {
-     "start_step": 38,
-     "source": "d3first_4_32w_0.state",
-     "commit": "5f0654fd24bd85f454b77d33df61dcbd9b0faf11",
-     "dirty": false,
-     "command": "python -m triforce.entry_states walk --route d3first --out target/r44/walk4 --start-step 38 --source target/r44/walk4/carry/d3first_4_32w_0.state --attempts 4"
-    },
-    {
      "start_step": 15,
      "source": "d3first_3_0fcave_0.state",
      "commit": "3b64d0133b719053a0e9a07e00b37d4b02f77d53",
