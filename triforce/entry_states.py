@@ -646,6 +646,21 @@ def sparkle_fight(source: str, kills: Optional[int], out_dir: str, states_dir: s
     return path
 
 
+def filled_source(source: str, out_dir: str, states_dir: str = STATES_DIR, route: Optional[str] = None) -> str:
+    """The walk's last resort (round 44): ``source`` loaded exactly as saved, Link's hearts filled to his containers
+    (the one byte every walked file holds filled anyway), written as ``<out_dir>/<source's name>`` for the explorer to
+    play the room again from.  For a room the walk cannot pass at the hearts it carries: a boss the death sparkle does
+    not end (Gleeok's heads are cut, not killed: zelda-asm `enemies.md`), a crossing every attempt dies in.  The
+    record's ``how`` says so for the door after it."""
+    game = Game(seed=0, states_dir=str(states_dir), route=route if route in native_routes() else None)
+    game.load(source, randomize_rng=False, fresh_room=False)
+    refill_hearts(game)
+    os.makedirs(out_dir, exist_ok=True)
+    path = os.path.join(out_dir, os.path.basename(source if source.endswith('.state') else f'{source}.state'))
+    game.save_state_file(path)
+    return path
+
+
 def walk_crossing(step: RouteStep, target: RouteStep, source: str, route: str, rooms: dict, iterations: int,
                   patience: int, attempts: int, states_dir: str = STATES_DIR, clips: Optional[bool] = None,
                   fights_dir: Optional[str] = None, parallel: int = 3) -> tuple:
@@ -653,16 +668,19 @@ def walk_crossing(step: RouteStep, target: RouteStep, source: str, route: str, r
     way to the step's objective-correct exit that kills what the step's ``clear:`` says and no more (``KillSpec``);
     the replay of that way from the same machine gives the next door's pre-entry frame.  A fight to the end or a
     partial fight the explorer cannot end is ended by ``sparkle_fight`` first (``how: sparkle``) and crossed from
-    there.  Attempt 0 runs alone, the rest (each its own seed) ``parallel`` at a time; after a batch with an unhurt
-    way the most healthy way of the attempts so far is kept (the lowest attempt on a tie), else the next batch runs:
-    no refill on the walk, so the hearts a room costs are carried on.  Deterministic whatever the threads' timing.
-    (pre-entry Snapshot or None, stats)."""
+    there; a room still not passed is played by the explorer once more with Link's hearts filled (``filled_source``,
+    ``how: explorer, hearts filled``).  Attempt 0 runs alone, the rest (each its own seed) ``parallel`` at a time;
+    after a batch with an unhurt way the most healthy way of the attempts so far is kept (the lowest attempt on a
+    tie), else the next batch runs: no refill on the walk otherwise, so the hearts a room costs are carried on.
+    Deterministic whatever the threads' timing.  Returns (pre-entry Snapshot or None, stats)."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
     stats = {'env_steps': 0, 'attempts': 0, 'seconds': 0.0, 'how': 'explorer'}
     kills = step.planned_kills()
     plan = [(source, kills, 'explorer')]
-    if step.clear is not False and fights_dir is not None:
-        plan.append((None, kills, 'sparkle'))
+    if fights_dir is not None:
+        if step.clear is not False:
+            plan.append(('sparkle', kills, 'sparkle'))
+        plan.append(('hearts', kills, 'explorer, hearts filled'))
     initial = Game(seed=0, states_dir=str(states_dir)).load(source, randomize_rng=False, fresh_room=False)
     left = step.treasure in ('refuse', 'skip') and not room_flags(initial, step.room) & FLAG_ITEM_TAKEN
 
@@ -684,13 +702,15 @@ def walk_crossing(step: RouteStep, target: RouteStep, source: str, route: str, r
         return result, found
 
     for start, spec, how in plan:
-        if start is None:
-            try:
+        try:
+            if start == 'sparkle':
                 start = sparkle_fight(source, None if step.clear is True else step.clear, fights_dir, states_dir,
                                       route)
-            except RuntimeError as error:
-                stats['sparkle_error'] = str(error)
-                break
+            elif start == 'hearts':
+                start = filled_source(source, os.path.join(fights_dir, 'hearts'), states_dir, route)
+        except RuntimeError as error:
+            stats[f'{how}_error'] = str(error)
+            continue
         best = None
         with ThreadPoolExecutor(max_workers=parallel) as pool:
             # Attempt 0 alone first (most rooms are crossed unhurt by it), then `parallel` at a time.
