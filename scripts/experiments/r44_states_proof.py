@@ -157,10 +157,51 @@ def cmd_table(args):
         row['splitters'] = [k for k in ((rooms.get(step.location.as_tuple()) or {}).get('enemies') or {})
                             if k in SPLIT_BY]
         row['wood'] = step.index < sword_step
+        row['how'] = door.get('how')
+        row['hearts'] = hearts(door['hearts'])
+        real_hearts = sorted(hearts(e['hearts']) for e in runs if 'hearts' in e)
+        row['hearts_real'] = real_hearts[len(real_hearts) // 2] if real_hearts else None
         rows.append(row)
     compose(rows, steps)
     Path(args.out).write_text('\n'.join(json.dumps(r) for r in rows) + '\n')
     report(rows)
+    if args.markdown:
+        Path(args.markdown).write_text(markdown(rows))
+
+
+def hearts(pair) -> float:
+    """Link's hearts from `$66F`/`$670`: the low nibble's whole hearts, then the partial one (half below `$80`)."""
+    full, partial = pair[0] & 0x0F, pair[1]
+    return full + (0.5 if 0 < partial < 0x80 else 1.0 if partial >= 0x80 else 0.0)
+
+
+def share(row: dict, field: str) -> str:
+    """The share of the runs at the door holding the walk's value of ``field``."""
+    real = row[f'{field}_real']
+    total = sum(real.values())
+    if not total:
+        return '-'
+    key = row[field] if field == 'room_kills' else json.dumps(row[field])
+    return f"{100 * real.get(key, 0) / total:.0f}%"
+
+
+def markdown(rows: list) -> str:
+    """One line per door with monsters or real runs: the walked `$524`, the plan's, the runs' (commonest, its share),
+    the shares of the runs holding the walk's `$525`, drop cycle, room history and banked kills, how the room before
+    it was played, the hearts carried against the runs' median."""
+    lines = ['| Door | Step | $524 walked / planned | runs: commonest $524 (share) | $524 | $525 | $52A | history | '
+             'kills | runs | room before played by | hearts walk / runs |', '|' + '---|' * 12]
+    for r in rows:
+        if not r['runs'] and r.get('planned') is None:
+            continue
+        real = r['spawn_cycle_real']
+        top = next(iter(real), None)
+        common = f"{top} ({100 * real[top] / sum(real.values()):.0f}%)" if top is not None else '-'
+        lines.append(f"| {r['door']} | {r['step']} | {r['spawn_cycle']} / {r.get('planned') if r.get('planned') is not None else '-'} | "
+                     f"{common} | {share(r, 'spawn_cycle')} | {share(r, 'edge_cell')} | {share(r, 'drop_cycle')} | "
+                     f"{share(r, 'room_history')} | {share(r, 'room_kills')} | {r['runs']} | {r['how']} | "
+                     f"{r['hearts']} / {r['hearts_real'] if r['hearts_real'] is not None else '-'} |")
+    return '\n'.join(lines) + '\n'
 
 
 def compose(rows: list, steps: dict):
@@ -290,6 +331,7 @@ def main(argv=None):
     table.add_argument('scans', nargs='+')
     table.add_argument('--min-version', default='2.0.0.7')
     table.add_argument('--out', default='target/r44/proof_table.jsonl')
+    table.add_argument('--markdown', default=None, help="also write the per-door table as markdown")
     place = sub.add_parser('placement')
     place.add_argument('walk')
     place.add_argument('replays', nargs='+')

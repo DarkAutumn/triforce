@@ -773,6 +773,20 @@ def walk(route: str, out: str, iterations: int, patience: int, attempts: int = 6
             raise ValueError(f"{out} holds a walk already: resume it with --start-step and --source (a carried state)")
         record.setdefault('resumed', []).append({'start_step': start_step, 'source': os.path.basename(source),
                                                  **_git_commit(), 'command': command})
+        # The doors after the resumption point belong to the abandoned branch: they go (file, carried state, manifest
+        # entry), so the record holds one walk, every door descending from the next.
+        stale = [name for name, door in record['doors'].items() if door['route_step'] > start_step]
+        for name in stale:
+            del record['doors'][name]
+            for path in (os.path.join(out, name), os.path.join(out, 'carry', name)):
+                if os.path.exists(path):
+                    os.remove(path)
+        manifest_path = os.path.join(out, MANIFEST)
+        if stale and os.path.exists(manifest_path):
+            with open(manifest_path, encoding='utf-8') as file:
+                entries = [e for e in json.load(file) if e['file'] not in stale]
+            write_json_atomic(manifest_path, entries, indent=1)
+        write_json_atomic(record_path, record, indent=1)
     else:
         if source is not None:
             raise ValueError("a walk starts at power on: --source resumes an earlier walk's --out (its walk.json)")
