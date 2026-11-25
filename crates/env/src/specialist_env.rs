@@ -759,7 +759,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             }
         }
         // Round 44 (`EnvOptions::exact_starts`, the real walk's builds): the machine as the file holds it, no draw
-        // and no write: no RNG or spawn redraw, no fresh room, no banked kills.
+        // and no write: no RNG or spawn redraw, no fresh room, no banked kills, no entry-rule draw.
         if self.exact_starts {
             banked_kills.clear();
         }
@@ -774,10 +774,12 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             // route's or one named, `set_layout`); other starts the uniform draw.
             // Training's unseeded resets deal from this env's decks (even shares over a handful of resets); a seeded
             // reset (evaluation: seed for seed the same start in every run, paired arms alike) draws from its seed alone.
-            entry: self.data.entry_rule(ns.as_deref()).map(|rule| zelda::room_entry::EntryDraw {
-                rule,
-                decks: if seed.is_some() { Default::default() } else { self.entry_decks.clone() },
-                layout: self.layout,
+            entry: self.data.entry_rule(ns.as_deref()).filter(|_| !self.exact_starts).map(|rule| {
+                zelda::room_entry::EntryDraw {
+                    rule,
+                    decks: if seed.is_some() { Default::default() } else { self.entry_decks.clone() },
+                    layout: self.layout,
+                }
             }),
         };
         let mut state = self.session.load(&machine, &opts, &mut self.rng)?.clone();

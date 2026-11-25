@@ -252,7 +252,8 @@ def report(rows: list):
     for field in FIELDS + ('room_history', 'room_kills'):
         rated = [r for r in judged if r[f'{field}_agrees'] is not None]
         agree = sum(1 for r in rated if r[f'{field}_agrees'])
-        commonest = sum(1 for r in rated if json.dumps(r[field]) == next(iter(r[f'{field}_real'])))
+        commonest = sum(1 for r in rated if (lambda k: json.dumps(r[field]) == k if isinstance(k, str) else r[field] == k)(
+            next(iter(r[f'{field}_real']))))
         print(f"  {field}: the walk's value among the runs' at {agree} of {len(rated)}, their commonest at "
               f"{commonest}")
     dungeon = [r for r in rows if r.get('planned') is not None and not r['cave'] and r['made']]

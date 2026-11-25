@@ -3060,8 +3060,7 @@ fn a_lying_clock_is_walked_round_while_a_wallmaster_lives() {
 /// the game's drop cycle (`$52A`, asm:Drop_SetUpItem) is 0 or 1, about half each; into 3:0x59 from N
 /// (`d3first_3_59n_0`) Link holds exactly 4 or 8 bombs, about half each. The rooms' other passes keep the family's
 /// draws: 0x5b from W the drop cycle `drop_state: real` draws (round 43: 0-9, no longer its state's own), 0x59 from S
-/// the `bombs` range. Round 44: d3first has one state per door (chain 0), so each door's one state is checked (three
-/// chains were before).
+/// the `bombs` range. Round 44: d3first has one state per door (chain 0), so each door's one state is checked.
 #[test]
 fn darknut_d3first_starts_hold_the_dungeon_3_plan() {
     let Some(nes) = open_core() else { return };

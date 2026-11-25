@@ -417,6 +417,11 @@ Stored start states were built by the old loads: 132 of the 364 hold `$FF` in th
 compared with room ids, so inert) and 120 an off-ring or corner edge cell (`$E0` in 109; `$10`, `$1F`, `$3F` in
 11): a randomized load replaces the cell, a load without it keeps it. Their own RNG registers are all on the cycle.
 
+Round 44: `EnvOptions::exact_starts` (`SpecialistEnv::set_exact_starts`, `Explorer(exact_starts=True)`) makes a
+reset load its state's machine exactly as saved: none of the writes above, no banked kills, no draw of the reset
+rule below. Only the real walk (`entry_states walk`, "Entry states") uses it: its explorer searches and replays each
+room from the carried machine itself, so the state carried on is the one real play of that room produced.
+
 **The reset rule (round 43; the owner, Nov 25: "never serve an unreal room", "all valid starting positions").** In a
 dungeon (and an overworld room with spawn spots) the monsters' positions come from `$524` alone
 (asm:Spawn_AssignPositions walks a 9-spot list from it; no random byte); `$524` is zeroed only at reset and moved only
@@ -438,11 +443,6 @@ the room, checked equal to the seed states' own maps at all 123 route doors), se
 every clear pattern from the values power-on runs bring to the dungeon's entrance (an emptied room passes the value
 on, at most five in a row: the six-room history); the overworld's doors, whose maps move with the point Link crosses
 an edge, take the values the runs held (`proof: measured`).
-
-Round 44: `EnvOptions::exact_starts` (`SpecialistEnv::set_exact_starts`, `Explorer(exact_starts=True)`) makes a
-reset load its state's machine exactly as saved: none of the writes above, no banked kills. Only the real walk
-(`entry_states walk`, "Entry states") uses it: its explorer searches and replays each room from the carried machine
-itself, so the state carried on is the one real play of that room produced.
 
 Round 45 (curriculum tracks in the route's layout): `room_entry::Layout` is `Valid` (the training draw above),
 `Route` (the planned `$524` at every door the rule knows) or `Cycle(v)` (one reachable value; one the door cannot

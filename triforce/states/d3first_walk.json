@@ -12492,6 +12492,51 @@
    "bombs": 2,
    "keys": 0,
    "rupees": 10
+  },
+  "d3first_9_32s_0.state": {
+   "route_step": 289,
+   "from_step": 288,
+   "how": "r29 ganon rule",
+   "walk": "ganon-r29-s288",
+   "clear": true,
+   "sha256": "2ea245713e2286cf068d81af9037513d8ddb39562a2a20289363bd8c685c999e",
+   "spawn_cycle": 8,
+   "edge_cell": 70,
+   "drop_cycle": 4,
+   "help_drop_count": 1,
+   "help_drop_bomb": 0,
+   "world_kill_count": 1,
+   "room_history": [
+    82,
+    66,
+    50,
+    4,
+    3,
+    119
+   ],
+   "long_timer_cycle": 6,
+   "frame_counter": 233,
+   "chase_flag": 0,
+   "chase_target": [
+    120,
+    61
+   ],
+   "chase_timer": 0,
+   "hearts": [
+    238,
+    255
+   ],
+   "level_kill_counts": {
+    "0x05": 15,
+    "0x10": 5,
+    "0x14": 15,
+    "0x16": 15,
+    "0x30": 4,
+    "0x42": 15,
+    "0x52": 15,
+    "0x56": 4,
+    "0x61": 15
+   }
   }
  },
  "walks": {
@@ -12504,13 +12549,6 @@
    "dirty": false,
    "command": "python -m triforce.entry_states walk --route d3first --out target/r44/walk4",
    "resumed": [
-    {
-     "start_step": 38,
-     "source": "d3first_4_32w_0.state",
-     "commit": "5f0654fd24bd85f454b77d33df61dcbd9b0faf11",
-     "dirty": false,
-     "command": "python -m triforce.entry_states walk --route d3first --out target/r44/walk4 --start-step 38 --source target/r44/walk4/carry/d3first_4_32w_0.state --attempts 4"
-    },
     {
      "start_step": 15,
      "source": "d3first_3_0fcave_0.state",
@@ -14890,6 +14928,17 @@
    "commit": "8e5a0fe7526c1b503067ceee551e493a16a8cb4e",
    "dirty": true,
    "command": "python -m triforce.entry_states walk --route d3first --attempts 4 --iterations 6000 --patience 300 --out target/r44/seg213b --start-step 213 --source target/r44/seg178/carry/d3first_0_22c_0.state --segment target/r44/seg213b/segment.json --last-step 229"
+  },
+  "ganon-r29-s288": {
+   "segment": {
+    "start_step": 288,
+    "source": "d3first_9_42s_0.state (the D9 segment walk, installed)",
+    "played_by": "scripts/experiments/r29_demos.py ganon --hearts own (seed 1000; 20 of 20 won)",
+    "note": "the explorer's search at 9x42 raised 'Link never became controllable'; the game's own fight by the scripted rule through Env (a load with the random phase drawn, Ganon's room fresh as on a first visit, Link's hearts the file's: filled), harvested as entry_states build writes a state",
+    "set": []
+   },
+   "commit": "7b70e1f7dcf8b718a5f45ad103865ca3f77355a8",
+   "command": "target/r44/stage_ganon.py"
   }
  }
 }
