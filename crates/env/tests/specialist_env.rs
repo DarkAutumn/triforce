@@ -2124,10 +2124,10 @@ fn leaving_wanted_bombs_behind_ends_drops_left_where_the_task_names_it() {
         let infos = walk(&mut env, 60);
         let last = infos.last().unwrap();
         assert_eq!(last.room, (6, 0x78, false), "named {named} full {full}");
-        assert_eq!(last.ending, want, "named {named} full {full}");
+        assert_eq!(last.ending(), Some(want), "named {named} full {full}");
         assert_eq!(has_term(last, "reward-new-location"), want == "exit-correct", "{:?}", last.rewards);
         if want == "drops-left" {
-            assert_eq!(last.outcome, "soft-failure");
+            assert_eq!(last.outcome(), Some("soft-failure"));
             assert_eq!(term(last, PENALTY_TERMINAL_FAILURE), Some(-TERMINAL_FAILURE_PENALTY_VALUE));
         }
         nes = Some(release(env));
