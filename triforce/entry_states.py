@@ -544,7 +544,7 @@ WALK_SEED = 44
 SPAWN_CYCLE, EDGE_CELL, DROP_CYCLE = 0x524, 0x525, 0x52A
 HELP_DROP_COUNT, HELP_DROP_BOMB, WORLD_KILL_COUNT = 0x50, 0x51, 0x627
 ROOM_HISTORY, LONG_TIMER_CYCLE, FRAME_COUNTER = 0x621, 0x26, 0x15
-CHASE_BYTES = (0x60, 0x61, 0x62, 0x4A)   # IsChasingOtherTarget, ChaseTargetX/Y, ChaseLongTimer
+CHASE_FLAG, CHASE_TARGET, CHASE_TIMER = 0x60, (0x61, 0x62), 0x4A   # IsChasingOtherTarget, ChaseTarget, ChaseLongTimer
 # Monsters a weak hit splits instead of killing (zelda-asm enemies.md "Zol", "Vire"): the sword that kills them
 # outright (1 wood, 2 white, 3 magic).  Their split deaths are uncounted Gels and Red Keese, so a sparkle (a counted
 # death) would hold a room memory no game with that sword can make: the walk never sparkles them.
@@ -565,7 +565,8 @@ def door_facts(game: Game) -> dict:
              'help_drop_count': read(HELP_DROP_COUNT), 'help_drop_bomb': read(HELP_DROP_BOMB),
              'world_kill_count': read(WORLD_KILL_COUNT), 'room_history': [read(ROOM_HISTORY + i) for i in range(6)],
              'long_timer_cycle': read(LONG_TIMER_CYCLE), 'frame_counter': read(FRAME_COUNTER),
-             'chase': [read(a) for a in CHASE_BYTES], 'hearts': [read(CONTAINERS_ADDR), read(CONTAINERS_ADDR + 1)]}
+             'chase_flag': read(CHASE_FLAG), 'chase_target': [read(a) for a in CHASE_TARGET],
+             'chase_timer': read(CHASE_TIMER), 'hearts': [read(CONTAINERS_ADDR), read(CONTAINERS_ADDR + 1)]}
     if read(LEVEL):
         facts['level_kill_counts'] = {f"0x{r:02x}": v for r in range(0x80) if (v := read(LEVEL_KILL_COUNTS + r))}
     pending = pending_room(read)
@@ -943,7 +944,10 @@ def build_path(source: str, rooms: List[MapLocation], chain: int, out: str, iter
 def install(staged: str, states_dir: str = STATES_DIR, partial: bool = False) -> List[str]:
     """Copies a staged build's states into ``states_dir`` (each through a temp file and ``os.replace``) and merges
     their manifest entries into its ``entry_states.json``.  Refuses a build without ``build.json`` (still running or
-    killed) or one with failed steps unless ``partial``.  Returns the installed file names."""
+    killed) or one with failed steps unless ``partial``.  A walk's build (round 44: ``walk.json`` beside it) installs
+    its record as ``<states dir>/<ns>_walk.json`` (a partial install of the same walk merges its doors) and, unless
+    ``partial``, replaces the route's states: every other state file of its namespace and its manifest entry go (one
+    state per door, all from one walk).  Returns the installed file names."""
     record_path = os.path.join(staged, BUILD_RECORD)
     if not os.path.exists(record_path):
         raise RuntimeError(f"{staged} has no {BUILD_RECORD}: the build is still running or was stopped")
@@ -961,7 +965,47 @@ def install(staged: str, states_dir: str = STATES_DIR, partial: bool = False) ->
         os.replace(tmp, os.path.join(states_dir, name))
         jobs.progress(done, len(names), 'files')
     _merge_manifest(states_dir, [staged_manifest[name] for name in names if name in staged_manifest])
+    if os.path.exists(os.path.join(staged, WALK_RECORD)):
+        _install_walk(staged, states_dir, partial)
     return names
+
+
+def walk_record_path(namespace: str, states_dir: str = STATES_DIR) -> str:
+    """A walked route's record in the states dir (round 44): ``<states dir>/<ns>_walk.json``."""
+    return os.path.join(states_dir, f'{namespace}_{WALK_RECORD}')
+
+
+def read_walk_record(namespace: str, states_dir: str = STATES_DIR) -> Optional[dict]:
+    """The installed walk record of a namespace, or None."""
+    path = walk_record_path(namespace, states_dir)
+    if not os.path.exists(path):
+        return None
+    with open(path, encoding='utf-8') as file:
+        return json.load(file)
+
+
+def _install_walk(staged: str, states_dir: str, partial: bool):
+    """``install``'s part for a walk (round 44): the record, and the route's other states removed."""
+    with open(os.path.join(staged, WALK_RECORD), encoding='utf-8') as file:
+        walked = json.load(file)
+    namespace = route_namespace(walked['route'])
+    old = read_walk_record(namespace, states_dir)
+    if partial and old is not None and old.get('walk') == walked['walk']:
+        walked['doors'] = {**old['doors'], **walked['doors']}
+    write_json_atomic(walk_record_path(namespace, states_dir), walked, indent=1)
+    if partial:
+        return
+    keep = set(walked['doors'])
+    stale = sorted(p for p in glob.glob(os.path.join(states_dir, f'{namespace}_*.state'))
+                   if os.path.basename(p) not in keep and state_namespace(state_label(p)) == namespace)
+    for path in stale:
+        os.remove(path)
+    manifest_path = os.path.join(states_dir, MANIFEST)
+    if os.path.exists(manifest_path):
+        with open(manifest_path, encoding='utf-8') as file:
+            entries = json.load(file)
+        entries = [e for e in entries if state_namespace(state_label(e['file'])) != namespace or e['file'] in keep]
+        write_json_atomic(manifest_path, entries, indent=1)
 
 
 # --- audit ---
@@ -1338,6 +1382,7 @@ def main(argv=None):
         manifest, failed = walk(args.route, out, args.iterations, args.patience, args.attempts, args.start_step,
                                 args.source, args.last_step, (WALK_BOOT[0], args.delay), states_dir=states_dir,
                                 command=command, log=lambda text: print(text, flush=True))
+        _write_build_record(out, command, manifest, [failed] if failed else [])
         print(f"{len(manifest)} walked states in {out}")
         if failed:
             print(f"FAILED: not walked from {failed}")
