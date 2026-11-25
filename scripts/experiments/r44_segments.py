@@ -103,7 +103,11 @@ def expected(route: str, start: int) -> dict:
 def door_runs(route: str, start: int, facing: int, scans) -> list:
     """The real runs' entries at the door of step ``start``: a door out of a dungeon (``entry: cave`` after a dungeon
     step) as each run's first entry of the room after its last entry in that dungeon, any other door the route's k-th
-    of it as each run's k-th by Link's facing (``r44_states_proof.real_doors``)."""
+    of it as each run's k-th by Link's facing (``r44_states_proof.real_doors``).  The scans hold no frame of the
+    arrival out of a dungeon itself (no room-entry event), so for such a door this is the run's next arrival at that
+    screen from an edge, the nearest real value there is.  Whether the overworld's maps bring ``$524`` to the runs'
+    commonest value at the next dungeon's entrance from it (as the walk from power on did at D3 and D4) is what the
+    per-dungeon proof checks."""
     steps = [s for s in route_steps(route) if s.way in (None, 'clips')]
     door = next(s for s in steps if s.index == start)
     before = [s for s in steps if s.index < start]
