@@ -3984,3 +3984,30 @@ be clips=yes for all for 99% of the models unless I specify otherwise."
   a retrain's first training.
 - **Left as it is:** start states that the route enters only on its plain way still fix the switch off (a stray 2
   of 370 walkers' episodes); the GUI shows the on/off split only when clips off is 10% or more of a run's episodes.
+
+## 2026-11-25 — Darknuts are their own teacher; stage 1 restarts on a fixed start-state draw (the owner's question, the lead's decision)
+
+The owner, Nov 24, watching the walkers' teacher: "I'm starting to wonder if darknuts might should just be a solo
+class like a boss is [...] Their shield is also truly a unique property [...] Be sure of your choice and confidently
+make it. Do what's best for the resulting speedruns", without regard to training time or the cost already sunk.
+
+- **What had happened** (round40.md "What the teachers train on", "Darknuts their own teacher"): Darknut did not
+  collapse. On its seed states its success rose 0.64 → 0.78 between iterations 114 and 912. The training curve fell
+  because the pool walked its harvested states in file-name order and one env entered a block harvested under
+  `d3first`'s first order (Dungeon 5 before Dungeon 2), where a step that leaves by stairs has no target and every
+  exit is wrong. 10,853 of the 55,489 harvested states the teachers could draw were such stale states.
+- **The decision: split.** `triforce/groups.yaml` has a teacher `darknut` (Darknut alone, 20 games, 30M steps) and
+  the walkers are nine families (18 games, 27M). In the group Darknut's eighteen room entries shared two games of
+  twenty: 3:0x59 from N got 787 room starts, the Olive Garden from E 862 and 3:0x5b's last pass 636 in 15.6M steps,
+  and those rooms stayed at 0.23, 0.08 and 0.36. The other nine families were at 0.92-1.00 early and need nothing
+  from Darknuts; a boss shows a family learns alone; stage 2's one network learns from every teacher either way.
+  The Darknut task keeps its rooms as they are, those with other monsters too.
+- **The restart:** the harvested snapshot `261124-gen2` (the stale states out) is current; the draw is fixed
+  (random order, shares by room entry, stale states refused at reset, entries under 20 states not drawn,
+  plain-way-only seed states left out of a clips-on task); every teacher that drew harvested states or had not
+  started runs again from scratch from `triforce-gen2` (`3e085d3d`): `gen1-darknut/s1`, `gen1-walkers/s1b`,
+  `gen1-overworld/s1b`, others, rooms, Ganon, Aquamentus, Manhandla, Digdogger. Kept: Dodongo, Gohma (no harvested
+  draws) and Gleeok (279 valid states). `gen1-walkers/s1` (stopped at 950) and `gen1-overworld/s1` (986: a quarter
+  of its episodes clips-off, 5% of ow-tektite's a step back out of the room) stay in the store as the record.
+- **Before a retrain** (with the clips rule of Nov 24): `python -m triforce.harvest_audit audit --snapshot NAME`
+  must find nothing invalid.

@@ -4235,3 +4235,36 @@ entry, standard error up to 0.05; jobs #1335-#1339, #1351, #1352, outputs `r42-h
 - The other families' "from invalid states" are upper estimates except the off-route (`-`) counts.
 - `harvest_audit`'s CONTAINERS and ITEMS checks are Python (`RouteIndex.hearts`, the route's cave treasures); only
   the progress check is shared with the env.
+
+## Darknuts their own teacher; stage 1 restarted (the lead, Nov 24-25)
+
+The owner's question on the night of Nov 24 (decisions 2026-11-25): Darknut's training curve in the walkers'
+teacher "collapsing, sometimes hitting 0%"; should Darknuts be a solo class as a boss is. What the lead found before
+Harvest42 took the audit over ("What the teachers train on", above):
+
+- `family/darknut@d3first/room/5:0x64/E/success_rate` was 1.00 on every episode through iteration 894 and about
+  0.10 from 896, its episodes rising from one every other iteration to 3-14, 5:0x64 from the cave's falling from 6-7
+  to 0-1; no step in `approx_kl` (0.020-0.025), `clipfrac` or `entropy` there; `clips/off/episodes` 0.
+- Checkpoint 912 on that room's seed states: a chain with the chain's act rule 300 of 300 (jobs #1325, #1326;
+  798: 300 of 300), with `--act sample` 298 of 300 (#1327, #1328; 798: 297), `triforce evaluate` in the training
+  environment 295 of 300 (#1329). In a training pool on harvested starts alone (the lead's throwaway
+  `dk_harvest.py`, #1330): 5:0x64 from E 175 of 185, the Olive Garden from E 0 of 62 (28 leave E after 3-6 steps),
+  3:0x59 from N 4 of 62; the `h6000..h6599_3` block of 5:0x64 from E alone 0 of about 117.
+- Darknut's seed states at checkpoint 912 (#1331, 90 episodes an entry): 3:0x59 N 0.23, 3:0x5b W 0.36, the Olive
+  Garden E 0.08, 8:0x3e 0.63, 8:0x5e 0.70, 3:0x5b S 0.73, 3:0x69 N 0.80; the other eleven entries 0.84-1.00.
+
+**The split** (`a921363c`): `triforce/groups.yaml` `darknut: {members: [darknut@d3first]}`, the walkers nine
+members; `scripts/experiments/r41_stage1.sh` darknut 20 games × 16,384 × 1,831 (30M), walkers 18 × 14,742 × 1,831
+(27M), `SUFFIX=b` for a restart's run id. An old ten-family walkers' checkpoint is judged in Darknut's slots as
+`+@darknut=gen1-walkers/s1-it000912`.
+
+**The restart** (Nov 24, 23:40-23:59, from `triforce-gen2` at `3e085d3d`, harvested `261124-gen2` current): the
+lead withdrew its own queued jobs (the overworld's resume #1324, others #1269, Aquamentus, Manhandla, Digdogger,
+Ganon, rooms) and queued `gen1-darknut/s1` (#1371) first, beside the experiment `gen1x-darknut/solo-seeds-s1`
+(#1342: Darknut alone on the old draw from `triforce-gen1`, `harvested_fraction` 0, 10M steps), then rooms, Ganon,
+the three bosses, others, `gen1-walkers/s1b` and `gen1-overworld/s1b` (#1372-#1379).
+
+**A mistake of the lead's on the way:** building the cleaned snapshot's folder with `cp -al` and `chmod -R u+w`
+turned the store's `harvested/261124-gen1` files from 0444 to 0644 through the hard links for about a minute
+(contents untouched; restored with `find -perm 644 -exec chmod 444`). A linked copy of a store folder must never be
+chmod-ed; `triforce-lead data install` takes a plain copy.
