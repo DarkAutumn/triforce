@@ -644,9 +644,9 @@ def walk_crossing(step: RouteStep, target: RouteStep, source: str, route: str, r
     way to the step's objective-correct exit that kills what the step's ``clear:`` says and no more (``KillSpec``);
     the replay of that way from the same machine gives the next door's pre-entry frame.  A fight to the end or a
     partial fight the explorer cannot end is ended by ``sparkle_fight`` first (``how: sparkle``) and crossed from
-    there.  Attempts (each its own seed) run ``parallel`` at a time; after a batch with an unhurt way the most
-    healthy way of the attempts so far is kept (the lowest attempt on a tie), else the next batch runs: no refill on
-    the walk, so the hearts a room costs are carried on.  Deterministic whatever the threads' timing.  Returns
+    there.  Attempt 0 runs alone, the rest (each its own seed) ``parallel`` at a time; after a batch with an unhurt
+    way the most healthy way of the attempts so far is kept (the lowest attempt on a tie), else the next batch runs:
+    no refill on the walk, so the hearts a room costs are carried on.  Deterministic whatever the threads' timing.
     (pre-entry Snapshot or None, stats)."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
     stats = {'env_steps': 0, 'attempts': 0, 'seconds': 0.0, 'how': 'explorer'}
@@ -684,8 +684,8 @@ def walk_crossing(step: RouteStep, target: RouteStep, source: str, route: str, r
                 break
         best = None
         with ThreadPoolExecutor(max_workers=parallel) as pool:
-            for first in range(0, attempts, parallel):
-                batch = range(first, min(first + parallel, attempts))
+            # Attempt 0 alone first (most rooms are crossed unhurt by it), then `parallel` at a time.
+            for batch in [range(0, 1)] + [range(f, min(f + parallel, attempts)) for f in range(1, attempts, parallel)]:
                 for result, found in pool.map(lambda n, s=start, p=spec, h=how: attempt(s, p, h, n), batch):
                     stats['env_steps'] += result.env_steps
                     stats['attempts'] += 1
