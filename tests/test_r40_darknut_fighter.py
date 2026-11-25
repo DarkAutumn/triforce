@@ -115,8 +115,8 @@ def test_the_fighter_keeps_the_reserve_in_3x59(fighter):
 
 def test_a_bomb_is_laid_only_for_two_or_more(fighter):
     """3:0x59 with 8 bombs (three above the reserve), seed 5: the one bomb laid hurt two or more Darknuts."""
-    # round 44: one state per door, from the real walk; seed 2 was pinned on chain 2's old state, seed 5 is the first
-    # of 0-39 that passes on the walked one (seeds 1 and 4 lay a bomb that hurts fewer than two)
+    # round 44: one state per door, from the real walk; seed 2 was pinned on chain 2's old state, seed 5 passes on the
+    # walked one under round 43's reset rule (`room_entry::EntryRule`) as before it
     record = fighter.play(fighter.make_env('59', 8, REPO_STATES_DIR), '59', 5, 'd3first_3_59n_0')
     assert record['ending'] == 'exit-correct' and record['bombs'] >= 1, record
     assert all(hurt >= 2 for hurt in record['bomb_hurt']), record
