@@ -3949,3 +3949,17 @@ and from the entrance, against the baseline `r40-2015-1k`.
 a job length of 10 minutes, regular 2, a spare place while the load average is at or under 15, tools 2). Agents do
 not edit it.
 
+## 2026-11-24 — The owner's answers to the stage 1 check-in (the owner)
+
+- **Seed 1's settings stand** ("fine" to all nine): the aimless penalty 0.002, the two-Darknut bomb mask, no
+  following cost (a later test arm), 7:0x1b a fight, the 50-50 drop cycle at 3:0x5b's first pass, the reserve of 5
+  in 3:0x59, the four groups and seven boss teachers, 768 wide, 3 million steps a family.
+- **Seeds: one to evaluate, then two more** ("1 to evaluate, then 2 more is the right path"): each teacher's seed 1
+  is judged first; a teacher that learns well gets seeds 2 and 3 without more work; one that does not is fixed
+  before more CPU time is spent on it.
+- **The generation is judged from the previous triforce** (the leg and the dungeon), not from each entrance.
+- **The hotspot is tracked only** for now; teaching it (demonstrations, a side task) is for later.
+- **The queue stays as it is** ("load average 30+. That's plenty"): one express place, two regular, a spare at
+  load 15 or less, tools; more places buy nothing.
+- **Main moves onto the store** (yes): round40.md "The removal plan".
+- The agents' request budget of 600 is saved for good.
