@@ -122,7 +122,8 @@ from .clips import OFF_LABEL, episode_jobs
 from .demos import load_demos, recipe as demo_recipe, row_weights
 from .events import (LOGS_DIR_ENV, PROGRESS_METRICS, EventLog, TrainingPlan, has_plan, new_log_dir,
                      write_json_atomic)
-from .jobs import announce, flag, work
+from .jobs import Speed, announce, flag, work
+from .jobspeed import network_name
 from .jobs import progress as job_progress
 from .metrics import MetricsLogger, format_summary
 from .model import ModelConfig, ZeldaPolicy, obs_spec_from_space
@@ -1149,6 +1150,7 @@ def _train(args, specialist: str, run_id: str, where: Where, out_dir: Path, even
         elapsed = time.time() - started
         fraction = result.iteration / args.iterations
         job_progress(state['steps'] - start_steps, target_steps - start_steps, 'steps', specialist)
+        speed.update(state['steps'] - start_steps, metrics.get('charts/rollout_SPS'))
         events.emit('progress', iteration=state['iteration'], iterations=start_iteration + args.iterations,
                     steps=state['steps'], target_steps=target_steps, fraction=round(fraction, 4),
                     elapsed=round(elapsed, 1), sps=round((state['steps'] - start_steps) / elapsed, 1),
@@ -1171,6 +1173,10 @@ def _train(args, specialist: str, run_id: str, where: Where, out_dir: Path, even
         return True
 
     started = time.time()
+    # The run's steps a second for the queue (round40.md "Steps a second on record"; the Rust actor's network: no
+    # look-ahead in this trainer).
+    speed = Speed(network_name(network.config.to_dict()), args.parallel, None, total=target_steps - start_steps,
+                  began=started)
     status = 'completed'
     try:
         ppo.train(network, pool, args.iterations, callback=on_iteration, start_steps=start_steps,

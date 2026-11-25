@@ -168,6 +168,36 @@ def test_chart_range_updates_when_switching_runs(qapp):
     assert chart.y_bounds() == (0.90, 1.0)
 
 
+def health_run(tmp_path, pairs):
+    """A training run whose iterations 1, 2, ... log these (real, total) hearts changes."""
+    run = gui.Run(tmp_path, 0, {'specialist': 'ow-start'})
+    for iteration, (real, total) in enumerate(pairs, 1):
+        run.apply({'event': 'progress', 'iteration': iteration,
+                   'metrics': {'health_change': real, 'health_change_total': total}})
+    return run
+
+
+def health_series(run, skip=0):
+    series, _ = gui.run_chart_data(run, skip)['health']
+    return {s['label']: s['points'] for s in series}
+
+
+def test_hearts_chart_draws_total_only_from_where_it_first_differs_from_real(tmp_path):
+    """The health chart's 'total (+wasted)' says something only where hearts were wasted: a run whose total equals
+    its real change everywhere shows 'real' alone (no total series at all); one whose total first differs at
+    iteration 3 has it from iteration 3 on, every later iteration kept even where the two agree again."""
+    same = health_run(tmp_path, [(-0.5, -0.5), (0.0, 0.0), (0.25, 0.25)])
+    assert health_series(same) == {'real': [(1, -0.5), (2, 0.0), (3, 0.25)]}
+    assert [s['label'] for s in gui.run_chart_data(same, 0)['health'][0]] == ['real']
+    differs = health_run(tmp_path, [(-0.5, -0.5), (0.0, 0.0), (0.25, 0.5), (0.25, 0.25), (0.5, 0.75)])
+    shown = health_series(differs)
+    assert list(shown) == ['total (+wasted)', 'real']            # total first, as before
+    assert shown['total (+wasted)'] == [(3, 0.5), (4, 0.25), (5, 0.75)]
+    assert shown['real'] == [(1, -0.5), (2, 0.0), (3, 0.25), (4, 0.25), (5, 0.5)]
+    # skipping startup past the first difference keeps the rest of the total
+    assert health_series(differs, skip=3)['total (+wasted)'] == [(4, 0.25), (5, 0.75)]
+
+
 def iso(ts):
     from datetime import datetime, timezone
     return datetime.fromtimestamp(ts, timezone.utc).isoformat()
@@ -1207,6 +1237,86 @@ def test_a_job_with_a_plan_is_one_box_over_its_runs(qapp, tmp_path, monkeypatch,
     web, = gui.WebState(root, machine=lambda: '', scan_every=0).refresh()['jobs']
     assert web['ended'] and web['box']['pills'][0] == ['COMPLETED', gui.C.ok.name()]
     assert [text for text, _ in web['box']['facts']][0].startswith('after ')
+
+
+def speed_report(now):
+    """A training's speed report (``jobs.speed``) as its tool writes it."""
+    return {'steps': 50_000, 'total': 1_000_000, 'sps': 1010.0, 'mean': 957.0, 'rollout': 1020.0, 'games': 20,
+            'network': 'hitnet-768', 'lookahead': '4:0.25', 'shape': 'hitnet-768, 20 games, look-ahead 4:0.25',
+            'ts': now}
+
+
+def test_a_running_trainings_speed_shows_under_its_counters_and_slow_in_the_warning_colour(qapp, tmp_path,
+                                                                                           monkeypatch, queue):
+    """A running training that reports its steps a second (``jobs.speed``, ``jobspeed``) shows
+    ``jobspeed.speed_line`` as one line under its counters, on its card, in the detail pane, on its one box and in
+    the web view; while its mark is SLOW also ``jobspeed.slow_line`` (the other jobs by id) in the warning colour, the
+    card and the box that much taller; a job without a report, or one that ended, shows nothing new."""
+    monkeypatch.setattr(gui.MachineStatus, 'sample', lambda self: None)
+    now = float(int(time_now()))
+    freeze_gui_clock(monkeypatch, now)
+    progress = {'steps': {'done': 50_000, 'total': 1_000_000, 'unit': 'steps', 'rate': 957.0, 'ts': now}}
+    ok_mark = {'state': 'ok', 'normal': '1,150 steps/s', 'normal_sps': 1150.0, 'rate': 1100.0}
+    fast = queue.add(subtask='fast', kind='train', progress=progress, speed=speed_report(now), speed_mark=ok_mark)
+    slow_mark = {'state': 'slow', 'normal': '1,460 steps/s', 'normal_sps': 1460.0, 'rate': 1010.0, 'below': 0.31,
+                 'since': now - 840, 'others': [fast], 'load': 27.1, 'slow_rate': 1010.0, 'ts': now}
+    slow = queue.add(subtask='slow', kind='train', progress=progress, speed=speed_report(now), speed_mark=slow_mark)
+    plain = queue.add(subtask='plain', kind='train', progress=progress)
+    ended = queue.add(subtask='ended', kind='train', status='completed', exit_code=0, finished_ts=now - 60,
+                      speed=speed_report(now), speed_mark=ok_mark)
+    fast_line = ('speed 957 steps/s mean (47.9 a game), last iteration 1,010, rollout 1,020, last 10 minutes 1,100 '
+                 '[hitnet-768, 20 games, look-ahead 4:0.25]; normal 1,150 steps/s: ok')
+    slow_line = ('speed 957 steps/s mean (47.9 a game), last iteration 1,010, rollout 1,020, last 10 minutes 1,010 '
+                 '[hitnet-768, 20 games, look-ahead 4:0.25]; normal 1,460 steps/s: SLOW')
+    slow_text = (f"SLOW: 31% below its normal (1,010 steps/s against 1,460) for 14 minutes since "
+                 f"{gui.jobspeed.clock(now - 840)}, beside #{fast}; load 27.1")
+    expected = {fast: [(fast_line, gui.C.muted)], slow: [(slow_line, gui.C.muted), (slow_text, gui.C.warn)],
+                plain: [], ended: []}
+    root = tmp_path / 'gui-root'
+    root.mkdir()
+    boxed, _ = checkout_job(queue, tmp_path / 'triforce-a', 'main', '261125_001_boxed')
+    window = gui.Window(root, None)
+    try:
+        views = {view.key: view for view in window.views}
+        cards = {job: views[gui.job_key({'id': job})].job_card for job in expected}
+        for job, lines in expected.items():
+            card = cards[job]
+            assert [(text, color) for text, color, _ in card.speed.lines] == lines, job
+            assert card.speed.isHidden() is (not lines)
+            card.grab()
+        # the speed is a line of the card's own: the card is that much taller, nothing overlaps
+        line = gui.TextLines.line_height(gui.font(9))
+        assert cards[fast].speed.minimumHeight() == line and cards[slow].speed.minimumHeight() == 2 * line
+        assert cards[fast].height() == cards[plain].height() + line + gui.JobCard.SPACING
+        assert cards[slow].height() == cards[fast].height() + line
+        window.select(views[gui.job_key({'id': slow})], 'round')        # the detail pane: under its progress
+        titles = [title for _, title, _ in window.detail.summary.sections]
+        assert titles.index('Speed') == titles.index('Progress') + 1
+        speed, = [rows for _, title, rows in window.detail.summary.sections if title == 'Speed']
+        assert speed == expected[slow]
+        window.select(views[gui.job_key({'id': plain})], 'round')
+        assert 'Speed' not in [title for _, title, _ in window.detail.summary.sections]
+        # a job with a plan: its one box draws the lines under its counters, a line's height each
+        view = views[boxed]
+        box = one_box(view)
+        assert box['speed'] == []
+        plain_height = view.header.height()
+        queue.update(view.job['id'], speed=speed_report(now), speed_mark=slow_mark)
+        window._scan_and_update()
+        box = one_box(view)
+        assert box['speed'] == expected[slow]
+        assert view.header.height() == plain_height + 2 * gui.Header.BOX_LINE
+        view.header.grab()
+    finally:
+        window.close()
+        window.deleteLater()
+    snapshot = gui.WebState(root, clock=lambda: now, machine=lambda: '', scan_every=0).refresh()
+    web = {job['id']: job for job in snapshot['jobs']}
+    for job, lines in expected.items():
+        assert web[gui.job_key({'id': job})]['speed'] == [[text, color.name()] for text, color in lines]
+    assert web[boxed]['box']['speed'] == [[text, color.name()] for text, color in expected[slow]]
+    page = gui.web_page().decode()
+    assert 'function speedHtml(lines)' in page and 'speedHtml(box.speed)' in page and 'speedHtml(job.speed)' in page
 
 
 def test_frames_repaint_only_what_animates(qapp, tmp_path, monkeypatch):

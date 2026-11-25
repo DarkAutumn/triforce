@@ -52,21 +52,38 @@ def serve_half() -> bool:
     return os.environ.get('TRIFORCE_SERVE_HALF', '') not in ('', '0')
 
 
-_LEARNER = {'on': False}
+_LEARNER = {'on': False, 'graphs': False}
 
 
-def learner_process():
-    """Marks this process as one whose own threads use the GPU while the server serves (a training, a recording):
-    its servers run eagerly.  A CUDA graph capture on the server thread cannot coexist with another thread's GPU
-    work in the same process (Nov 23: a training's value recompute and the capture failed each other with
-    cudaErrorStreamCaptureUnsupported, in every capture mode)."""
-    _LEARNER['on'] = True
+def learner_process(graphs: bool = False):
+    """Marks this process as one whose own threads use the GPU while the server serves (a training, a recording).
+    A CUDA graph capture on the server thread cannot coexist with another thread's GPU work in the same process
+    (Nov 23: a training's value recompute and the capture failed each other with cudaErrorStreamCaptureUnsupported,
+    in every capture mode, f8def785), so a learner's server captures only where nothing else uses the GPU:
+    ``graphs`` (the lab trainer, round40.md "Where a teacher's time goes"): each network's every batch-size bucket
+    at its first batch (a training's first rollout, while the learner waits for it), never later, and the training's
+    later rollouts copy the new weights into the same served copy (``Server.serve_copy``), so its graphs stay valid;
+    without (a recording, ``triforce train``): eager, as before."""
+    _LEARNER.update(on=True, graphs=graphs)
 
 
 def serve_graphs() -> bool:
-    """CUDA graphs for served networks: on by default on the GPU, off in a learner process (``learner_process``) and
-    with ``$TRIFORCE_SERVE_GRAPHS=0``."""
-    return not _LEARNER['on'] and os.environ.get('TRIFORCE_SERVE_GRAPHS', '1') not in ('', '0')
+    """CUDA graphs for served networks: on by default on the GPU, in a learner process only as
+    ``learner_process(graphs=True)`` sets, and off with ``$TRIFORCE_SERVE_GRAPHS=0``."""
+    if _LEARNER['on'] and not _LEARNER['graphs']:
+        return False
+    return os.environ.get('TRIFORCE_SERVE_GRAPHS', '1') not in ('', '0')
+
+
+def serve_mode() -> dict:
+    """How this process serves its networks, for a run's manifest (``training.serve``): ``graphs`` (CUDA graphs
+    replayed) or ``eager``, the batch window in seconds, the device and the precision."""
+    device = serve_device()
+    graphs = serve_graphs() and device.type == 'cuda'
+    default = GRAPH_GATHER if graphs else DEFAULT_GATHER
+    return {'forward': 'graphs' if graphs else 'eager', 'device': device.type,
+            'gather': float(os.environ.get('TRIFORCE_SERVE_GATHER', default)),
+            'half': serve_half() and device.type == 'cuda'}
 
 
 def _bucket(rows: int) -> Optional[int]:
@@ -138,6 +155,19 @@ class Server:
         self.gather = float(os.environ.get('TRIFORCE_SERVE_GATHER', default)) if gather is None else gather
         self._graphs: dict[tuple[int, int], _Graph] = {}
         self._eager: set[int] = set()
+        # In a learner process with graphs (``learner_process``): each network's buckets are captured all at once at
+        # its first batch (``_captured``) and never later; ``serve_copy`` keeps one copy a key, the weights copied in.
+        self.capture_all = self.graphs and _LEARNER['on']
+        self._captured: set[int] = set()
+        self._copies: dict = {}
+        # A measurement (``$TRIFORCE_SERVE_ALTERNATE=1``, round40.md "Where a teacher's time goes"): a learner's
+        # rollouts alternate between the graphs (1 ms window) and the eager forward (5 ms), the first with graphs,
+        # so both are timed under the same load; ``replaying`` says which the current rollout serves with.
+        self.alternate = self.capture_all and os.environ.get('TRIFORCE_SERVE_ALTERNATE', '') not in ('', '0')
+        self.replaying = self.graphs
+        # ``$TRIFORCE_SERVE_AUDIT=1``: every graphed answer checked against the eager forward (``_audit``).
+        self.audit: Optional[dict] = ({'rows': 0, 'max_diff': 0.0, 'flips': 0} if os.environ.get(
+            'TRIFORCE_SERVE_AUDIT', '') not in ('', '0') else None)
         if self.device.type == 'cpu':
             # torch's default (every core) contends with the pool's workers: measured 4 decisions/s on 10 envs.
             torch.set_num_threads(threads)
@@ -151,20 +181,24 @@ class Server:
         self.error: Optional[BaseException] = None
         self.batches = 0
         self.rows = 0
+        self.busy = 0.0                         # seconds spent answering (``answer``): the server thread's load
 
     def policy(self, network: torch.nn.Module, key=None):
         """``network`` (moved to the server's device, eval mode) as an ``_native.ExternalPolicy``.  The same
         ``key`` (default: the network object) reuses its model index and replaces the network there; a new key
-        always gets a new index."""
+        always gets a new index.  The same object served again at its index keeps its CUDA graphs."""
         key = id(network) if key is None else key
         with self._lock:
             index = self._keys.get(key)
             if index is None:
                 index = self._keys[key] = len(self.models)
+            same = self.models.get(index) is network
             self.models[index] = network.to(self.device).eval()
             self._states = {k: v for k, v in self._states.items() if k[0] != index}
-            self._graphs = {k: v for k, v in self._graphs.items() if k[0] != index}
-            self._eager.discard(index)
+            if not same:
+                self._graphs = {k: v for k, v in self._graphs.items() if k[0] != index}
+                self._eager.discard(index)
+                self._captured.discard(index)
         self._start()
         return self.queue.policy(index, weights_hash(network))
 
@@ -172,12 +206,26 @@ class Server:
         """``policy`` of a frozen copy of ``network`` (``key`` default: the network object, so a training run's
         rollouts reuse one index and the copy before is dropped).  The default key lives as long as ``network``:
         once it is gone its id may name another network (``load_model(path)[0].to_native()`` in a loop), which
-        must get its own index, never replace the one served for the network that died."""
+        must get its own index, never replace the one served for the network that died.  With ``capture_all`` the
+        key's copy is kept and the weights are copied into it (its graphs read them in place; call it only while
+        none of its rows is being served: a training starts its rollout after the last one ended)."""
         if key is None:
             key = id(network)
             if key not in self._keys:
                 weakref.finalize(network, self._keys.pop, key, None)
-        return self.policy(copy.deepcopy(network), key)
+                weakref.finalize(network, self._copies.pop, key, None)
+        kept = self._copies.get(key) if self.capture_all else None
+        if (kept is not None and type(kept) is type(network)
+                and kept.state_dict().keys() == network.state_dict().keys()):
+            kept.load_state_dict(network.state_dict())
+            if self.alternate:
+                self.replaying = not self.replaying
+                self.gather = GRAPH_GATHER if self.replaying else DEFAULT_GATHER
+            return self.policy(kept, key)
+        served = copy.deepcopy(network)
+        if self.capture_all:
+            self._copies[key] = served
+        return self.policy(served, key)
 
     def _start(self):
         if self._thread is None or not self._thread.is_alive():
@@ -208,6 +256,7 @@ class Server:
     @torch.no_grad()
     def answer(self, batch: dict):
         """Runs every network on its rows of ``batch`` (an ``ExternalQueue.take`` dict) and answers them."""
+        began = time.monotonic()
         models = batch['model']
         count, size = len(models), self.queue.logits_size
         logits = np.empty((count, size), dtype=np.float32)
@@ -217,7 +266,8 @@ class Server:
             rows = np.nonzero(models == model)[0]
             network = self.models[int(model)]
             state = self._state_rows(network, int(model), batch, rows)
-            out = self._graphed(int(model), network, batch, rows) if state is None and self.graphs else None
+            out = (self._graphed(int(model), network, batch, rows) if state is None and self.graphs and self.replaying
+                   else None)
             new_state = None
             if out is None:
                 obs = {key: torch.from_numpy(value[rows]).to(self.device, non_blocking=True)
@@ -233,6 +283,7 @@ class Server:
         self.queue.answer(batch['slot'], logits, values, hit)
         self.batches += 1
         self.rows += count
+        self.busy += time.monotonic() - began
 
     def _graphed(self, model: int, network, batch: dict, rows) -> Optional[np.ndarray]:
         """``rows`` of ``batch`` through ``network``'s CUDA graph for their bucket (the rows padded by repeating the
@@ -247,9 +298,23 @@ class Server:
                for key, value in batch['obs'].items()}
         graph = self._graphs.get((model, bucket))
         try:
+            if graph is None and self.capture_all:
+                # A learner process captures nothing beside its learner's GPU work: every bucket at the network's
+                # first batch (the rows repeated to each size), none later (a bucket missing then is served eagerly).
+                if model in self._captured:
+                    return None
+                self._captured.add(model)
+                for size in GRAPH_BUCKETS:
+                    sized = np.resize(rows, size)
+                    self._graphs[(model, size)] = _Graph(
+                        network, {key: torch.from_numpy(value[sized]).to(self.device) for key, value in
+                                  batch['obs'].items()}, self.half)
+                graph = self._graphs[(model, bucket)]
             if graph is None:
                 graph = self._graphs[(model, bucket)] = _Graph(network, obs, self.half)
             out = graph.run(obs)
+            if self.audit is not None:
+                self._audit(network, batch, rows, out[:len(rows)])
             if graph.checks:
                 graph.checks -= 1
                 with torch.autocast('cuda', dtype=torch.float16, enabled=self.half):
@@ -263,6 +328,35 @@ class Server:
             print(f"triforce: warning: served network {model} runs without CUDA graphs: "
                   f"{type(error).__name__}: {error}", flush=True)
             return None
+
+    def _audit(self, network, batch: dict, rows, graphed: torch.Tensor):
+        """``$TRIFORCE_SERVE_AUDIT=1`` (round40.md "Where a teacher's time goes"): every graphed answer against the
+        eager forward the server would have run on the same rows (unpadded), into ``audit``: rows, the largest
+        difference of a logit or value, and the decisions whose pick differs, kind, direction then duration head by
+        head as the Rust actor picks (``policy::logits``: the legal logits plus one Gumbel draw shared by both)."""
+        obs = {key: torch.from_numpy(value[rows]).to(self.device) for key, value in batch['obs'].items()}
+        with torch.autocast('cuda', dtype=torch.float16, enabled=self.half):
+            eager = _flat(network.heads(obs)[0])
+        a, b = graphed.float().cpu().numpy(), eager.float().cpu().numpy()
+        size = self.queue.logits_size
+        both = np.isfinite(a[:, :size + 1]) & np.isfinite(b[:, :size + 1])
+        self.audit['rows'] += len(rows)
+        self.audit['max_diff'] = max(self.audit['max_diff'], float(np.abs(a[:, :size + 1] - b[:, :size + 1])[both]
+                                                                   .max(initial=0.0)))
+        mask = batch['obs']['action_mask'][rows].astype(bool)
+        noise = -np.log(-np.log(np.random.default_rng(self.audit['rows']).uniform(1e-12, 1.0, a[:, :size].shape)))
+
+        def pick(logits, i, lo, hi) -> int:
+            return int(np.where(mask[i, lo:hi], logits[i, lo:hi] + noise[i, lo:hi], -np.inf).argmax())
+        kinds, dirs, durations = NUM_KINDS, NUM_DIRECTIONS, NUM_DURATIONS
+        for i in range(len(rows)):
+            kind = pick(a, i, 0, kinds)
+            same = kind == pick(b, i, 0, kinds)
+            if same:
+                d0, u0 = kinds + kind * dirs, kinds + kinds * dirs + kind * durations
+                same = (pick(a, i, d0, d0 + dirs) == pick(b, i, d0, d0 + dirs)
+                        and pick(a, i, u0, u0 + durations) == pick(b, i, u0, u0 + durations))
+            self.audit['flips'] += int(not same)
 
     def _state_rows(self, network, model: int, batch: dict, rows) -> Optional[torch.Tensor]:
         fresh = network.initial_state(len(rows)) if hasattr(network, 'initial_state') else None

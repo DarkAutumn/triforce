@@ -50,8 +50,10 @@ from ..best_of_n import success_by_state
 from ..demos import load_demos, recipe as demo_recipe, row_weights
 from ..inputs import MissingInput, task_demos
 from ..events import EventLog, logged_job, write_json_atomic
-from ..jobs import announce, work
+from ..jobs import Speed, announce, work
+from ..jobspeed import lookahead_text, network_name
 from ..jobs import progress as job_progress
+from ..nets.serve import learner_process, serve_mode
 from ..metrics import MetricsLogger, format_summary
 from ..ppo import PPO, IterationResult, PPOConfig, joint_kl, minibatch_forward
 from ..train import (CONFIRM_EPISODES, EXIT_INTERRUPTED, EarlyStop, curriculum_spec, interrupt_on_sigterm,
@@ -275,12 +277,14 @@ class RunLog:
     teacher coefficient (``teacher_coeff``) and losses (``SHARED_METRICS``, ``losses/aux_*``).  The training GUI
     draws the run as one group with a row a family."""
 
-    def __init__(self, plan, keys: list[str], run_id: str):
+    def __init__(self, plan, keys: list[str], run_id: str, shape: tuple = (None, None, None)):
         self.plan = plan
         self.keys = keys
         self.streams = [EventLog(plan.directory / f'{key}.jsonl', specialist=key, run_id=run_id) for key in keys]
         self.began = time.time()
         self.start_steps = 0
+        self.shape = shape          # (network, games, look-ahead): ``jobs.Speed``'s
+        self.speed: Optional[Speed] = None
 
     @staticmethod
     def runs(keys: list[str], run_id: str, out_dir: Path, total: int, iterations: int) -> list[dict]:
@@ -292,6 +296,8 @@ class RunLog:
         """Every family's ``start`` (``start_steps``: where a resumed run continues; its rate counts from there)."""
         self.began = time.time()
         self.start_steps = int(fields.get('start_steps') or 0)
+        total = fields.get('target_steps')
+        self.speed = Speed(*self.shape, total=None if total is None else total - self.start_steps, began=self.began)
         for index, stream in enumerate(self.streams):
             stream.emit('start', **fields)
             self.plan.update_run(index, status='running')
@@ -305,6 +311,8 @@ class RunLog:
         shared = {key: value for key, value in metrics.items()
                   if key in SHARED_METRICS or key.startswith('losses/aux_')}
         job_progress(done, target_steps - self.start_steps, 'steps')
+        if self.speed is not None:
+            self.speed.update(done, metrics.get('charts/rollout_SPS'))
         for key, stream in zip(self.keys, self.streams):
             prefix = f'family/{key}/'
             own = {name[len(prefix):]: value for name, value in metrics.items() if name.startswith(prefix)}
@@ -518,7 +526,11 @@ def training_settings(args, cfg: PPOConfig, tried, steps_per_env: int, recurrent
             'bptt': args.bptt if recurrent else None, 'teacher': teacher, 'sampling': sampling, 'rehearse': rehearse,
             'stop': None if args.stop_success is None else {'success': args.stop_success,
                                                             'patience': args.stop_patience},
-            'curriculum': not args.no_curriculum}
+            'curriculum': not args.no_curriculum,
+            # How the rollouts' network is served (``nets.serve.serve_mode``: CUDA graphs since Nov 25, round40.md
+            # "Where a teacher's time goes"): the same actions within float tolerance; a manifest without it is an
+            # older run, served eagerly (a resume only notes it: unknown there).
+            'serve': serve_mode()}
 
 
 def cli(argv=None) -> int:
@@ -541,8 +553,9 @@ def main(argv=None) -> Path:
     # pylint: disable=too-many-locals, too-many-statements, too-many-branches
     argv = sys.argv[1:] if argv is None else list(argv)
     args = parse_args(argv)
-    from ..nets.serve import learner_process  # pylint: disable=import-outside-toplevel
-    learner_process()           # its learner uses the GPU beside the rollouts' server: no CUDA graphs there
+    # Its learner uses the GPU beside the rollouts' server: the server captures its CUDA graphs only during the first
+    # rollout, while the learner waits for it (``nets.serve.learner_process``).
+    learner_process(graphs=True)
     if args.mode == 'imitate' and args.teacher_coeff <= 0:
         args.teacher_coeff = 1.0
     if args.actor == 'teacher' and args.mode != 'imitate':
@@ -670,7 +683,8 @@ def main(argv=None) -> Path:
                     args.logs_dir, work=work(train_steps=total), families=keys, run_dir=str(out_dir),
                     mode=args.mode) as plan:
         interrupt_on_sigterm()  # SIGTERM waits out a TensorBoard write (interrupts_held); logged_job restores it
-        log = RunLog(plan, keys, run_id)
+        log = RunLog(plan, keys, run_id, (network_name(network.config.to_dict()), sum(f.envs for f in families),
+                                          lookahead_text(tried)))
         aux_losses = [AuxLoss.parse(text) for text in args.aux]
         sampler = None
         if args.sampling == 'need':
@@ -729,7 +743,8 @@ def main(argv=None) -> Path:
         print(f"[lab] {args.name} run={run_id} dir={out_dir} arch={arch} "
               f"parameters={network.parameter_count():,} envs={collector.shares} mode={args.mode}", flush=True)
         logger = MetricsLogger(str(out_dir))
-        state = {'iteration': start_iteration, 'steps': start_steps, 'metrics': {}, 'stopped_early': False}
+        state = {'iteration': start_iteration, 'steps': start_steps, 'metrics': {}, 'stopped_early': False,
+                 'rollout_steps': 0.0, 'rollout_seconds': 0.0}
 
         def save():
             registry.save_checkpoint(args.name, run_id, network, ppo.optimizer, iterations=state['iteration'],
@@ -741,9 +756,12 @@ def main(argv=None) -> Path:
         def on_iteration(result: IterationResult):
             iteration = start_iteration + result.iteration
             state['iteration'], state['steps'] = iteration, result.total_steps
-            metrics = {**result.rollout.summary(), **result.stats, **collector.family_metrics()}
+            metrics = {**result.rollout.summary(), **result.stats, **collector.serve_stats,
+                       **collector.family_metrics()}
             stop = stopper is not None and stopper.update(network, iteration, metrics)
             state['metrics'] = metrics
+            state['rollout_steps'] += metrics.get('rollout/steps', 0.0)
+            state['rollout_seconds'] += metrics.get('charts/rollout_seconds', 0.0)
             with interrupts_held():             # TensorBoard's queue: a SIGTERM waits for the scalars
                 logger.log(iteration, result.total_steps, metrics)
             log.progress(iteration, args.iterations, result.total_steps, total, metrics, ppo.teacher_coeff)
@@ -805,6 +823,12 @@ def main(argv=None) -> Path:
         status = 'early_stop' if state['stopped_early'] else status
         summary = {'status': status, 'iterations': state['iteration'], 'steps': state['steps'],
                    'start_iteration': start_iteration, 'wall_seconds': round(time.time() - began, 1)}
+        # The run's steps a second (round40.md "Steps a second on record"): its mean over this process's wall time,
+        # and the rollouts' alone (their steps over their seconds).
+        summary['steps_per_second'] = round((state['steps'] - start_steps) / summary['wall_seconds'], 1) \
+            if summary['wall_seconds'] > 0 else None
+        summary['rollout_steps_per_second'] = round(state['rollout_steps'] / state['rollout_seconds'], 1) \
+            if state['rollout_seconds'] > 0 else None
         log.end(status, iterations=state['iteration'], steps=state['steps'], wall_seconds=summary['wall_seconds'])
         write_json_atomic(out_dir / 'train_summary.json', summary)
         print(f"[lab] {status}: {summary}", flush=True)
