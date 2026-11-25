@@ -1663,6 +1663,26 @@ every step, so following an enemy that moves away pays again, and knockback rese
   earlier run had measured it) or failed. Its Eval tab lists every entry's result and, for a selected entry, the
   outcomes with their share of the evaluation, `108× (10.8%)`: of the chain's runs (where the failed runs ended),
   or of the family evaluation's episodes (start room and ending; `eval` event `by_room_failures`).
+- Each job's CPU and load (`triforce/jobload.py`, `JobLoads`; the owner, Nov 25): the GUI's process alone samples
+  every running job of this host every 3 s (`INTERVAL`; one sampler shared by the window's timer and the web view's
+  thread, rate-limited under a lock). A job's cgroup is read once from its wrapper's `/proc/<pid>/cgroup` (a
+  detached job's `tfjob-...service` unit; a job without one is followed by its wrapper's process tree through
+  `/proc/*/task/*/children`). **CPU** is the cgroup's `cpu.stat` `usage_usec` between two samples (cores, and their
+  share of `os.cpu_count()` threads); **load** is the count of its threads in state R (`cgroup.threads`, each
+  `/proc/<tid>/task/<tid>/stat`) smoothed as the kernel smooths its 1-minute average (`load * e + n * (1 - e)`, `e =
+  exp(-dt/60)`; first seen, as if it had run that many since its admission); **waiting** is `cpu.pressure` `some
+  avg10`. The machine's busy cores (`/proc/stat`) and load average beside the jobs' sums (an ended job's load still
+  in it, fading as the kernel's average still holds it) give what is outside the queue; over 3 cores
+  (`OUTSIDE_CORES`) for 60 s (`OUTSIDE_SECONDS`) warns, and only while over is `/proc/*/stat`
+  read, every 15 s (`OUTSIDE_SCAN`), to name the busiest process outside every job. A unit that ends, a missing
+  file, a vanished pid are skipped, never raised; an ended job keeps its last sample (`final`: total CPU time and
+  mean cores, when that sample came within 8 s of its end). Cost (Nov 25, at load 60): 3.3 ms of CPU a sample on
+  10 jobs of 40 threads (0.11% of a core at one sample in 3 s); the look at every process (650: 6-10 ms) adds under
+  0.07% while it runs. The card shows it at its first line's right (`job_load`, `fit_aside`: the longest variant
+  that fits beside the headline, so it is cut before anything else; the page's `.jload` shrinks first and
+  ellipsizes); the line over the list is `loads_line`.
+  Rates: `fmt_rate` is the one formatter of every counter, chain and evaluation rate, never below one (`s/test`,
+  `min/chain`, `h/chain` under one a second; `singular`).
 - Web view (`training-gui.py`, `WebState`/`WebServer`): beside the window (or alone, `--web-only`, no display
   needed) a stdlib `ThreadingHTTPServer` on `--web-host` (default `0.0.0.0`, every interface) port `--web-port`
   (default 22222; `--no-web` off) answers GET `/` (one page, no external assets, its first snapshot inlined) and
