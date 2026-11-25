@@ -4212,7 +4212,12 @@ routes.yaml for the run-time switch).
 ### Not done, not tested
 
 - The draw's change was not run in a training (a short lab run would show the per-room seed and harvested counts in
-  the log); the suites cover it (below).
+  the log). Suites on e1d960d0 (job #1356): pytest 1,236 passed, 12 skipped; zelda-asm 5; `asm.py check` ok; cargo
+  all programs ok.
+- Equal shares per harvested entry give a tiny entry the same share as a big one: darknut's 5 states of 3x5b from N
+  (a recovery entry) get 3% of its resets; boss-gleeok's 8:0x3c (68 states) now half its resets (24% by file counts
+  before). Whether to drop tiny recovery entries from a snapshot is the lead's call.
+- No VERSION bump: the change is to training code (REV), and the generation's number is the lead's.
 - The darknut reconstruction is an estimate from per-iteration room counts (no per-state log exists): the blocks and
   their iterations are certain, the 3x5b first-pass split is ±300.
 - The other families' "from invalid states" are upper estimates except the off-route (`-`) counts.
