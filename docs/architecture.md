@@ -2044,8 +2044,10 @@ every step, so following an enemy that moves away pays again, and knockback rese
   kill count two thirds by real play's distribution and a third uniform over 0-15
   (`start_states::drop_state_values`, `DROP_STATE_REAL_SHARE`), and draws the drop cycle `$52A` 0-9; after every
   other draw. An entry listed in `room_kill_cycle` (3:0x5b from S) keeps its cycle and its `help_count` streak, draw
-  for draw; a curriculum start keeps the counters and the cycle its state holds. Without the table a task that names
-  it is refused at its first reset.
+  for draw. Without the table a task that names it is refused at its first reset.
+- A curriculum start past its track's first point (round 43) keeps its own mid-room state: of the reset's draws only
+  the hearts are written (`start_states::track_point_values`): no bag, kill counters, drop cycle, room value
+  (`room_kill_cycle`, `room_bomb_counts`, `room_bombs`) or drop state. A track's first point draws as a seed start.
 - A forced bomb drop (round 25; boss-manhandla): `ram_randomization: {drop_bombs: P}` arms the game's help drop as
   bombs (`HelpDropCount` $0A, `IsHelpDropBomb` 1, asm:Drop_SetUpItem) in a share P of resets, at the reset and again
   after every step while a monster is in the room (harm to Link clears both), so the room's next drop (Manhandla's

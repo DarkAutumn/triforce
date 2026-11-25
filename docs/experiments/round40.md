@@ -4848,9 +4848,17 @@ removed, 21 files; the bare tasks, `d2first` and the product trainer untouched).
   `help_count: [0, 9]` for an entry that states its own cycle): its draws are the same draw for draw. Proof: 300
   resets (seeds 0-99 on `3_5bs_0..2`) give the same RAM, `$000-$7FF` byte for byte, on `r40-int` at 92940375 and
   on this branch; the unit test runs 300 draws with and without the key and the random stream after them.
-- *A track start* (curriculum) keeps the counters and the cycle its state holds: it is a point inside the room's play,
-  after kills or hits the track made, so a draw would rewrite a fight's own history (today `help_count` did); 3:0x5b
-  from S's track starts draw as before.
+- *A track start* (curriculum, past its track's first point) keeps its own mid-room state, and only the hearts are
+  drawn (`start_states::track_point_values`; the lead, after Tracks45 found the listed-room draws still applied there):
+  no bag, no kill counters, no drop cycle, no room value, no drop state. A point is a moment inside the room's play,
+  after the kills, hits and pickups its track made: before, a 3:0x5b first-pass point after the kill (cycle 1) was
+  drawn back to 0 or 1, so half the time the carriers lit again and `carriers: fight` asked for a second kill, and a
+  3:0x59 point mid-fight got a bag of 4 or 8 its track never held. A track's first point (the room's entry) draws as a
+  seed start. darknut's 3:0x5b first-pass tracks (store trajectories 261124-gen2, the fighter's, three tracks of 74,
+  89 and 97 points): 174 of the 257 points a curriculum start can draw hold the carriers lit (before the kill, cycle
+  0), 83 dark (after it, cycle 1); the curriculum starts near a track's end and walks back, so its early stages train
+  the leaving after the kill and its later ones the kill. Before, every point was lit about half the time. Test
+  `a_track_point_keeps_its_own_cycle_bag_and_counters`.
 - *The values the game can hold*: every triple was held by the game; the cycle is independent of them. Where
   Manhandla's and Dodongo's `drop_bombs` arm the bomb drop (at the reset, and again after a hit cleared it) the three
   counters are a real armed triple copied from the table (`start_states::armed_drop_values`; the lead's follow-up, Nov
