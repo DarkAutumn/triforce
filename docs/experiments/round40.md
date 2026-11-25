@@ -4198,25 +4198,36 @@ entry, standard error up to 0.05; jobs #1335-#1339, #1351, #1352, outputs `r42-h
   harvest only skips a state the route can't be in: a run off the route's progress); `triforce evaluate` names its
   starts; rewards, routes, tasks.
 
-### The plain-way seed states (the lead's question; nothing changed)
+### The plain-way seed states and tiny harvested entries (the lead's follow-ups, built)
 
-Nine Dungeon 4 seed states fix the clips switch off (`start_clips`: the route enters there on its plain way only):
-vire's `4_20s_[0-2]` and `4_30e_[0-2]` (steps 45, 44) and stalfos-keese-gel's `4_21w_[0-2]` (step 46). Under the
-owner's ruling (2.0.1.0 trains with clips on in every episode) a task with `off_share: 0` should not draw them. The
-proposal: `lab.collect.route_only` (the generation's tasks on one route) drops a seed state whose route steps (by
-its room, side and visit, `_native.route_steps`) are all on a plain way when the task's `clips.off_share` is 0, and
-says so in the run's log; the same rule could join `triforce train`. Rather than the three tasks' globs, because it
-follows the route data when a stretch changes. Chains: nothing (they play no seed states; the plain way stays in
-routes.yaml for the run-time switch).
+- **Plain-way-only seed states are left out with clips on.** Nine Dungeon 4 seed states fix the clips switch off
+  (`start_clips`: the route enters there on its plain way only): vire's `4_20s_[0-2]` and `4_30e_[0-2]` (steps 45,
+  44) and stalfos-keese-gel's `4_21w_[0-2]` (step 46). `lab.collect.route_only` now leaves out, when the task's
+  `clips.off_share` is 0 (the owner: 2.0.1.0 trains clips on in every episode), every seed state whose route steps
+  (by room, side and visit) are all on a plain way, and their tracks; a glob that matched one becomes the names it
+  keeps, so the manifest's start-state count shows it; the run's log names them. `triforce train` would need the same
+  call (`plain_way_only`) where it resolves a task's start states (not changed). Chains: nothing (they play no seed
+  states; the plain way stays in routes.yaml for the run-time switch).
+- **Tiny harvested entries are not drawn**: `env::start_states::MIN_HARVESTED_ENTRY` = 20 (equal entry shares: five
+  recovery states of 3x5b from N would take 3% of Darknut's resets). An entry with fewer is left out while the pool
+  has one with at least 20 (a pool whose every entry is that small draws them all: nothing larger to protect, and
+  the tests' small harvests keep working); entries a seed state lacks stay drawn at 20 or more (8x3c's Gleeok, 68).
+  The lab's log names each entry left out and its count (`[lab] darknut@d3first: harvested room entries under 20
+  states are not drawn: d3first_3_5bn (5)`).
+- **The smoke run on the new draw** (job #1359; Darknuts alone, the group file's network, 20 games, 16,384 steps an
+  update, 12 iterations; store run `r42-smoke/draw1`): 2,540 resets, 1,268 of them curriculum starts (which come
+  before the pool), 868 seed and 404 harvested room starts: 31.8% of the pool's resets harvested (the task's 0.33),
+  10 harvested entries at 32-52 episodes each (2.5-4.1% of the pool's resets, 3.2% on average; 3x5b from N left
+  out); **the Olive Garden from E seed-only (50 seed, 0 harvested)**; **3x59 from N drawing its harvested states**
+  (52 harvested, 48 seed); nothing refused. 614 steps a second over the run (cumulative at iteration 12, load
+  average about 22), against the walkers' old draw's 445 at its iteration 12 (same games and update size, ten
+  families, another load: not a paired measure; no slowdown).
 
 ### Not done, not tested
 
-- The draw's change was not run in a training (a short lab run would show the per-room seed and harvested counts in
-  the log). Suites on e1d960d0 (job #1356): pytest 1,236 passed, 12 skipped; zelda-asm 5; `asm.py check` ok; cargo
-  all programs ok.
-- Equal shares per harvested entry give a tiny entry the same share as a big one: darknut's 5 states of 3x5b from N
-  (a recovery entry) get 3% of its resets; boss-gleeok's 8:0x3c (68 states) now half its resets (24% by file counts
-  before). Whether to drop tiny recovery entries from a snapshot is the lead's call.
+- Suites on e1d960d0 (job #1356): pytest 1,236 passed, 12 skipped; zelda-asm 5; `asm.py check` ok; cargo all
+  programs ok. The follow-ups' suites: below in the report.
+- Boss-gleeok's 8:0x3c (68 states) now takes half its resets (24% by file counts before).
 - No VERSION bump: the change is to training code (REV), and the generation's number is the lead's.
 - The darknut reconstruction is an estimate from per-iteration room counts (no per-state log exists): the blocks and
   their iterations are certain, the 3x5b first-pass split is ±300.
