@@ -38,6 +38,11 @@ for config in "$@"; do
                          --state-route d3first --arch hitnet --arch-config "$bare" --aux hit=hit:0.5
                          --try-others 4:0.25) ;;
             g8) games=8 steps=6552 ;;
+            gohma) args=(--group boss-gohma) games=8 steps=4096 ;;
+            others) args=(--group others) games=10 steps=8192 ;;
+            walkers) args=(--group walkers) games=18 steps=14742 ;;
+            overworld) args=(--group overworld) games=20 steps=16384 ;;
+            cap) env+=(TRIFORCE_GPU_FRACTION=0.4) ;;
             eager) env+=(TRIFORCE_SERVE_GRAPHS=0) ;;
             gather1) env+=(TRIFORCE_SERVE_GRAPHS=0 TRIFORCE_SERVE_GATHER=0.001) ;;
             alt) env+=(TRIFORCE_SERVE_ALTERNATE=1) ;;

@@ -1271,8 +1271,11 @@ def cmd_speed(args) -> int:
                 continue
             end = 'running' if job['status'] == 'running' else (q.iso(job.get('finished_ts')) or '?')[:16]
             print(f"#{job['id']} {job.get('name')} [{report.get('shape')}] {job['status']}")
+            last = '' if report.get('gpu_mb') is None else f" (last {report['gpu_mb'] / 1024:.1f} GB)"
+            gpu = ('' if report.get('gpu_peak_mb') is None else
+                   f", GPU memory peak {report['gpu_peak_mb'] / 1024:.1f} GB{last}")
             print(f"    {(q.iso(job.get('admitted_ts')) or '?')[:16]} to {end}, {report.get('steps') or 0:,.0f} steps"
-                  + ('' if not report.get('backfilled') else ' (backfilled from its run folder: no load average)'))
+                  + gpu + ('' if not report.get('backfilled') else ' (backfilled from its run folder: no load average)'))
             line = jobspeed.final_line(con, job) or ''
             print(f"    {line.split(' speed: ', 1)[-1]}")
             if job['status'] == 'running':

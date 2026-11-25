@@ -465,6 +465,49 @@ def test_a_lab_trainers_server_stages_one_copy_a_batch_and_answers_no_hit_logits
     assert all(each._graphs and not each._eager for name, each in servers.items() if name != 'eager')
 
 
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA graphs need the GPU")
+def test_a_capture_that_runs_out_of_gpu_memory_serves_eagerly_and_the_run_goes_on(observations, monkeypatch,
+                                                                                   capsys):
+    """A training whose first capture cannot get its GPU memory (the restart's three trainings beside a suite, the
+    lead's question of Nov 25): the network is served eagerly from then on with one warning line, the answers are the
+    eager forward's, and the GPU stays usable (the capture ended)."""
+    monkeypatch.setattr(serve_module, '_LEARNER', {'on': False, 'graphs': False})
+    eager = Server(device='cuda', graphs=False)
+    serve_module.learner_process(graphs=True)
+    torch.manual_seed(17)
+    network = nets.create('wide', native_spec(), hidden_dim=64, depth=2).to('cuda').eval()
+    heads, calls = network.heads, []
+
+    def short_of_memory(obs, state=None):
+        calls.append(torch.cuda.is_current_stream_capturing())
+        if calls[-1]:
+            raise torch.OutOfMemoryError("CUDA out of memory (the test's)")
+        return heads(obs, state)
+    monkeypatch.setattr(network, 'heads', short_of_memory)
+    server = Server(device='cuda')
+    answered = {}
+    for name, each in (('server', server), ('eager', eager)):
+        class Queue:            # pylint: disable=too-few-public-methods
+            logits_size = 11 * 13
+
+            @staticmethod
+            def answer(slots, logits, values, hit, name=name):
+                answered[name] = logits.copy()
+        each.queue = Queue()
+        each.models[0] = network
+    for n in (3, 5, 1):
+        obs = {k: v[:n] for k, v in observations.items()}
+        for each in (server, eager):
+            each.answer({'obs': obs, 'slot': np.arange(n), 'model': np.zeros(n, dtype=np.int64), 'job': np.arange(n),
+                         'step': np.zeros(n, dtype=np.int64), 'bootstrap': np.zeros(n, dtype=bool)})
+        assert np.allclose(answered['server'], answered['eager'], atol=1e-5)
+    assert any(calls) and 0 in server._eager and not server._graphs
+    assert not torch.cuda.is_current_stream_capturing()
+    assert (torch.ones(4, device='cuda') * 2).sum().item() == 8.0
+    warnings = [line for line in capsys.readouterr().out.splitlines() if 'runs without CUDA graphs' in line]
+    assert len(warnings) == 1 and 'OutOfMemoryError' in warnings[0] and 'the run goes on' in warnings[0]
+
+
 def test_the_game_threads_are_niced_above_the_server():
     """``lab.collect.nice_game_threads``: the pools' game threads (``pool-N``) are raised the given steps above the
     calling thread (the server and the learner stay where they are); a thread already there is left alone."""

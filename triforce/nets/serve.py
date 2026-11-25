@@ -228,6 +228,7 @@ class Server:
         self.batches = 0
         self.rows = 0
         self.busy = 0.0                         # seconds spent answering (``answer``): the server thread's load
+        self.graph_bytes = 0                    # GPU memory the learner's captures took (``capture_all``)
 
     def policy(self, network: torch.nn.Module, key=None):
         """``network`` (moved to the server's device, eval mode) as an ``_native.ExternalPolicy``.  The same
@@ -350,10 +351,16 @@ class Server:
                 if model in self._captured:
                     return None
                 self._captured.add(model)
+                reserved = torch.cuda.memory_reserved(self.device)
                 for size in GRAPH_BUCKETS:
                     sized = np.resize(rows, size)
                     self._graphs[(model, size)] = _Graph(network, {key: value[sized] for key, value in arrays.items()},
                                                          self.half, self.device, self.hits, self.staged)
+                grown = torch.cuda.memory_reserved(self.device) - reserved
+                self.graph_bytes += grown
+                print(f"triforce: served network {model}: {len(GRAPH_BUCKETS)} CUDA graphs captured (batches of "
+                      f"{', '.join(map(str, GRAPH_BUCKETS))} rows; never more), {grown / 2 ** 20:.0f} MB of GPU memory",
+                      flush=True)
                 graph = self._graphs[(model, bucket)]
             if graph is None:
                 graph = self._graphs[(model, bucket)] = _Graph(
