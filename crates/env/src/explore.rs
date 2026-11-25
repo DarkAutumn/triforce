@@ -237,6 +237,14 @@ pub fn layout_json(asked: Layout, phase: Option<u32>, entry: Option<EntryValues>
     json!({"asked": asked, "rng_phase": phase, "entry": entry})
 }
 
+/// A track's `trajectory.json` `start` (round 45): what its first decision holds of the values a curriculum point
+/// past the track's first keeps rather than draws (the track-start rule): the bag `$658`, the drop cycle `$52A`, the
+/// help drop counter and value `$50`/`$51`, the kill streak `$627`, and the hearts.
+pub fn start_json(state: &GameView) -> serde_json::Value {
+    json!({"bombs": state.peek(0x658), "drop_cycle": state.peek(0x52A), "help_count": state.peek(0x50),
+           "help_value": state.peek(0x51), "kill_streak": state.peek(0x627), "health": state.health()})
+}
+
 /// (health, -steps, actions, ending) of the best success so far.
 type Candidate = (f64, i64, Vec<[usize; 3]>, Option<String>);
 
@@ -292,8 +300,9 @@ pub struct Explorer<N: Nes, St: StateStore<N::State>> {
     kills: Option<KillSpec>,
     /// The layout every `explore`'s reset serves (round 45; [`Explorer::set_layout`]).
     layout: Layout,
-    /// The last `explore`'s reset: its RNG phase and what its room is entered with (`trajectory.json` `layout`).
-    start: (Option<u32>, Option<EntryValues>),
+    /// The last `explore`'s reset: its RNG phase and what its room is entered with (`trajectory.json` `layout`), and
+    /// what its first decision holds of the values a curriculum point past the first keeps (`start`).
+    start: (Option<u32>, Option<EntryValues>, serde_json::Value),
 }
 
 impl<N: Nes, St: StateStore<N::State>> Explorer<N, St> {
@@ -321,7 +330,7 @@ impl<N: Nes, St: StateStore<N::State>> Explorer<N, St> {
             stop: None,
             kills: None,
             layout: Layout::Valid,
-            start: (None, None),
+            start: (None, None, serde_json::Value::Null),
         })
     }
 
@@ -383,7 +392,7 @@ impl<N: Nes, St: StateStore<N::State>> Explorer<N, St> {
                 entry.map(|e| (e.source.name(), e.spawn_cycle))
             )));
         }
-        self.start = (self.env.session().rng_phase(), entry);
+        self.start = (self.env.session().rng_phase(), entry, start_json(self.env.session().state()));
         let root = self.env.save();
         let mut archive: IndexMap<CellKey, Cell<N::State>> = IndexMap::new();
         {
@@ -558,6 +567,7 @@ impl<N: Nes, St: StateStore<N::State>> Explorer<N, St> {
             "explore": {"iterations": result.iterations, "env_steps": result.env_steps, "cells": result.cells,
                         "seconds": (result.seconds * 10.0).round() / 10.0, "seed": self.seed},
             "layout": layout_json(self.layout, self.start.0, self.start.1),
+            "start": self.start.2,
         });
         let mut out = Vec::new();
         let formatter = serde_json::ser::PrettyFormatter::with_indent(b" ");

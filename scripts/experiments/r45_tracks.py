@@ -4,6 +4,7 @@ again from States44's walked states (one state per door, no redraw), in the rout
 
     python scripts/experiments/r45_tracks.py table ROOT... [--json OUT]
     python scripts/experiments/r45_tracks.py replay ROOT [--points P] [--seeds S] [--families F,G] [--json OUT]
+    python scripts/experiments/r45_tracks.py annotate ROOT...
     python scripts/experiments/r45_tracks.py compose --store DIR --add DIR [--add DIR] --walk WALK.json --out NEW
         [--keep GLOB]
 
@@ -196,6 +197,30 @@ def replay(root: Path, points: int, seeds: int, families: list | None, out: Path
     return 0 if kept == resets else 1
 
 
+def annotate(roots: list):
+    """Writes ``start`` into each track's ``trajectory.json`` that lacks it (tracks explored before ``Explorer::write``
+    recorded it, Nov 25): the same values (``env::explore::start_json``) read from the track's ``0000.state``, the
+    explorer's reset itself (no ``ram_randomization``: the walked state's own bag, drop cycle and counters)."""
+    from triforce._native import Game  # pylint: disable=import-outside-toplevel
+    game = Game(seed=0)
+    done = 0
+    for root in roots:
+        for track in tracks_under(root):
+            path = track / 'trajectory.json'
+            meta = json.loads(path.read_text(encoding='utf-8'))
+            if meta.get('start') is not None:
+                continue
+            state = game.load(str(track / '0000.state'), randomize_rng=False, controllable=True)
+            ram = bytes(state.ram)
+            meta['start'] = {'bombs': ram[0x658], 'drop_cycle': ram[0x52A], 'help_count': ram[0x50],
+                             'help_value': ram[0x51], 'kill_streak': ram[0x627], 'health': state.health,
+                             'read_from': '0000.state'}
+            path.write_text(json.dumps(meta, indent=1), encoding='utf-8')
+            done += 1
+    print(f'{done} tracks annotated')
+    return 0
+
+
 def compose(store: Path, adds: list, walk: Path, keep: list, out: Path):
     doors = {door_of(Path(name).stem) for name in json.loads(walk.read_text(encoding='utf-8'))['doors']}
     if out.exists():
@@ -245,6 +270,8 @@ def main(argv=None):
     r.add_argument('--seeds', type=int, default=4)
     r.add_argument('--families', default=None)
     r.add_argument('--json', type=Path)
+    a = sub.add_parser('annotate')
+    a.add_argument('roots', nargs='+', type=Path)
     c = sub.add_parser('compose')
     c.add_argument('--store', required=True, type=Path)
     c.add_argument('--add', action='append', default=[], type=Path)
@@ -254,6 +281,8 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if args.command == 'table':
         return table(args.roots, args.json)
+    if args.command == 'annotate':
+        return annotate(args.roots)
     if args.command == 'replay':
         return replay(args.root, args.points, args.seeds, args.families.split(',') if args.families else None,
                       args.json)

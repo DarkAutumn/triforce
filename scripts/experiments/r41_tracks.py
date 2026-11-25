@@ -100,9 +100,10 @@ def write_track(env, root: Path, family: str, state: str, seed: int, how: str, a
     meta = {'start_state': state, 'success': info.get('outcome') == 'success', 'ending': info.get('ending'),
             'steps': len(played), 'health': env.state.health, 'actions': played,
             'explore': {'iterations': 0, 'env_steps': len(played), 'cells': 0, 'seconds': 0.0, 'seed': seed},
-            'layout': layout, 'start': {'bombs': begin[0x658], 'drop_cycle': begin[0x52A], 'help_count': begin[0x50],
-                                        'written': {k: (v[1] if k == 'drop' else v) for k, v in (start or {}).items()
-                                                    if v is not None}},
+            'layout': layout,
+            'start': {'bombs': begin[0x658], 'drop_cycle': begin[0x52A], 'help_count': begin[0x50],
+                      'help_value': begin[0x51], 'kill_streak': begin[0x627], 'health': start_health,
+                      'written': {k: (v[1] if k == 'drop' else v) for k, v in (start or {}).items() if v is not None}},
             'crafted': crafted, 'hits': hits, 'hearts_lost': start_health - env.state.health}
     (track / 'trajectory.json').write_text(json.dumps(meta, indent=1), encoding='utf-8')
     return {'track': str(track), **{k: meta[k] for k in ('success', 'ending', 'steps', 'health', 'hits',
