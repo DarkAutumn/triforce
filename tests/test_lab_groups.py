@@ -13,12 +13,13 @@ from triforce.specialist import load_specialist
 from .conftest import REPO_STATES_DIR
 from .networks import native_spec
 
-# The lead's pins for 2.0.1.0 (four groups, seven bosses each its own teacher).
+# The lead's pins for 2.0.1.0 (four groups; Darknuts and the seven bosses each their own teacher).
 TEACHERS = {
     'overworld': ['ow-start', 'ow-tektite', 'ow-leever', 'ow-moblin', 'ow-octorok', 'ow-zora', 'ow-peahat', 'ow-lynel',
                   'ow-ghini', 'ow-boulder'],
-    'walkers': ['darknut', 'gibdo', 'stalfos-keese-gel', 'zol', 'like-like', 'vire', 'goriya', 'd2-rope',
-                'dodongo-crossing', 'moldorm'],
+    'walkers': ['gibdo', 'stalfos-keese-gel', 'zol', 'like-like', 'vire', 'goriya', 'd2-rope', 'dodongo-crossing',
+                'moldorm'],
+    'darknut': ['darknut'],
     'others': ['wizzrobe', 'pols-voice', 'wallmaster', 'lanmola', 'patra'],
     'rooms': ['equipment-room', 'trap-room'],
     **{boss: [boss] for boss in ('boss-manhandla', 'boss-gleeok', 'boss-aquamentus', 'boss-dodongo', 'boss-digdogger',

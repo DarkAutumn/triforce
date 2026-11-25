@@ -1,9 +1,10 @@
 #!/bin/bash
-# Stage 1 of the fresh generation (2.0.1.0): the eleven teachers of triforce/groups.yaml, each from scratch through
-# the lab trainer and the job queue, into the shared store as gen1-<teacher>/s<seed>.
+# Stage 1 of the fresh generation (2.0.1.0): the twelve teachers of triforce/groups.yaml, each from scratch through
+# the lab trainer and the job queue, into the shared store as gen1-<teacher>/s<seed><SUFFIX>.
 #
-#     scripts/experiments/r41_stage1.sh SEED [TEACHER...]        (no TEACHER: all eleven, the long ones first)
+#     scripts/experiments/r41_stage1.sh SEED [TEACHER...]        (no TEACHER: all twelve, the long ones first)
 #     DRY=1 scripts/experiments/r41_stage1.sh SEED [TEACHER...]  (print the commands only)
+#     SUFFIX=b scripts/experiments/r41_stage1.sh 1 overworld     (the run gen1-overworld/s1b: a restart beside s1)
 #
 # Run it from a worktree frozen at the generation's commit (not the lead's integration tree, which moves).  The
 # network, the hit auxiliary loss and the look-ahead come from the group file (hitnet, 768 wide; the owner, Nov 24);
@@ -19,7 +20,10 @@ cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 # teacher  games  steps-an-update  iterations  (iterations x steps = 3M steps a family)
 recipe() {
     case "$1" in
-        overworld|walkers) echo "20 16384 1831" ;;   # 10 families: 30.0M steps
+        overworld)         echo "20 16384 1831" ;;   # 10 families: 30.0M steps
+        walkers)           echo "18 14742 1831" ;;   #  9 families: 27.0M steps (Darknuts their own teacher, Nov 25)
+        darknut)           echo "20 16384 1831" ;;   #  1 family, 18 room entries: 30.0M steps, ten times a family's
+                                                     #  (in the walkers' group its hard rooms got ~800 attempts each)
         others)            echo "10 8192 1831" ;;    #  5 families: 15.0M steps
         rooms)             echo "8 4096 1465" ;;     #  2 families:  6.0M steps
         boss-*|ganon)      echo "8 4096 733" ;;      #  1 family:    3.0M steps
@@ -29,15 +33,16 @@ recipe() {
 
 teachers=("$@")
 if [ ${#teachers[@]} -eq 0 ]; then
-    teachers=(walkers overworld others rooms boss-manhandla boss-gleeok boss-aquamentus boss-dodongo
+    teachers=(darknut walkers overworld others rooms boss-manhandla boss-gleeok boss-aquamentus boss-dodongo
               boss-digdogger boss-gohma ganon)
 fi
 
 for teacher in "${teachers[@]}"; do
     read -r games steps iterations <<<"$(recipe "$teacher")"
-    command=(.venv/bin/triforce job run --agent lead --task gen1 --subtask "$teacher-s$seed"
-             --desc "Stage 1 of the retrain: the $teacher teacher from scratch, seed $seed." --detach --
-             .venv/bin/python -m triforce.lab.train --name "gen1-$teacher" --run-id "s$seed" --group "$teacher"
+    run="s$seed${SUFFIX:-}"
+    command=(.venv/bin/triforce job run --agent lead --task gen1 --subtask "$teacher-$run"
+             --desc "Stage 1 of the retrain: the $teacher teacher from scratch, run $run." --detach --
+             .venv/bin/python -m triforce.lab.train --name "gen1-$teacher" --run-id "$run" --group "$teacher"
              --parallel "$games" --steps-per-update "$steps" --iterations "$iterations"
              --checkpoint-every $((iterations / 16)) --seed $((4100 + seed)))
     if [ -n "${DRY:-}" ]; then
