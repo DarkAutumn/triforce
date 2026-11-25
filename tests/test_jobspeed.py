@@ -175,13 +175,19 @@ def test_jobs_speed_writes_the_report_of_the_job_it_runs_in(con, tmp_path, monke
     running = add_job(con, 'reporting', T0)
     monkeypatch.setenv(jobs.JOB_ID_ENV, str(running))
     speed = jobs.Speed('hitnet-768 eager', 20, '4:0.25', total=1000.0, began=T0)
+    readings = iter([5200.0, 4800.0])     # the process's GPU memory, read once a GPU_SECONDS (here: each update)
+    monkeypatch.setattr(jobspeed, 'gpu_megabytes', lambda pid=None: next(readings))
+    monkeypatch.setattr(jobs.Speed, 'GPU_SECONDS', 0.0)
     monkeypatch.setattr(jobs.time, 'time', lambda: T0 + 10.0)
     speed.update(5000.0, rollout=520.0)
     monkeypatch.setattr(jobs.time, 'time', lambda: T0 + 20.0)
     report = speed.update(9000.0, rollout=410.0)
     assert report['sps'] == pytest.approx(400.0) and report['mean'] == pytest.approx(450.0)
+    assert report['gpu_mb'] == 4800.0 and report['gpu_peak_mb'] == 5200.0
     assert job(con, running)['speed'] == {**report, 'ts': T0 + 20.0}
     assert job(con, running)['speed']['shape'] == SHAPE
+    add_samples(con, running, T0 + 30, [450.0] * 3)
+    assert ', GPU memory peak 5.1 GB, ' in jobspeed.final_line(con, job(con, running))
 
 
 def test_backfill_reads_a_run_folder_named_by_the_jobs_log(con, tmp_path):

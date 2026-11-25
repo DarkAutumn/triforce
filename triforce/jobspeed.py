@@ -27,6 +27,7 @@ import json
 import os
 import re
 import statistics
+import subprocess
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -76,6 +77,20 @@ def lookahead_text(tried: Optional[dict]) -> Optional[str]:
 
 
 # ------------------------------------------------------------------------------------------------ the samples
+
+def gpu_megabytes(pid: Optional[int] = None) -> Optional[float]:
+    """The GPU memory ``pid`` (default this process) holds, all of it (CUDA context, torch's cache, the CUDA graphs'
+    pools), as ``nvidia-smi`` reports it; None without a GPU, without ``nvidia-smi`` or for a process holding none."""
+    pid = os.getpid() if pid is None else pid
+    try:
+        out = subprocess.run(['nvidia-smi', '--query-compute-apps=pid,used_memory', '--format=csv,noheader,nounits'],
+                             capture_output=True, text=True, timeout=10, check=False).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    used = [float(parts[1]) for parts in (line.split(',') for line in out.splitlines())
+            if len(parts) == 2 and parts[0].strip() == str(pid)]
+    return sum(used) if used else None
+
 
 def read_load() -> Optional[float]:
     """The 1-minute load average (``$TRIFORCE_LOADAVG``'s file in tests), None where unreadable."""
@@ -379,8 +394,10 @@ def final_line(con, job: dict) -> Optional[str]:
     normal = ('no normal yet (fewer than 3 ended runs of this shape and no reference)' if found['expected'] is None
               else f"normal {sps(found['expected'])}{per_game(found['expected'], games)}")
     beside = (f"; beside it: {names(con, found['beside'])}" if found['beside'] else '; nothing else ran beside it')
+    peak = (job.get('speed') or {}).get('gpu_peak_mb')
+    gpu = '' if peak is None else f", GPU memory peak {peak / 1024:.1f} GB"
     head = (f"{q.label(job)} {job.get('status') or ''} speed: {sps(found['mean'])} steps/s mean"
-            f"{per_game(found['mean'], games)} [{found['shape']}], {normal}")
+            f"{per_game(found['mean'], games)} [{found['shape']}]{gpu}, {normal}")
     if found['bounds'] == 'no normal':
         return f"{head}: NO NORMAL{beside}"
     if found['bounds'] == 'in':
