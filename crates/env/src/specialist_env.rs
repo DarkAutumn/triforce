@@ -64,6 +64,10 @@ pub struct TerminalInfo {
     /// The start state is one of the pool's harvested states (round 42: training logs each room's seed and
     /// harvested starts apart, `triforce.metrics`).
     pub harvested: bool,
+    /// Round 45: the start room's spawn cycle `$524` is the route's planned one (`Some(true)`), another reachable or
+    /// written one (`Some(false)`); None where no door rule judged it (a curriculum start, a cave, a door the rule
+    /// lacks). Training logs each room's seed starts by layout (`triforce.metrics`).
+    pub route_layout: Option<bool>,
     pub start_health: f64,
     pub hearts: HeartSummary,
     pub linger: LingerSummary,
@@ -238,6 +242,7 @@ impl StepInfo {
             o.insert("outcome".into(), json!(t.outcome));
             o.insert("start_state".into(), json!(t.start_state));
             o.insert("harvested".into(), json!(t.harvested));
+            o.insert("route_layout".into(), json!(t.route_layout));
             o.insert("start_health".into(), json!(t.start_health));
             o.insert("hearts".into(), hearts_json(&t.hearts));
             o.insert("linger".into(), linger_json(&t.linger));
@@ -390,6 +395,8 @@ pub struct SpecialistEnv<N: Nes, St: StateStore<N::State>> {
     /// The episode's route step exit and entry ([`TerminalInfo::target`]).
     episode_target: String,
     episode_entry: String,
+    /// The last reset's [`TerminalInfo::route_layout`].
+    episode_layout: Option<bool>,
     episode_steps: u64,
     episode_frames: u64,
     episode_hits: u32,
@@ -543,6 +550,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             clip_stats: ClipStats::default(),
             episode_target: String::new(),
             episode_entry: String::new(),
+            episode_layout: None,
             episode_steps: 0,
             episode_frames: 0,
             episode_hits: 0,
@@ -773,6 +781,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             }),
         };
         let mut state = self.session.load(&machine, &opts, &mut self.rng)?.clone();
+        self.episode_layout = self.session.entry_values().and_then(|e| e.planned);
         let here = (state.level(), state.location());
         self.banked_kills = opts.banked_kills.iter().find(|(at, _)| *at == here && !state.full_location().in_cave).map_or(0, |b| b.1);
         if !self.verified.contains(&name) {
@@ -863,6 +872,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         name: &str,
     ) -> Result<(Observation, StepInfo), EnvError> {
         self.curriculum_tag = None;
+        self.episode_layout = None;
         self.drop_bombs = false;
         self.session.restore(snapshot);
         self.clips_fixed = None;
@@ -1285,6 +1295,7 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
                 outcome,
                 start_state: state_label(&self.episode_state).to_owned(),
                 harvested: self.pool.as_ref().is_some_and(|p| p.is_harvested(&self.episode_state)),
+                route_layout: self.episode_layout,
                 start_health: self.start_health,
                 hearts: self.hearts.summary(),
                 linger: self.linger.summary(),
