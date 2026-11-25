@@ -1478,6 +1478,11 @@ A training config may name a truncation (`max-steps`, `no-damage`, `no-room-prog
 failure (`hard-failure` or `soft-failure`; anything else is refused): the episode then *terminates* as that failure,
 with the terminal failure penalty and no bootstrap (round 34: a boss that waits out the budget is not paid for
 surviving). No shipped family yaml does; chains and evaluation classify as before.
+A task may also name `drops-left` (round 43, Manhandla's and Dodongo's d3first tasks; only as a failure): a correct
+exit that leaves wanted bombs lying in the room (`objective::bombs_left_behind`: Link's own bombs below the bag's
+size, the drop not about to vanish) ends the episode as that failure, with no exit reward (`rewards::score_step`, the
+critic). Leaving a carrier alive where the route step says `carriers: fight` ends it `carrier-left` (a soft failure;
+`zelda::objectives::Objective::carriers_first`). Neither is a chain's: a chain goes on along the route.
 
 Endings, linger, the chain's stall counter and the visit metrics read `Change.observed` (hits, stuns and pickups
 seen in the step itself); only the critic and the bomb counts (`zelda::bombs::BombStats`) read the credited fields,
@@ -2012,6 +2017,15 @@ every step, so following an enemy that moves away pays again, and knockback rese
   as likely, in place of the `bombs` and `room_bombs` draws; `room_kill_cycle: {'(3, 0x5b, S)': [0, 1]}` holds the
   game's drop cycle (`$52A`, asm:Drop_SetUpItem) at one of the listed values (darknut@d3first's fresh-generation
   starts: 0x5b's first pass at 0, one Darknut's death drops bombs, or 1, it drops none).
+- The drop state as real play brings it (round 43, the fresh generation's `_generation.yaml`; the owner, Nov 25):
+  `ram_randomization: {drop_state: real}` replaces the `help_count` streak at a seed reset with a triple (`$627`,
+  `$50`, `$51`) real play held at a door of the same kind (dungeon, overworld), from `triforce/drop_state.json`
+  (`scripts/experiments/r43_drop_state.py build` over Seeds43's power-on scans: every triple with its count), the
+  kill count two thirds by real play's distribution and a third uniform over 0-15
+  (`start_states::drop_state_values`, `DROP_STATE_REAL_SHARE`), and draws the drop cycle `$52A` 0-9; after every
+  other draw. An entry listed in `room_kill_cycle` (3:0x5b from S) keeps its cycle and its `help_count` streak, draw
+  for draw; a curriculum start keeps the counters and the cycle its state holds. Without the table a task that names
+  it is refused at its first reset.
 - A forced bomb drop (round 25; boss-manhandla): `ram_randomization: {drop_bombs: P}` arms the game's help drop as
   bombs (`HelpDropCount` $0A, `IsHelpDropBomb` 1, asm:Drop_SetUpItem) in a share P of resets, at the reset and again
   after every step while a monster is in the room (harm to Link clears both), so the room's next drop (Manhandla's

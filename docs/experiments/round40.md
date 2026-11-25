@@ -4732,3 +4732,76 @@ an entry the task lists: with `room_kill_cycle`, `$050` HelpDropCount = n, `$051
 `help_count` draw) and `$52A` = a listed cycle; with `room_bombs`, `$658` from the range at its share; with
 `room_bomb_counts`, `$658` = a listed count. Nothing else (no hearts, keys, `$524`, positions); an entry not listed
 draws nothing. Seed and curriculum starts are as before.
+
+### 7. The drop state at a reset, and Manhandla's and Dodongo's bombs (the owner's directive, Nov 25)
+
+The owner: "leave 3x5b with current behavior, but every other room should be randomized with possible exceptions for
+the boss. With manhandla, we need to teach it to not skip the bombs [...] Same with dodongo's forced bomb drops [...]
+3x5b needs special rules, and manhandla and dodongo need special rules OR a failed scenario if they leave with bombs on
+the floor [...] we need to make sure training runs see manhandla drop bombs", then on the shape of the draw: "closer
+to real values than uniform [...] somewhere between uniform and what we see in practice [...] make the decision,
+record the reasoning behind it and go". The measurement and the shares are the lead's (decisions 2026-11-25 "The drop
+counters at a reset"); the build, the table's script, the ending and the bosses' settings Carrier43's.
+
+**(A) `ram_randomization.drop_state: real`, one rule** (`_generation.yaml`; every d3first task's own `help_count` line
+removed, 21 files; the bare tasks, `d2first` and the product trainer untouched).
+- *What real play holds.* Seeds43's scan of the archive's power-on replays (507 runs of 2.0.0.0-2.0.0.16, every room
+  entry the scan found whose memory edits before it are only cheated wall bombs and shop rupees, which no counter
+  reads: 48,774 dungeon and 28,627 overworld entries; the lead's count of 77,465 also kept 64 dungeon entries after
+  other edits). Kills since Link was last hit (`$627`) at a room entry:
+
+| kills | dungeon, real | dungeon, drawn | overworld, real | overworld, drawn |
+|---:|---:|---:|---:|---:|
+| 0 | 23.0% | 17.4% | 53.7% | 37.9% |
+| 1-3 | 34.4% | 29.2% | 29.9% | 26.2% |
+| 4-9 | 23.4% | 28.1% | 6.9% | 17.1% |
+| 10-15 | 9.2% | 18.7% | 2.8% | 14.4% |
+| 16+ | 10.0% | 6.7% | 6.6% | 4.4% |
+
+- *The table* (`triforce/drop_state.json`, `scripts/experiments/r43_drop_state.py build SCAN...`; `report` prints the
+  table above): every triple (`$627`, `$50`, `$51`) seen, with its count, by kind of door (370 dungeon, 135 overworld
+  triples; a forced drop armed as bombs in 135 dungeon entries and no overworld one). Triples, never one counter
+  computed from another: 9% of real entries fit no formula between `$50` and `$627`. Rebuilt from the generation's own
+  power-on runs later by the same command.
+- *The draw* (`start_states::drop_state_values`, `apply_drop_state`): at a seed reset, after every other draw, the kill
+  count with probability 2/3 from real play's distribution of the door's kind and 1/3 uniform over 0-15, then a
+  triple with that count at its real frequency; the drop cycle `$52A` uniform 0-9 (a hit zeroes the counters and not
+  the cycle: every pair is one play can bring). The shares are constants beside their reasoning
+  (`DROP_STATE_REAL_SHARE`): closer to real than to uniform as asked; the 10-15 band, where a fairy is one to six
+  unhurt kills away, at twice real play's share, because a better network goes unhurt longer than the old ones did;
+  one table a kind of door, not a door, since a door's own distribution is the old networks' habit there.
+- *3:0x5b from S* keeps its `room_kill_cycle` (0 or 1) and its `help_count` streak 0-9 (`_generation.yaml` keeps
+  `help_count: [0, 9]` for an entry that states its own cycle): its draws are the same draw for draw. Proof: 300
+  resets (seeds 0-99 on `3_5bs_0..2`) give the same RAM, `$000-$7FF` byte for byte, on `r40-int` at 92940375 and
+  on this branch; the unit test runs 300 draws with and without the key and the random stream after them.
+- *A track start* (curriculum) keeps the counters and the cycle its state holds: it is a point inside the room's play,
+  after kills or hits the track made, so a draw would rewrite a fight's own history (today `help_count` did); 3:0x5b
+  from S's track starts draw as before.
+- *The values the game can hold*: every triple was held by the game; the cycle is independent of them. Manhandla's
+  and Dodongo's `drop_bombs` then write `$50` = 10 and `$51` = 1 over the drawn triple (the armed bomb drop),
+  leaving `$627` as drawn: a pair the game holds after ten unhurt kills in a row whatever `$627` read, as long as it
+  reads 10 or more; below that it is the one non-game pair a reset writes, and `$627` matters only for the fairy at 16.
+
+**(B) `drops-left`, Manhandla (3x4d) and Dodongo (2x0e)**: a task that names `endings: {drops-left: soft-failure}`
+ends an episode whose correct exit leaves wanted bombs lying (`objective::bombs_left_behind`: the bag has room, the
+drop not about to vanish) as a failure, −20, no exit reward (`rewards::score_step`, the critic); a full bag leaves
+nothing wanted. Only those two tasks name it. Chains never end on it: a chain plays the bare task with the route
+task's observation switches only (`for_chain`), and its room records count `bomb_drop_left`.
+- What points the network at the drops stays: `reward.drops_first` (once the fight is over the wanted drops are the
+  only targets until taken or gone; now on for Dodongo too) and Manhandla's `left_drop_penalty` 3.0 a drop left
+  (bombs, and a heart or fairy while hurt, which the ending does not cover: kept, for bombs on top of the ending).
+- **Training sees the drops.** Manhandla's `drop_bombs` 0.75 stays: three resets in four arm his bomb drop, against
+  real play reaching his door with it armed in 3 of 507 entries (the scan) and seeing bombs drop in 44-46% of
+  visits (today's team: 283 of 638, r40-2015-1k-d3; 64 of 139 with it570's Darknut network), from bomb kills during
+  the fight. Dodongo: his sword death on a stunned Dodongo writes `$50` = `$51` = 10, so his own drop is bombs
+  unless Link is hurt before the sparkle ends; his death by a second swallowed bomb drops from the table
+  (asm:Dodongo_CheckCollisions). Today's team: bombs dropped in 887 of 999 visits (678 of them entered with a full
+  bag); his task now arms the bomb drop in half the training resets (`drop_bombs` 0.5) so a network that still kills
+  him by feeding him sees the bombs too.
+- *Proofs*: `leaving_wanted_bombs_behind_ends_drops_left_where_the_task_names_it` (a bomb pack written in 6_79s, the
+  walk out W: `drops-left` with the ending named and room in the bag, `exit-correct` with a full bag or the ending
+  unnamed); chains of today's team on this code, 100 runs each (`target/r43/drops/`): from `3_4dw_0` 90 of 100 to
+  the triforce (10 die to Manhandla), drops in 50 visits, all 50 taken; from `2_0es_0` 100 of 100, drops in 85, all
+  taken; no wrong exit, every run goes on. The stage-1 teachers on their tasks (`triforce evaluate`, 50 a state, no
+  forced drop in evaluation): Manhandla 243 of 300 (`3_4dw` 96 of 150, 56 deaths), drops in 56 episodes, 55 taken, 0
+  left; Dodongo 148 of 150, drops in 127, all taken: neither leaves bombs today, so the ending never fired there.
