@@ -465,6 +465,7 @@ class PPO:
                                 uniform=cfg.plr_uniform) if cfg.plr else None
         collector = collector or Collector(pool, steps_per_env, cfg.gamma, cfg.lam, cfg.search, budget=episode_budget)
         start = time.time()
+        cpu_mark = time.process_time()      # the process's CPU (every thread) an iteration: ``charts/cpu_seconds``
         steps_this_run = 0
         shaping = shaping_for(1)
         collector.start(network)
@@ -518,6 +519,9 @@ class PPO:
                 stats['charts/rollout_wait_seconds'] = wait_time
                 stats['charts/recompute_seconds'] = collector.recompute_seconds
                 stats['charts/optimize_seconds'] = time.time() - optimize_start
+                cpu_now = time.process_time()
+                stats['charts/cpu_seconds'] = cpu_now - cpu_mark
+                cpu_mark = cpu_now
                 if rollout_shaping is not None:
                     stats['charts/shaping_scale'] = rollout_shaping
                 stats.update(plr_stats)
