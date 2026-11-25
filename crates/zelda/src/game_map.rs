@@ -3719,7 +3719,7 @@ mod tests {
         assert_eq!(own_bombs, [(269, "tenth"), (273, "tenth")], "the Vires of 0x39 and 0x2d after the magic sword");
         assert_eq!((steps[269].room, steps[273].room), (0x39, 0x2d));
         let load = |routes: &str| GameMap::from_yaml(GAME_YAML, routes).map(|_| ()).map_err(|e| e.0);
-        let typo = ROUTES_YAML.replacen("drops: first}", "drops: last}", 1);
+        let typo = ROUTES_YAML.replacen("drops: first,", "drops: last,", 1);
         assert_ne!(typo, ROUTES_YAML);
         assert!(load(&typo).unwrap_err().contains("drops \"last\" is not one of first"));
         assert_eq!(map.get(loc(0, 0x21)).unwrap().secret, Some(Secret::Push((18, 10))));
