@@ -132,6 +132,19 @@ class RouteStep:
     visit: int = 1             # the route's visit to the room from that side (zelda::game_map::route_visits)
     treasure: Optional[str] = None  # routes.yaml `treasure:` (None: take it; `skip`, `refuse`: leave it)
     namespace: Optional[str] = None  # the route's start-state namespace (routes.yaml `states:`, phase X; None: bare)
+    # routes.yaml `clear:` (round 44): True (every monster dies), False (none), an int (that many die), None (absent).
+    clear: object = None
+
+    def planned_kills(self) -> dict:
+        """The kills the walk lets the explorer make in the room (``Explorer.explore``'s ``max_kills``, ``exit_kills``,
+        ``clear``): none on a crossing, exactly N in a partial fight, every monster in a fight to the end."""
+        if self.clear is True:
+            return {'clear': True}
+        if self.clear is False:
+            return {'max_kills': 0}
+        if isinstance(self.clear, int):
+            return {'max_kills': self.clear, 'exit_kills': self.clear}
+        raise ValueError(f"route step {self.index} {self.level}:0x{self.room:02x} has no `clear:` (routes.yaml)")
 
     @property
     def location(self) -> MapLocation:
@@ -175,7 +188,7 @@ def namespace_route(namespace: Optional[str]) -> str:
 
 def _step(index: int, raw: dict, namespace: Optional[str] = None) -> RouteStep:
     return RouteStep(index, raw['level'], raw['room'], bool(raw['in_cave']), raw['entry'], raw['exit'],
-                     raw['specialist'], raw.get('way'), raw['visit'], raw.get('treasure'), namespace)
+                     raw['specialist'], raw.get('way'), raw['visit'], raw.get('treasure'), namespace, raw.get('clear'))
 
 
 def route_steps(route: str = DEFAULT_ROUTE) -> List[RouteStep]:
@@ -272,7 +285,7 @@ def write_idle_states(out: Optional[str] = None) -> List[str]:
 # --- build ---
 
 def step_config(step: RouteStep, source: str, route: str = DEFAULT_ROUTE,
-                rooms: Optional[dict] = None) -> SpecialistConfig:
+                rooms: Optional[dict] = None, fresh_rooms: bool = True) -> SpecialistConfig:
     """A one-room task from ``source``: leave this step's room through an objective-correct exit (or pick up the
     triforce).  Bombs are usable only in a ``requires_bombs`` room, where the bomb rule keeps Link from running out
     (elsewhere ``never``, not even the 10th kill's, so a built state carries the bombs the route does): a boss's
@@ -280,7 +293,8 @@ def step_config(step: RouteStep, source: str, route: str = DEFAULT_ROUTE,
     where the bomb opens it (``required``, round 22).  The grid-point skips (CLIP) follow the step's family's
     ``clips:`` switch, as in a chain: 4:0x21 entered from S is left only by the ladder clip.  The run-time switch is
     no draw: on, off on a step of a stretch's plain way (round 22).  The recorder, food and candle follow the family
-    (round 24), and the arrows (round 27: Gohma dies to nothing else)."""
+    (round 24), and the arrows (round 27: Gohma dies to nothing else).  ``fresh_rooms=False``: the walk's (round 44),
+    whose starts load as saved."""
     rooms = route_rooms(route) if rooms is None else rooms
     bombs = 'never'
     if rooms.get(step.location.as_tuple(), {}).get('requires_bombs'):
@@ -293,7 +307,7 @@ def step_config(step: RouteStep, source: str, route: str = DEFAULT_ROUTE,
     # Phase X: the source is the route's (a bare name is not also looked for in another route's namespace).
     return SpecialistConfig(name=f'entry-step-{step.index}', rooms=[step.location], start_states=[source],
                             success=['exit-correct', 'triforce-collected'], max_steps=3000,
-                            items=items, fresh_rooms=True, route=route, clips=clips, state_routes=[route])
+                            items=items, fresh_rooms=fresh_rooms, route=route, clips=clips, state_routes=[route])
 
 
 def refill_hearts(game: Game):
@@ -518,6 +532,259 @@ def build(chain_ids: List[int], out: str, iterations: int, patience: int, start_
 def _write_build_record(out: str, command: Optional[str], manifest: List[dict], failed: List[str]):
     write_json_atomic(os.path.join(out, BUILD_RECORD), {'command': command, 'files': [e['file'] for e in manifest],
                                                         'failed': failed}, indent=1)
+
+
+# --- walk (round 44): one state per door, by real play from console power on ---
+
+WALK_CHAIN = 0                       # a walked route has one state per door, named as chain 0
+WALK_RECORD = 'walk.json'            # the walk's record in its staging dir; installed as <states dir>/<ns>_walk.json
+WALK_BOOT = ('LINK', 16610)          # the power-on: the corpus's golden-d3first-51-networks (its name and delay)
+WALK_SEED = 44
+# What each door's record holds (zelda-asm/index/ram.md): the bytes that descend from the play before the door.
+SPAWN_CYCLE, EDGE_CELL, DROP_CYCLE = 0x524, 0x525, 0x52A
+HELP_DROP_COUNT, HELP_DROP_BOMB, WORLD_KILL_COUNT = 0x50, 0x51, 0x627
+ROOM_HISTORY, LONG_TIMER_CYCLE, FRAME_COUNTER = 0x621, 0x26, 0x15
+CHASE_BYTES = (0x60, 0x61, 0x62, 0x4A)   # IsChasingOtherTarget, ChaseTargetX/Y, ChaseLongTimer
+# Monsters a weak hit splits instead of killing (zelda-asm enemies.md "Zol", "Vire"): the sword that kills them
+# outright (1 wood, 2 white, 3 magic).  Their split deaths are uncounted Gels and Red Keese, so a sparkle (a counted
+# death) would hold a room memory no game with that sword can make: the walk never sparkles them.
+SPLITTERS = {0x13: 2, 0x12: 3}
+
+
+def walk_state_name(step: RouteStep) -> str:
+    """A walked state's file name: ``<ns>_<stem>_0.state`` (one state per door)."""
+    return step.filename(WALK_CHAIN)
+
+
+def door_facts(game: Game) -> dict:
+    """The bytes of the machine ``game`` holds (a pre-entry frame) that the play before it decides: the spawn cycle
+    and edge cell, the drop cycle and help-drop counters, the kills since the last hit, the room history, the chase
+    state and dividers, hearts, the level's banked kills and the pending room's flags."""
+    read = game.read
+    facts = {'spawn_cycle': read(SPAWN_CYCLE), 'edge_cell': read(EDGE_CELL), 'drop_cycle': read(DROP_CYCLE),
+             'help_drop_count': read(HELP_DROP_COUNT), 'help_drop_bomb': read(HELP_DROP_BOMB),
+             'world_kill_count': read(WORLD_KILL_COUNT), 'room_history': [read(ROOM_HISTORY + i) for i in range(6)],
+             'long_timer_cycle': read(LONG_TIMER_CYCLE), 'frame_counter': read(FRAME_COUNTER),
+             'chase': [read(a) for a in CHASE_BYTES], 'hearts': [read(CONTAINERS_ADDR), read(CONTAINERS_ADDR + 1)]}
+    if read(LEVEL):
+        facts['level_kill_counts'] = {f"0x{r:02x}": v for r in range(0x80) if (v := read(LEVEL_KILL_COUNTS + r))}
+    pending = pending_room(read)
+    if pending is not None:
+        addr = read(WORLD_FLAGS_ADDR) | (read(WORLD_FLAGS_ADDR + 1) << 8)
+        facts['pending'] = [pending[0], pending[1]]
+        facts['pending_flags'] = read(addr + (pending[1] & 0x7F)) if 0 < addr < 0x800 else None
+    return facts
+
+
+def sparkle_fight(source: str, kills: Optional[int], out_dir: str, states_dir: str = STATES_DIR,
+                  route: Optional[str] = None) -> str:
+    """A fight the explorer could not end, ended by the game's own deaths (round 44, the walk's fallback): ``source``
+    loaded exactly as saved, then each monster put into its death sparkle as it comes out (ObjMetastate $10,
+    asm:Obj_EndMetastate: the game counts the kill, steps the drop cycle, decides the drop and banks the room as it
+    would), with the two counters of the sword's kill that the sparkle skips (asm:Damage_KillMonster:
+    WorldKillCount + 1, HelpDropCount + 1 up to $0A); ``kills`` of them (None: every one), Link's hearts as they are,
+    the drops left lying.  Refuses a Zol or Vire the sword cannot kill outright (``SPLITTERS``).  Written as
+    ``<out_dir>/<source's name>``, a controllable state the explorer goes on from."""
+    game = Game(seed=0, states_dir=str(states_dir), route=route if route in native_routes() else None)
+    state = game.load(source, randomize_rng=False, fresh_room=False)
+    killed = set()
+    for _ in range(FIGHT_SKIP_FRAMES):
+        for enemy in state.enemies:
+            if enemy['dying'] or enemy['index'] in killed or (kills is not None and len(killed) >= kills):
+                continue
+            if state.sword < SPLITTERS.get(enemy['id'], 0):
+                raise RuntimeError(f"{source}: a {enemy['name']} the sword {state.sword} splits: the walk does not "
+                                   "sparkle it (its split deaths are not counted)")
+            game.write(OBJ_METASTATE + enemy['index'], DEATH_SPARKLE)
+            game.write(WORLD_KILL_COUNT, min(game.read(WORLD_KILL_COUNT) + 1, 0xFF))
+            if game.read(HELP_DROP_COUNT) < 0x0A:
+                game.write(HELP_DROP_COUNT, game.read(HELP_DROP_COUNT) + 1)
+            killed.add(enemy['index'])
+        state = game.press('NONE', 1)
+        if (kills is None and not state.enemies and game.read(0x34D)) or \
+                (kills is not None and len(killed) >= kills and not any(e['dying'] for e in state.enemies)):
+            break
+    else:
+        raise RuntimeError(f"{source}: the room's monsters did not die in {FIGHT_SKIP_FRAMES} frames")
+    os.makedirs(out_dir, exist_ok=True)
+    path = os.path.join(out_dir, os.path.basename(source if source.endswith('.state') else f'{source}.state'))
+    game.save_state_file(path)
+    return path
+
+
+def walk_crossing(step: RouteStep, target: RouteStep, source: str, route: str, rooms: dict, iterations: int,
+                  patience: int, attempts: int, states_dir: str = STATES_DIR, clips: Optional[bool] = None,
+                  fights_dir: Optional[str] = None) -> tuple:
+    """One room of the walk: from ``source`` (the carried machine, loaded exactly as saved) the explorer finds a
+    way to the step's objective-correct exit that kills what the step's ``clear:`` says and no more (``KillSpec``);
+    the replay of that way from the same machine gives the next door's pre-entry frame.  A fight to the end or a
+    partial fight the explorer cannot end is ended by ``sparkle_fight`` first (``how: sparkle``) and crossed from
+    there.  A way that costs Link hearts is kept only if no attempt finds one costing fewer (an unhurt one is taken at
+    once): no refill on the walk, so the hearts a room costs are carried on.  Returns (pre-entry Snapshot or None,
+    stats)."""
+    # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
+    stats = {'env_steps': 0, 'attempts': 0, 'seconds': 0.0, 'how': 'explorer'}
+    kills = step.planned_kills()
+    plan = [(source, kills, 'explorer')]
+    if step.clear is not False and fights_dir is not None:
+        plan.append((None, kills, 'sparkle'))
+    initial = Game(seed=0, states_dir=str(states_dir)).load(source, randomize_rng=False, fresh_room=False)
+    for start, spec, how in plan:
+        if start is None:
+            try:
+                start = sparkle_fight(source, None if step.clear is True else step.clear, fights_dir, states_dir,
+                                      route)
+            except RuntimeError as error:
+                stats['sparkle_error'] = str(error)
+                break
+        best = None
+        for attempt in range(attempts):
+            explorer = Explorer(step_config(step, start, route, rooms, fresh_rooms=False),
+                                seed=WALK_SEED * 100000 + step.index * 100 + attempt, states_dir=str(states_dir),
+                                exact_starts=True)
+            result = explorer.explore(start, iterations, 25, patience, clips=clips, **spec)
+            stats['env_steps'] += result.env_steps
+            stats['attempts'] += 1
+            stats['seconds'] += result.seconds
+            if not result.success:
+                stats.setdefault('failures', {}).update(dict(result.failures))
+                continue
+            _, pre_entry = explorer.replay(result, capture_pre_entry=True)
+            state = explorer.state
+            if state.full_location != target.location:
+                pre_entry, state = follow_to(explorer.snapshot(), target.location, states_dir)
+            left = step.treasure in ('refuse', 'skip') and not room_flags(initial, step.room) & FLAG_ITEM_TAKEN
+            if pre_entry is None or (left and room_flags(state, step.room) & FLAG_ITEM_TAKEN):
+                continue
+            if best is None or result.health > best[0]:
+                best = (result.health, pre_entry, dict(steps=len(result.actions), health=result.health,
+                                                       ending=result.ending, how=how, attempt=attempt))
+            if result.health >= initial.health:
+                break
+        if best is not None:
+            stats.update(best[2])
+            return best[1], stats
+    return None, stats
+
+
+def _git_commit() -> dict:
+    """The commit the walk runs from, and whether the tree has edits (its record says so)."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    try:
+        head = os.popen(f"git -C {shlex.quote(root)} rev-parse HEAD").read().strip()
+        dirty = bool(os.popen(f"git -C {shlex.quote(root)} status --porcelain --untracked-files=no").read().strip())
+    except OSError:
+        head, dirty = '', True
+    return {'commit': head, 'dirty': dirty}
+
+
+def _sha256(path: str) -> str:
+    import hashlib    # pylint: disable=import-outside-toplevel
+    with open(path, 'rb') as file:
+        return hashlib.sha256(file.read()).hexdigest()
+
+
+def walk_boot(out: str, name: str = WALK_BOOT[0], delay: int = WALK_BOOT[1], route: Optional[str] = None) -> str:
+    """Console power on, ``name`` registered, ``delay`` idle frames on the file-select screen, the game started
+    (``Game.boot``: controller inputs alone, no memory written): ``<out>/boot/start.state``, the walk's first
+    machine (the game start; the shared ``start.state`` is the base movie's and stays)."""
+    game = Game(seed=0, route=route if route in native_routes() else None)
+    game.boot(name, delay)
+    path = os.path.join(out, 'boot', f'{START_STATE}.state')
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    game.save_state_file(path)
+    return path
+
+
+def _stretch_parts(route: str) -> dict:
+    """Each stretch's first clip-way step -> its plain way's steps (indices) and its rejoin (round 22)."""
+    from ._native import route_stretches    # pylint: disable=import-outside-toplevel
+    return {s['clips'][0]: (list(s['plain']), s['rejoin']) for s in route_stretches(route)}
+
+
+def walk(route: str, out: str, iterations: int, patience: int, attempts: int = 6, start_step: int = 0,
+         source: Optional[str] = None, last_step: Optional[int] = None, boot: tuple = WALK_BOOT,
+         states_dir: str = STATES_DIR, command: Optional[str] = None, log: Callable = print) -> tuple:
+    """Walks ``route`` once from console power on (``walk_boot``) or from ``source`` (a carried state of
+    ``start_step`` from an earlier walk's ``<out>/carry``), carrying the machine from door to door with no redraw,
+    no fresh room and no refill: at every door of the clip way (and of each stretch's plain way, walked as a branch
+    from the door where the ways part) it saves the pre-entry frame as the game holds it (``<out>/carry/<name>``) and
+    the state file ``<out>/<name>``, the same bytes with Link's hearts filled to his containers (the one write: a
+    run arrives hurt, this is the valid upper end, and a training load draws them anyway).  Every room is played by
+    ``walk_crossing`` (the step's ``clear:`` kills).  ``<out>/walk.json`` records the power-on, the commit, the
+    command and every door's facts (``door_facts``) and file hash; ``<out>/entry_states.json`` the manifest entries.
+    Returns (manifest entries, the first file not built or None)."""
+    # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals, too-many-statements
+    rooms, steps = route_rooms(route), route_steps(route)
+    if any(s.clear is None for s in steps):
+        raise ValueError(f"route {route} has steps without `clear:` (routes.yaml): the walk plays each step's kills")
+    os.makedirs(os.path.join(out, 'carry'), exist_ok=True)
+    record_path = os.path.join(out, WALK_RECORD)
+    if os.path.exists(record_path):
+        with open(record_path, encoding='utf-8') as file:
+            record = json.load(file)
+    else:
+        record = {'route': route, 'walk': time.strftime('%y%m%d-%H%M%S'), 'boot': {'name': boot[0], 'delay': boot[1]},
+                  **_git_commit(), 'command': command, 'hearts': 'filled to the containers in each state file only',
+                  'doors': {}}
+    if source is None:
+        source = walk_boot(out, *boot, route=route)
+    game = Game(seed=0, states_dir=str(states_dir), route=route)
+    parts = _stretch_parts(route)
+    way = [s for s in steps if s.way in (None, 'clips')]
+    first = next(i for i, s in enumerate(way) if s.index >= start_step)
+    crossings = [(step, target) for step, target in zip(way[first:], way[first + 1:])
+                 if last_step is None or target.index <= last_step]
+    manifest = []
+
+    def door(step: RouteStep, target: RouteStep, at: str, clips: Optional[bool]) -> Optional[str]:
+        started = time.time()
+        pre_entry, stats = walk_crossing(step, target, at, route, rooms, iterations, patience, attempts, states_dir,
+                                         clips, os.path.join(out, 'fights'))
+        label = f"step {step.index} {step.level}:0x{step.room:02x} {step.entry}->{step.exit} clear {step.clear}"
+        if pre_entry is None:
+            log(f"{label} -> {walk_state_name(target)}: FAILED ({stats})")
+            return None
+        name = walk_state_name(target)
+        carry, path = os.path.join(out, 'carry', name), os.path.join(out, name)
+        state = game.restore(pre_entry)
+        game.save_state_file(carry)
+        facts = {**door_facts(game), 'bombs': state.bombs, 'keys': state.keys, 'rupees': state.rupees}
+        refill_hearts(game)
+        game.save_state_file(path)
+        loaded = game.load(path, randomize_rng=False, fresh_room=False)
+        if loaded.full_location != target.location:
+            raise RuntimeError(f"{path} loads into {loaded.full_location}, expected {target.location.as_tuple()}")
+        entry = {'file': name, 'chain': WALK_CHAIN, 'route': route, 'route_step': target.index,
+                 'from_step': step.index, 'specialist': target.specialist, 'level': target.level,
+                 'room': f"0x{target.room:02x}", 'in_cave': target.in_cave, 'entry': target.entry,
+                 'exit': target.exit, 'way': target.way, 'walk': record['walk'], **stats}
+        _merge_manifest(out, [entry], command)
+        manifest.append(entry)
+        record['doors'][name] = {'route_step': target.index, 'from_step': step.index, 'how': stats['how'],
+                                 'clear': step.clear, 'sha256': _sha256(path), **facts}
+        write_json_atomic(record_path, record, indent=1)
+        log(f"{label} -> {name}: {stats['how']}, {stats['steps']} steps, {stats['env_steps']} env steps, "
+            f"$524 {facts['spawn_cycle']}, drop cycle {facts['drop_cycle']}, hearts {facts['hearts']}, "
+            f"{time.time() - started:.0f}s")
+        return carry
+
+    for crossed, (step, target) in enumerate(crossings):
+        jobs.progress(crossed, len(crossings), 'steps', label='walk')
+        if step.index in parts:        # a stretch's plain way: a branch from the door where the ways part
+            plain, rejoin = parts[step.index]
+            at = source
+            for index, next_index in zip(plain, plain[1:] + [rejoin]):
+                if next_index == rejoin:
+                    break
+                at = door(steps[index], steps[next_index], at, False)
+                if at is None:
+                    return manifest, walk_state_name(steps[next_index])
+        source = door(step, target, source, None)
+        if source is None:
+            return manifest, walk_state_name(target)
+    jobs.progress(len(crossings), len(crossings), 'steps', label='walk')
+    return manifest, None
 
 
 def _merge_manifest(out: str, manifest: List[dict], command: Optional[str] = None):
@@ -1004,6 +1271,21 @@ def build_parser() -> argparse.ArgumentParser:
     path_parser.add_argument('--route', default=DEFAULT_ROUTE,
                              help="routes.yaml route the rooms belong to (manifest step; the explored objective "
                                   "follows its steps where Link's progress matches, e.g. through a maze)")
+    walk_parser = sub.add_parser('walk', help="round 44: one state per door of a route by real play from console "
+                                              "power on, the machine carried from door to door (no redraw)")
+    walk_parser.add_argument('--route', required=True, help="routes.yaml route (every step needs `clear:`)")
+    walk_parser.add_argument('--iterations', type=int, default=3000, help="Go-Explore iterations per attempt")
+    walk_parser.add_argument('--patience', type=int, default=200)
+    walk_parser.add_argument('--attempts', type=int, default=6, help="explorer attempts per room (seeds)")
+    walk_parser.add_argument('--out', default=None, help=out_help)
+    walk_parser.add_argument('--delay', type=int, default=WALK_BOOT[1],
+                             help="idle frames on the file-select screen at power on (default: the corpus's "
+                                  "golden-d3first-51-networks)")
+    walk_parser.add_argument('--start-step', type=int, default=0,
+                             help="resume: the route step --source is the carried pre-entry state of")
+    walk_parser.add_argument('--source', default=None, help="resume: a state of an earlier walk's --out/carry")
+    walk_parser.add_argument('--last-step', type=int, default=None,
+                             help="the last route step whose entry state is written (default: the route's end)")
     install_parser = sub.add_parser('install', help="copy a finished staged build into the states dir")
     install_parser.add_argument('staged', help="the build's --out directory")
     install_parser.add_argument('--partial', action='store_true', help="install a build that failed part-way")
@@ -1049,6 +1331,17 @@ def main(argv=None):
         target = args.to or states_dir
         names = install(args.staged, target, args.partial)
         print(f"installed {len(names)} states into {target}")
+        return 0
+
+    if args.command == 'walk':
+        out = args.out or default_out()
+        manifest, failed = walk(args.route, out, args.iterations, args.patience, args.attempts, args.start_step,
+                                args.source, args.last_step, (WALK_BOOT[0], args.delay), states_dir=states_dir,
+                                command=command, log=lambda text: print(text, flush=True))
+        print(f"{len(manifest)} walked states in {out}")
+        if failed:
+            print(f"FAILED: not walked from {failed}")
+            return 1
         return 0
 
     if args.command in ('path', 'build'):

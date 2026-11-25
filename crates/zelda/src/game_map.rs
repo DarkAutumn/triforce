@@ -416,9 +416,9 @@ const EXIT_KEYS: [&str; 10] =
     ["level", "location", "in_cave", "locked", "shutter", "span", "wrap", "wrap_in", "keep_out", "never_opens"];
 const RAFT_EXIT_KEYS: [&str; 3] = ["level", "location", "dock"];
 const EXIT_NAMES: [&str; 5] = ["N", "S", "E", "W", "cave"];
-const STEP_KEYS: [&str; 18] = [
+const STEP_KEYS: [&str; 19] = [
     "level", "room", "in_cave", "specialist", "entry", "exit", "waypoint", "retreat", "treasure", "bomb_reserve",
-    "rupee_reserve", "bombs", "drops", "banked_kills", "sword", "grant", "carriers", "note",
+    "rupee_reserve", "bombs", "drops", "banked_kills", "sword", "grant", "carriers", "clear", "note",
 ];
 /// `recorder` ([`RECORDER`]): set down by the whirlwind.
 const STEP_ENTRIES: [&str; 7] = ["start", "N", "S", "E", "W", "cave", RECORDER];
@@ -590,6 +590,11 @@ pub struct RouteStep {
     /// lit up"): the carriers are this step's targets and the exit is none while one is named
     /// (`crate::objectives::Objective::carriers_first`); `carriers` is true. Default false.
     pub carrier_fight: bool,
+    /// `clear:` (round 44, the owner: "Add it if you need it. There's nothing sacred about the route file"): what the
+    /// route's plan leaves alive in the room ([`StepClear`]). Data for the state builder (`entry_states walk`, which
+    /// plays each step's kills) and the audit; nothing that plays reads it. A route with its own start states
+    /// (`states:`) has it on every step; None elsewhere.
+    pub clear: Option<StepClear>,
     /// The way of a `stretch:` this step belongs to (None: a step both ways share).
     pub way: Option<Way>,
     /// The name of that stretch.
@@ -809,6 +814,7 @@ fn parse_step(v: &Value) -> Result<RouteStep, MapError> {
         sword: bool_key(v, "sword", &what)?,
         carriers: carriers != Carriers::Off,
         carrier_fight: carriers == Carriers::Fight,
+        clear: get(v, "clear").map(|c| StepClear::parse(c, &what)).transpose()?,
         entry,
         way: None,
         stretch: None,
@@ -838,6 +844,46 @@ fn carriers_key(v: &Value, what: &str) -> Result<Carriers, MapError> {
         Some(Value::Bool(false)) => Ok(Carriers::Off),
         Some(Value::String(s)) if s == "fight" => Ok(Carriers::Fight),
         Some(other) => err(format!("{what}: carriers must be true, false or fight, got {other:?}")),
+    }
+}
+
+/// A step's `clear:` (round 44): whether the route's plan leaves the room with every monster dead. `true`: every
+/// monster the room makes on this visit dies (a room that makes none is `true`: the game itself saves it as all dead,
+/// asm:RoomHistory_SaveKillCountUW); `false`: none dies; a number N: a partial fight, N monsters killed and the rest
+/// left (3:0x5b's first pass, `carriers: fight`: one Darknut of three). What the game's room memory then holds
+/// (`LevelKillCounts`, room flags bits 6-7) follows from the monsters' types and the sword: a Zol or a Vire split by
+/// the wood sword dies as child Gels or Red Keese, which the game does not count, so a room cleared so is saved with
+/// those kills missing and refills (zelda-asm `enemies.md` "Vire", "Zol").
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StepClear {
+    /// `clear: true`.
+    All,
+    /// `clear: false`.
+    None,
+    /// `clear: N`, 1 <= N < the room's monsters.
+    Kills(u8),
+}
+
+impl StepClear {
+    fn parse(v: &Value, what: &str) -> Result<StepClear, MapError> {
+        match v {
+            Value::Bool(true) => Ok(StepClear::All),
+            Value::Bool(false) => Ok(StepClear::None),
+            Value::Number(n) => match n.as_u64().and_then(|n| u8::try_from(n).ok()) {
+                Some(k) if k >= 1 => Ok(StepClear::Kills(k)),
+                _ => err(format!("{what}: clear must be true, false or a kill count of at least 1, got {n}")),
+            },
+            other => err(format!("{what}: clear must be true, false or a kill count, got {other:?}")),
+        }
+    }
+
+    /// The kills the plan makes in a room that makes `monsters`.
+    pub fn kills(self, monsters: u8) -> u8 {
+        match self {
+            StepClear::All => monsters,
+            StepClear::None => 0,
+            StepClear::Kills(k) => k,
+        }
     }
 }
 
@@ -1840,6 +1886,9 @@ impl GameMap {
             if step.banked_kills.is_some_and(|k| !(1..=15).contains(&k)) {
                 return err(format!("{at}: banked_kills must be 1-15, got {:?}", step.banked_kills));
             }
+            if let Some(clear) = step.clear {
+                check_clear(&at, step, room, clear)?;
+            }
             // A maze room is left by its free edge or by its sequence (`exit: maze`); its other edges only loop back.
             let maze = room.maze;
             if step.exit == MAZE_EXIT && maze.is_none() {
@@ -1861,6 +1910,18 @@ impl GameMap {
         }
         for (route, steps) in &routes {
             check_ends(route, steps)?;
+        }
+        // Round 44: a route with its own start states has `clear:` on every step (its states are built by playing
+        // each step's kills, `entry_states walk`).
+        for (route, steps) in routes.iter().filter(|(name, _)| checked(name) && tables.namespaces.contains_key(name.as_str())) {
+            if let Some((i, step)) = steps.iter().enumerate().find(|(_, s)| s.clear.is_none()) {
+                return err(format!(
+                    "routes.yaml: {route}: step {i} {} from {}: needs `clear:` (true, false or a kill count): the \
+                     route has its own start states, built by playing what each step kills",
+                    step.location(),
+                    step.entry
+                ));
+            }
         }
         // A room whose wall the route bombs before the room's bombs holds bombs and is left through its own bomb wall.
         for (route, rules) in tables.bomb_rules.iter().filter(|(name, _)| checked(name)) {
@@ -2267,6 +2328,51 @@ fn check_ends(route: &str, steps: &[RouteStep]) -> Result<(), MapError> {
         if step.banked_kills.is_some() && !steps[..i].iter().any(|s| s.location() == step.location()) {
             return err(format!("{at}: banked_kills, but no earlier step of the route is in this room"));
         }
+    }
+    Ok(())
+}
+
+/// Monster names of game.yaml's room lists that are not the room's monsters (`entry_states.NOT_ROOM_MONSTERS`): Zoras,
+/// the boulder spawner and its Boulders, Bubbles, traps, persons, Zelda.
+const NOT_ROOM_MONSTERS: [&str; 18] = [
+    "Zora", "Unknown_32", "32", "Unknown_31", "Bubble", "BlueBubble", "RedBubble", "Trap", "Unknown_54", "Unknown_55",
+    "Unknown_75", "Unknown_76", "Unknown_77", "Unknown_78", "Unknown_79", "Unknown_80", "Unknown_81", "Unknown_82",
+];
+
+/// The monsters a room's game.yaml list makes on a fresh entry (none in a cellar or a cave).
+fn room_monsters(location: MapLocation, room: &GameRoom) -> i64 {
+    if location.in_cave {
+        return 0;
+    }
+    room.enemies.iter().filter(|(name, _)| !NOT_ROOM_MONSTERS.contains(&name.as_str())).map(|(_, n)| *n).sum()
+}
+
+/// A step's `clear:` against what the route data already says (round 44): a room without monsters is `true` (the game
+/// saves it as all dead); a step leaving through a shutter (opened by the kills, or by a block that moves only in an
+/// empty room) or with `treasure: clear` kills them all; a kill count is a partial fight, fewer than the room makes;
+/// `carriers: fight` kills its carrier and leaves the rest.
+fn check_clear(at: &str, step: &RouteStep, room: &GameRoom, clear: StepClear) -> Result<(), MapError> {
+    let monsters = room_monsters(step.location(), room);
+    let shutter = room.exits.get(&step.exit).is_some_and(|e| e.shutter);
+    let why_all = if monsters == 0 {
+        Some("the room makes no monsters")
+    } else if shutter {
+        Some("it leaves through a shutter")
+    } else if step.treasure == TreasureRule::Clear {
+        Some("its treasure is `clear`")
+    } else {
+        None
+    };
+    match (clear, why_all) {
+        (StepClear::All, _) => {}
+        (_, Some(why)) => return err(format!("{at}: clear must be true: {why}")),
+        (StepClear::Kills(k), None) if i64::from(k) >= monsters => {
+            return err(format!("{at}: clear: {k} kills, but the room makes {monsters} monsters (all of them: true)"));
+        }
+        _ => {}
+    }
+    if step.carrier_fight && clear == StepClear::All {
+        return err(format!("{at}: carriers: fight kills the bomb carrier and leaves the rest: clear 1, not true"));
     }
     Ok(())
 }
@@ -4072,6 +4178,38 @@ mod tests {
         let steps = &routes.routes["r"];
         assert_eq!(visit_at(steps, &[], 3, &steps[0]), 2, "an alternate for step 3: the second visit");
         assert_eq!(visit_at(steps, &[], 1, &steps[0]), 1, "right after step 0: another target of the first");
+    }
+
+    /// Round 44: `clear:` on every step of a route with its own start states (`d3first`), checked against the route
+    /// data: a shutter exit and a room without monsters are `true`, a kill count is below the room's monsters,
+    /// `carriers: fight` is no full clear; `d2first`'s own steps have none.
+    #[test]
+    fn a_step_says_what_its_plan_kills() {
+        let map = GameMap::builtin();
+        let d3first = &map.routes["d3first"];
+        assert!(d3first.iter().all(|s| s.clear.is_some()));
+        let at = |l: u8, r: u8, entry: &str| d3first.iter().find(|s| s.location() == loc(l, r) && s.entry == entry);
+        assert_eq!(at(3, 0x5b, "S").and_then(|s| s.clear), Some(StepClear::Kills(1)));
+        assert_eq!(at(3, 0x59, "N").and_then(|s| s.clear), Some(StepClear::All));
+        assert_eq!(at(3, 0x7b, "E").and_then(|s| s.clear), Some(StepClear::None));
+        assert_eq!(StepClear::Kills(1).kills(3) + StepClear::All.kills(3) + StepClear::None.kills(3), 4);
+        assert_eq!(map.routes["d2first"][0].clear, None);
+        let first_pass = "entry: S, exit: N, treasure: skip, carriers: fight, clear: 1}";
+        let shutter = "entry: N, exit: S, bomb_reserve: 5, clear: true}";
+        assert!(ROUTES_YAML.contains(first_pass) && ROUTES_YAML.contains(shutter));
+        let load = |from: &str, to: &str| GameMap::from_yaml(GAME_YAML, &ROUTES_YAML.replacen(from, to, 1)).map_err(|e| e.0);
+        for (from, to, error) in [
+            (shutter, "entry: N, exit: S, bomb_reserve: 5}", "needs `clear:`"),
+            (shutter, "entry: N, exit: S, bomb_reserve: 5, clear: false}", "it leaves through a shutter"),
+            (first_pass, "entry: S, exit: N, treasure: skip, carriers: fight, clear: true}", "carriers: fight"),
+            (first_pass, "entry: S, exit: N, treasure: skip, carriers: fight, clear: 3}", "the room makes 3"),
+            (first_pass, "entry: S, exit: N, treasure: skip, carriers: fight, clear: 0}", "at least 1"),
+            (first_pass, "entry: S, exit: N, treasure: skip, carriers: fight, clear: some}", "true, false or a kill"),
+        ] {
+            assert!(load(from, to).unwrap_err().contains(error), "{to}");
+        }
+        let partial = load(first_pass, "entry: S, exit: N, treasure: skip, carriers: fight, clear: 2}").unwrap();
+        assert_eq!(partial.routes["d3first"].iter().find(|s| s.carrier_fight).and_then(|s| s.clear), Some(StepClear::Kills(2)));
     }
 
     /// Round 37: a route's `bomb_rules:` (the owner's, Nov 22). `d3first`'s `wall_only` is 3:0x5b and its

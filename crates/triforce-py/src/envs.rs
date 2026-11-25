@@ -156,6 +156,7 @@ impl PyEnv {
             start_weights: None,
             staged_kills,
             forced_drops,
+            exact_starts: false,
         };
         let store = TfzStore::new(&data, rom.clone());
         let mut env = SpecialistEnv::new(config.clone(), data, ZCore::power_on(rom), store, opts)

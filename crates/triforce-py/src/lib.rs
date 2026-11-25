@@ -87,6 +87,13 @@ fn step_dict<'py>(
     d.set_item("sword", s.sword)?;
     d.set_item("carriers", s.carriers)?;
     d.set_item("carrier_fight", s.carrier_fight)?;
+    // Round 44: `clear:` as written: True, False, a kill count, or None (a route without it).
+    match s.clear {
+        Some(zelda::game_map::StepClear::All) => d.set_item("clear", true)?,
+        Some(zelda::game_map::StepClear::None) => d.set_item("clear", false)?,
+        Some(zelda::game_map::StepClear::Kills(k)) => d.set_item("clear", k)?,
+        None => d.set_item("clear", py.None())?,
+    }
     d.set_item("way", s.way.map(|w| w.name()))?;
     d.set_item("stretch", s.stretch.as_deref())?;
     d.set_item("visit", visit)?;
