@@ -2,6 +2,7 @@
 the way it says, every take it names exists, verifies and scores as solved, no cellar is ever an entry, and the
 criteria tell the solved way from another."""
 
+import json
 from pathlib import Path
 
 import pytest
@@ -113,9 +114,20 @@ def test_compare_counts_passes_from_records_by_entry_side(tmp_path):
                       'frames': 300},
                      {'level': 5, 'room': '0x37', 'in_cave': False, 'outcome': 'death', 'hits': 3, 'frames': 200}]}
     records = tmp_path / 'chain.jsonl'
-    records.write_text(__import__('json').dumps(run) + '\n')
+    records.write_text(json.dumps(run) + '\n')
     visits = solved_rooms.record_visits([records], load())
     assert visits['5x47-S'] == [{'exit_correct': True, 'hits': 1, 'frames': 300, 'died': False}]
     assert visits['5x37-S'] == [{'exit_correct': False, 'hits': 3, 'frames': 200, 'died': True}]
     rows = solved_rooms.team_table(load(), [], visits)
     assert next(r for r in rows if r['key'] == '5x37-S')['records']['died'] == '100.0%'
+
+
+def test_a_runs_first_room_takes_its_side_from_the_start_state(tmp_path):
+    """A chain started in the solved room itself (--from 5_47s_0): the start state's name gives the side."""
+    run = {'rooms': [{'level': 5, 'room': '0x47', 'in_cave': False, 'outcome': 'exit-correct', 'hits': 0,
+                      'frames': 290}]}
+    records = tmp_path / 'chain.jsonl'
+    records.write_text(json.dumps(run) + '\n')
+    assert solved_rooms.record_visits([records], load())['5x47-S'] == []       # no provenance: side unknown
+    Path(f"{records}.meta.json").write_text('{"provenance": {"start_from": "d3first_5_47s_0"}}')
+    assert len(solved_rooms.record_visits([records], load())['5x47-S']) == 1

@@ -2635,8 +2635,11 @@ has every flag and key).
   power-on game from frame 0 (the frame-0 EDITs give a take's `$524` and `$60`). It opens on the first GameMode-5
   frame in the room and closes on the first frame of a scroll (the side, from Link's last position), the stairs
   (`cave`) or death; it keeps Link's position, the controller byte and whether he is mid-swing each frame, every
-  swing with the monsters ahead of him then, the hits (drops of his hearts), the entry side (`cave` after a
-  cellar), and `cut` when the replay ends in it by its own stop (not counted). `check(entry, pass)` applies the
+  swing with the monsters ahead of him then, the hits (drops of his hearts), the entry side (the edge behind him;
+  `cave` after a cellar or cave mode, or out of a dungeon's mouth; a take's own META entry; `start` at a power-on
+  game's hand-over; from a start state with no transition seen, `cave` when he stands inside the room,
+  `zelda::room_entry::enters_inside`), and `cut` when the replay ends in it by its own stop (not counted).
+  `check(entry, pass)` applies the
   criteria (`exit`, `hits`, `hold` with `gap` and `grace`, `directions`, `line` with `tolerance`, `bands`,
   `swings` with `when: in_the_way`, `frames`).
 - **The comparison** (`triforce solved compare TEAM [TEAM ...]`, a queue job): each team's replay folders and

@@ -55,6 +55,7 @@ import argparse
 import json
 import math
 import os
+import re
 import sys
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
@@ -340,16 +341,16 @@ def _side_left(x: int, y: int) -> Optional[str]:
     return None
 
 
-def _side_entered(first_link: dict) -> Optional[str]:
-    """The side Link came in by, from his facing and place on his first frame in play: across the screen edge
-    behind him, or ``cave`` when he stands inside the room (up a stair, out of a cave or cellar;
-    zelda::room_entry::enters_inside: facing up he is at the bottom from Y $C0, down at the top to Y $50, right or
-    left on the side edges, X $10 and $E0)."""
+def _side_entered(first_link: dict, inside: bool = False) -> Optional[str]:
+    """The side Link came in by across a screen edge: the one behind him on his first frame in play.  With
+    ``inside`` (nothing seen of how he came: a start state's room), ``cave`` when he stands inside the room rather
+    than on that edge (zelda::room_entry::enters_inside: facing up he is at the bottom from Y $C0, down at the top
+    to Y $50, right or left on the side edges, X $10 and $E0)."""
     x, y, facing = first_link['x'], first_link['y'], first_link['direction']
-    edge = {'N': y >= 0xC0, 'S': y <= 0x50, 'E': x <= 0x10, 'W': x >= 0xE0}.get(facing)
-    if edge is None:
+    if facing not in ('N', 'S', 'E', 'W'):
         return None
-    return {'N': 'S', 'S': 'N', 'E': 'W', 'W': 'E'}[facing] if edge else 'cave'
+    edge = {'N': y >= 0xC0, 'S': y <= 0x50, 'E': x <= 0x10, 'W': x >= 0xE0}[facing]
+    return {'N': 'S', 'S': 'N', 'E': 'W', 'W': 'E'}[facing] if edge or not inside else 'cave'
 
 
 class _Reader:
@@ -365,6 +366,9 @@ class _Reader:
         self.start_entry = human.get('entry') if human.get('room') else None
         # A take of one room (META human.room, '5:0x47') is about that room: the next one's first frames are not.
         self.human_room = tuple(int(v, 0) for v in human['room'].split(':')) if human.get('room') else None
+        # From power on, the pass that opens at the hand-over (the CONTROL event) is the game's start, not an entry.
+        control = next((e['frame'] for e in self.replay.events() if e.get('type') == 'control'), None)
+        self.game_start = control if (self.replay.source or {}).get('kind') == 'power-on' else None
 
     def windows(self) -> list:
         """Frame ranges to play: around each ROOM event of a wanted room, else the whole replay."""
@@ -413,6 +417,9 @@ class _Reader:
             chase = self.edits0.get(CHASE_FLAG, int(ram[CHASE_FLAG]))
         else:
             layout = chase = None
+        # Up a stair or out of a cave: a cellar or cave mode (or a level loaded into the overworld: out of a dungeon
+        # by its mouth) since the last screen edge; None until the window has seen a transition at all.
+        came_up = None
         last_health, last_a = None, False
         frame = begin
         while frame < end and player.step(1, False):
@@ -422,6 +429,10 @@ class _Reader:
             if current is None:
                 if mode in TRANSITION_MODES or (mode in ENTER_MODES and ram[UPDATING] == 0):
                     layout, chase = int(ram[SPAWN_CYCLE]), int(ram[CHASE_FLAG])
+                if mode in (0x09, 0x0A, 0x0B, 0x0C) or (mode in (0x02, 0x03) and ram[LEVEL] == 0):
+                    came_up = True
+                elif mode in (0x02, 0x03, 0x06, 0x07):
+                    came_up = False
                 if mode != PLAY_MODE or (self.wanted is not None and (ram[LEVEL], ram[ROOM]) not in self.wanted):
                     continue
             elif mode != PLAY_MODE:
@@ -429,7 +440,7 @@ class _Reader:
                     current.exit = ('death' if mode == DEATH_MODE else 'cave' if mode == 0x10
                                     else _side_left(*current.positions[-1]))
                     out.append(current)
-                    current = None
+                    current, came_up = None, mode == 0x10
                 continue
             state = game.load(player.save_state(), randomize_rng=False, controllable=True)
             link = state.link
@@ -437,8 +448,14 @@ class _Reader:
                 level, room, in_cave = state.full_location
                 if in_cave:
                     continue
-                first = begin == 0 and frame < 30 and self.start_entry
-                entry = self.start_entry if first else _side_entered(link)
+                if begin == 0 and not out and self.start_entry:      # a take of one room: its own entry
+                    entry = self.start_entry
+                elif self.game_start is not None and abs(frame - self.game_start) <= 30:   # the game's start
+                    entry = 'start'
+                elif came_up is not None:
+                    entry = 'cave' if came_up else _side_entered(link)
+                else:                                                # a start state's room: where Link stands
+                    entry = _side_entered(link, inside=True)
                 current = Pass(self.source, level, room, entry, frame, frame + 1, None, layout, chase,
                                health_in=state.health)
                 last_health, last_a = state.health, False
@@ -568,15 +585,33 @@ def passes_of(paths: Iterable, entries: list, workers: Optional[int] = None) -> 
     return out
 
 
+START_STATE = re.compile(r'(\d)_([0-9a-f]{2})([nsewc])_\d+$')      # a route state's name: 5_47s_0, d3first_3_69c_1
+
+
+def _start_side(records: Path) -> Optional[tuple]:
+    """(level, room, side) of the state a chain file's runs started from (its ``.meta.json`` provenance), or
+    None (a power-on chain, no provenance)."""
+    meta = Path(f"{records}.meta.json")
+    if not meta.is_file():
+        return None
+    found = START_STATE.search(str((json.loads(meta.read_text()).get('provenance') or {}).get('start_from') or ''))
+    if not found:
+        return None
+    side = {'n': 'N', 's': 'S', 'e': 'E', 'w': 'W', 'c': 'cave'}[found.group(3)]
+    return int(found.group(1)), int(found.group(2), 16), side
+
+
 def record_visits(paths: Iterable, entries: list) -> dict:
     """From chain records: per entry key, each visit as {'exit_correct', 'hits', 'frames', 'died'}.  A visit's
-    entry side is the side of the room whose exit leads to the room visited before it (game.yaml)."""
+    entry side is the side of the room whose exit leads to the room visited before it (game.yaml), or for a run's
+    first room the side of the state it started from."""
     rooms = _game_rooms()
     by_room = {(e.level, e.room): [] for e in entries}
     for e in entries:
         by_room[(e.level, e.room)].append(e)
     out = {e.key: [] for e in entries}
     for path in _record_files(paths):
+        start = _start_side(path)
         for line in Path(path).read_text().splitlines():
             run = json.loads(line)
             previous = None
@@ -585,13 +620,14 @@ def record_visits(paths: Iterable, entries: list) -> dict:
                 if (level, room) in by_room and not visit.get('in_cave'):
                     exits = (rooms.get((level, room, False)) or {}).get('exits') or {}
                     entry = None
-                    if previous is not None:
-                        if previous[2]:
-                            entry = 'cave'
-                        else:
-                            entry = next((side for side, to in exits.items() if isinstance(to, dict)
-                                          and (int(to.get('level', level)), int(str(to['location']), 16),
-                                               bool(to.get('in_cave', False))) == previous), None)
+                    if previous is None:
+                        entry = start[2] if start and start[:2] == (level, room) else None
+                    elif previous[2]:
+                        entry = 'cave'
+                    else:
+                        entry = next((side for side, to in exits.items() if isinstance(to, dict)
+                                      and (int(to.get('level', level)), int(str(to['location']), 16),
+                                           bool(to.get('in_cave', False))) == previous), None)
                     for e in by_room[(level, room)]:
                         if e.entry == entry:
                             out[e.key].append({'exit_correct': visit.get('outcome') == 'exit-correct',
