@@ -768,6 +768,17 @@ the team when they start: restart them after), a landing or `triforce-lead impor
    `models/` and "A worktree needs `roms/zelda.nes`"; `README.md`'s ROM and data paths. The aside folder is the
    owner's to delete when he is satisfied (his `trajectories.prev-*` and videos rule).
 
+### Done, Nov 24 at 20:10 (the owner's yes)
+
+Step 1 (job #1319, two minutes on the cached hashes): every folder `identical`, `0 (0)` only here, the 64 pointers
+agree with 2.0.0.15. Step 2: nothing to back up. Step 3: the nine folders moved into `../triforce.aside-261124`.
+Step 4: `job doctor` in main names the store's ROM, team 2.0.0.15 and the current snapshots (harvested
+`261124-gen1`, harvested-rooms `261123-aabd5d07`, trajectories `261124-gen2`, demos `261124-gen3`); from main the
+suites passed (#1320: 1,151 Python, the Rust and asm suites), the 5-run 250 test (#1321) matched 2.0.0.16's record
+run for run (seeds 0-4: five deaths, in 5:0x65, 5:0x05, 3:0x69 twice and 4:0x32, same steps and frames), and
+the golden race (#1322) won every segment. Step 6: AGENTS.md's landing, backup, worktree and environment rules.
+The owner's `zelda-map.py`, started from main before the move, still holds what it loaded then: restart it.
+
 ### What is not tested
 
 `reconcile aside --apply` and `back` on the real main (only on made-up checkouts in `tests/test_reconcile.py`); the

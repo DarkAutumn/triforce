@@ -543,13 +543,14 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   play-zelda and see the progress as you work"). A stretch is a dungeon with its leg (the D7 triforce, the magic
   sword and the D6 triforce, D8, D9 and Ganon), complete when its first team takes it at a working rate. Landing
   means all of: `main` merged into the line of work and the five suites green there; `main` fast-forwarded; the
-  module rebuilt in the main checkout (`.venv/bin/maturin develop --release`); every promoted run copied into the
-  main checkout's `models/` with its `promoted`, `act`, `version` and `eval.json`,
-  the trajectories copied, the start states as committed; a short chain run from the main checkout as the proof
+  module rebuilt in the main checkout (`.venv/bin/maturin develop --release`); the landed team made in the shared
+  store and set current (`triforce-lead team`; since Nov 24 main has no `models/` of its own and reads the store's
+  current team like every worktree), its data snapshots installed and set current (`triforce-lead data`), the start
+  states as committed; a short chain run from the main checkout as the proof
   that `play-zelda.py` there plays the new stretch; the tag `v<VERSION>`; `git push` of `main` and the tag; the
   report. Nothing else waits on the next stretch: a stretch is never held back to be landed together with a later
   one. Work in progress is watched from its worktree in the meantime (`cd ../triforce-<line> &&
-  TRIFORCE_MODELS_DIR=$PWD/models .venv/bin/python play-zelda.py 3x2`).
+  TRIFORCE_TEAM=<team spec> .venv/bin/python play-zelda.py 3x2`).
 - **Log every experiment** in `docs/experiments/roundN.md` (setup, numbers, what was promoted, what wasn't and why)
   and every idea or problem found along the way in `docs/experiments/backlog.md`.
 - **Note where each idea came from** in the round doc: the owner's (from his own messages only), the agents', or
@@ -702,7 +703,7 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   version** (the owner, Nov 23; layout: `/backup/triforce/README.md`, contents: `INDEX.md`): run dirs once under
   `models/runs/` (`scripts/backup_models.py store`), the team each version played in `models/teams/<version>.json`
   (**at every landing:** `scripts/backup_models.py manifest VERSION <a chain of the landed team>.meta.json`, then
-  `store` main's `models/` with `--source <date>_main` and `index`), worktree data under
+  `triforce-lead backup --apply` through the queue and `index`), worktree data under
   `worktree-data/<date>_<branch>/`. Remove a finished worktree with `scripts/tidy_worktrees.sh NAME...` (replays,
   models and data kept that way first). `/backup` (a separate 8 TB disk) keeps
   at least 2 TB free. **What must be kept** (the owner, Nov 22): "a golden replay saved per model version (and if
@@ -755,8 +756,8 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   both routes and is measured on both.
 - **Old worktrees are deleted once their work is on `main`** (the owner, Nov 19: "you can always delete old worktrees.
   Once things are merged into main, delete them and keep stuff tidy"): `git worktree remove` (the branch stays);
-  first copy out what is not in git and still wanted: promoted run dirs into `models/`, demonstration files into
-  `target/demos/` (every `--demos` file a lineage used must stay findable there), harvested states, chains of record.
+  first copy out what is not in git and still wanted into the shared store (runs, demonstration snapshots: every
+  `--demos` file a lineage used must stay findable there), harvested states, chains of record.
 - **Experiment data is cleaned up as it stops being needed** (the owner, Nov 22: "Yes please clean up experiment data
   occasionally. When we don't need it remove it, but you can run all the way down to 30gb free and we are ok... I
   still want it cleaned up before then"): recorded datasets and their caches, finished rounds' worktree data under
@@ -949,7 +950,8 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 
 - Setup (README "Getting started"): `uv venv --python 3.12 .venv`, then `uv pip install --python .venv/bin/python -e
   '.[dev]'` (pytest, pytest-xdist, pyyaml, PySide6, pygame). Python 3.12; RTX 4090, 10 cores / 20 threads. ROM at
-  `roms/zelda.nes` (or `$TRIFORCE_ROM`); `triforce job setup BRANCH` makes a worktree with all of it. After changing
+  `roms/zelda.nes`, `$TRIFORCE_ROM` or the shared store's `rom/zelda.nes`; `triforce job setup BRANCH` makes a
+  worktree that reads the store. After changing
   any crate, rebuild the module: `triforce job build --agent A --task T` (`maturin develop --release`, niced). The
   build stamps the module with the sources it was built from; the queued tools refuse a module without that stamp
   or older than its sources (round 40, `triforce.build`): rebuild with `triforce job build`.
@@ -998,8 +1000,9 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   checkout while a training round is running.** Training and the background evaluation import the code fresh; a
   mid-round change broke two evaluations (round 6). Code changes go in a worktree (e.g. `../triforce-dev`):
   fast-forward it from `main` first, commit and test there (build its own module with maturin into a separate
-  venv, or test the Rust side with `cargo test`), then merge into main once no round is running. A worktree needs
-  `roms/zelda.nes`.
+  venv, or test the Rust side with `cargo test`), then merge into main once no round is running. A worktree finds the
+  ROM, data and team in the shared store (main too, since its own folders went aside on Nov 24 into
+  `../triforce.aside-261124` beside the checkout, put back with `python -m triforce.reconcile back`).
 - Throwaway scripts live in `/tmp`. A `/tmp` script imports the installed (main) `triforce`.
 - **Entry states are saved mid-scroll** (pre-entry: the frame before the room entry, game mode `$12` = 4, scroll
   complete). For one-off investigations (screenshots, ASCII tile maps, objective/wavefront checks) never read the
