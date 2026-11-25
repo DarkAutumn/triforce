@@ -5304,17 +5304,16 @@ the Vires, the Like-Likes' 4x32 W, Gleeok 4x13 W; the Gleeok also has the round-
 | walkers | gibdo 7 (5x14, 5x26, 5x47, 5x65 E and W, 5x66, 5x76); zol 1 more (4x40); like-like 2 (4x32 W and its cellar); vire 8 (4x03, 4x12, 4x30, 4x31 E and W, 4x50, 4x61, 4x71); goriya 17 (1x23 S and W, 1x44, 2x1e, 2x5e, 7x18, 7x19, 7x1a W and cellar, 7x1b by rule, 7x28, 7x29 cellar, 7x2b, 7x38, 7x59, 7x69, 7x79) |
 | overworld | ow-leever 11 more (0x0b two ways, 0x29, 0x2a, 0x2b, 0x34 three ways, 0x48 N and W twice); ow-moblin 16 (0x3d, 0x42, 0x4d, 0x51-0x53, 0x5d, 0x63, 0x6d, 0x73); ow-zora 12 more (0x28, 0x2d, 0x38 S and W, 0x3f, 0x44 two ways, 0x46, 0x47, 0x55 N twice, 0x56); ow-lynel 2 (0x50, 0x60); ow-ghini 1 (0x31) |
 | others | wallmaster 2 (1x45, 7x0d) |
-| bosses | boss-aquamentus 2 (1x35, 7x2a); boss-gleeok 2 (4x13, explorer and rule) |
+| bosses | boss-aquamentus 2 (1x35, 7x2a); boss-gleeok 2 (4x13, explorer and rule); boss-digdogger 3 for its bare task (curriculum on; the generation's has it off): 5x24 and 7x39 by the explorer, 7x1c by round 32's rule (`digdogger-1c`, 10 of 12 won; the explorer had not solved it in 10 minutes) |
 
 stalfos-keese-gel, d2-rope, dodongo-crossing, moldorm, ow-start, ow-tektite, ow-octorok, ow-peahat, ow-boulder,
 wizzrobe, pols-voice, lanmola, patra and the other bosses' generation tasks needed none: their walked doors are
 declared untracked or their curriculum is off.
 
-- **The staged snapshot**, recomposed: 1,292 tracks, 120,277 files, 1,360,184,625 bytes. Task loader on it: 88 task
-  files, every generation task loads (overworld 10, walkers 9, others 5, rooms 2, darknut, each boss), no red flag.
-  The bare `boss-digdogger` task (d2first's, curriculum on) still draws three walked doors without a track (5x24,
-  7x1c, 7x39).
+- **The staged snapshot**, recomposed: 1,295 tracks, 120,693 files, 1,365,006,816 bytes. Task loader on it: all 88
+  task files load (overworld 10, walkers 9, others 5, rooms 2, darknut, each boss, the bare tasks), none refused, no
+  red flag. `start_audit --route d3first`: 276 seed states of d3first's tasks, none fails.
 - **Replay proof.** Walkers and overworld, 89 new tracks: 1,008 of 1,008 curriculum resets hold the track's state but
   the RNG; 261 of 267 replays win from the last decision. The six that do not are ow-zora 0x44 N (3), 0x55 N's second
   visit (2) and goriya's 7x1a cellar (1): the last action, played open-loop under another RNG, ends nowhere (no
-  ending); the recorded runs succeed. The others and the bosses, 6 tracks: 72 of 72 and 18 of 18.
+  ending); the recorded runs succeed. The others and the bosses, 9 tracks: 108 of 108 and 27 of 27.
