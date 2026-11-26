@@ -933,6 +933,8 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   `tf replay info FILE`, `tf replay verify FILE... [--jobs N]` (the emulator alone, the files side by side on every
   core unless `--jobs`, reported in name order; exit 1 on a divergence). The golden path
   is a race, so which seed wins a segment can differ between two invocations; each saved replay is exact.
+  `tf replay clip FILE|DIR... --room 7:1b [--visit N|all] [--playable] --out DIR`: each visit to one room as a
+  replay of its own from the machine state there (`--playable`: mode 5 only; docs/architecture.md "Replays").
   `play-zelda.py` plays replays: of runs it simulates in the background and files into queues
   (`best`, `success`, `stuck`, `died`, `random`, `golden`; `crates/theater`), or of the files of a PATH. Its
   simulations run unpaced on `--parallel` (8) cores until the queues are full: mind that next to a training

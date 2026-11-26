@@ -1,10 +1,10 @@
-//! Joining two replays end to start, and cutting one at a state.
+//! Joining two replays end to start, cutting one at a state, and taking a stretch of one out as a replay of its own.
 
 use serde_json::{Map, Value, json};
 
 use crate::format::{
-    Cursor, ENDING_UNKNOWN, Ending, Event, ReplayError, Runs, SectionOut, StateKind, Stream, format_error,
-    put_varint, section,
+    Cursor, ENDING_UNKNOWN, Ending, Event, ReplayError, Runs, SOURCE_EMBEDDED, SectionOut, StateKind, Stream,
+    format_error, put_varint, section, write_file,
 };
 use crate::reader::{Records, Replay};
 use crate::recorder::{ending_meta, merge_models};
@@ -318,4 +318,154 @@ pub fn truncate(replay: &Replay, state_index: usize) -> Result<Vec<u8>, ReplayEr
     sections.extend(streams.iter().map(|(kind, stream)| SectionOut::stream(*kind, stream)));
     sections.sort_by_key(|s| s.kind);
     Ok(crate::format::write_file(frame, ENDING_UNKNOWN, replay.source_byte(), &replay.rom_sha1(), &sections))
+}
+
+/// A record's payload: its bytes after the leading `dframe` varint.
+fn payload(record: &[u8]) -> &[u8] {
+    let len = record.iter().position(|b| b & 0x80 == 0).map_or(record.len(), |i| i + 1);
+    &record[len..]
+}
+
+/// The records of a stream at frames `from..to` for which `keep(frame, record)` holds, moved back by `from`; when
+/// `carry` holds for the last record before `from` and no record is at `from`, that one too, at the new frame 0
+/// (a stream written only when it changes still says what held at the first frame).
+fn window<T>(
+    mut records: Records<'_, T>,
+    from: u32,
+    to: u32,
+    carry: impl Fn(&T) -> bool,
+    keep: impl Fn(u32, &T) -> bool,
+) -> Result<Stream, ReplayError> {
+    let bytes = records.bytes();
+    let mut out = Stream::default();
+    let mut held: Option<&[u8]> = None;
+    loop {
+        let start = records.position();
+        let Some(record) = records.next() else { break };
+        let record = record?;
+        let frame = records.frame();
+        if frame >= to {
+            break;
+        }
+        let raw = payload(&bytes[start..records.position()]);
+        if frame < from {
+            if carry(&record) {
+                held = Some(raw);
+            }
+            continue;
+        }
+        if let Some(raw) = held.take().filter(|_| frame > from || !carry(&record)) {
+            out.record(0).extend_from_slice(raw);
+        }
+        if keep(frame, &record) {
+            out.record(frame - from).extend_from_slice(raw);
+        }
+    }
+    if let Some(raw) = held {
+        out.record(0).extend_from_slice(raw);
+    }
+    Ok(out)
+}
+
+/// The input frames `from..to` of `replay` as a replay of their own (`tf replay clip`): it starts from the
+/// embedded `start` (a `TFZSTATE` of the machine before input `from`: after that frame's RESET, before its
+/// edits) and ends in `end` (the machine after input `to - 1`, before frame `to`'s RESET and edits) with
+/// `ending`.  It carries every record of those frames, the frame's RESET at `from` excepted (`start` is after
+/// it), and the keyframes and checkpoints between, all moved back by `from`; TARGETS, MASKS and the ROOM event
+/// in force at `from` are written again at frame 0.  META is the source's with `kind` `clip`, the source
+/// `checkpoint`, the new ending, no `segments` or `rng_phase` (they describe the whole), and `clip`: `about`
+/// with `from`, `to` (source input frames, `to` excluded) and the source's `kind`.
+pub fn clip(
+    replay: &Replay,
+    from: u32,
+    to: u32,
+    start: &[u8],
+    end: &[u8],
+    ending: &Ending,
+    about: Map<String, Value>,
+) -> Result<Vec<u8>, ReplayError> {
+    if from >= to || to > replay.frames() {
+        return format_error(format!("frames {from}..{to} are not a stretch of the replay's {}", replay.frames()));
+    }
+    if let Some((kind, ..)) = replay.sections().find(|&(kind, ..)| kind > section::MASKS) {
+        return format_error(format!("section kind {kind} is not known to this build"));
+    }
+    if replay.has(section::DECISIONS) && replay.version() < 2 {
+        return format_error("decisions of a replay before version 2 (f32 distributions) are not clipped");
+    }
+
+    let mut meta = replay.meta()?;
+    let mut clip = about;
+    clip.insert("from".into(), json!(from));
+    clip.insert("to".into(), json!(to));
+    clip.insert("kind".into(), meta.get("kind").cloned().unwrap_or(Value::Null));
+    meta.remove("segments");
+    meta.remove("rng_phase");
+    meta.insert("kind".into(), json!("clip"));
+    meta.insert("source".into(), json!({"kind": "checkpoint"}));
+    meta.insert("ending".into(), ending_meta(ending));
+    meta.insert("clip".into(), Value::Object(clip));
+    let meta = meta_bytes(meta);
+
+    let mut runs = Runs::default();
+    let mut at = 0u32;
+    for (buttons, count) in replay.runs() {
+        let (lo, hi) = (at.max(from), (at + count).min(to));
+        if lo < hi {
+            runs.push(buttons, hi - lo);
+        }
+        at += count;
+    }
+    let inputs = runs.finish();
+
+    let mut before = 0u32;
+    for edit in replay.edits() {
+        if edit?.frame >= from {
+            break;
+        }
+        before += 1;
+    }
+    let edits = window(replay.edits(), from, to, |_| false, |_, _| true)?;
+    let mut states = Stream::default();
+    states.state(0, StateKind::Start, Default::default(), 0, start);
+    for s in replay.states() {
+        let inside = s.frame > from || (s.frame == from && s.edits > before);
+        if matches!(s.kind, StateKind::Keyframe | StateKind::Checkpoint) && inside && s.frame < to {
+            states.state(s.frame - from, s.kind, s.context, s.edits - before, s.blob);
+        }
+    }
+    states.state(to - from, StateKind::End, Default::default(), edits.count, end);
+
+    let mut streams = vec![
+        (section::EDITS, edits),
+        (section::CHEATS, window(replay.cheats(), from, to, |_| false, |_, _| true)?),
+        (section::EVENTS, window(
+            replay.events(),
+            from,
+            to,
+            |e| matches!(e.event, Event::Room { .. }),
+            |frame, e| !(frame == from && e.event == Event::Reset),
+        )?),
+    ];
+    if replay.has(section::REWARDS) {
+        streams.push((section::REWARDS, window(replay.rewards(), from, to, |_| false, |_, _| true)?));
+    }
+    if replay.has(section::DECISIONS) {
+        streams.push((section::DECISIONS, window(replay.decisions()?, from, to, |_| false, |_, _| true)?));
+    }
+    if replay.has(section::TARGETS) {
+        streams.push((section::TARGETS, window(replay.targets(), from, to, |_| true, |_, _| true)?));
+    }
+    if replay.has(section::MASKS) {
+        streams.push((section::MASKS, window(replay.masks(), from, to, |_| true, |_, _| true)?));
+    }
+    let mut sections = vec![
+        SectionOut { kind: section::META, count: 1, last_frame: 0, bytes: &meta },
+        SectionOut { kind: section::SOURCE, count: 1, last_frame: 0, bytes: &[] },
+        SectionOut::stream(section::INPUTS, &inputs),
+        SectionOut::stream(section::STATES, &states),
+    ];
+    sections.extend(streams.iter().map(|(kind, stream)| SectionOut::stream(*kind, stream)));
+    sections.sort_by_key(|s| s.kind);
+    Ok(write_file(to - from, ending.kind, SOURCE_EMBEDDED, &replay.rom_sha1(), &sections))
 }

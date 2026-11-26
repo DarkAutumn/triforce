@@ -1,9 +1,10 @@
 //! `tf`: movie, replay, zcore self-diff, trace, corpus and benchmark tooling for zcore.
 //!
-//! The heavy subcommands (`ladder-golden`, `ladder-diff`, `corpus check`, `replay verify` of a folder or of more
-//! than one file, `bench` of movies or recordings) run as jobs of the machine's queue (`require_job`):
+//! The heavy subcommands (`ladder-golden`, `ladder-diff`, `corpus check`, `replay verify` and `replay clip` of a
+//! folder or of more than one file, `bench` of movies or recordings) run as jobs of the machine's queue (`require_job`):
 //! `triforce job run --agent A --task T --subtask S --desc '...' --timeout 40m -- target/release/tf ladder-diff`.
 
+mod clip;
 mod corpus;
 use movie as formats;
 mod replay;
@@ -173,6 +174,33 @@ enum ReplayCmd {
         #[arg(long)]
         decisions: bool,
     },
+    /// Each visit to one room as a replay of its own (`tfreplay::clip`): it starts from the machine state at the
+    /// visit's first frame (an embedded START) and ends at its last; META `clip` names the source file, the room,
+    /// the visit, the frames and how it ended (death, left for another room, the replay's end). A visit runs
+    /// while `$10`/`$EB` (and caves/cellars by `$12`) say the room, and ends at a death there (the dying mode,
+    /// `$12` = `$11`). `--playable` keeps only its first to last frame in mode 5 (in a cave or cellar its own
+    /// mode); a visit never playable is skipped. Files `<stem>_<L>x<RR>_v<N>.tfreplay` in `--out`. A folder
+    /// stands for its `*.tfreplay` files; a folder or more than one file is a job (`triforce job run`).
+    Clip {
+        #[arg(required = true)]
+        files: Vec<PathBuf>,
+        /// The room: `L:RR`, the room in hex (`7:1b`; `0:77` the overworld; `0:77:cave` its cave or cellar).
+        #[arg(long)]
+        room: String,
+        /// Which visit, from 1, or `all`.
+        #[arg(long, default_value = "all")]
+        visit: String,
+        /// Only the frames Link can act in: from the visit's first frame in mode 5 to its last.
+        #[arg(long)]
+        playable: bool,
+        #[arg(long)]
+        out: PathBuf,
+        /// Where a replay recorded from a named state file finds it (default: triforce/states).
+        #[arg(long)]
+        states_dir: Option<PathBuf>,
+        #[arg(long)]
+        jobs: Option<usize>,
+    },
     /// A replay's sound as music and sound effects (`zcore::tracks`): `full.wav` (the game's sound),
     /// `music.wav`, `effects.wav` and `effects-no-beep.wav` in `--out`, 48 kHz mono; `--check` prints, as JSON,
     /// the checks that the tracks follow the game's sound driver (docs/architecture.md "Sound").  A job
@@ -230,7 +258,9 @@ fn main() {
 fn heavy(cmd: &Cmd) -> bool {
     match cmd {
         Cmd::LadderGolden { .. } | Cmd::LadderDiff { .. } | Cmd::Corpus { cmd: CorpusCmd::Check { .. } } => true,
-        Cmd::Replay { cmd: ReplayCmd::Verify { files, .. } } => files.len() > 1 || files.iter().any(|f| f.is_dir()),
+        Cmd::Replay { cmd: ReplayCmd::Verify { files, .. } | ReplayCmd::Clip { files, .. } } => {
+            files.len() > 1 || files.iter().any(|f| f.is_dir())
+        }
         Cmd::Replay { cmd: ReplayCmd::Sound { .. } } => true,
         Cmd::Bench { movies, agent, recordings, .. } => !movies.is_empty() || *agent || recordings.is_some(),
         _ => false,
@@ -636,6 +666,9 @@ fn replay_cmd(cmd: ReplayCmd, rom: &rom::RomInfo) -> Result<i32> {
             if let Some(segments) = meta.get("segments").and_then(|s| s.as_array()) {
                 println!("segments: {}", segments.len());
             }
+            if let Some(clip) = meta.get("clip") {
+                println!("clip:     {clip}");
+            }
             println!("rng:      {}", rng_start(&replay, &meta));
             for (index, model) in meta.get("models").and_then(|m| m.as_array()).into_iter().flatten().enumerate() {
                 let text = |key: &str| model.get(key).and_then(|v| v.as_str()).unwrap_or("-").to_owned();
@@ -694,6 +727,36 @@ fn replay_cmd(cmd: ReplayCmd, rom: &rom::RomInfo) -> Result<i32> {
                     }
                 }
             }
+            Ok(i32::from(failed))
+        }
+        ReplayCmd::Clip { files, room, visit, playable, out, states_dir, jobs: j } => {
+            let rom = ::zcore::Rom::from_ines(&rom.bytes)?;
+            let dir = states_dir.unwrap_or_else(|| rom::workspace_root().join("triforce/states"));
+            let resolve = |name: &str| std::fs::read(state_path(&dir, name));
+            let visit = match visit.as_str() {
+                "all" => None,
+                n => Some(n.parse::<usize>().ok().filter(|&n| n >= 1)
+                    .with_context(|| format!("--visit {n}: a visit number from 1, or all"))?),
+            };
+            let options = clip::Options { room: clip::Room::parse(&room)?, visit, playable, out };
+            let files = replay_files(&files)?;
+            let results = corpus::par_map(&files, jobs(j), |file| clip::clip_file(&rom, file, &options, &resolve));
+            let (mut failed, mut written) = (false, 0);
+            for (file, result) in files.iter().zip(results) {
+                match result {
+                    Ok(clipped) => {
+                        written += clipped.written;
+                        for line in clipped.lines {
+                            println!("{}: {line}", file.display());
+                        }
+                    }
+                    Err(e) => {
+                        failed = true;
+                        println!("{}: {e:#}", file.display());
+                    }
+                }
+            }
+            println!("{written} clips of {} written to {}", options.room.text(), options.out.display());
             Ok(i32::from(failed))
         }
     }

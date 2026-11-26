@@ -549,3 +549,84 @@ fn a_missing_rom_is_refused_up_front() {
     assert_eq!(out.status.code(), Some(2));
     assert!(stderr(&out).contains("ROM not found"), "{}", stderr(&out));
 }
+
+/// `tf replay clip` (the owner, Nov 26: "show me just one room"): a run that is in its start room twice (before
+/// and after the sword cave) gives two clips, each a replay that verifies, starts at the visit's first frame in
+/// mode 5 there and ends at its last, and plays the source's frames machine for machine.
+#[test]
+fn replay_clip_writes_a_replay_for_each_visit() {
+    if !have_rom() {
+        return;
+    }
+    let tmp = TempDir::new("clip");
+    let stem = "single-run-d3first-2.0.0.15-55-networks";
+    let source = format!("corpus/replays/{stem}.tfreplay");
+    let out = tf(&["replay", "clip", &source, "--room", "0:77", "--playable", "--out", &tmp.arg("clips")]);
+    assert_eq!(out.status.code(), Some(0), "{}{}", stdout(&out), stderr(&out));
+    assert!(stdout(&out).ends_with(&format!("2 clips of 0:0x77 written to {}\n", tmp.arg("clips"))), "{}", stdout(&out));
+    let mut names: Vec<String> = std::fs::read_dir(tmp.join("clips")).unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+    names.sort();
+    assert_eq!(names, [format!("{stem}_0x77_v1.tfreplay"), format!("{stem}_0x77_v2.tfreplay")]);
+
+    let rom = Rom::from_ines(&test_rom::bytes().unwrap()).unwrap();
+    let no_files = |name: &str| Err(std::io::Error::new(std::io::ErrorKind::NotFound, name.to_owned()));
+    let replay = Replay::parse(std::fs::read(repo().join(&source)).unwrap()).unwrap();
+    let in_play = |nes: &ZCore| {
+        let ram = nes.ram();
+        (ram[0x12], ram[0x10], ram[0xEB]) == (5, 0, 0x77)
+    };
+    for (visit, name) in names.iter().enumerate() {
+        let path = tmp.join("clips").join(name);
+        let out = tf(&["replay", "verify", &path.to_string_lossy()]);
+        assert_eq!(out.status.code(), Some(0), "{}", stdout(&out));
+        let clip = Replay::parse(std::fs::read(&path).unwrap()).unwrap();
+        let meta = clip.meta().unwrap();
+        let about = &meta["clip"];
+        assert_eq!((&meta["kind"], &about["kind"]), (&serde_json::json!("clip"), &serde_json::json!("chain")));
+        assert_eq!(about["source"], format!("{stem}.tfreplay"));
+        assert_eq!((&about["room"], &about["visit"], &about["visits"]), (&serde_json::json!("0:0x77"), &serde_json::json!(visit + 1), &serde_json::json!(2)));
+        assert_eq!((clip.ending_name(), &meta["ending"]["result"]), ("other", &serde_json::json!("left")));
+        let (from, to) = (about["from"].as_u64().unwrap() as u32, about["to"].as_u64().unwrap() as u32);
+        assert_eq!(clip.frames(), to - from);
+        // The objective and the mask in force at `from` open the clip, at its frame 0 (the first visit starts before
+        // the models take over, so before any).
+        let targets = replay.targets().map(Result::unwrap).filter(|t| t.frame <= from).last();
+        let first = clip.targets().next().unwrap().unwrap();
+        match targets {
+            Some(targets) => assert_eq!(first, tfreplay::Targets { frame: 0, ..targets }, "visit {}", visit + 1),
+            None => assert!(visit == 0 && first.frame > 0, "visit {}: no objective before frame {from}", visit + 1),
+        }
+        let mask = replay.masks().map(Result::unwrap).filter(|m| m.frame <= from).last();
+        let first = clip.masks().next().unwrap().unwrap();
+        match mask {
+            Some(mask) => assert_eq!(first, tfreplay::Mask { frame: 0, ..mask }, "visit {}", visit + 1),
+            None => assert!(visit == 0 && first.frame > 0, "visit {}: no mask before frame {from}", visit + 1),
+        }
+
+        // The source just before the clip is not in play there; the clip's first and last frames are; its end is not.
+        let mut source = tfreplay::Player::open(rom.clone(), replay.clone(), &no_files).unwrap();
+        source.seek(from - 1).unwrap();
+        assert!(!in_play(source.nes()), "visit {}: frame {} is in play", visit + 1, from - 1);
+        assert!(source.step(false).unwrap());
+        let mut cut = tfreplay::Player::open(rom.clone(), clip.clone(), &no_files).unwrap();
+        assert!(in_play(cut.nes()), "visit {}: the clip starts out of play", visit + 1);
+        assert_eq!(cut.nes().ram()[..], source.nes().ram()[..]);
+        while cut.frame() < cut.frames() {
+            if cut.frame() + 1 == cut.frames() {
+                assert!(in_play(cut.nes()), "visit {}: the clip's last frame is out of play", visit + 1);
+            }
+            assert!(cut.step(false).unwrap() && source.step(false).unwrap());
+            assert_eq!(cut.nes().ram()[..], source.nes().ram()[..], "visit {}: source frame {}", visit + 1, source.frame());
+        }
+        assert!(!in_play(cut.nes()), "visit {}: still in play after the clip", visit + 1);
+        assert_eq!(source.frame(), to);
+    }
+
+    let out = tf(&["replay", "info", &tmp.join("clips").join(&names[0]).to_string_lossy()]);
+    assert!(stdout(&out).contains("source:   embedded checkpoint"), "{}", stdout(&out));
+    assert!(stdout(&out).contains("clip:     {"), "{}", stdout(&out));
+    let out = tf(&["replay", "clip", &source, "--room", "0:77", "--visit", "3", "--out", &tmp.arg("none")]);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(stdout(&out).contains("no visit 3 to 0:0x77 (2 visits)"), "{}", stdout(&out));
+}

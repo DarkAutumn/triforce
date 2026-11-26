@@ -235,13 +235,20 @@ impl Player {
         Ok(())
     }
 
-    /// Presses RESET where a RESET event is tagged with the current frame, then applies the frame's edits, each
-    /// after checking the byte it replaces.
-    fn apply_edits(&mut self, compare: bool) -> Result<(), ReplayError> {
+    /// Presses RESET where a RESET event is tagged with the current frame (once: the next [`Player::step`] does
+    /// not press it again).  The machine is then the one a state recorded at this frame holds, before the
+    /// frame's edits: what [`crate::clip`] starts from.
+    pub fn press_resets(&mut self) {
         while self.resets.get(self.reset) == Some(&self.frame) {
             self.nes.reset();
             self.reset += 1;
         }
+    }
+
+    /// Presses RESET where a RESET event is tagged with the current frame, then applies the frame's edits, each
+    /// after checking the byte it replaces.
+    fn apply_edits(&mut self, compare: bool) -> Result<(), ReplayError> {
+        self.press_resets();
         loop {
             if compare {
                 self.compare_states()?;
