@@ -589,6 +589,20 @@ fn replay_clip_writes_a_replay_for_each_visit() {
         assert_eq!((clip.ending_name(), &meta["ending"]["result"]), ("other", &serde_json::json!("left")));
         let (from, to) = (about["from"].as_u64().unwrap() as u32, about["to"].as_u64().unwrap() as u32);
         assert_eq!(clip.frames(), to - from);
+        // The objective and the mask in force at `from` open the clip, at its frame 0 (the first visit starts before
+        // the models take over, so before any).
+        let targets = replay.targets().map(Result::unwrap).filter(|t| t.frame <= from).last();
+        let first = clip.targets().next().unwrap().unwrap();
+        match targets {
+            Some(targets) => assert_eq!(first, tfreplay::Targets { frame: 0, ..targets }, "visit {}", visit + 1),
+            None => assert!(visit == 0 && first.frame > 0, "visit {}: no objective before frame {from}", visit + 1),
+        }
+        let mask = replay.masks().map(Result::unwrap).filter(|m| m.frame <= from).last();
+        let first = clip.masks().next().unwrap().unwrap();
+        match mask {
+            Some(mask) => assert_eq!(first, tfreplay::Mask { frame: 0, ..mask }, "visit {}", visit + 1),
+            None => assert!(visit == 0 && first.frame > 0, "visit {}: no mask before frame {from}", visit + 1),
+        }
 
         // The source just before the clip is not in play there; the clip's first and last frames are; its end is not.
         let mut source = tfreplay::Player::open(rom.clone(), replay.clone(), &no_files).unwrap();

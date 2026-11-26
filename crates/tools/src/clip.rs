@@ -10,7 +10,7 @@ use anyhow::{Context, Result, bail, ensure};
 use serde_json::{Map, Value, json};
 use tfreplay::{ENDING_DEATH, ENDING_OTHER, Ending, Player, Replay};
 use zelda::executor::MODE_GAMEPLAY;
-use zelda::game::{MODE_CAVE, MODE_CELLAR, MODE_DYING};
+use zelda::game::{MODE_CAVE, MODE_CELLAR, MODE_DYING, MODE_GAME_OVER};
 use zelda::vars::Var;
 
 /// Leaving a cellar; the shortcut cave's mode.
@@ -106,47 +106,57 @@ pub struct Visit {
 }
 
 /// The visits to `room` in `looks` (one per input frame, then the machine after the last).  A visit runs while the
-/// room holds and ends at a death there; what follows a death in the room (the game over screens) belongs to no
-/// visit.  A scroll shows the next room's id for a frame or two and comes back to this one: frames out of the room
-/// that Link comes back from without having played anywhere belong to the visit.
+/// room holds and ends at a death there; the dying and game over frames count as the room Link died in (a cave's
+/// mode is gone by then), and belong to no visit up to the next playable frame, so a respawn in the same room is
+/// a visit of its own.  A scroll shows the next room's id for a frame or two and comes back to this one: frames
+/// out of the room that Link comes back from without having played anywhere belong to the visit.
 pub fn visits(looks: &[Look], room: Room) -> Vec<Visit> {
     let frames = looks.len().saturating_sub(1) as u32;
+    let mut rooms: Vec<Room> = Vec::with_capacity(looks.len());
+    for look in looks {
+        let here = match (look.mode, rooms.last()) {
+            (MODE_DYING | MODE_GAME_OVER, Some(&before)) => before,
+            _ => look.room(),
+        };
+        rooms.push(here);
+    }
     let at = |k: u32| looks[k as usize];
+    let room_at = |k: u32| rooms[k as usize];
     let mut out = Vec::new();
     let mut k = 0;
     while k < frames {
-        if at(k).room() != room {
+        if room_at(k) != room {
             k += 1;
             continue;
         }
         let first = k;
         loop {
-            while k < frames && at(k).room() == room && at(k).mode != MODE_DYING {
+            while k < frames && room_at(k) == room && at(k).mode != MODE_DYING {
                 k += 1;
             }
-            if k == frames || at(k).room() == room {
+            if k == frames || room_at(k) == room {
                 break;
             }
-            match (k..frames).find(|&j| at(j).room() == room || at(j).playable()) {
-                Some(back) if at(back).room() == room => k = back,
+            match (k..frames).find(|&j| room_at(j) == room || at(j).playable()) {
+                Some(back) if room_at(back) == room => k = back,
                 _ => break,
             }
         }
         // The machine after the visit's last input frame says how it ended.
         let next = at(k);
-        let end = if next.room() != room {
-            End::Left(next.room())
+        let end = if room_at(k) != room {
+            End::Left(room_at(k))
         } else if next.mode == MODE_DYING {
             End::Death
         } else {
             End::Replay
         };
         let last = k.checked_sub(1).filter(|&last| last >= first);
-        while k < frames && at(k).room() == room {
-            k += 1;   // after a death: the game over screens
+        while k < frames && room_at(k) == room && !at(k).playable() {
+            k += 1;   // after a death: the game over screens, up to a respawn here
         }
         let Some(last) = last else { continue };   // dying as it came in
-        let playable = |&f: &u32| at(f).room() == room && at(f).playable();
+        let playable = |&f: &u32| room_at(f) == room && at(f).playable();
         let play = (first..=last).find(playable).zip((first..=last).rev().find(playable));
         out.push(Visit { number: out.len() + 1, first, last, play, end });
     }
@@ -371,5 +381,49 @@ mod tests {
         let v = visits(&looks, Room::parse("7:1b").unwrap());
         let left = End::Left(Room::parse("7:1a").unwrap());
         assert_eq!(v, vec![Visit { number: 1, first: 1, last: 6, play: Some((2, 2)), end: left }]);
+    }
+
+    /// Dying in a room and respawning in it (a dungeon's entrance): the game over screens belong to no visit, the
+    /// respawn is a visit of its own.
+    #[test]
+    fn a_respawn_in_the_room_is_a_new_visit() {
+        let looks = vec![
+            look(5, 7, 0x1b),
+            look(MODE_DYING, 7, 0x1b), // 1
+            look(MODE_GAME_OVER, 7, 0x1b), // 2
+            look(3, 7, 0x1b), // 3: the dungeon drawn again
+            look(5, 7, 0x1b), // 4: playing again
+            look(5, 7, 0x1b), // 5
+            look(5, 7, 0x1c), // 6
+        ];
+        let v = visits(&looks, Room::parse("7:1b").unwrap());
+        let left = End::Left(Room::parse("7:1c").unwrap());
+        assert_eq!(v, vec![
+            Visit { number: 1, first: 0, last: 0, play: Some((0, 0)), end: End::Death },
+            Visit { number: 2, first: 4, last: 5, play: Some((4, 5)), end: left },
+        ]);
+    }
+
+    /// The dying and game over modes are no cave modes: those frames count as the room Link died in, so a death in
+    /// a cave ends its visit as a death and makes no visit to the overworld room above it.
+    #[test]
+    fn a_death_in_a_cave_is_a_death_there() {
+        let looks = vec![
+            look(5, 0, 0x77),
+            look(MODE_CAVE, 0, 0x77), // 1
+            look(MODE_CAVE, 0, 0x77), // 2
+            look(MODE_DYING, 0, 0x77), // 3
+            look(MODE_GAME_OVER, 0, 0x77), // 4
+            look(5, 0, 0x77), // 5: respawned outside
+            look(5, 0, 0x77),
+        ];
+        let cave = visits(&looks, Room::parse("0:77:cave").unwrap());
+        assert_eq!(cave, vec![Visit { number: 1, first: 1, last: 2, play: Some((1, 2)), end: End::Death }]);
+        let outside = visits(&looks, Room::parse("0:77").unwrap());
+        let into = End::Left(Room::parse("0:77:cave").unwrap());
+        assert_eq!(outside, vec![
+            Visit { number: 1, first: 0, last: 0, play: Some((0, 0)), end: into },
+            Visit { number: 2, first: 5, last: 5, play: Some((5, 5)), end: End::Replay },
+        ]);
     }
 }
