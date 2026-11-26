@@ -1,27 +1,29 @@
-"""The owner's takes: every replay he plays on ``emu-zelda.py``, kept in git and in the archive, with an index (the
-owner, Nov 25: "Place these somewhere durable (along with the other replays I make for you, this may be an ongoing
-thing)").
+"""The owner's takes: the replays he plays on ``emu-zelda.py`` and names for the project, kept in git and in the
+archive, with an index (the owner, Nov 25: "Place these somewhere durable (along with the other replays I make for
+you, this may be an ongoing thing)"; and the same day: "not all save states I play need saving, only the ones I
+tell you about. I might save a few by accident, I might save some but make better ones and not use the others").
 
     triforce job run --agent A --task T --subtask S --desc '...' --express --timeout 10m -- \\
-        .venv/bin/python scripts/owner_takes.py sync [--from DIR] [--no-archive] [--entry-rule PATH]
+        .venv/bin/python scripts/owner_takes.py add PATH|NAME... [--from DIR] [--no-archive] [--entry-rule PATH]
+    ... scripts/owner_takes.py sync [--no-archive] [--entry-rule PATH]
     ... scripts/owner_takes.py index [--entry-rule PATH]
 
-``sync`` finds every take of his under ``--from`` (default ``~/triforce-review``, read only: nothing there is moved,
-renamed or deleted): every ``*.tfreplay`` whose META ``kind`` is ``human`` (what ``emu-zelda.py`` records; renamed
-files are found by that, not by their names), wherever it lies.  A take not yet kept (by SHA-1, against every file
-under ``replays/owner/``) must verify (``tf replay verify``: ``_native.replay_verify``) and is copied under its own
-name into ``replays/owner/<room>/`` (a room take: ``5x47``, ``ox1f`` by META ``human.room``) or
+``add`` files only the takes it is given: a path, or a file name (with or without ``.tfreplay``) matched under
+``--from`` (default ``~/triforce-review``, read only: nothing there is moved, renamed or deleted).  Each must be one
+of his (META ``kind`` ``human``, what ``emu-zelda.py`` records), name one take only (copies of one file by SHA-1
+count once) and verify (``tf replay verify``: ``_native.replay_verify``); if any of them does not, nothing is filed
+and the command exits 1.  A take not yet kept (by SHA-1, against every file under ``replays/owner/``) is copied under
+its own name into ``replays/owner/<room>/`` (a room take: ``5x47``, ``ox1f`` by META ``human.room``) or
 ``replays/owner/game/`` (a whole game from power on: ``start_<name>...``); then every take kept there is archived
 (``scripts/archive_replays.py --kind owner --keep-names``: ``/backup/triforce/replays/<version>/owner/``; what the
-archive holds is skipped) and the index is rewritten.  Run it again at any time: what is kept is skipped.  A take
-that does not verify is not copied;
-it is printed and the command exits 1.
+archive holds is skipped) and the index is rewritten.  Nothing he did not name is filed.
 
-``index`` (also the end of ``sync``) reads every take under ``replays/owner/`` and writes ``replays/owner/INDEX.md``,
-one row a take (room, entry, date, seed, frames, how it ended, ``$524`` and whether it is the route's layout for
-that door, the hearts and items he came in with, the cheats and overrides, the replay version) and, for a whole
-game, the rooms it passes with the frame Link is first in play in each.  What each take holds is cached by SHA-1 in
-``replays/owner/index.json``, so a whole game is read once.
+``sync`` files nothing new: it archives what ``replays/owner/`` holds (a missed archive catches up) and rewrites the
+index.  ``index`` (also the end of ``add`` and ``sync``) reads every take under ``replays/owner/`` and writes
+``replays/owner/INDEX.md``, one row a take (room, entry, date, seed, frames, how it ended, ``$524`` and whether it is
+the route's layout for that door, the hearts and items he came in with, the cheats and overrides, the replay
+version) and, for a whole game, the rooms it passes with the frame Link is first in play in each.  What each take
+holds is cached by SHA-1 in ``replays/owner/index.json``, so a whole game is read once.
 
 The route's layout for a door is ``triforce/entry_rule.<namespace>.json``'s ``planned`` (round 43, on r40-int and
 after it); a checkout without it takes ``--entry-rule PATH``, else the column says "layout unknown".
@@ -146,8 +148,8 @@ def write_index(rule: dict, rule_name: str) -> None:
         takes.append(entry)
     INDEX_JSON.write_text(json.dumps(fresh, indent=1, sort_keys=True) + '\n')
     lines = ['# The owner\'s takes', '',
-             'Every replay the owner played on `emu-zelda.py` for the project, kept as he saved it (his file names).',
-             'Written by `scripts/owner_takes.py` (`sync` brings in what is new from his review folder; do not edit',
+             'The replays the owner played on `emu-zelda.py` and named for the project, kept as he saved them (his',
+             'file names). Written by `scripts/owner_takes.py` (`add NAME...` files the takes he names; do not edit',
              'by hand). `$524`: the spawn cycle the room was entered with (where its monsters stand); "route" when it',
              f'is the layout the route brings to that door (`{rule_name}`).',
              'Solved rooms: `triforce/solved_rooms.yaml`.',
@@ -195,21 +197,54 @@ def _cheats(t: dict) -> str:
     return ', '.join(parts) or 'none'
 
 
-def sync(source: Path, archive: bool) -> int:
-    kept = {sha1(p.read_bytes()) for p in OWNER.rglob('*.tfreplay')}
-    found = [p for p in sorted(source.rglob('*.tfreplay'))]
-    new, bad = [], []
-    for done, path in enumerate(found):
-        jobs.progress(done, len(found), 'replays')
-        data = path.read_bytes()
-        key = sha1(data)
-        if key in kept or not is_take(data):
-            continue
+def find(names: list, source: Path) -> tuple[list, list]:
+    """The takes ``names`` name: (path, bytes) each, and the problems (not found, more than one take, not his)."""
+    found, problems = [], []
+    files = None
+    for name in names:
+        path = Path(name).expanduser()
+        if path.is_file():
+            matches = [path]
+        else:
+            if files is None:
+                files = sorted(source.rglob('*.tfreplay'))
+            stem = name[:-len('.tfreplay')] if name.endswith('.tfreplay') else name
+            matches = [p for p in files if p.stem == stem]
+        takes = {}
+        for match in matches:
+            takes.setdefault(sha1(match.read_bytes()), match)
+        if not takes:
+            problems.append(f"{name}: no such take under {source}")
+        elif len(takes) > 1:
+            problems.append(f"{name}: names {len(takes)} different files: {', '.join(map(str, takes.values()))}")
+        else:
+            path = next(iter(takes.values()))
+            data = path.read_bytes()
+            if not is_take(data):
+                problems.append(f"{name}: {path} is not one of his takes (META kind is not human)")
+            else:
+                found.append((path, data))
+    return found, problems
+
+
+def add(names: list, source: Path, archive: bool) -> int:
+    """Files the takes ``names`` name (``find``), all or none: each verified, copied under its own name, then the
+    archive."""
+    found, problems = find(names, source)
+    for path, data in found:
         try:
             _native.replay_verify(data)
         except Exception as error:  # pylint: disable=broad-exception-caught
-            bad.append(path)
-            print(f"does not verify, not kept: {path}: {error}")
+            problems.append(f"{path}: does not verify: {error}")
+    if problems:
+        print('nothing filed:\n  ' + '\n  '.join(problems))
+        return 1
+    kept = {sha1(p.read_bytes()) for p in OWNER.rglob('*.tfreplay')}
+    new = 0
+    for path, data in found:
+        key = sha1(data)
+        if key in kept:
+            print(f"already kept: {path}")
             continue
         target = destination(data, path.name)
         if target.exists():
@@ -217,31 +252,40 @@ def sync(source: Path, archive: bool) -> int:
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(path, target)
         kept.add(key)
-        new.append(target)
+        new += 1
         print(f"kept {target.relative_to(ROOT)}  <- {path}")
-    jobs.progress(len(found), len(found), 'replays')
-    print(f"{len(new)} new take(s), {len(bad)} that do not verify; {len(kept)} kept in {OWNER.relative_to(ROOT)}")
-    if archive:     # every take kept here: the archive skips what it holds (by SHA-1), so a missed run catches up
-        sys.path.insert(0, str(ROOT / 'scripts'))
-        import archive_replays  # pylint: disable=import-outside-toplevel
-        archive_replays.main([str(OWNER), '--kind', 'owner', '--keep-names'])
-    return 1 if bad else 0
+    print(f"{new} new take(s); {len(kept)} kept in {OWNER.relative_to(ROOT)}")
+    if archive:
+        archive_all()
+    return 0
+
+
+def archive_all() -> None:
+    """Every take kept in ``replays/owner/`` into the backup (what it holds is skipped, by SHA-1)."""
+    sys.path.insert(0, str(ROOT / 'scripts'))
+    import archive_replays  # pylint: disable=import-outside-toplevel
+    archive_replays.main([str(OWNER), '--kind', 'owner', '--keep-names'])
 
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     sub = parser.add_subparsers(dest='command', required=True)
-    s = sub.add_parser('sync', help="bring in every new take from the review folder, archive it, write the index")
-    s.add_argument('--from', dest='source', default=str(SOURCE))
-    s.add_argument('--no-archive', action='store_true', help="leave /backup alone")
-    s.add_argument('--entry-rule', default=str(ENTRY_RULE))
+    a = sub.add_parser('add', help="file the takes he named (paths or file names under --from), archive, index")
+    a.add_argument('names', nargs='+', metavar='PATH|NAME')
+    a.add_argument('--from', dest='source', default=str(SOURCE))
+    s = sub.add_parser('sync', help="file nothing new: archive what replays/owner holds, rewrite the index")
+    for p in (a, s):
+        p.add_argument('--no-archive', action='store_true', help="leave /backup alone")
     i = sub.add_parser('index', help="write replays/owner/INDEX.md")
-    i.add_argument('--entry-rule', default=str(ENTRY_RULE))
+    for p in (a, s, i):
+        p.add_argument('--entry-rule', default=str(ENTRY_RULE))
     args = parser.parse_args(argv)
     jobs.require_job()
     status = 0
-    if args.command == 'sync':
-        status = sync(Path(args.source).expanduser(), not args.no_archive)
+    if args.command == 'add':
+        status = add(args.names, Path(args.source).expanduser(), not args.no_archive)
+    elif args.command == 'sync' and not args.no_archive:
+        archive_all()
     rule = entry_rule(args.entry_rule)
     write_index(rule, Path(args.entry_rule).name if rule else 'no entry rule file: layout unknown')
     return status

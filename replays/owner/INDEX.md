@@ -1,7 +1,7 @@
 # The owner's takes
 
-Every replay the owner played on `emu-zelda.py` for the project, kept as he saved it (his file names).
-Written by `scripts/owner_takes.py` (`sync` brings in what is new from his review folder; do not edit
+The replays the owner played on `emu-zelda.py` and named for the project, kept as he saved them (his
+file names). Written by `scripts/owner_takes.py` (`add NAME...` files the takes he names; do not edit
 by hand). `$524`: the spawn cycle the room was entered with (where its monsters stand); "route" when it
 is the layout the route brings to that door (`entry_rule.d3first.json`).
 Solved rooms: `triforce/solved_rooms.yaml`.
