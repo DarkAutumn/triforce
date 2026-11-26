@@ -760,6 +760,12 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   on the same starts). When something looks off and enough has trained to show it, the lead may record replays for
   the owner to watch (paths in the check-in, what to look for) and ask what he sees: he often spots what is going on
   or points somewhere the lead didn't look.
+  **A quick read the moment a training finishes** (the owner, Nov 26: "when something completes a SMALL benchmark
+  should be run to get a read [...] a couple of minutes [...] up to 10 [...] I want a read, not certainty"): the lab
+  trainer does not evaluate at the end of a run, so the lead queues, as soon as a training ends, a few minutes of
+  express chains of the rooms it plays (from each dungeon's entrance, about 100 runs) beside the previous team on the
+  same starts, and writes the read into the check-in before the owner asks. No evaluations along the way while a
+  training runs, unless the owner asks for a check-in mid-run: then measure its latest checkpoint at once.
 - **The 250-run test of every versioned build** (the owner, Nov 23: "When you build a new model that looks
   'interesting' [...] I want you do 250 runs and record the best and worst [...] save up to 3 runs that end 'stuck',
   with each [...] having a different room [...] capture detailed statistics about these runs [...] a .json that goes
