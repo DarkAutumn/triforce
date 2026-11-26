@@ -5356,13 +5356,18 @@ push block on the way to the tunnel (`clear: true`) and came back through the em
   because 9x61 from the tunnel now makes its Patra and walks the spot list, where the runs found it emptied; from
   9x41 on the walk is back among the runs' values. The misses before 9x61 are as before (the overworld after D8,
   the rotated history ring, 9x20 from N).
-- **The reset rule's table** rebuilt (`r43_seeds.py reach` on the new route, Seeds43's scrolls and flips without
-  the old step 268's; `r43_seeds.py rule` from the record). A door the route passes twice now takes its first walked
-  visit's value (the table's door has no visit; before, the later visit overwrote it, and the overworld's later
-  visits come right after a segment's start). Against r40-int's table 9 doors' planned values change, all to the
-  walk's own: 0x2f, 0x34, 0x37 and 0x3c out of their caves (1 → 5, 8 → 3, 0 → 7, 0 → 4), 0x44 from N (1 → 5), the
-  d4-island plain way's 4x20 from S, 4x21 from W and 4x30 from E (0 → 7, 3, 4), and 9x51 from S (0 → 1, the one this
-  change makes). `entry_states audit`: 1318 states, 0 problems; `start_audit`: 276 seed states, 0 fail.
+- **The reset rule's table** rebuilt from the record (`r43_seeds.py reach` on the new route, then `rule`; the
+  table in the branch is Seeds43's rebuild on top of mine, r43-seeds 060d8b77: no clear flips, since routes.yaml
+  says `clear` at every step). A door the route passes twice takes its first walked visit's value (the table's door
+  has no visit; before, the later visit overwrote it, and the overworld's later visits come right after a segment's
+  start); a later visit's value, and a walked value outside the searched set, join the door's set. Against
+  r40-int's table 15 doors' planned values change: nine overworld doors out of a cave or a dungeon, measured (0x22
+  2 → 1, 0x2c 8 → 4, 0x2f 1 → 5, 0x34 8 → 3, 0x37 0 → 7, 0x3c 0 → 4, 0x44 1 → 6, 0x45 0 → 3, 0x74 8 → 1) and 0x44
+  from N (1 → 5, 216 runs), all to the walk's own; the d4-island plain way's 4x20 from S,
+  4x21 from W and 4x30 from E (0 → 7, 3, 4; nine values each, by the maps); and the two this change makes, 9x51 from
+  S (0 → 1) and Zelda's room 9x32 from S (1 → 7, the plan's composed value: the clip way leaves 9x61's Patra
+  alive; 9_32s itself is the Ganon rule's, not the walk's). `entry_states audit`: 1318 states, 0 problems;
+  `start_audit`: 276 seed states, 0 fail.
 - **The teachers.** Patra's teacher (`others`) waited for this. The walkers at 9x51 and 9x41 and Ganon trained on the
   states before it: their doors' planned `$524` changed (a reset draws it from the table) and they hold one key
   fewer, which no room of theirs reads; the hearts are drawn at a reset.

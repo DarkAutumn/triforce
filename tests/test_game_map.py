@@ -74,7 +74,7 @@ def test_d3first_runs_from_the_start_to_the_end_of_the_game():
     steps = native.route_steps('d3first')
     first, last = steps[0], steps[-1]
     assert (first['level'], first['room'], first['entry'], last['level'], last['room'], last['exit']) == (
-        0, 0x77, 'start', 9, 0x32, 'end') and len(steps) == 290
+        0, 0x77, 'start', 9, 0x32, 'end') and len(steps) == 292      # round 44: 9x61's two stretches
     assert [s['level'] for s in steps if s['exit'] == 'triforce'] == [3, 4, 1, 2, 5, 7, 6, 8]
     index = RouteIndex('d3first')
     entrances = {}
@@ -132,7 +132,7 @@ def test_d3first_keeps_the_bag_through_dungeon_7_to_0x1b():
                          (0x1a, entrance), (0x1b, 2), (0x1c, 2), (0x0c, 2), (0x0d, 2), (0x29, 2), (0x2a, 0),
                          (0x2b, 0)], route
         assert [s['treasure'] for s in native.route_steps(route) if (s['level'], s['room']) == (7, 0x1b)] == [wanted]
-    assert [len(native.route_steps(r)) for r in ('d2first', 'd3first')] == [354, 290]
+    assert [len(native.route_steps(r)) for r in ('d2first', 'd3first')] == [354, 292]
 
 
 def test_d3first_fights_moldorm_and_takes_0x56s_key():

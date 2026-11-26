@@ -1697,8 +1697,8 @@ def test_a_running_250_test_shows_its_runs_so_far(qapp, queue, monkeypatch, job_
             assert [(item['level'], item['runs']) for item in card.tiles.triforces] == [
                 (3, 2), (4, 1), (1, 0), (2, 0), (5, 0), (7, 0), (6, 0), (8, 0), (9, 0)]
             assert card.tiles.triforces[0]['share'] == 0.5 and card.tiles.triforces[0]['color'] == gui.rate_color(0.5)
-            assert card.reach.furthest == {'step': 60, 'room': '0:0x37', 'steps': 290, 'fraction': 60 / 290,
-                                           'label': 'step 60 of 290 · 0:0x37'}
+            assert card.reach.furthest == {'step': 60, 'room': '0:0x37', 'steps': 292, 'fraction': 60 / 292,
+                                           'label': 'step 60 of 292 · 0:0x37'}
             assert not card.tiles.isHidden() and not card.reach.isHidden()
             assert card.height() > gui.ChainCard.TOP + gui.ChainCard.TILES + gui.ChainCard.REACH
             _, timing = gui.chain_caption(view.model.chain(), now)
@@ -1725,10 +1725,10 @@ def test_a_running_250_test_shows_its_runs_so_far(qapp, queue, monkeypatch, job_
                                                    [1, gui.css_color(gui.C.muted)]]
         assert chain_card['tally']['triforces'][:2] == [['D3', 2, 0.5, gui.rate_color(0.5).name()],
                                                         ['D4', 1, 0.25, gui.rate_color(0.25).name()]]
-        assert chain_card['tally']['furthest'] == {'fraction': 60 / 290, 'label': 'step 60 of 290 · 0:0x37'}
+        assert chain_card['tally']['furthest'] == {'fraction': 60 / 292, 'label': 'step 60 of 292 · 0:0x37'}
         assert is_runs_rate(chain_card['speed']) and chain_card['eta']
         # a win: every triforce, Dungeon 9's the game's end, the furthest step the end
-        progress(chain_result('d3first', 4, list(range(290)), result='success'))
+        progress(chain_result('d3first', 4, list(range(292)), result='success'))
         model = gui.Training(out)
         model.poll()
         tally = gui.chain_tally(model.chain()['progress'])
@@ -1777,7 +1777,7 @@ def test_a_batch_chain_entry_shows_its_runs_so_far(qapp, queue, monkeypatch, job
             assert gui.row_outcomes(view.model.runs[1]) is None
             tally = gui.chain_tally(run.chain_progress)
             assert [(item['level'], item['runs']) for item in tally['triforces']] == [(3, 1)]
-            assert tally['furthest']['label'] == 'step 23 of 290 · 3:0x3d'
+            assert tally['furthest']['label'] == 'step 23 of 292 · 3:0x3d'
             assert is_runs_rate(gui.run_speed(run, 'evaluating'))
             window.select(view, 0)
             assert section_titles(window.detail.evaluation)[:3] == ['Runs so far (3 of 40)', 'Triforces taken',

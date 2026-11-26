@@ -60,7 +60,7 @@ fn pieces(levels: &[u8]) -> u8 {
 fn the_route_runs_from_the_start_to_the_end_of_the_game() {
     let map = map();
     let steps = steps(&map);
-    assert_eq!(steps.len(), 290);
+    assert_eq!(steps.len(), 292);
     let (first, last) = (&steps[0], steps.last().unwrap());
     assert_eq!((first.level, first.room, first.entry.as_str(), first.exit.as_str()), (0, 0x77, "start", "cave"));
     assert_eq!((last.level, last.room, last.exit.as_str()), (9, 0x32, "end"));
@@ -68,7 +68,11 @@ fn the_route_runs_from_the_start_to_the_end_of_the_game() {
     let triforces: Vec<u8> = steps.iter().filter(|s| s.exit == "triforce").map(|s| s.level).collect();
     assert_eq!(triforces, [3, 4, 1, 2, 5, 7, 6, 8]);
     let stretches: Vec<&str> = map.stretches[ROUTE].iter().map(|s| s.name.as_str()).collect();
-    assert_eq!(stretches, ["d4-island", "ring-07", "arrow-20", "arrow-20n"], "the blocks' only");
+    assert_eq!(
+        stretches,
+        ["d4-island", "ring-07", "patra-61", "arrow-20", "arrow-20n", "patra-61n"],
+        "the blocks' and 9x61's own (round 44: the block clip past the Patra, both ways)"
+    );
 }
 
 /// The wood sword until the grave's magic sword, the items and pieces in the route's order, and the heart containers
