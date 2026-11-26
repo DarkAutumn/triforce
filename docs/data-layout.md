@@ -115,7 +115,7 @@ links: `triforce store view TEAM --into DIR`. What resolves where:
 |---|---|---|---|
 | ROM | `$TRIFORCE_ROM` (only it) | store `rom/zelda.nes` | `<checkout>/roms/zelda.nes` |
 | networks | `--models-dir` | `--team` / `$TRIFORCE_TEAM` | `$TRIFORCE_MODELS_DIR`, `<checkout>/models`, the store's current team |
-| harvested, harvested-rooms, trajectories, demos | `--data KIND=NAME` (`train`) | the caller's own folder | the store's current snapshot |
+| harvested, harvested-rooms, trajectories, demos | `--data KIND=NAME` (`train`) | the caller's own folder | the snapshot the checkout pins (`triforce/data_pins.yaml`), else the store's current snapshot |
 | run written by `train` | `--models-dir` (as before) | the store (a store team plays) | |
 
 One rule for every reader of the data, not only `triforce train`'s command line: `paths::data_dir` in Rust
@@ -130,6 +130,22 @@ checkout's `trajectories/` only while it has one, else into `target/trajectories
 snapshot for every reader. The test suites' session store links the machine store's current snapshots, so they
 play the same states in a checkout with the old links or without them; `triforce job test` names the store's current
 team (`$TRIFORCE_TEAM`) and the Python suite gives its tests a read-only view of it, never a checkout's `models/`.
+
+**Pins** (Nov 25): a branch whose code no longer matches the store's current snapshot of a kind names the one it
+reads in `triforce/data_pins.yaml`, committed, so every worktree of the branch reads it (`kind: snapshot` lines,
+`#` comments; `paths.pins`, the Rust twin `paths::pins` with the same rule; a malformed line is refused naming it).
+The order is the caller's own folder, then the pin, then the store's current snapshot; a pinned snapshot the store
+does not hold is refused (`paths.data_missing` names the pin), never quietly replaced by the current one. Python
+reads the pins of the checkout `triforce/paths.py` lives in, Rust those of the checkout `crates/paths` was built
+from. `triforce job doctor` says `store snapshot NAME (pinned by .../triforce/data_pins.yaml: ...)`, a training's
+source line `pinned by triforce/data_pins.yaml`, and its manifest's data record carries `'pinned': true` beside the
+snapshot's name; the test suites' session store links the pinned snapshots beside the current ones. No file, no
+pins: the default. `main` pins `trajectories: 261124-gen2` (the store's current, `261125-all4`, is the fresh
+generation's, without the old `d3first` tracks of the walked doors that main's three-chain states and tasks
+draw); the generation's branch `r40-int` has no pins: it deletes the file in one commit after it merges main, and
+keeps it deleted on every later merge (git keeps a deletion against an unchanged file; when main changes the file,
+the merge stops on a modify/delete conflict, resolved with `git rm triforce/data_pins.yaml`). When a branch catches
+up with the current snapshot it deletes its pin.
 
 Every tool that plays or trains says at its start, in one line, which it took and why, and its manifest carries the
 same line (`models.why`; a training's `sources`): `models: store team 2.0.0.13 (--team; sha256 ...)`,

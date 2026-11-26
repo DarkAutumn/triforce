@@ -14,7 +14,9 @@ Two kinds of place:
 The transition (the owner's staged cutover): until the lead's reconciliation, a checkout that still has today's
 folders (``roms/``, ``trajectories/``, ``triforce/states/harvested``, ``models/``, or the links ``triforce job
 setup`` used to make) keeps reading them exactly as before (``legacy_data``); a checkout without them reads the
-store.  Missing is an error: ``MissingError`` names every place looked in.
+store: the snapshot its ``triforce/data_pins.yaml`` pins for the kind (``pins``; the file is committed, so every
+worktree of a branch reads the same snapshot), else the store's current one.  Missing is an error: ``MissingError``
+names every place looked in.
 """
 
 import json
@@ -42,6 +44,9 @@ CHECKOUT_DATA = {'harvested': 'triforce/states/harvested', 'harvested-rooms': 't
                  'trajectories': 'trajectories', 'demos': 'target/demos'}
 _LEGACY_DATA = {'harvested': STATES_DIR / 'harvested', 'harvested-rooms': STATES_DIR / 'harvested-rooms',
                 'trajectories': ROOT / 'trajectories', 'demos': ROOT / 'target' / 'demos'}
+# A checkout's pins: ``kind: snapshot`` lines (``#`` comments, blank lines), read before the store's current (the
+# Rust twin, ``paths::pins``, parses the same lines).  No file, no pins: the branch reads the store's current.
+PINS_FILE = 'triforce/data_pins.yaml'
 
 # Kept names: the checkout's folders as they were (today's readers and writers, until reconciliation).
 HARVESTED_DIR = _LEGACY_DATA['harvested']
@@ -130,39 +135,67 @@ def legacy_data(kind: str) -> Path:
     return _LEGACY_DATA[kind]
 
 
+def pins(checkout: Optional[Path] = None) -> dict:
+    """kind -> snapshot name the checkout pins (``<checkout>/triforce/data_pins.yaml``, default this one; {} without
+    the file).  ``ValueError`` naming the line for anything but ``kind: name`` lines of known kinds, once each."""
+    path = Path(checkout or ROOT) / PINS_FILE
+    if not path.is_file():
+        return {}
+    found = {}
+    for number, line in enumerate(path.read_text(encoding='utf-8').splitlines(), 1):
+        text = line.split('#', 1)[0].strip()
+        if not text:
+            continue
+        kind, sep, name = (part.strip() for part in text.partition(':'))
+        if not sep or kind not in DATA_KINDS or not name or kind in found or ' ' in name or name == CURRENT:
+            raise ValueError(f"{path}:{number}: {line.strip()!r}: a pin is 'KIND: SNAPSHOT' with KIND one of "
+                             f"{', '.join(DATA_KINDS)}, once each, and a snapshot name")
+        found[kind] = name
+    return found
+
+
 def data_source(kind: str, name: Optional[str] = None) -> tuple[Path, dict]:
     """(folder, record) of the ``kind`` a tool reads: snapshot ``name`` from the store when one is named; else this
     checkout's own folder when it still has one (the transition: today's command lines read what they read); else the
-    store's current snapshot.  The record says which (``{'kind', 'snapshot', 'path'}`` or ``{'kind', 'legacy',
-    'path'}``), for the run's provenance.  ``MissingError`` when there is none of them."""
+    snapshot this checkout pins (``pins``); else the store's current snapshot.  The record says which (``{'kind',
+    'snapshot', 'path'}``, with ``'pinned': True`` for a pin, or ``{'kind', 'legacy', 'path'}``), for the run's
+    provenance.  ``MissingError`` when there is none of them, or the pinned snapshot is not in the store."""
     if name is None and legacy_data(kind).exists():
         return legacy_data(kind), {'kind': kind, 'legacy': True, 'path': str(legacy_data(kind))}
+    pinned = pins().get(kind) if name is None else None
     try:
-        path = data(kind, name or CURRENT)
+        path = data(kind, name or pinned or CURRENT)
     except MissingError as error:
+        if pinned:
+            raise MissingError(f"{error}; it is pinned by {ROOT / PINS_FILE}") from error
         if name is None:
             raise MissingError(f"{error}; this checkout has no {legacy_data(kind)} either") from error
         raise
-    return path, {'kind': kind, 'snapshot': path.name, 'path': str(path)}
+    record = {'kind': kind, 'snapshot': path.name, 'path': str(path)}
+    return path, {**record, 'pinned': True} if pinned else record
 
 
-def data_dir(kind: str, legacy: Optional[Path] = None) -> Path:
+def data_dir(kind: str, legacy: Optional[Path] = None, checkout: Optional[Path] = None) -> Path:
     """The folder of ``kind`` every reader uses (the Rust twin is ``paths::data_dir``): ``legacy`` (default this
     checkout's ``legacy_data(kind)``; a caller's own states dir passes ``<states>/harvested``) while it exists, else
-    the store's current snapshot, else ``legacy`` again for the reader's refusal (``data_missing`` says where it
-    looked)."""
+    the snapshot ``checkout`` (default this one) pins, else the store's current snapshot, else ``legacy`` again for
+    the reader's refusal (``data_missing`` says where it looked)."""
     legacy = Path(legacy) if legacy is not None else legacy_data(kind)
     if legacy.exists():
         return legacy
     try:
-        return data(kind)
+        return data(kind, pins(checkout).get(kind, CURRENT))
     except MissingError:
         return legacy
 
 
-def data_missing(kind: str, legacy: Optional[Path] = None) -> str:
+def data_missing(kind: str, legacy: Optional[Path] = None, checkout: Optional[Path] = None) -> str:
     """What a reader of ``kind`` says when ``data_dir`` found nothing: both places it looked."""
     legacy = Path(legacy) if legacy is not None else legacy_data(kind)
+    pinned = pins(checkout).get(kind)
+    if pinned:
+        return (f"{legacy} is missing and the store at {shared_root()} has no {kind} snapshot {pinned!r} (pinned by "
+                f"{Path(checkout or ROOT) / PINS_FILE})")
     return (f"{legacy} is missing and the store at {shared_root()} has no current {kind} snapshot "
             f"({data_root(kind) / CURRENT})")
 
