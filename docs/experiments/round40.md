@@ -5477,3 +5477,39 @@ job a scope) on the same seeds, paired by seed.
 overworld cave and dungeon exits (no run frame there: the old table planned the composed or commonest value, the new
 the walk's own). `gen1-overworld/s1r` (50 minutes in) was stopped and `gen1-overworld/s1r2` started from
 `triforce-gen4`; the small teachers were withdrawn and requeued behind it (shortest-first had put the overworld last).
+
+## No weapon bomb in a room fought for its bombs (Bombs48, branch `bombs48`, Nov 26)
+
+The owner, Nov 26: "we should NOT be using bombs in rooms we fight for bombs, other than 10th streak to get more bombs
+or to open wall-doors", and "make sure the 10th bomb thing in a no-bombs allowed room still works, maybe with a test if
+there's not one." (The owner's rule; the agent's the form below and the tests.)
+
+- **One route-level rule**, routes.yaml `bomb_rules: {d3first: {treasure_wall_only: true}}`
+  (`zelda::game_map::BombRules::treasure_wall_only`, read by `GameCompletion::weapon_bombs_off`): every step that
+  takes its room's game.yaml bombs (no `treasure:`, or `{if_bombs_below: M}`: the same steps the floor
+  `treasure_below: 8` judges) plays as a `wall_only` room, the family's mode or the step's capped at `required`: BOMB
+  only at the wall the step leaves through and on the 10th damage-free kill (`$50` = 9), a fight for the bombs or a
+  crossing with a full bag alike. A rule rather than a room list in `wall_only` or a `bombs: tenth` per step: it is
+  the set the floor already names, follows the route as it changes, and leaves the other visits of the same rooms
+  alone (3:0x5b's first pass, 9:0x16 southbound, which `skip` the bombs). `d2first` names no rules: unchanged.
+- **The steps it covers** (d3first, today's numbering): 3:0x4a E→W (11, stalfos-keese-gel), 3:0x5b W→E (19,
+  darknut; `wall_only` already, its E wall), 2:0x1e S→N (102, goriya), 5:0x65 W→E (134, gibdo), 7:0x1b W→E (170,
+  goriya), 8:0x3f W→cave (224, darknut), 9:0x16 S→N (262, patra). **Play changes at one step, 8:0x3f**: its
+  Darknuts (`free`, above the reserve of 2) lose the weapon bomb. 7:0x1b's step `bombs: tenth` (the owner's, earlier
+  the same day) is the same mask and is removed; 2:0x1e's Red Goriyas (`free`) are under the reserve of 8 set on
+  0:0x37's step, which a bag of 8 never exceeds; the `required` families (3:0x4a, 5:0x65, 9:0x16) placed no weapon
+  bomb before. 2:0x1e and 5:0x65 eastbound were not on the lead's list; they are the floor's steps all the same
+  (game.yaml `treasure: bombs`, taken on the step).
+- **Tests** (`crates/env/tests/specialist_env.rs`): `no_weapon_bomb_where_the_route_fights_for_a_rooms_bombs` (new;
+  the session's mask, the observation's mask and `bomb_usable`): 8:0x3f and 7:0x1b with 5 bombs (a fight, above the
+  reserve of 2) offer no BOMB at `$50` 0 or 8 and offer it at 9; 8:0x3f with a full bag none; the same routes.yaml
+  with the switch removed, and `d2first`'s rooms, offer the weapon at 5 (so the switch, not the reserve or
+  `fights_only`, masks it). `a_bomb_on_the_tenth_kill_arms_a_forced_bomb_drop` now plays a second room in the
+  emulator: 8:0x3f on `d3first` with 5 bombs and `$50` = 9, the search for a bomb kill through the env's strict mask,
+  the kill arming the forced drop (`$51`), `reward-armed-bomb-drop` paid once, one bomb spent, the drop falling as
+  bombs. The wall bomb of 3:0x5b's last pass stays offered where it opens the wall:
+  `the_owners_order_in_3_5b_wall_then_bombs_then_out` lays `BOMB E` through the strict mask in every order (in with
+  8, 5, 4 and 0). `a_route_names_its_bomb_rules`: the switch on `d3first` and a non-bool refused.
+- **Not done**: nothing retrained or measured. A Darknut teacher trained before this commit had the weapon bomb in
+  8:0x3f and meets the new mask there once its worktree carries the commit. The walked tracks are state sequences,
+  not actions: a track whose fight used a bomb there still seeds a valid state.

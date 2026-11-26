@@ -583,9 +583,10 @@ d3first:
   # Those above the reserve of 2 go to Digdogger's 0x1c and on.
   - {level: 7, room: '0x79', specialist: goriya, entry: S, exit: N, bomb_reserve: 8, clear: true}
   - include: dungeon-7
-  # 0x1b is fought for its bombs, so no bomb is spent there but the 10th-kill one that forces a bomb drop (`bombs:
-  # tenth`; the owner, Nov 26, watching the walkers' teacher bomb its Goriyas).
-  - {level: 7, room: '0x1b', specialist: goriya, entry: W, exit: E, bomb_reserve: 2, bombs: tenth, clear: true}
+  # 0x1b is fought for its bombs, so no bomb is spent there but the 10th-kill one that forces a bomb drop (the owner,
+  # Nov 26, watching the walkers' teacher bomb its Goriyas): the route's `treasure_wall_only` (`bomb_rules`, below),
+  # which replaced the step's own `bombs: tenth` the same day.
+  - {level: 7, room: '0x1b', specialist: goriya, entry: W, exit: E, bomb_reserve: 2, clear: true}
   - include: dungeon-7-east
   # Level 7 to the magic sword (round 36; r36-warp3f): 0x42 S, 0x52 W, 0x51's wrap exit (CLIP E: clips only) into
   # 0x50, S 0x60 and its wrap exit round the world onto 0x5f's water, the ladder clip to the heart container (11);
@@ -660,6 +661,17 @@ d3first:
 # d3first, 8 (the bag): 3:0x4a, 3:0x5b's last pass, 2:0x1e, 5:0x65 eastbound, 7:0x1b, 8:0x3f, 9:0x16 northbound.
 # `treasure_below_rooms: [{level, room, below: N}, ...]`: a room's own floor instead (the override for a room where
 # the fight costs too much; 7:0x1b's crossing would be `{level: 7, room: '0x1b', below: 2}`).
+# `treasure_wall_only: true` (round 40; the owner, Nov 26: "we should NOT be using bombs in rooms we fight for bombs,
+# other than 10th streak to get more bombs or to open wall-doors"): every step that takes its room's game.yaml bombs
+# (the floor's steps above: no `treasure:`, or `{if_bombs_below: M}`) plays as a `wall_only` room, a fight for them or
+# a crossing with a full bag alike: BOMB only at the wall the step leaves through and on the 10th damage-free kill
+# (its bomb kill arms a forced drop of four).  One rule over the route rather than a room list or a `bombs:` per
+# step: it follows the steps that take a room's bombs as the route changes, and a step that leaves them (`skip`,
+# `refuse`, `clear`: 3:0x5b's first pass, 9:0x16 southbound) is untouched.  On d3first: 3:0x4a, 5:0x65 eastbound
+# and 9:0x16 northbound (stalfos-keese-gel, gibdo and patra are `required` families: unchanged), 3:0x5b's last pass
+# (already `wall_only`: its E wall), 2:0x1e (goriya, `free`, but under the reserve of 8 set on 0:0x37's step: no
+# weapon bomb before either), 7:0x1b (goriya; its step's `bombs: tenth`, the same, gone) and 8:0x3f (darknut,
+# `free` above its reserve of 2), the one step whose play it changes.
 # `fights_only: true`: in a dungeon BOMB is a weapon only while the objective fights the room (the owner: "In
 # dungeons, link should only use bombs in rooms it somehow needs to clear"): a shutter the monsters hold on the step's
 # exit, a treasure or a block that waits on the kills and the step takes, a boss.  Where the route only crosses
@@ -694,6 +706,7 @@ bomb_rules:
     fights_only: true
     wall_only: [{level: 3, room: '0x5b'}]
     treasure_below: 8
+    treasure_wall_only: true
     carrier_targets: true
     wall_grant: objective
     wall_first_rooms: [{level: 3, room: '0x5b'}]

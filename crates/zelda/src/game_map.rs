@@ -1103,6 +1103,13 @@ pub struct BombRules {
     /// `treasure_below_rooms: [{level, room, below: N}, ...]`: a room's own floor instead of `treasure_below` (on
     /// every step of the room that takes its bombs): the override for a room the rule costs too much in.
     pub treasure_below_rooms: BTreeMap<MapLocation, u8>,
+    /// `treasure_wall_only: true` (round 40; the owner, Nov 26: "we should NOT be using bombs in rooms we fight for
+    /// bombs, other than 10th streak to get more bombs or to open wall-doors"): every step that takes its room's
+    /// game.yaml bombs (the steps [`BombRules::treasure_below`] judges: no `treasure:`, or `{if_bombs_below: M}`)
+    /// plays as a [`BombRules::wall_only`] room, a fight for the bombs or a crossing with a full bag alike: only the
+    /// bomb that opens the wall the step leaves through and the 10th damage-free kill's. A step that leaves the room's
+    /// bombs (`skip`, `refuse`, `clear`) is not touched. `zelda::objectives::GameCompletion::weapon_bombs_off`.
+    pub treasure_wall_only: bool,
     /// `carrier_targets: true` (round 40, the fresh generation; backlog "the exit and the nearest eligible
     /// carrier"): in a dungeon room the route crosses, a monster whose death may drop bombs now (the observation's
     /// `bomb_carrier`, `crate::bomb_windows::bomb_carrier_window`) is a target beside the exit, and its dropped bombs
@@ -1150,6 +1157,7 @@ impl BombRules {
                 "wall_only",
                 "treasure_below",
                 "treasure_below_rooms",
+                "treasure_wall_only",
                 "carrier_targets",
                 "wall_grant",
                 "wall_first_rooms",
@@ -1194,6 +1202,7 @@ impl BombRules {
             wall_only,
             treasure_below,
             treasure_below_rooms,
+            treasure_wall_only: flag(v, "treasure_wall_only", &what)?,
             carrier_targets: flag(v, "carrier_targets", &what)?,
             wall_grant_follows_objective,
             wall_first_rooms,
@@ -4207,8 +4216,9 @@ mod tests {
     }
 
     /// Round 37: a route's `bomb_rules:` (the owner's, Nov 22). `d3first`'s `wall_only` is 3:0x5b and its
-    /// `treasure_below` 8, no room of its own; `d2first` has none; the loader refuses an unknown key, an overworld room,
-    /// a room none of the route's steps plays, a room's floor without `below` and a route it doesn't know.
+    /// `treasure_below` 8, no room of its own; round 40: `treasure_wall_only` on `d3first` (the owner, Nov 26);
+    /// `d2first` has none; the loader refuses an unknown key, an overworld room, a room none of the route's steps
+    /// plays, a room's floor without `below`, a flag that is no bool and a route it doesn't know.
     #[test]
     fn a_route_names_its_bomb_rules() {
         let map = GameMap::builtin();
@@ -4216,6 +4226,7 @@ mod tests {
         assert_eq!(d3first.wall_only, [loc(3, 0x5b)].into_iter().collect());
         assert_eq!((d3first.treasure_below, d3first.treasure_below_rooms.len()), (Some(8), 0));
         assert_eq!(d3first.treasure_below_at(loc(7, 0x1b)), Some(8));
+        assert!(d3first.treasure_wall_only);
         assert!(!map.bomb_rules.contains_key("d2first"));
         let rules = "    wall_only: [{level: 3, room: '0x5b'}]\n";
         assert!(ROUTES_YAML.contains(rules));
@@ -4234,6 +4245,10 @@ mod tests {
         ] {
             assert!(load(&ROUTES_YAML.replacen(rules, bad, 1)).unwrap_err().contains(error), "{bad}");
         }
+        let flag = "    treasure_wall_only: true\n";
+        assert_eq!(ROUTES_YAML.matches(flag).count(), 1);
+        let bad = load(&ROUTES_YAML.replacen(flag, "    treasure_wall_only: 1\n", 1)).unwrap_err();
+        assert!(bad.contains("treasure_wall_only must be true or false"), "{bad}");
         let unknown = ROUTES_YAML.replacen("bomb_rules:\n  d3first:\n", "bomb_rules:\n  d4first:\n", 1);
         assert!(load(&unknown).unwrap_err().contains("is no route"));
     }

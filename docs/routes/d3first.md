@@ -276,6 +276,15 @@ under its name switches them on there):
   `{level: 7, room: '0x1b', below: 2}` (the owner: "you have the ability to skip that fight for bombs if it kills
   too many runs"); measured both ways in round37.md (`d7` 12.6% with the floor, 12.7% crossing: the runs bring 0.21
   bombs, so nearly every visit fights either way) and left commented under `bomb_rules` for the lead.
+- `treasure_wall_only: true` (round 40; the owner, Nov 26: "we should NOT be using bombs in rooms we fight for bombs,
+  other than 10th streak to get more bombs or to open wall-doors"). Every step that takes its room's bombs (the
+  floor's steps above) plays as a `wall_only` room, a fight for them or a crossing with a full bag alike: BOMB only
+  at the wall the step leaves through and on the 10th damage-free kill. One rule over the route, not a room list or a
+  `bombs:` per step: it follows the steps that take a room's bombs as the route changes, and the steps that leave
+  them (3:0x5b's first pass, 9:0x16 southbound) are untouched. Play changes at one step: 8:0x3f's Darknuts (`free`,
+  above the reserve of 2) lose their weapon bomb. 7:0x1b's Blue Goriyas had it off already by the step's `bombs:
+  tenth` (the same, replaced by the rule); 2:0x1e's Red Goriyas by the reserve of 8 there; 3:0x4a, 5:0x65 eastbound
+  and 9:0x16 northbound are `required` families'; 3:0x5b's last pass is `wall_only` already (its E wall).
 - `wall_first_rooms: [3:0x5b]` (round 40, the fresh generation; the owner's ordering, decisions 2026-11-24 "Dungeon
   3's bombs": "Leave that room with 7 isn't a hard rule. 6 is fine. 7 is if we didn't drop to 4, and had a bomb to use
   on the wall THEN pick up the treasure bomb drop"). On the last pass (W to E, through the room's own bomb wall) the
@@ -294,8 +303,9 @@ under its name switches them on there):
 The dungeon steps of `d3first` by what the rules make of them (step numbers of 2.0.0.7; the engine's objective as
 the scout read it every 30 frames of the golden replay, round37.md; cellars left out). **Clear**: BOMB by the
 family's mode above the reserve while the fight lasts. **Clear < 8**: a fight only when Link comes in with 7 or
-fewer. **Wall**: a crossing whose exit is a bomb wall (one bomb). **Owner's**: no weapon bomb, the wall's and the
-10th kill's only. **Cross**: no bomb but the 10th kill's.
+fewer; since round 40's `treasure_wall_only` with no weapon bomb, as **Owner's**. **Wall**: a crossing whose exit is a
+bomb wall (one bomb). **Owner's**: no weapon bomb, the wall's and the 10th kill's only. **Cross**: no bomb but the
+10th kill's.
 
 | Level | Clear | Clear < 8 | Clear + wall | Wall | Owner's | Cross |
 |---|---|---|---|---|---|---|

@@ -985,10 +985,9 @@ impl GameCompletion {
     fn step_treasure(&self, location: MapLocation, state: &GameView) -> Option<TreasureRule> {
         let step = self.current_step(location)?;
         let floor = self.bomb_rules.treasure_below_at(location);
-        let bombs = self.map.get(location).is_some_and(|r| r.treasure.as_deref() == Some("bombs"));
         let judged = if self.wall_first_step(location) { self.own_bombs(state) } else { self.entry_bombs };
         Some(match (step.treasure, floor) {
-            (TreasureRule::Take | TreasureRule::IfBombsBelow(_), Some(n)) if bombs => {
+            (_, Some(n)) if self.takes_room_bombs(location) => {
                 if judged < i32::from(n) || state.treasure().is_some() {
                     TreasureRule::IfBombsBelow(u8::try_from(state.bomb_max()).unwrap_or(u8::MAX))
                 } else {
@@ -997,6 +996,15 @@ impl GameCompletion {
             }
             (rule, _) => rule,
         })
+    }
+
+    /// The current step takes the game.yaml bombs of `location`, its room (no `treasure:`, or `{if_bombs_below: M}`):
+    /// the steps the floor makes fight for them ([`GameCompletion::step_treasure`]) and the route's
+    /// `treasure_wall_only` keeps BOMB off as a weapon on ([`GameCompletion::weapon_bombs_off`]).
+    fn takes_room_bombs(&self, location: MapLocation) -> bool {
+        self.current_step(location)
+            .is_some_and(|step| matches!(step.treasure, TreasureRule::Take | TreasureRule::IfBombsBelow(_)))
+            && self.map.get(location).is_some_and(|r| r.treasure.as_deref() == Some("bombs"))
     }
 
     /// The current step leaves `location`, a room of the route's `bomb_rules: {wall_first_rooms}` (round 40: 3:0x5b on
@@ -1189,14 +1197,17 @@ impl GameCompletion {
 
     /// The route's bomb rules (round 37, routes.yaml `bomb_rules:`) take BOMB as a weapon off in `state`'s room, after
     /// [`GameCompletion::objectives`] for `state`: it is one of the owner's rooms where a bomb only opens the way
-    /// (`wall_only`, 3:0x5b on `d3first`), or (`fights_only`) a dungeon room the objective does not fight (the route
-    /// only crosses it, or its fight is over: a room that stops being a fight stops offering BOMB). There the env caps
-    /// the family's mode, or the step's, at `required` (`env::config::ItemsConfig::on_step`): the bomb that opens the
-    /// wall the objective leaves through and the 10th damage-free kill's (arming a forced drop of four, always
-    /// allowed: the owner, Nov 22), nothing else; `never` stays never.
+    /// (`wall_only`, 3:0x5b on `d3first`), the current step takes the room's own bombs (`treasure_wall_only`, round
+    /// 40: the owner, Nov 26, "we should NOT be using bombs in rooms we fight for bombs"), or (`fights_only`) a
+    /// dungeon room the objective does not fight (the route only crosses it, or its fight is over: a room that stops
+    /// being a fight stops offering BOMB). There the env caps the family's mode, or the step's, at `required`
+    /// (`env::config::ItemsConfig::on_step`): the bomb that opens the wall the objective leaves through and the 10th
+    /// damage-free kill's (arming a forced drop of four, always allowed: the owner, Nov 22), nothing else; `never`
+    /// stays never.
     pub fn weapon_bombs_off(&self, state: &GameView) -> bool {
         let here = state.full_location();
         self.bomb_rules.wall_only.contains(&here)
+            || (self.bomb_rules.treasure_wall_only && self.takes_room_bombs(here))
             || (self.bomb_rules.fights_only && here.level != 0 && self.last_kind != ObjectiveKind::Fight)
     }
 
