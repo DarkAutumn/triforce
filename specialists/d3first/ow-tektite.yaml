@@ -14,11 +14,13 @@ rooms:
 - (0, 0x0d)
 - (0, 0x0c)
 - (0, 0x0c, cave)
-start_states:
+start_states:                             # round 45 (the lead, Nov 26): every walked Tektite door a seed (0x1e, 0x0d)
 - 0_2c*_[0-9]
 - 0_74*_[0-9]
 - 0_76*_[0-9]
 - 0_0c*_[0-9]
+- 0_1e*_[0-9]
+- 0_0d*_[0-9]
 success:
 - exit-correct
 - enter-room:3:0x7c
