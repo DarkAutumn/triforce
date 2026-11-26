@@ -5371,3 +5371,61 @@ push block on the way to the tunnel (`clear: true`) and came back through the em
 - **The teachers.** Patra's teacher (`others`) waited for this. The walkers at 9x51 and 9x41 and Ganon trained on the
   states before it: their doors' planned `$524` changed (a reset draws it from the table) and they hold one key
   fewer, which no room of theirs reads; the hearts are drawn at a reset.
+
+## Stage 1 restarted: the Darknut and walkers teachers judged (the lead, Nov 25-26)
+
+Both teachers trained from scratch from the frozen worktree `triforce-gen3` (`d611d444`): the walked states, the load
+rule (`entry_rule.d3first.json`), real drops, the carrier rule, CUDA-graph serving, clips on.
+
+- **`gen1-darknut/s1r`**: 30.0M steps, 7 h 38 min, 1,093 steps/s, GPU peak 6.9 GB, IN BOUNDS (normal 898).
+- **`gen1-walkers/s1r`**: 27.0M steps, 8 h 46 min, 856 steps/s, GPU peak 5.7 GB (no normal yet).
+
+**The baseline on the same starts.** Today's team (store team `current`, 2.0.0.15) chained from `triforce-gen4`
+(`8511e429`) on every scope, 300 runs, seeds 0-299 (jobs #1810-#1815 and the twelve `control-2015-*` after them,
+batch `gen-control-2015`). Each teacher's chains (`eval-batch --teacher ... --scopes S --no-report`, one fast-lane
+job a scope) on the same seeds, paired by seed.
+
+| Dungeon | Start | Today's team | + Darknut | + Darknut and walkers | Difference (walkers' arm) |
+|---|---|---:|---:|---:|---:|
+| D3 | previous triforce | 1.3% | 60.3% | 61.3% | +60.0 ± 2.9 |
+| D3 | entrance | 0.7% | 60.0% | 66.0% | +65.3 ± 2.8 |
+| D4 | previous triforce | 37.3% | | 31.7% | −5.7 ± 3.7 |
+| D4 | entrance | 46.3% | | 36.3% | −10.0 ± 3.8 |
+| D1 | previous triforce | 96.7% | | 97.0% | +0.3 ± 1.4 |
+| D1 | entrance | 98.3% | | 99.3% | +1.0 ± 0.9 |
+| D2 | previous triforce | 76.0% | | 96.0% | +20.0 ± 2.6 |
+| D2 | entrance | 97.0% | | 100.0% | +3.0 ± 1.0 |
+| D5 | previous triforce | 27.0% | 61.7% | 63.0% | +36.0 ± 3.7 |
+| D5 | entrance | 42.0% | 76.3% | 74.3% | +32.3 ± 3.7 |
+| D7 | previous triforce | 0.0% | | 0.0% | 0 |
+| D7 | entrance | 61.0% | | 9.3% | −51.7 ± 3.4 |
+| D6 | previous triforce | 0.0% | | 0.0% | 0 |
+| D6 | entrance | 37.3% | | 29.7% | −7.7 ± 3.7 |
+| D8 | previous triforce | 87.0% | 99.3% | 99.3% | +12.3 ± 2.0 |
+| D8 | entrance | 96.0% | 99.3% | 99.7% | +3.7 ± 1.2 |
+| D9 | previous triforce | 0.3% | | 0.0% | −0.3 ± 0.3 |
+| D9 | entrance | 0.7% | | 1.7% | +1.0 ± 0.7 |
+
+- **Today's team in Dungeon 3 on the new starts: 2 of 300 from the entrance**, 262 runs ending in 3x5b (its first
+  pass is now a real fight with carriers and real drops). The lead's first comparison (against `r40-2015-1k`, the
+  old route and starts: +15 to +19 points) understated the teacher's gain.
+- **The two dock steps** (147 ox55 and 189 ox3f, `exit: recorder`) fail every run of today's team: the generation's
+  `unaided_docks: true`, as measured on the old starts in "Engine macros". Ow46 (tree `ow46-docks`, the docks aided,
+  job #1850): the new starts pass ox55 271/300 (old 282/300) and ox3f 299/300 (old 297/300); the dock bytes match
+  main's. The overworld teacher (`gen1-overworld/s1r2`, ow-zora) trains both docks unaided from their seed states
+  and tracks; at it342 (job #1848, 40 a state) ox55's dock 47.5%, ox3f's 82.5%. `room/0:0x55/N` mixes step 54 with
+  the dock and overstates it.
+- **7x1b (walkers' Goriyas)**: 2.68 hearts lost a visit (today's team 0.17), 174 deaths in 300 runs. In training it
+  got about one episode an iteration (1,900 in the run), success 0.24 → 0.76 and still rising. Continued as
+  `gen1-walkers/s1r-c1` from `triforce-gen4`: `--load` s1r, `--shares goriya@d3first=3`, 450 iterations (6.6M
+  steps).
+- **D4 and D6:** most runs end at Gleeok (4x13) with under 2 hearts for both teams, and in 6x3a/6x38 (not walker
+  rooms).
+- **The Darknut teacher's seed-state skill** (40 episodes a state): all 18 entries 0.71 / 0.93 / 0.96 / 0.98 / 0.97 at
+  1.9 / 9.3 / 16.8 / 24.3 / 29.9M steps; the Olive Garden from E 0.95 at 24.3M, 0.93 at the end; 3x59 from N 0.90 →
+  0.78 between the last two (two standard errors): stage 2 chooses the teacher's checkpoint by a chain.
+
+**The overworld teacher restarted.** Seeds43's table rebuild (in States44's merge) moved the planned `$524` at ten
+overworld cave and dungeon exits (no run frame there: the old table planned the composed or commonest value, the new
+the walk's own). `gen1-overworld/s1r` (50 minutes in) was stopped and `gen1-overworld/s1r2` started from
+`triforce-gen4`; the small teachers were withdrawn and requeued behind it (shortest-first had put the overworld last).
