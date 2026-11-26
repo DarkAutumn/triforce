@@ -43,9 +43,7 @@ ram_randomization:
 items:
   bombs: required
 curriculum:
-  enabled: true
-  untracked:                              # round 40: the seed states that train without a track (triforce.inputs)
-  - d3first_5_66w_[0-9]
+  enabled: true                           # round 45: every walked door tracked (Tracks45)
 one_room: true
 max_steps: 600
 warm_start: null

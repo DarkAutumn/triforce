@@ -182,21 +182,23 @@ GENERATION = ['ow-start', 'ow-tektite', 'ow-leever', 'ow-moblin', 'ow-octorok', 
 # files, the ones today's team and every `d2first` chain play with: unchanged by the generation's tasks (r40-tasks:
 # the same before and after on `r40-gen` 42d15e02). A deliberate change to a bare task updates its row: Tracks41
 # (r40-gen fee9db0c) dropped `curriculum.untracked` entries from boss-digdogger, boss-gleeok, darknut, goriya,
-# like-like, vire and zol (their states got tracks); Tracks45 (round 45) dropped them from boss-dodongo, wizzrobe,
-# pols-voice, lanmola, patra, equipment-room and trap-room (the walked doors got tracks).
+# like-like, vire and zol (their states got tracks); Tracks45 (round 45) dropped the rest of them (every walked
+# d3first door got tracks): boss-dodongo, boss-gohma, boss-manhandla, d2-rope, dodongo-crossing, equipment-room, ganon,
+# gibdo, goriya, lanmola, like-like, moldorm, ow-boulder, ow-ghini, ow-moblin, ow-peahat, ow-start, ow-zora, patra,
+# pols-voice, trap-room, vire, wizzrobe and zol.
 BARE_EFFECTIVE = {
     'boss-aquamentus': '964037cc7c6772f7', 'boss-digdogger': '9fc25620d8af66a8', 'boss-dodongo': '7461eb48c333d15a',
-    'boss-gleeok': '7e34d4a6d9495d86', 'boss-gohma': '122a41323615e34b', 'boss-manhandla': 'e051deaf86f9ae1c',
-    'd2-rope': '5371a6f5d01257fc', 'darknut': 'c6365d2aab2792a1', 'dodongo-crossing': '57c07e2b82521950',
-    'equipment-room': '9104ac87057c87a9', 'ganon': '8d17a7f7e0532c21', 'gibdo': 'e14a78e5da3f71ca',
-    'goriya': '587eafc639eeb4eb', 'lanmola': '8b26e87dc23965cd', 'like-like': '1fbad86272424f98',
-    'moldorm': '196755b386307c5b', 'ow-boulder': 'af1cd69733b32f1b', 'ow-ghini': '192f1922e6745cab',
-    'ow-leever': '4d74f994b3d7d936', 'ow-lynel': '13553bde87634c4f', 'ow-moblin': '84eafeaa06d972ea',
-    'ow-octorok': '796292f6ddc66d68', 'ow-peahat': 'b854f9edb2964622', 'ow-start': '813e16e5602996f8',
-    'ow-tektite': '729c50d784b9d954', 'ow-zora': '29c4b95850a4755e', 'patra': '64baa281838a7c56',
+    'boss-gleeok': '7e34d4a6d9495d86', 'boss-gohma': '4dbb47a3c834ff73', 'boss-manhandla': '8743ae0fc9027b57',
+    'd2-rope': '279e4949c7a2486f', 'darknut': 'c6365d2aab2792a1', 'dodongo-crossing': 'c76e737302687a38',
+    'equipment-room': '9104ac87057c87a9', 'ganon': 'a9a0946f210b208f', 'gibdo': '73fa4086f6f1bb6f',
+    'goriya': 'a24a98a6ca911d59', 'lanmola': '8b26e87dc23965cd', 'like-like': '5456bb8f8dcabd4e',
+    'moldorm': '722cf1df9adcfa1f', 'ow-boulder': 'f1e62898c1a86a81', 'ow-ghini': 'a9f2595f23135885',
+    'ow-leever': '4d74f994b3d7d936', 'ow-lynel': '13553bde87634c4f', 'ow-moblin': '44379ed012f710b9',
+    'ow-octorok': '796292f6ddc66d68', 'ow-peahat': 'cf49a64afa791bfe', 'ow-start': 'e37b0a27c4a124dd',
+    'ow-tektite': '729c50d784b9d954', 'ow-zora': '3a0353c57ebbb36a', 'patra': '64baa281838a7c56',
     'pols-voice': '6be5d292dfa6538c', 'stalfos-keese-gel': '8039e87cffe1a7ef', 'trap-room': '3baa0e14cfe200be',
-    'vire': 'da0b4233fc7a3191', 'wallmaster': 'feca0df6d2aac23f', 'wizzrobe': 'd0c8d9b6f762e71a',
-    'zol': '8baa46c3cd7c7242',
+    'vire': 'f6ab857fd54ef5c6', 'wallmaster': 'feca0df6d2aac23f', 'wizzrobe': 'd0c8d9b6f762e71a',
+    'zol': '04d329a56258c10c',
 }
 
 

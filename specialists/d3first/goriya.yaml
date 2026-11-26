@@ -78,9 +78,7 @@ clips:
   enabled: true
   off_share: 0
 curriculum:
-  enabled: true
-  untracked:                              # round 40: the seed states that train without a track (triforce.inputs);
-  - d3first_7_49s_[0-9]                   # 1:0x23, 2:0x1e explored, 7:0x1b the rule goriya-1b's (Tracks41)
+  enabled: true                           # round 45: every walked door tracked (7x49 by a staged-kill track, Tracks45)
 one_room: true
 max_steps: 2000
 warm_start: null

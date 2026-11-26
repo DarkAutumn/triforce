@@ -10,9 +10,7 @@ ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [2, 8], bombs_share: 0
                                            # (the route arrives with 2-8; with 0-1 the fight is lost, round 25)
 items: {bombs: free}                       # the room is requires_bombs (game.yaml): never without a bomb here
 curriculum:                              # trajectories/boss-manhandla (Go-Explore, plus --variant seeds)
-  enabled: true
-  untracked:                              # round 40: the seed states that train without a track (triforce.inputs)
-  - d3first_8_6es_[0-9]
+  enabled: true                           # round 45: d3first's walked 8x6e S tracked too (Tracks45)
 # Round 30: a third of the resets start from 3:0x4d's chain entries at the route's hearts (triforce/states/harvested/
 # boss-manhandla, not in git; round30.md "Darknut").
 harvested_fraction: 0.33

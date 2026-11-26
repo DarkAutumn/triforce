@@ -9,15 +9,7 @@ ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0
 items: {bombs: tenth}                      # only the 10th damage-free kill's bomb (arms a forced bomb drop)
 clips: true                               # round 21: the screen wrap (W/E; none in 0x45)
 curriculum:                              # trajectories/ow-peahat (Go-Explore paths per start state)
-  enabled: true
-  untracked:                              # round 40: the seed states that train without a track (triforce.inputs)
-  - d3first_0_1de_[0-9]
-  - d3first_0_1ds_[0-9]
-  - d3first_0_1fn_[0-9]
-  - d3first_0_1fw_[0-9]
-  - d3first_0_45c_[0-9]
-  - d3first_0_45r_[0-9]
-  - d3first_0_45s_[0-9]
+  enabled: true                           # round 45: d3first's walked doors tracked too (Tracks45)
 one_room: true                          # round 5: per-room episodes
 max_steps: 600
 warm_start: null

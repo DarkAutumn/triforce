@@ -67,11 +67,12 @@ Later rooms (round 32's training of Level 5 to the ending; the walks: docs/route
                   shutter.
     goriya-1b     7:0x1b W->E (goriya, step 170; round 34; round 45 as the route judges it): with 7 bombs or fewer
                   in the bag on entering (d3first's floor, routes.yaml round 37 `bomb_rules`: a fight for the room's
-                  bombs whenever the bag isn't full; leaving E without them is `exit-wrong` there), the walks' sword
-                  fighter (`r32_walks.Fighter`, the wood sword) on the six Blue Goriyas until the room is all dead,
-                  the room's 4 bombs where they lie, the E key door; with a full bag, no fight: the floor walk to the
-                  E key door.  `--hearts family` takes the task's draws (bag 0-8 on half the resets, 1-5 Goriyas
-                  killed already on half), so both ways are played.
+                  bombs whenever the bag isn't full; leaving E without them is `exit-wrong` there), the stun fighter
+                  (`stun_fighter`: the boomerang on a Goriya in Link's lane, then the sword on the stunned one; no
+                  bomb, the room is `bombs: tenth`) on the six Blue Goriyas until the room is all dead, the room's 4
+                  bombs where they lie, the E key door; with a full bag, no fight: the floor walk to the E key door.
+                  `--hearts family` takes the task's draws (bag 0-8 on half the resets, 1-5 Goriyas killed already
+                  on half), so both ways are played.
 
 Not ported: 5:0x66 W->N (gibdo, `r32b_d7.Fight` 52/60 in the walks): the env fighter's floor graph has no water, so
 it waits on the near shore while the last Gibdo walks the far one (0 of 12); gibdo's teacher there is the planner."""
