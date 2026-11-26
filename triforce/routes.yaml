@@ -425,6 +425,10 @@ d2first:
 # 0x56's key is left (d3first takes it, round 39: Moldorm's key is not taken on that route).
 - {level: 9, room: '0x56', specialist: like-like, entry: S, exit: W, treasure: skip, bombs: required}
 - include: dungeon-9-from-55
+- {level: 9, room: '0x61', specialist: patra, entry: E, exit: cave, clear: true}
+- include: dungeon-9-tunnel
+- {level: 9, room: '0x61', specialist: patra, entry: cave, exit: N, banked_kills: 15, clear: true}
+- include: dungeon-9-to-ganon
 # d3first (phase X, the owner's list and answers of Nov 19; docs/routes/d3first.md, d3first-walks-a.md and
 # d3first-walks-b.md): the speedrunners' route, to become the main one once a golden path on it reaches the ending.
 # The wood sword until the magic sword (no white sword); Dungeons 3, 4, 1, 5, 2, 7, the magic sword, 6, 8, 9, their
@@ -613,6 +617,28 @@ d3first:
   # scripts/experiments/r40_route.py ledger).
   - {level: 9, room: '0x56', specialist: like-like, entry: S, exit: W, bombs: required, clear: true}
   - include: dungeon-9-from-55
+  # 9:0x61 (round 44, the owner, Nov 25: "Yes you clip through there. Why would you fight? Do you even need the key in
+  # the room? [...] Normally you clip through the block, attack to invuln through patra's bees if in the way, on the
+  # way out, sword clip twice through him if needed"): with clips Link clips through the push block to the tunnel
+  # stairs with the Patra alive, its key left on the floor (the room's item lies there from the start, trigger 0; no
+  # key door follows it: scripts/experiments/r40_route.py ledger), and comes back out N past the living Patra; without
+  # clips the Patra is fought for the block and stays dead for the way back (`banked_kills: 15`).
+  - stretch: patra-61
+    parts: {level: 9, room: '0x61', entry: E}
+    rejoins: {level: 9, room: '0x75', in_cave: true, entry: S}
+    clips:
+    - {level: 9, room: '0x61', specialist: patra, entry: E, exit: cave, treasure: skip, clear: false}
+    plain:
+    - {level: 9, room: '0x61', specialist: patra, entry: E, exit: cave, clear: true}
+  - include: dungeon-9-tunnel
+  - stretch: patra-61n
+    parts: {level: 9, room: '0x61', entry: cave}
+    rejoins: {level: 9, room: '0x51', entry: S}
+    clips:
+    - {level: 9, room: '0x61', specialist: patra, entry: cave, exit: N, clear: false}
+    plain:
+    - {level: 9, room: '0x61', specialist: patra, entry: cave, exit: N, banked_kills: 15, clear: true}
+  - include: dungeon-9-to-ganon
 # The owner's bomb rules (round 37, Nov 22; docs/routes/d3first.md "Bombs"), by route.  A route not named here plays
 # none (every room by the family's `items: {bombs:}` mode and its step's `bombs:`).  `d2first` is in scope for them
 # when its own work comes (the owner: "not until we've completed this work on d3-first, entirely"): the same entry
@@ -991,7 +1017,9 @@ blocks:
   - {level: 9, room: '0x70', in_cave: true, specialist: equipment-room, entry: S, exit: W, clear: false}
   - {level: 9, room: '0x63', specialist: zol, entry: cave, exit: W, clear: false}
   - {level: 9, room: '0x62', specialist: stalfos-keese-gel, entry: E, exit: W, treasure: skip, clear: false}
-  - {level: 9, room: '0x61', specialist: patra, entry: E, exit: cave, clear: true}
+  # 0x61 is each route's own (round 44, the owner, Nov 25): d2first fights its Patra for its block both ways, d3first
+  # clips through the block (its stretches `patra-61` and `patra-61n`); the tunnel between is shared.
+  dungeon-9-tunnel:
   - {level: 9, room: '0x75', in_cave: true, specialist: equipment-room, entry: S, exit: W, clear: false}
   # 0x20's first visit: crossed to its N wall with its five Wizzrobes alive on the clip way (the second visit clips
   # to the stairs), emptied on the plain way (the second visit finds it empty and pushes the block).
@@ -1013,7 +1041,7 @@ blocks:
     plain:
     - {level: 9, room: '0x20', specialist: wizzrobe, entry: N, exit: cave, banked_kills: 15, clear: true}
   - {level: 9, room: '0x75', in_cave: true, specialist: equipment-room, entry: S, exit: E, clear: false}
-  - {level: 9, room: '0x61', specialist: patra, entry: cave, exit: N, banked_kills: 15, clear: true}
+  dungeon-9-to-ganon:
   - {level: 9, room: '0x51', specialist: like-like, entry: S, exit: N, clear: false}
   - {level: 9, room: '0x41', specialist: like-like, entry: S, exit: N, clear: false}
   - {level: 9, room: '0x31', specialist: wizzrobe, entry: S, exit: W, clear: false}
