@@ -159,7 +159,8 @@ def test_the_d3first_table_prices_the_steps_its_chains_played():
     common subsequence leaves to the old order's other side; the dock warp out of 0x55, 0x34's landing, 0x44 from the
     north and its cave; 0x51 to the dock warp out of 0x3f and the graveyard's landing) have no visits yet: the damage
     prior alone, over the next steps' curves, until the new order's chains refit them.  Round 38 (2.0.0.7: 0x2d's
-    cave dropped, every step after 90 two lower) refit it the same way onto the 290 steps."""
+    cave dropped, every step after 90 two lower) refit it the same way onto the 290 steps; round 44 (9x61's block clip
+    past the Patra, the owner) onto the 292: the clip way's 9x61 in and out (268, 279) have no visits yet."""
     root = Path(__file__).resolve().parent.parent
     table = json.loads((root / 'triforce' / 'heart_value.d3first.json').read_text())
     from triforce import _native
@@ -167,7 +168,7 @@ def test_the_d3first_table_prices_the_steps_its_chains_played():
     assert table['route'] == 'd3first'
     assert [r['room'] for r in table['steps']] == [heart_value.room_key(s) for s in steps]
     clip_way = [k for k, s in enumerate(steps) if s['way'] in (None, 'clips')]
-    unvisited = set(range(88, 121)) | {147, 148, 151, 152, 153} | set(range(180, 191))
+    unvisited = set(range(88, 121)) | {147, 148, 151, 152, 153} | set(range(180, 191)) | {268, 279}
     assert all(table['steps'][k]['clips'] is not None for k in clip_way)
     assert {k for k in clip_way if table['steps'][k]['clips']['visits'] < 20} == unvisited
     for k in unvisited:
