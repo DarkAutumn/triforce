@@ -222,6 +222,12 @@ class Goals:
         self.no_hit: list = []               # 1 a visit without a hit (where a planned path was expected)
         self.carrier_in = self.carrier_seen = self.carrier_killed = 0
         self.carrier_bombs = self.carrier_taken = 0
+        # Round 46, a crossed visit carrying the fields: 1 it killed / it left no monster alive (of a room that had
+        # one), the detour (tiles) and the frames it walked away from the way out with no bomb reason.
+        self.crossed_killed: list = []
+        self.crossed_cleared: list = []
+        self.crossed_detour: list = []
+        self.crossed_away_free: list = []
 
     def add(self, v: dict):
         self.visits += 1
@@ -230,6 +236,13 @@ class Goals:
         if not v.get('goal_fought'):
             self.crossed += 1
             self.crossed_kills.append((v.get('goal_cycle_kills') or 0) - (v.get('goal_carrier_kills') or 0))
+            if v.get('goal_alive_max') is not None:
+                self.crossed_killed.append(1 if v.get('kills') else 0)
+                if v['goal_alive_max']:
+                    self.crossed_cleared.append(0 if v['goal_alive_out'] else 1)
+                if v['goal_way_known']:
+                    self.crossed_detour.append(v['goal_detour'])
+                self.crossed_away_free.append(v['goal_away_free_frames'])
         self.cycle_in[v.get('goal_cycle_in')] += 1
         if v.get('goal_wrap_expected'):
             self.wraps.append(1 if v.get('goal_wraps') else 0)
@@ -245,6 +258,9 @@ class Goals:
         share = lambda xs: rate_block(sum(xs), len(xs)) if xs else None  # noqa: E731
         return {'visits': self.visits, 'expects': [k for k, n in self.expected.items() if n],
                 'crossed': self.crossed, 'crossed_kills': distribution(self.crossed_kills),
+                'crossed_killed': share(self.crossed_killed), 'crossed_cleared': share(self.crossed_cleared),
+                'crossed_detour': distribution(self.crossed_detour),
+                'crossed_away_free': distribution(self.crossed_away_free),
                 'cycle_in': {str(k): n for k, n in sorted(self.cycle_in.items(), key=lambda kv: (kv[0] is None, kv[0]))},
                 'wrap_taken': share(self.wraps), 'no_hit': share(self.no_hit),
                 'carrier': {'in': self.carrier_in, 'seen': self.carrier_seen, 'killed': self.carrier_killed,
@@ -1179,16 +1195,19 @@ def show(stats: dict, rooms: int = 20, family: Optional[str] = None) -> str:
 def goal_cells(g: Optional[dict]) -> list:
     """A step's goal figures as table cells (``-`` for a file without the step)."""
     if not g:
-        return ['-'] * 9
+        return ['-'] * len(GOAL_HEADER)
     share = lambda b: f"{b['successes']}/{b['n']}" if b else '-'  # noqa: E731
     c = g['carrier']
     cycle = ' '.join(f"{k}:{n}" for k, n in g['cycle_in'].items())
-    return [g['visits'], g['crossed'], mean_text(g.get('crossed_kills')), cycle, share(g.get('wrap_taken')),
-            share(g.get('no_hit')), f"{c['in']}/{c['seen']}", c['killed'], f"{c['taken']}/{c['bombs']}"]
+    return [g['visits'], g['crossed'], mean_text(g.get('crossed_kills')), share(g.get('crossed_killed')),
+            share(g.get('crossed_cleared')), mean_text(g.get('crossed_detour')), mean_text(g.get('crossed_away_free')),
+            cycle, share(g.get('wrap_taken')), share(g.get('no_hit')), f"{c['in']}/{c['seen']}", c['killed'],
+            f"{c['taken']}/{c['bombs']}"]
 
 
-GOAL_HEADER = ['visits', 'crossed', 'kills/crossed visit', 'cycle in (value:visits)', 'wrap taken', 'no hit',
-               'carrier in/aimed at', 'carrier killed', 'carrier bombs taken/dropped']
+GOAL_HEADER = ['visits', 'crossed', 'kills/crossed visit', 'crossed: killed', 'crossed: cleared',
+               'crossed: detour tiles', 'crossed: frames away w/o bomb reason', 'cycle in (value:visits)', 'wrap taken',
+               'no hit', 'carrier in/aimed at', 'carrier killed', 'carrier bombs taken/dropped']
 
 
 def goal_table(goals: dict, other: Optional[dict] = None) -> list:

@@ -266,6 +266,24 @@ def test_route_goals_by_step_per_run_and_compared():
     assert '## Kills where the route crosses a run' in compared and '## Route goals by step' in compared
 
 
+def test_crossed_visits_killed_cleared_detour_and_frames_away():
+    """Round 46: a crossed visit's kills, whether it left the room empty, its detour and its frames away from the way
+    out with no bomb reason, by step; records without the fields count in none of them."""
+    runs = [goal_run(0, 1, 0, 0, 0, 0), goal_run(1, 0, 0, 0, 0, 0), goal_run(2, 0, 0, 0, 0, 0)]
+    runs[0]['rooms'][1].update(kills=3, goal_alive_in=3, goal_alive_max=4, goal_alive_out=0, goal_way_known=1,
+                               goal_way_in=20, goal_walked=50, goal_detour=12, goal_away_frames=90,
+                               goal_away_free_frames=60, goal_reason_kills=0)
+    runs[1]['rooms'][1].update(kills=0, goal_alive_in=2, goal_alive_max=2, goal_alive_out=2, goal_way_known=1,
+                               goal_way_in=20, goal_walked=22, goal_detour=2, goal_away_frames=0,
+                               goal_away_free_frames=0, goal_reason_kills=0)
+    g = chain(runs)['goals']['1']
+    assert (g['crossed_killed']['successes'], g['crossed_killed']['n']) == (1, 2)
+    assert (g['crossed_cleared']['successes'], g['crossed_cleared']['n']) == (1, 2)
+    assert g['crossed_detour']['mean'] == 7 and g['crossed_away_free']['mean'] == 30
+    assert chain([goal_run(0, 1, 0, 0, 0, 0)])['goals']['1']['crossed_cleared'] is None
+    assert '| crossed: cleared |' in rs.show(chain(runs))
+
+
 def test_aimless_frames_a_visit_and_a_run():
     """Aimless frames (``RoomRecord.aimless_frames``, round 38) in the step, room and family tables and paired."""
     base = chain([goal_run(0, 0, 0, 1, 0, 30), goal_run(1, 0, 0, 1, 0, 10)])

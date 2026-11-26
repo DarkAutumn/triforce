@@ -1248,11 +1248,29 @@ record as `goal_*` (`env::chain::RoomRecord::goals`; `runner.RoomRecord`, None i
   `goal_carrier_seen` (a carrier aimed at on the first decision / any), `goal_carrier_kills` (deaths of monsters
   aimed at as carriers), `goal_carrier_bombs` and `goal_carrier_bombs_taken` (their bomb drops, followed as
   `bombs::BombStats` follows every bomb drop). Hits are the record's `hits`.
+- **The walk and the room (round 46**, the owner, Nov 26, of the new teachers in rooms the route only crosses: "I
+  want to see how far out of the way they go [...] Is it clearing the room?"): `goal_alive_in` / `goal_alive_max` /
+  `goal_alive_out` (living monsters, not dying, Bubbles and the other hazards aside: on the first decision, at most,
+  on the last decision in the room; cleared = 0 out of a room that had one); the way out (`goals::way_targets`: the
+  objective's targets that lead out, an exit side, bomb wall, push block, stairs, cave, dock, secret or Zelda, never a
+  monster, a dropped item, the room's treasure, Gohma's stand, the Wallmaster's lure, the whirlwind's row or the dock
+  warp's spot, which follow Link; without one, as while `carriers: fight` hides the exit, the sides toward its next
+  rooms; a decision naming none keeps the last; a new way keeps the visit's start): `goal_way_known` (it was
+  reachable from the start), `goal_way_in` (the shortest walk to it in 8-pixel tiles from where Link stood when a way
+  was first known: a TREASURE objective names none, so in a room whose treasure the step takes it counts from the
+  pickup tile and the walk to the treasure is no detour), `goal_walked` (tiles walked in the room, an in-room screen
+  wrap none), `goal_detour` (the most the shortest walk from that spot to the way out through a tile Link stood on
+  is longer than the shortest walk);
+  `goal_away_frames` (frames of actions that ended farther from the way out than they began) and
+  `goal_away_free_frames` (those begun with no bomb reason, `goals::bomb_reason`: no carrier or dropped bombs aimed
+  at, the next kill not the 10th with bombs in the bag, no forced bomb drop armed); `goal_reason_kills` (drop-cycle
+  deaths in actions begun with a bomb reason).
 - **Read:** `triforce stats show` has a "Route goals" table by step (visits, crossed, kills a crossed visit carriers
-  aside, the cycle on entering by value, wraps taken of those expected, visits without a hit where expected, carriers
-  in / aimed at / killed, their bombs taken of dropped); `compare` pairs four per-run measures (kills where the route
-  crossed, expected wraps not taken, hits in rooms with a planned path, carriers' bombs taken) and puts both files'
-  goal tables side by side. Chains only: an evaluation's visits carry no goals.
+  aside, the crossed visits that killed, that left the room empty, their detour and frames away without a bomb
+  reason, the cycle on entering by value, wraps taken of those expected, visits without a hit where expected,
+  carriers in / aimed at / killed, their bombs taken of dropped); `compare` pairs four per-run measures (kills where
+  the route crossed, expected wraps not taken, hits in rooms with a planned path, carriers' bombs taken) and puts
+  both files' goal tables side by side. Chains only: an evaluation's visits carry no goals.
 
 ### Experimental reward and cutoff controls
 
