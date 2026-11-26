@@ -15,9 +15,7 @@ obs: {objective: true, target: true}
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5}
 items: {bombs: free}
 curriculum:
-  enabled: true
-  untracked:                              # round 40: the seed states that train without a track (triforce.inputs)
-  - d3first_2_3es_[0-9]
+  enabled: true                           # round 45: the walked 2x3e S tracked (Tracks45)
 one_room: true
 max_steps: 3000
 warm_start: null

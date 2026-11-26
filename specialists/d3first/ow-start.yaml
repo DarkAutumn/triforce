@@ -18,16 +18,7 @@ ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0
 items: {bombs: tenth}
 clips: {enabled: true, off_share: 0}     # 2.0.1.0 trains clips on only (the owner, Nov 18 and Nov 24)
 curriculum:
-  enabled: true
-  untracked:                              # round 40: the seed states that train without a track (triforce.inputs)
-  - d3first_0_0fc_[0-9]
-  - d3first_0_0fcave_[0-9]
-  - d3first_0_0fs_[0-9]
-  - d3first_0_2fc_[0-9]
-  - d3first_0_2fcave_[0-9]
-  - d3first_0_2fs_[0-9]
-  - d3first_0_77c_[0-9]
-  - d3first_0_77cave_[0-9]
+  enabled: true                           # round 45: every walked door tracked (Tracks45)
 one_room: true
 max_steps: 600
 warm_start: null

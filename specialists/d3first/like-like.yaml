@@ -55,14 +55,7 @@ clips:
   enabled: true
   off_share: 0
 curriculum:
-  enabled: true
-  untracked:                              # round 40: the seed states that train without a track (triforce.inputs);
-  - d3first_6_1dc_[0-9]                   # the Breakfast Room 4:0x32 has the rule like-like-32's (Tracks41)
-  - d3first_9_03e_[0-9]
-  - d3first_9_14c_[0-9]
-  - d3first_9_41s_[0-9]
-  - d3first_9_51s_[0-9]
-  - d3first_9_56s_[0-9]
+  enabled: true                           # round 45: every walked door tracked (Tracks45)
 one_room: true
 max_steps: 2000
 warm_start: null

@@ -85,8 +85,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import r28_demos                                                  # noqa: E402
 import r29_demos                                                  # noqa: E402
 import r32_walks                                                  # noqa: E402  (round 29's Bot: overworld bounds)
-from r29_demos import (BOMBS, LETTER, OBJ_TYPE, OBJ_X, OBJ_Y, PARALYZED, ROOM_ALL_DEAD, Decided, Way, action, go,
-                       make_bot)                                  # noqa: E402
+from r29_demos import (BOMBS, LETTER, OBJ_DIR, OBJ_META, OBJ_TYPE, OBJ_X, OBJ_Y, PARALYZED, ROOM_ALL_DEAD, Decided,
+                       Way, action, go, make_bot)                 # noqa: E402
 
 ROUTE = 'd3first'
 RUPEES, INV_CANDLE, HEARTS, KEYS = 0x66D, 0x65B, 0x66F, 0x66E
@@ -155,26 +155,28 @@ def rule_env(family, state, hearts):
 # ---- the fighters with bombs, asked once per action ------------------------------------------------------------------
 
 class Bombed(Exception):
-    """The fighter lays a bomb toward `button` (the env's `BOMB <d>`)."""
+    """The fighter uses an item toward `button`: `kind` BOMB (the env's `BOMB <d>`) or BOOMERANG (`BOOMERANG <d>`)."""
 
-    def __init__(self, button):
+    def __init__(self, button, kind='BOMB'):
         super().__init__(button)
         self.button = button
+        self.kind = kind
 
 
 def act(bot, method, ok, leave=None):
-    """`r29_demos.action`, with the fighter's bomb (`Decided(('BOMB', button))`) played as `BOMB <d>`."""
+    """`r29_demos.action`, with the fighter's bomb or boomerang (`Decided(('BOMB'|'BOOMERANG', button))`) played as
+    `BOMB <d>` or `BOOMERANG <d>`."""
     def first():
         try:
             method()
         except Decided as d:
-            if isinstance(d.choice, tuple) and d.choice[0] == 'BOMB':
-                raise Bombed(d.choice[1]) from d
+            if isinstance(d.choice, tuple) and d.choice[0] in ('BOMB', 'BOOMERANG'):
+                raise Bombed(d.choice[1], d.choice[0]) from d
             raise
     try:
         return action(bot, first, ok, leave)
     except Bombed as b:
-        return f'BOMB {LETTER[b.button]}'
+        return f'{b.kind} {LETTER[b.button]}'
 
 
 def _spread(trail, x1, y1, n):
@@ -251,6 +253,94 @@ def manhandla_fighter():
                 self.toward(goals)
             return r32_walks.Fighter.fight_frame(self)
     return EnvManhandla
+
+
+GORIYAS = (0x05, 0x06)                                            # Blue, Red (crates/zelda/src/enums.rs)
+GORIYA_BOOMERANG = 0x5C                                           # the Goriyas' thrown boomerang (a shot, 0x53-0x5C)
+STUN_TIMER = 0x3D                                                 # + slot (crates/zelda/src/tables.rs OBJ_STUN_TIMER)
+
+
+def stun_fighter():
+    """`r32_walks.Fighter` that stuns Goriyas with Link's boomerang and swords them while they stand (the owner,
+    Nov 26, on 7:0x1b: "coupled with closing the gap and hitting"): a Goriya in Link's lane 16-112 px ahead, not
+    stunned, with no boomerang of Link's out, gets `BOOMERANG <d>` (where the mask offers it); while any Goriya is
+    stunned the stances are that one's alone (close the gap and stab); and a Goriya's boomerang is dangerous all along
+    its way back, the segment from where it is to the Goriya that threw it, not only where it flies next."""
+
+    class EnvStun(r32_walks.Fighter):
+        ok = staticmethod(lambda _step: False)
+        stun_reach = 0x70
+        stun_wait = 48                     # frames before another throw (Link's boomerang out and back)
+        lane_reach = 0x50                  # how far down its facing lane a Goriya's throw is kept off
+
+        def stunned(self):
+            w = self.w
+            return [s for s in self.prev if self.prev[s][0] in GORIYAS and self.is_target(s)
+                    and w.r(STUN_TIMER + s) > 8]
+
+        def stances(self):
+            held = self.stunned()
+            if not held:
+                return super().stances()
+            keep = self.prev
+            self.prev = {s: o for s, o in keep.items() if s in held or self.prev[s][0] not in GORIYAS}
+            try:
+                return super().stances()
+            finally:
+                self.prev = keep
+
+        def harms(self, s: int) -> bool:
+            """A Goriya's boomerang hurts in every state of its flight (the shots' `state & 0xF0 == 0x10` test of
+            the base misses it on its way back)."""
+            return self.prev[s][0] == GORIYA_BOOMERANG or super().harms(s)
+
+        def danger(self, spot, frames=None, first: int = 0) -> bool:
+            if super().danger(spot, frames, first):
+                return True
+            for _s, (t, x, y) in self.prev.items():
+                if t != GORIYA_BOOMERANG:
+                    continue
+                owners = [o for o in self.prev.values() if o[0] in GORIYAS]
+                if not owners:
+                    continue
+                _, ox, oy = min(owners, key=lambda o: abs(o[1] - x) + abs(o[2] - y))
+                for i in range(9):            # the way back, sampled
+                    px, py = x + (ox - x) * i / 8, y + (oy - y) * i / 8
+                    if abs(px - spot[0]) < self.touch and abs(py - spot[1]) < self.touch:
+                        return True
+            w = self.w
+            for s, (t, x, y) in self.prev.items():    # the lane a Goriya faces, where it throws, unless it is stunned
+                if t not in GORIYAS or w.r(STUN_TIMER + s) or w.r(OBJ_META + s):
+                    continue
+                dx, dy = {1: (1, 0), 2: (-1, 0), 4: (0, 1), 8: (0, -1)}.get(w.r(OBJ_DIR + s), (0, 0))
+                along = (spot[0] - x) * dx + (spot[1] - y) * dy
+                across = abs((spot[0] - x) * dy) + abs((spot[1] - y) * dx)
+                if 0 < along <= self.lane_reach and across < self.touch:
+                    return True
+            return False
+
+        def stun_button(self):
+            w = self.w
+            if self.frames < getattr(self, 'stun_ready', 0):
+                return None
+            for s, (t, x, y) in self.prev.items():
+                if t not in GORIYAS or not self.is_target(s) or w.r(STUN_TIMER + s):
+                    continue
+                for button, (dx, dy) in r32_walks.AHEAD.items():
+                    along = (x - w.x) * dx + (y - w.y) * dy
+                    across = abs((x - w.x) * dy) + abs((y - w.y) * dx)
+                    if 16 <= along <= self.stun_reach and across <= 6 and self.ok(f'BOOMERANG {LETTER[button]}'):
+                        return button
+            return None
+
+        def fight_frame(self):
+            if self.can_act() and not self.stunned():
+                button = self.stun_button()
+                if button and not self.danger((self.w.x, self.w.y), 4):
+                    self.stun_ready = self.frames + self.stun_wait
+                    raise Decided(('BOOMERANG', button))
+            r32_walks.Fighter.fight_frame(self)
+    return EnvStun
 
 
 def out(letter):
@@ -461,8 +551,9 @@ def heart_item_way(door):
 
 def goriya_1b_rule():
     """7:0x1b as d3first's route judges it: the fight for the room's bombs when the bag holds 7 or fewer on the
-    first ask, else (a full bag) the walk to the E key door past the Goriyas."""
-    fight = fight_rule(lambda: r32_walks.Fighter,
+    first ask (the stun fighter: boomerang, close in, sword; no bomb, the room is `bombs: tenth`), else (a full bag)
+    the walk to the E key door past the Goriyas."""
+    fight = fight_rule(stun_fighter,
                        lambda bot: Way(room_item(bot, taken(BOMBS, lambda before, now: now > before)),
                                        go(bot, (0xD0, 0x8D), 'E'), out('E')))
     cross = walk_rule(lambda bot: Way(go(bot, (0xD0, 0x8D), 'E'), out('E')))

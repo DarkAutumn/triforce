@@ -12,8 +12,6 @@ curriculum:                              # trajectories/ow-moblin (round 6: the 
   enabled: true
   untracked:                              # round 40: the seed states that train without a track (triforce.inputs)
   - 0_61n_1
-  - d3first_0_3ds_[0-9]
-  - d3first_0_4dw_v2_[0-9]
 one_room: true                          # round 5: per-room episodes
 max_steps: 600                        # explored paths are 12-70 steps; 2000-step timeouts starved r24 of episodes
 warm_start: null

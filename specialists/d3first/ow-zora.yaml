@@ -66,21 +66,7 @@ clips:
   enabled: true
   off_share: 0
 curriculum:
-  enabled: true
-  untracked:                              # round 40: the seed states that train without a track (triforce.inputs)
-  - d3first_0_27e_[0-9]
-  - d3first_0_28s_v2_[0-9]
-  - d3first_0_2ds_[0-9]
-  - d3first_0_38s_v2_[0-9]
-  - d3first_0_38w_v2_[0-9]
-  - d3first_0_3fs_[0-9]
-  - d3first_0_44cave_[0-9]
-  - d3first_0_47c_[0-9]
-  - d3first_0_47cave_[0-9]
-  - d3first_0_47e_[0-9]
-  - d3first_0_4fs_[0-9]
-  - d3first_0_54n_[0-9]
-  - d3first_0_5fe_[0-9]
+  enabled: true                           # round 45: every walked door tracked (Tracks45)
 one_room: true
 max_steps: 2000
 warm_start: null

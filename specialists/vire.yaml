@@ -10,12 +10,7 @@ items: {bombs: free}                       # The owner, Nov 12: Vires may be bom
 clips: {enabled: true, off_share: 0}       # round 21: the block clip (0x50's diagonal, 0x03) and the ladder clip; the owner, Nov 18: no episode with CLIP masked
 harvested_fraction: 0.2                   # round 33: chain handoffs at the route's hearts (6:0x39 and 0x2d after phase IX's 0x29 key and `bombs: tenth`), triforce/states/harvested/vire, not in git (docs/experiments/round33.md); with the seed states Dungeon 6 is about 36% of the resets (D4's eight rooms keep the rest)
 curriculum:                              # trajectories/vire (Go-Explore paths per start state)
-  enabled: true
-  untracked:                              # round 40: the seed states that train without a track (triforce.inputs);
-  - d3first_4_20s_[0-9]                   # 4:0x12 and 4:0x31 have the rules vire-12's and vire-31's (Tracks41)
-  - d3first_4_30e_[0-9]
-  - d3first_6_2dn_[0-9]
-  - d3first_6_39n_[0-9]
+  enabled: true                           # round 45: d3first's walked doors tracked too (Tracks45)
 one_room: true
 max_steps: 2000
 warm_start: null

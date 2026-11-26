@@ -52,11 +52,7 @@ ram_randomization:
 items:
   bombs: tenth
 curriculum:
-  enabled: true
-  untracked:                              # round 40: the seed states that train without a track (triforce.inputs);
-  - d3first_5_57w_[0-9]                   # 3:0x4b's have the rule zol-4b's (Tracks41)
-  - d3first_6_68s_[0-9]
-  - d3first_9_63c_[0-9]
+  enabled: true                           # round 45: every walked door tracked (Tracks45)
 one_room: true
 max_steps: 2000
 warm_start: null

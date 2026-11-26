@@ -59,10 +59,7 @@ clips:
   enabled: true
   off_share: 0
 curriculum:
-  enabled: true
-  untracked:                              # round 40: the seed states that train without a track (triforce.inputs)
-  - d3first_0_3ds_[0-9]
-  - d3first_0_4dw_v2_[0-9]
+  enabled: true                           # round 45: every walked door tracked (Tracks45)
 one_room: true
 max_steps: 600
 warm_start: null
