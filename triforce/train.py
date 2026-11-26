@@ -639,8 +639,8 @@ def data_sources(args) -> dict:
 
 def source_lines(args, data: dict) -> dict:
     """kind -> one line saying which data the training reads and why (printed at its start, carried by its
-    manifest): this checkout's own folder (the layout before the store), a store snapshot (``--data`` or the kind's
-    current one), or none."""
+    manifest): this checkout's own folder (the layout before the store), a store snapshot (``--data``, the
+    checkout's pin in ``triforce/data_pins.yaml``, or the kind's current one), or none."""
     named = {item.partition('=')[0] for item in args.data}
     lines = {}
     for kind, (path, record) in data.items():
@@ -650,8 +650,8 @@ def source_lines(args, data: dict) -> dict:
         elif record.get('legacy'):
             lines[kind] = f"this checkout's folder {path} (the layout before the store)"
         else:
-            lines[kind] = (f"store snapshot {record['snapshot']} "
-                           f"({'--data' if kind in named else 'current'}: {path})")
+            why = '--data' if kind in named else f'pinned by {paths.PINS_FILE}' if record.get('pinned') else 'current'
+            lines[kind] = f"store snapshot {record['snapshot']} ({why}: {path})"
     return lines
 
 

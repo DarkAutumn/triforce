@@ -1,0 +1,9 @@
+# This branch's data pins: `kind: snapshot` (triforce/paths.py `pins`, the Rust twin `paths::pins`). A reader of a
+# kind takes this checkout's own folder while it exists, else the store snapshot pinned here, else the store's
+# current one (docs/data-layout.md "What resolves where"). No file, no pins.
+#
+# main (Nov 25): the store's current trajectories snapshot is the fresh generation's (261125-all4: the old d3first
+# tracks of the walked doors are gone), while main still has the three-chain d3first states and tasks; main reads
+# the last snapshot made for them. Harvested states, harvested rooms and demos read the current snapshots.
+# The generation's branch (r40-int) keeps no pins: it deletes this file, and keeps it deleted on every merge of main.
+trajectories: 261124-gen2

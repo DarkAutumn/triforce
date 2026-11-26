@@ -899,18 +899,22 @@ def team_lines(root: Path) -> list[str]:
 
 def data_lines(root: Path) -> list[str]:
     """Where each data kind resolves for the checkout ``root`` (``paths.data_dir``): ``this checkout's folder``,
-    ``store snapshot NAME`` (current), or ``missing`` with both places looked in."""
+    ``store snapshot NAME`` (pinned by the checkout's ``triforce/data_pins.yaml``, or current), or ``missing`` with
+    both places looked in."""
     from . import paths  # pylint: disable=import-outside-toplevel
+    pinned = paths.pins(root)
     lines = []
     for kind, relative in paths.CHECKOUT_DATA.items():
         legacy = root / relative
-        folder = paths.data_dir(kind, legacy)
+        folder = paths.data_dir(kind, legacy, root)
         if folder == legacy and legacy.exists():
-            lines.append(f"{kind}: this checkout's folder {legacy} (the layout before the store)")
+            lines.append(f"{kind}: this checkout's folder {legacy} (the layout before the store)"
+                         + (f"; the pin {pinned[kind]} is not read while it exists" if kind in pinned else ""))
         elif folder != legacy:
-            lines.append(f"{kind}: store snapshot {folder.name} (current: {folder})")
+            why = f"pinned by {root / paths.PINS_FILE}" if kind in pinned else 'current'
+            lines.append(f"{kind}: store snapshot {folder.name} ({why}: {folder})")
         else:
-            lines.append(f"{kind}: missing: {paths.data_missing(kind, legacy)}")
+            lines.append(f"{kind}: missing: {paths.data_missing(kind, legacy, root)}")
     return lines
 
 

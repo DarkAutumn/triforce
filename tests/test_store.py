@@ -345,8 +345,11 @@ def test_data_is_the_callers_folder_else_the_stores_snapshot_else_refused_naming
     with pytest.raises(MissingInput, match=re.escape(f"{states}/harvested is missing and the store at {shared} has "
                                                      f"no current harvested snapshot")):
         check_harvested(zol, states)
+    pinned = paths.pins().get('trajectories')      # main pins its trajectories (triforce/data_pins.yaml)
+    looked = (f"no trajectories snapshot {pinned!r} (pinned by {paths.ROOT / paths.PINS_FILE})" if pinned
+              else "no current trajectories snapshot")
     with pytest.raises(MissingInput, match=re.escape(f"{tmp_path}/trajectories is missing and the store at {shared} "
-                                                     f"has no current trajectories snapshot")):
+                                                     f"has {looked}")):
         check_curriculum(zol, tmp_path / 'trajectories' / 'zol', states)
     # The store's current snapshot when the caller has no folder of its own.
     snapshot = shared / 'data' / 'harvested' / 's1'
@@ -360,3 +363,60 @@ def test_data_is_the_callers_folder_else_the_stores_snapshot_else_refused_naming
     (states / 'harvested' / 'zol').mkdir(parents=True)
     assert Path(zol.harvested_dir(str(states))) == states / 'harvested' / 'zol'
     assert paths.data_dir('harvested', states / 'harvested') == states / 'harvested'
+
+
+def _pins_store(tmp_path, monkeypatch) -> Path:
+    """A store with trajectories snapshots ``old`` and ``new`` (current), and a checkout pinning ``old``."""
+    shared = tmp_path / 'store'
+    for name in ('old', 'new'):
+        (shared / 'data' / 'trajectories' / name).mkdir(parents=True)
+    (shared / 'data' / 'trajectories' / 'current').write_text('new\n')
+    monkeypatch.setenv(paths.SHARED_ENV, str(shared))
+    checkout = tmp_path / 'checkout'
+    (checkout / 'triforce').mkdir(parents=True)
+    (checkout / paths.PINS_FILE).write_text("# pins\n\ntrajectories: old   # the old tracks\n")
+    return checkout
+
+
+def test_a_pin_wins_over_current_and_the_legacy_folder_over_both(tmp_path, monkeypatch):
+    checkout = _pins_store(tmp_path, monkeypatch)
+    shared = tmp_path / 'store' / 'data' / 'trajectories'
+    legacy = checkout / 'trajectories'
+    assert paths.pins(checkout) == {'trajectories': 'old'}
+    assert paths.data_dir('trajectories', legacy, checkout) == shared / 'old'
+    assert paths.data_dir('trajectories', legacy, tmp_path / 'unpinned') == shared / 'new'   # no file: current
+    assert paths.data_dir('harvested', checkout / 'harvested', checkout) == checkout / 'harvested'  # not pinned
+    legacy.mkdir()
+    assert paths.data_dir('trajectories', legacy, checkout) == legacy
+    # A pin the store does not hold is refused, never quietly the current one.
+    legacy.rmdir()
+    (checkout / paths.PINS_FILE).write_text('trajectories: gone\n')
+    assert paths.data_dir('trajectories', legacy, checkout) == legacy
+    assert "no trajectories snapshot 'gone' (pinned by" in paths.data_missing('trajectories', legacy, checkout)
+
+
+def test_a_pin_is_read_by_data_source_and_recorded_as_pinned(tmp_path, monkeypatch):
+    checkout = _pins_store(tmp_path, monkeypatch)
+    monkeypatch.setattr(paths, 'ROOT', checkout)
+    monkeypatch.setitem(paths._LEGACY_DATA, 'trajectories', checkout / 'trajectories')  # pylint: disable=protected-access
+    path, record = paths.data_source('trajectories')
+    assert path.name == 'old' and record == {'kind': 'trajectories', 'snapshot': 'old', 'path': str(path),
+                                              'pinned': True}
+    assert paths.data_source('trajectories', 'new')[1].get('pinned') is None      # a named snapshot is not a pin
+    from triforce import job
+    assert any(line.startswith('trajectories: store snapshot old (pinned by') for line in job.data_lines(checkout))
+
+
+@pytest.mark.parametrize('text', ['models: x', 'trajectories x', 'trajectories:', 'trajectories: a\ntrajectories: b',
+                                  'demos: current'])
+def test_a_malformed_pins_file_names_its_line(tmp_path, text):
+    (tmp_path / 'triforce').mkdir()
+    (tmp_path / paths.PINS_FILE).write_text(text)
+    with pytest.raises(ValueError, match="a pin is 'KIND: SNAPSHOT'"):
+        paths.pins(tmp_path)
+
+
+def test_this_checkouts_pins_are_well_formed_and_in_the_store():
+    """The committed pins (main: trajectories 261124-gen2) parse, and each names a snapshot the store holds."""
+    for kind, name in paths.pins().items():
+        assert (paths.data_root(kind) / name).is_dir(), f"{kind}: {name} is not in the store at {paths.shared_root()}"
