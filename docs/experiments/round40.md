@@ -5318,6 +5318,54 @@ declared untracked or their curriculum is off.
   visit (2) and goriya's 7x1a cellar (1): the last action, played open-loop under another RNG, ends nowhere (no
   ending); the recorded runs succeed. The others and the bosses, 9 tracks: 108 of 108 and 27 of 27.
 
+### 7. The doors that trained without a track (Nov 26)
+
+The Dodongo teacher (`gen1-boss-dodongo/s1r`) trained 12M steps at 0%: `specialists/boss-dodongo.yaml` declared
+`untracked: [d3first_2_0es_[0-9]]` (round 40), so the d3first fight, a trick the explorer had found in round 13 (a
+bomb beside him, then the sword while he is stunned), had no curriculum. The audit that followed (every walked door,
+its route step's specialist, that family's `@d3first` task, against the old bare task's tracks of the same door):
+
+- **Declared untracked in round 40 although the old task had tracks**: the queued teachers' doors (wizzrobe all 19,
+  pols-voice 3, lanmola 9x55 E, patra 7, equipment-room 17, trap-room 5), the trained teachers' (gibdo 5x66 W, zol 3,
+  like-like 6, vire 4, goriya 7x49 S, d2-rope 6, dodongo-crossing 2, moldorm 2x3e, ow-start 8, ow-moblin 2, ow-zora
+  13, ow-peahat 7, ow-ghini 4, ow-boulder 0x17 S, Manhandla 8x6e, Gohma 6x1c, Ganon 9x32 and 9x42) and Dodongo.
+- **Not drawn at all**: ow-lynel@d3first (round 38) seeded only 0x50 and 0x60, so Death Mountain's walked Lynel doors
+  (0x05 E, 0x06 E, 0x07 S, 0x22 cave and S, 0x32 W) were never a reset's start, only met inside chains (24 of 100 of
+  the overworld teacher's runs died there); boss-gleeok@d3first left out 8x3c, ow-tektite@d3first 0x1e and 0x0d. The
+  loader checks the tracks of the states a task draws, so nothing flagged them. `tests/test_inputs.py::
+  test_every_walked_door_is_a_seed_of_its_steps_task` now fails a walked door its step's task does not draw (a
+  deliberate one goes in `NOT_DRAWN` with its reason; none).
+- **Curriculum off** (kept, their old tasks had none either): ow-octorok, ow-tektite (deliberate, its yaml), and
+  stalfos-keese-gel. boss-digdogger@d3first's was off only because round 34's run had no tracks in its worktree; it is
+  on now.
+
+All of them have tracks from the walked states in the route's layout, the declarations are dropped, and the three
+tasks seed the missing doors. The explorer solved nearly all (express jobs of 6,000 iterations; 5x66 W at 20,000);
+the old rules, now with `--layout` (`r28_demos.py`, `r29_demos.py`, `r32p_rules.py`) and the layout kept in their
+tracks, gave the rest and second tracks: wizzrobe 9x05, 9x10 S, 9x30; patra 9x16 S, 9x52 and 9x61 E (the walk's
+block-clip script, 11 of 20 open-loop; the explorer found the clip too); lanmola 9x55 E (`r33_d9_demos.py clip-55e`:
+the round-29 lanmola rule fights, which lanmola's yaml forbids); ow-lynel 0x05 E (rock-wall) and 0x22 (whirlwind);
+Gleeok 8x3c; Digdogger 7x1c; like-like 9x14; ow-boulder 0x17; Ganon 9x32 and 9x42. Dropped: the round-29 `room-03`
+rule tracks of like-like's 9x03 (they fight; the yaml's 9x03 is the block clip, not fought). 7x49 S has one staged
+track (`~k4`, four of the room's kills banked) so far: the explorer fails the full room in 6,000 iterations, and the
+sword or stun fighter stalls there (0 of 24, `no-damage`).
+
+**7x1b, as the route judges it.** d3first's floor (round 37 `bomb_rules`) wants 7x1b's bombs whenever the bag is not
+full: a crossing with 5-7 bombs ends `exit-wrong` (traced: the same walk out of the E key door is `exit-correct` at 8
+bombs), so the rule fights below a full bag and crosses with 8. The room is `bombs: tenth` (the owner, Nov 26). The
+fighter is new (`r32p_rules.stun_fighter`, the owner: "boomerang to stun, coupled with closing the gap and
+hitting"): a Goriya in Link's lane gets the boomerang, the stunned one is the only stance target, and a Goriya's
+facing lane and its thrown boomerang's way back are kept off. Same seeds, 20 runs each: at 0 bombs 18 won and 1.06
+hearts lost in wins (round 34's sword fighter 19 and 1.13), at 6 bombs 18 and 0.39 (20 and 1.10); under the task's
+draws 76 of 80 won, 0.74 hearts lost in wins, the Goriyas' boomerangs still most of the damage. The 33 tracks (2
+hearts lost at most): 29 fights (bags 0-7, each a boomerang then the sword within 12 decisions), 4 crossings at 8.
+
+Staged: `target/trajectories-gen4` (Dodongo, installed as 261126-dodongo), `-gen5` (the queued teachers, Death
+Mountain, 8x3c, 7x1b's first set; 261126-gen5), `-gen6` (the trained teachers' doors and 7x1b's stun tracks: 1,491
+tracks, 145,464 files). On gen6: the loader 88 task files, none refused, no red flag; `start_audit` 286 seed states,
+none fails; the replay proof of its 108 new tracks 1,269 of 1,269 resets keep the track's state but the RNG, 318 of
+324 win from the last decision (gen5's 124: 1,440 of 1,440 and 357 of 360).
+
 ## 9x61: the block clip past the Patra, and Dungeon 9 walked again (States44, Nov 25)
 
 The owner, Nov 25: "9x61 - Yes you clip through there. Why would you fight? Do you even need the key in the room? If
