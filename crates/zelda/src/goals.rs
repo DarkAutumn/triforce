@@ -154,49 +154,102 @@ impl GoalRecord {
     }
 }
 
-/// The way out of `here` the objective names: its targets but the monsters and the dropped items (an exit side, the
-/// stairs, a cave, a bomb wall, a block, a dock); while carriers hide the exit (`carriers: fight`), the sides toward
-/// its next rooms on the same map.
-pub fn way_targets(objective: &Objective, here: MapLocation) -> BTreeSet<Target> {
-    let mut out: BTreeSet<Target> = objective
-        .labels
-        .iter()
-        .filter(|(_, role)| !matches!(role, Role::Monster { .. } | Role::Item { .. }))
-        .map(|a| a.0)
-        .collect();
-    if out.is_empty() {
-        for next in objective.next_rooms.iter().filter(|n| n.level == here.level && n.in_cave == here.in_cave) {
+/// A target that leads out of the room: an exit side, a bomb wall, a push block, the stairs, a cave, a dock, a secret,
+/// Zelda, the dock warp's spot. Never a monster, a dropped item, the room's treasure, Gohma's stand, the Wallmaster's
+/// lure or the whirlwind's row (it follows Link): a trip to them is no walk out.
+fn leads_out(role: &Role) -> bool {
+    matches!(
+        role,
+        Role::Exit(_)
+            | Role::BombWall { .. }
+            | Role::PushBlock { .. }
+            | Role::Stairs(_)
+            | Role::Cave(_)
+            | Role::Dock { .. }
+            | Role::Secret(_)
+            | Role::Zelda
+            | Role::DockWarp(_)
+    )
+}
+
+fn way_labels(objective: &Objective) -> impl Iterator<Item = Target> + '_ {
+    objective.labels.iter().filter(|(_, role)| leads_out(role)).map(|a| a.0)
+}
+
+/// The sides of `here` toward the objective's next rooms on the same map.
+fn way_sides(objective: &Objective, here: MapLocation) -> impl Iterator<Item = Target> + '_ {
+    objective.next_rooms.iter().filter(move |n| n.level == here.level && n.in_cave == here.in_cave).filter_map(
+        move |next| {
             let side = match i32::from(next.value) - i32::from(here.value) {
                 1 => Direction::E,
                 -1 => Direction::W,
                 16 => Direction::S,
                 -16 => Direction::N,
-                _ => continue,
+                _ => return None,
             };
-            out.insert(Target::Dir(side));
-        }
-    }
-    out
+            Some(Target::Dir(side))
+        },
+    )
 }
 
-/// A bomb reason to be about a monster: the objective aims at a carrier or at dropped bombs, the next kill is the
-/// 10th damage-free one with bombs in the bag (a bomb kill arms the forced drop), or a forced bomb drop is armed.
+/// The way out of `here` the objective names: its targets that lead out ([`leads_out`]); without one (carriers hide
+/// the exit under `carriers: fight`), the sides toward its next rooms on the same map. Empty: no way out is known.
+pub fn way_targets(objective: &Objective, here: MapLocation) -> Vec<Target> {
+    let labels: Vec<Target> = way_labels(objective).collect();
+    if labels.is_empty() { way_sides(objective, here).collect() } else { labels }
+}
+
+/// [`way_targets`] is `targets` (in order), without building it.
+fn same_way(targets: &[Target], objective: &Objective, here: MapLocation) -> bool {
+    let mut labels = way_labels(objective).peekable();
+    if labels.peek().is_some() {
+        targets.iter().copied().eq(labels)
+    } else {
+        targets.iter().copied().eq(way_sides(objective, here))
+    }
+}
+
+/// A bomb reason to be about a monster: the objective aims at a carrier (a MOVE objective's monster,
+/// [`Objective::carriers`]) or at dropped bombs, the next kill is the 10th damage-free one with bombs in the bag (a
+/// bomb kill arms the forced drop), or a forced bomb drop is armed.
 pub fn bomb_reason(state: &GameView, objective: &Objective) -> bool {
-    !objective.carriers().is_empty()
-        || objective.labels.iter().any(|(_, role)| matches!(role, Role::Item { item: id, .. } if i16::from(*id) == item::BOMBS))
-        || (state.next_kill_arms_drop() && state.bombs() > 0)
+    objective.labels.iter().any(|(_, role)| match role {
+        Role::Monster { .. } => objective.kind == crate::objectives::ObjectiveKind::Move,
+        Role::Item { item: id, .. } => i16::from(*id) == item::BOMBS,
+        _ => false,
+    }) || (state.next_kill_arms_drop() && state.bombs() > 0)
         || (state.help_drop_count() >= 10 && state.help_drop_is_bombs())
 }
 
-fn living(state: &GameView) -> u32 {
-    state.enemies.iter().filter(|e| !e.is_dying()).count() as u32
+/// What the walk measures read from one decision in the visit's room ([`GoalTracker::follow`]).
+struct Decision<'a> {
+    here: MapLocation,
+    tile: Tile,
+    objective: &'a Objective,
+    /// Living monsters (not dying).
+    alive: u32,
+    /// The next action begins with a bomb reason ([`bomb_reason`]).
+    reason: bool,
+}
+
+impl<'a> Decision<'a> {
+    fn of(state: &GameView, objective: &'a Objective) -> Decision<'a> {
+        Decision {
+            here: state.full_location(),
+            tile: state.link.tile(),
+            objective,
+            alive: state.enemies.iter().filter(|e| !e.is_dying()).count() as u32,
+            reason: bomb_reason(state, objective),
+        }
+    }
 }
 
 /// The way out a visit measures against (`GoalTracker`): its targets, the wavefront to them, the wavefront back to
-/// where Link stood when it was first known, and the shortest walk from there to it by both (None: unreachable).
+/// where Link stood when a way was first known (kept when the way changes: the detour stays measured from the
+/// visit's start), and the shortest walk from there to the way by both (None: unreachable).
 #[derive(Clone, Debug)]
 struct Way {
-    targets: BTreeSet<Target>,
+    targets: Vec<Target>,
     to_way: Wavefront,
     from_start: Wavefront,
     shortest: Option<i32>,
@@ -235,18 +288,21 @@ impl GoalTracker {
             carriers,
             ..GoalTracker::default()
         };
-        let alive = living(state);
-        self.record.alive_in = alive;
-        self.follow(state, objective, 0);
+        let decision = Decision::of(state, objective);
+        self.record.alive_in = decision.alive;
+        self.follow(&decision, 0, false, |targets| room_wavefront(state, targets, objective.clips));
     }
 
-    /// A decision in the visit's room (`frames`: the action's that led to it, 0 on entering): Link's walk against
-    /// the way out, the living monsters, the bomb reason the next action begins with.
-    fn follow(&mut self, state: &GameView, objective: &Objective, frames: u32) {
-        let tile = state.link.tile();
+    /// A decision in the visit's room (`frames`: the action's that led to it, 0 on entering; `wrapped`: that action
+    /// completed an in-room screen wrap, no walk): Link's walk against the way out (`wavefront`: the room's wavefront
+    /// toward targets), the living monsters, the bomb reason the next action begins with.
+    fn follow(&mut self, d: &Decision, frames: u32, wrapped: bool, wavefront: impl Fn(&[Target]) -> Wavefront) {
+        let tile = d.tile;
         let r = &mut self.record;
         if let Some(last) = self.tile {
-            r.walked += ((tile.0 - last.0).abs() + (tile.1 - last.1).abs()) as u32;
+            if !wrapped {
+                r.walked += ((tile.0 - last.0).abs() + (tile.1 - last.1).abs()) as u32;
+            }
             if let Some(way) = &self.way
                 && let (Some(before), Some(after)) = (way.to_way.get(last), way.to_way.get(tile))
                 && after > before
@@ -257,17 +313,21 @@ impl GoalTracker {
                 }
             }
         }
-        let targets = way_targets(objective, state.full_location());
-        if !targets.is_empty() && self.way.as_ref().is_none_or(|w| w.targets != targets) {
-            let to_way = room_wavefront(state, &Vec::from_iter(targets.iter().copied()), objective.clips);
+        // Built only when the way out differs from the one held; a decision that names none keeps the last one.
+        let changed = self.way.as_ref().is_none_or(|w| !same_way(&w.targets, d.objective, d.here));
+        let targets = if changed { way_targets(d.objective, d.here) } else { Vec::new() };
+        if !targets.is_empty() {
+            let to_way = wavefront(&targets);
             let (from_start, start) = match self.way.take() {
                 Some(w) => (w.from_start, w.start),
-                None => (room_wavefront(state, &[Target::Tile(tile)], objective.clips), tile),
+                None => (wavefront(&[Target::Tile(tile)]), tile),
             };
             let shortest = from_start.get(start).zip(to_way.get(start)).map(|(a, b)| a + b);
-            if !r.way_known {
+            if !r.way_known
+                && let Some(walk) = to_way.get(start)
+            {
                 r.way_known = true;
-                r.way_in = to_way.get(start).unwrap_or(0) as u32;
+                r.way_in = walk as u32;
             }
             self.way = Some(Way { targets, to_way, from_start, shortest, start });
         }
@@ -276,31 +336,33 @@ impl GoalTracker {
         {
             r.detour = r.detour.max((a + b - shortest).max(0) as u32);
         }
-        let alive = living(state);
-        r.alive_max = r.alive_max.max(alive);
-        r.alive_out = alive;
+        r.alive_max = r.alive_max.max(d.alive);
+        r.alive_out = d.alive;
         self.tile = Some(tile);
-        self.reason = bomb_reason(state, objective);
+        self.reason = d.reason;
+    }
+
+    /// Deaths that moved the drop cycle in an action: those with a bomb reason as it began.
+    fn killed(&mut self, moves: u8) {
+        self.record.cycle_kills += u32::from(moves);
+        if self.reason {
+            self.record.reason_kills += u32::from(moves);
+        }
     }
 
     /// One action: `change` (its `previous` the state the action began in), `state` the state after it (the cheat
     /// ledger's writes included), `objective` the objective made for `state`. An action that leaves the room is the
     /// visit's last: what it did counts here, its new objective does not.
     pub fn update(&mut self, change: &Change, state: &Arc<GameView>, objective: &Objective) {
-        let r = &mut self.record;
-        if let Some(clip) = change.clip
-            && clip.completed()
-            && matches!(clip.kind, Some(SkipKind::Wrap | SkipKind::WrapExit))
-        {
-            r.wraps += 1;
-        }
+        let wrapped = change.clip.is_some_and(|clip| {
+            clip.completed() && matches!(clip.kind, Some(SkipKind::Wrap | SkipKind::WrapExit))
+        });
+        self.record.wraps += u32::from(wrapped);
         let left = change.previous.full_location() != state.full_location();
         let step = Step { prev: &change.previous, curr: state, left, frames: change.frames, own_prev: 0 };
         let (moves, deaths) = cycle_deaths(&step);
-        r.cycle_kills += u32::from(moves);
-        if self.reason {
-            r.reason_kills += u32::from(moves);
-        }
+        self.killed(moves);
+        let r = &mut self.record;
         let gained = !left && state.bombs() > change.previous.bombs();
         for death in deaths {
             if self.carriers.contains(&(death.slot, death.kind)) {
@@ -345,7 +407,8 @@ impl GoalTracker {
         let carriers = objective.carriers();
         r.carrier_seen |= !carriers.is_empty();
         self.carriers.extend(carriers);
-        self.follow(state, objective, change.frames);
+        let decision = Decision::of(state, objective);
+        self.follow(&decision, change.frames, wrapped, |targets| room_wavefront(state, targets, objective.clips));
     }
 }
 
@@ -381,12 +444,11 @@ mod tests {
         assert_eq!(StepGoals { wrap: true, no_hit: true, carriers: true }.names(), ["wrap", "no-hit", "carriers"]);
     }
 
-    /// The way out is the objective's targets but its monsters and dropped items; while carriers hide the exit
-    /// (`carriers: fight`), the sides toward its next rooms on the same map (3:0x5b's first pass leaves N to 0x4b).
-    #[test]
-    fn the_way_out_leaves_monsters_and_items_out() {
-        let here = MapLocation::new(3, 0x5b, false);
-        let objective = |labels: Vec<(Target, Role)>| Objective {
+    const HERE: MapLocation = MapLocation::new(3, 0x5b, false);
+
+    /// A crossing's MOVE objective in 3:0x5b with `labels`, its next rooms 0x4b (N) and the 0x0f cellar.
+    fn objective(labels: Vec<(Target, Role)>) -> Objective {
+        Objective {
             kind: crate::objectives::ObjectiveKind::Move,
             targets: labels.iter().map(|a| a.0).collect(),
             next_rooms: [MapLocation::new(3, 0x4b, false), MapLocation::new(3, 0x0f, true)].into_iter().collect(),
@@ -398,13 +460,110 @@ mod tests {
             bag_drops: true,
             own_bombs: 0,
             labels,
-        };
+        }
+    }
+
+    const EAST: (Target, Role) = (Target::Dir(Direction::E), Role::Exit(Direction::E));
+    const NORTH: (Target, Role) = (Target::Dir(Direction::N), Role::Exit(Direction::N));
+
+    /// An open room's wavefronts: to the E side `30 - x`, to the N side `y`, to a tile the walk to it; `x_from`: the
+    /// columns the E side reaches (a wall west of it).
+    fn room(x_from: i32) -> impl Fn(&[Target]) -> Wavefront {
+        move |targets| {
+            let dist = |(x, y): Tile| {
+                targets
+                    .iter()
+                    .filter_map(|t| match *t {
+                        Target::Dir(Direction::E) => (x >= x_from).then_some(30 - x),
+                        Target::Dir(Direction::N) => Some(y),
+                        Target::Tile((tx, ty)) => Some((x - tx).abs() + (y - ty).abs()),
+                        Target::Dir(_) => None,
+                    })
+                    .min()
+            };
+            Wavefront::from_distances(
+                (0..31).flat_map(|x| (0..21).map(move |y| (x, y))).filter_map(|t| dist(t).map(|d| (t, d))),
+            )
+        }
+    }
+
+    /// Plays decisions `(tile, alive, reason, frames of the action to it)` of one objective from a fresh visit.
+    fn walk(t: &mut GoalTracker, o: &Objective, steps: &[(Tile, u32, bool, u32)], x_from: i32) {
+        for &(tile, alive, reason, frames) in steps {
+            let d = Decision { here: HERE, tile, objective: o, alive, reason };
+            t.follow(&d, frames, false, room(x_from));
+        }
+    }
+
+    /// The way out is the objective's targets that lead out: never its monsters, dropped items, the room's treasure,
+    /// Gohma's stand, the Wallmaster's lure or the whirlwind's row; while carriers hide the exit (`carriers: fight`),
+    /// the sides toward its next rooms on the same map (3:0x5b's first pass leaves N to 0x4b, the cellar is no side).
+    #[test]
+    fn the_way_out_leaves_monsters_items_treasures_and_moving_spots_out() {
         let monster = (Target::Tile((10, 10)), Role::Monster { slot: 1, kind: 0x0b });
         let bombs = (Target::Tile((12, 10)), Role::Item { slot: 5, item: 0 });
-        let exit = (Target::Dir(Direction::N), Role::Exit(Direction::N));
-        let way = way_targets(&objective(vec![monster, bombs, exit]), here);
-        assert_eq!(way, [Target::Dir(Direction::N)].into_iter().collect());
-        let hidden = way_targets(&objective(vec![monster]), here);
-        assert_eq!(hidden, [Target::Dir(Direction::N)].into_iter().collect(), "the cellar is no side");
+        let treasure = (Target::Tile((14, 10)), Role::Treasure { item: 3 });
+        let stand = (Target::Tile((16, 10)), Role::Stand((16, 10)));
+        let lure = (Target::Tile((18, 10)), Role::Lure);
+        let row = (Target::Tile((20, 10)), Role::Whirlwind { row: 10 });
+        let all = objective(vec![monster, bombs, treasure, stand, lure, row, NORTH]);
+        assert_eq!(way_targets(&all, HERE), [Target::Dir(Direction::N)]);
+        assert_eq!(way_targets(&objective(vec![monster]), HERE), [Target::Dir(Direction::N)]);
+        let mut whirlwind = objective(vec![row]);
+        whirlwind.next_rooms = [MapLocation::new(0, 0x45, false)].into_iter().collect();
+        assert!(way_targets(&whirlwind, HERE).is_empty());
+        assert!(same_way(&[Target::Dir(Direction::N)], &all, HERE) && !same_way(&[], &all, HERE));
+    }
+
+    /// The walk against the way out: tiles walked, the detour (how much the shortest walk through the farthest-off
+    /// tile adds), frames moving away with and without a bomb reason as the action began, drop-cycle deaths with
+    /// one, the living monsters at most and last.
+    #[test]
+    fn a_visit_walks_detours_and_moves_away_with_or_without_a_reason() {
+        let mut t = GoalTracker::default();
+        let o = objective(vec![EAST]);
+        walk(&mut t, &o, &[((2, 10), 3, false, 0), ((6, 10), 3, true, 16)], 0);
+        t.killed(1);
+        walk(&mut t, &o, &[((4, 10), 2, false, 16), ((4, 14), 2, false, 16), ((2, 14), 2, false, 16)], 0);
+        t.killed(2);
+        walk(&mut t, &o, &[((20, 10), 1, false, 32)], 0);
+        let r = t.record;
+        assert!(r.way_known && r.way_in == 28);
+        assert_eq!(r.walked, 4 + 2 + 4 + 2 + 22);
+        assert_eq!(r.detour, 4, "(2, 14): 4 from the start and 28 to the side, against 28");
+        assert_eq!((r.away_frames, r.away_free_frames), (32, 16), "back from (6, 10) had a reason, from (4, 14) none");
+        assert_eq!((r.cycle_kills, r.reason_kills), (3, 1));
+        assert_eq!((r.alive_max, r.alive_out), (3, 1));
+    }
+
+    /// A treasure aimed at on entering is no way out (the walk to it is a detour); the way changing mid-visit keeps
+    /// its start; an unreachable way is not known; a whirlwind's row (it follows Link) is none; an in-room screen
+    /// wrap is no walk.
+    #[test]
+    fn the_way_out_holds_its_start_and_skips_what_is_no_way() {
+        let treasure = (Target::Tile((2, 20)), Role::Treasure { item: 3 });
+        let mut t = GoalTracker::default();
+        walk(&mut t, &objective(vec![treasure, EAST]), &[((2, 10), 0, false, 0), ((2, 20), 0, false, 48)], 0);
+        assert_eq!((t.record.way_in, t.record.detour), (28, 10));
+        assert_eq!(t.record.away_frames, 0, "south along the column is no farther from the E side");
+        walk(&mut t, &objective(vec![NORTH]), &[((2, 15), 0, false, 24), ((2, 5), 0, false, 48)], 0);
+        assert_eq!((t.record.way_in, t.record.detour), (28, 10), "the start stays (2, 10): 10 to N, no detour");
+
+        let mut t = GoalTracker::default();
+        walk(&mut t, &objective(vec![EAST]), &[((2, 10), 0, false, 0), ((4, 10), 0, false, 16)], 10);
+        assert!(!t.record.way_known && t.record.way_in == 0 && t.record.detour == 0);
+
+        let row = (Target::Tile((2, 10)), Role::Whirlwind { row: 10 });
+        let mut t = GoalTracker::default();
+        let mut whirlwind = objective(vec![row]);
+        whirlwind.next_rooms = [MapLocation::new(0, 0x45, false)].into_iter().collect();
+        walk(&mut t, &whirlwind, &[((2, 10), 0, false, 0), ((6, 10), 0, false, 16), ((2, 10), 0, false, 16)], 0);
+        assert!(!t.record.way_known && t.record.away_frames == 0, "the row follows Link: no way out");
+
+        let mut t = GoalTracker::default();
+        let o = objective(vec![EAST]);
+        walk(&mut t, &o, &[((28, 10), 0, false, 0)], 0);
+        t.follow(&Decision { here: HERE, tile: (1, 10), objective: &o, alive: 0, reason: false }, 16, true, room(0));
+        assert_eq!(t.record.walked, 0, "a wrap is no walk");
     }
 }
