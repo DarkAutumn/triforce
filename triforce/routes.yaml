@@ -583,7 +583,9 @@ d3first:
   # Those above the reserve of 2 go to Digdogger's 0x1c and on.
   - {level: 7, room: '0x79', specialist: goriya, entry: S, exit: N, bomb_reserve: 8, clear: true}
   - include: dungeon-7
-  - {level: 7, room: '0x1b', specialist: goriya, entry: W, exit: E, bomb_reserve: 2, clear: true}
+  # 0x1b is fought for its bombs, so no bomb is spent there but the 10th-kill one that forces a bomb drop (`bombs:
+  # tenth`; the owner, Nov 26, watching the walkers' teacher bomb its Goriyas).
+  - {level: 7, room: '0x1b', specialist: goriya, entry: W, exit: E, bomb_reserve: 2, bombs: tenth, clear: true}
   - include: dungeon-7-east
   # Level 7 to the magic sword (round 36; r36-warp3f): 0x42 S, 0x52 W, 0x51's wrap exit (CLIP E: clips only) into
   # 0x50, S 0x60 and its wrap exit round the world onto 0x5f's water, the ladder clip to the heart container (11);
