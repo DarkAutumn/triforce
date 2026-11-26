@@ -1252,13 +1252,15 @@ record as `goal_*` (`env::chain::RoomRecord::goals`; `runner.RoomRecord`, None i
   want to see how far out of the way they go [...] Is it clearing the room?"): `goal_alive_in` / `goal_alive_max` /
   `goal_alive_out` (living monsters, not dying, Bubbles and the other hazards aside: on the first decision, at most,
   on the last decision in the room; cleared = 0 out of a room that had one); the way out (`goals::way_targets`: the
-  objective's targets that lead out, an exit side, bomb wall, push block, stairs, cave, dock, secret, Zelda or the
-  dock warp's spot, never a monster, a dropped item, the room's treasure, Gohma's stand, the Wallmaster's lure or the
-  whirlwind's row, which follows Link; without one, as while `carriers: fight` hides the exit, the sides toward its
-  next rooms; a decision naming none keeps the last; a new way keeps the visit's start): `goal_way_known` (it was
+  objective's targets that lead out, an exit side, bomb wall, push block, stairs, cave, dock, secret or Zelda, never a
+  monster, a dropped item, the room's treasure, Gohma's stand, the Wallmaster's lure, the whirlwind's row or the dock
+  warp's spot, which follow Link; without one, as while `carriers: fight` hides the exit, the sides toward its next
+  rooms; a decision naming none keeps the last; a new way keeps the visit's start): `goal_way_known` (it was
   reachable from the start), `goal_way_in` (the shortest walk to it in 8-pixel tiles from where Link stood when a way
-  was first known), `goal_walked` (tiles walked in the room, an in-room screen wrap none), `goal_detour` (the most the
-  shortest walk from that spot to the way out through a tile Link stood on is longer than the shortest walk);
+  was first known: a TREASURE objective names none, so in a room whose treasure the step takes it counts from the
+  pickup tile and the walk to the treasure is no detour), `goal_walked` (tiles walked in the room, an in-room screen
+  wrap none), `goal_detour` (the most the shortest walk from that spot to the way out through a tile Link stood on
+  is longer than the shortest walk);
   `goal_away_frames` (frames of actions that ended farther from the way out than they began) and
   `goal_away_free_frames` (those begun with no bomb reason, `goals::bomb_reason`: no carrier or dropped bombs aimed
   at, the next kill not the 10th with bombs in the bag, no forced bomb drop armed); `goal_reason_kills` (drop-cycle

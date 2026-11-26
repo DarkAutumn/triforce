@@ -155,8 +155,8 @@ impl GoalRecord {
 }
 
 /// A target that leads out of the room: an exit side, a bomb wall, a push block, the stairs, a cave, a dock, a secret,
-/// Zelda, the dock warp's spot. Never a monster, a dropped item, the room's treasure, Gohma's stand, the Wallmaster's
-/// lure or the whirlwind's row (it follows Link): a trip to them is no walk out.
+/// Zelda. Never a monster, a dropped item, the room's treasure, Gohma's stand, the Wallmaster's lure, the whirlwind's
+/// row or the dock warp's spot (both follow Link while he waits on them): a trip to them is no walk out.
 fn leads_out(role: &Role) -> bool {
     matches!(
         role,
@@ -168,7 +168,6 @@ fn leads_out(role: &Role) -> bool {
             | Role::Dock { .. }
             | Role::Secret(_)
             | Role::Zelda
-            | Role::DockWarp(_)
     )
 }
 
@@ -496,8 +495,9 @@ mod tests {
     }
 
     /// The way out is the objective's targets that lead out: never its monsters, dropped items, the room's treasure,
-    /// Gohma's stand, the Wallmaster's lure or the whirlwind's row; while carriers hide the exit (`carriers: fight`),
-    /// the sides toward its next rooms on the same map (3:0x5b's first pass leaves N to 0x4b, the cellar is no side).
+    /// Gohma's stand, the Wallmaster's lure, the whirlwind's row or the dock warp's spot; while carriers hide the exit
+    /// (`carriers: fight`), the sides toward its next rooms on the same map (3:0x5b's first pass leaves N to 0x4b, the
+    /// cellar is no side).
     #[test]
     fn the_way_out_leaves_monsters_items_treasures_and_moving_spots_out() {
         let monster = (Target::Tile((10, 10)), Role::Monster { slot: 1, kind: 0x0b });
@@ -506,12 +506,15 @@ mod tests {
         let stand = (Target::Tile((16, 10)), Role::Stand((16, 10)));
         let lure = (Target::Tile((18, 10)), Role::Lure);
         let row = (Target::Tile((20, 10)), Role::Whirlwind { row: 10 });
-        let all = objective(vec![monster, bombs, treasure, stand, lure, row, NORTH]);
+        let warp = (Target::Tile((22, 10)), Role::DockWarp((22, 10)));
+        let all = objective(vec![monster, bombs, treasure, stand, lure, row, warp, NORTH]);
         assert_eq!(way_targets(&all, HERE), [Target::Dir(Direction::N)]);
         assert_eq!(way_targets(&objective(vec![monster]), HERE), [Target::Dir(Direction::N)]);
-        let mut whirlwind = objective(vec![row]);
-        whirlwind.next_rooms = [MapLocation::new(0, 0x45, false)].into_iter().collect();
-        assert!(way_targets(&whirlwind, HERE).is_empty());
+        for spot in [row, warp] {
+            let mut carried = objective(vec![spot]);
+            carried.next_rooms = [MapLocation::new(0, 0x45, false)].into_iter().collect();
+            assert!(way_targets(&carried, HERE).is_empty());
+        }
         assert!(same_way(&[Target::Dir(Direction::N)], &all, HERE) && !same_way(&[], &all, HERE));
     }
 
@@ -536,14 +539,23 @@ mod tests {
         assert_eq!((r.alive_max, r.alive_out), (3, 1));
     }
 
-    /// A treasure aimed at on entering is no way out (the walk to it is a detour); the way changing mid-visit keeps
-    /// its start; an unreachable way is not known; a whirlwind's row (it follows Link) is none; an in-room screen
-    /// wrap is no walk.
+    /// A TREASURE objective (the builder gives it no exit and no next rooms) names no way out: the way is first known
+    /// after the pickup, so the walk to a planned treasure is no detour and `way_in` counts from the pickup tile; the
+    /// way changing mid-visit keeps its start; an unreachable way is not known; a whirlwind's row or the dock warp's
+    /// spot (they follow Link) is none; an in-room screen wrap is no walk.
     #[test]
     fn the_way_out_holds_its_start_and_skips_what_is_no_way() {
-        let treasure = (Target::Tile((2, 20)), Role::Treasure { item: 3 });
+        let mut take = objective(vec![(Target::Tile((2, 20)), Role::Treasure { item: 3 })]);
+        take.kind = crate::objectives::ObjectiveKind::Treasure;
+        take.next_rooms.clear();
         let mut t = GoalTracker::default();
-        walk(&mut t, &objective(vec![treasure, EAST]), &[((2, 10), 0, false, 0), ((2, 20), 0, false, 48)], 0);
+        walk(&mut t, &take, &[((2, 10), 0, false, 0), ((2, 20), 0, false, 48)], 0);
+        assert!(!t.record.way_known && t.record.away_frames == 0);
+        walk(&mut t, &objective(vec![EAST]), &[((2, 20), 0, false, 16), ((12, 20), 0, false, 48)], 0);
+        assert_eq!((t.record.way_in, t.record.detour, t.record.walked), (28, 0, 20), "from the pickup tile");
+
+        let mut t = GoalTracker::default();
+        walk(&mut t, &objective(vec![EAST]), &[((2, 10), 0, false, 0), ((2, 20), 0, false, 48)], 0);
         assert_eq!((t.record.way_in, t.record.detour), (28, 10));
         assert_eq!(t.record.away_frames, 0, "south along the column is no farther from the E side");
         walk(&mut t, &objective(vec![NORTH]), &[((2, 15), 0, false, 24), ((2, 5), 0, false, 48)], 0);
@@ -553,12 +565,18 @@ mod tests {
         walk(&mut t, &objective(vec![EAST]), &[((2, 10), 0, false, 0), ((4, 10), 0, false, 16)], 10);
         assert!(!t.record.way_known && t.record.way_in == 0 && t.record.detour == 0);
 
-        let row = (Target::Tile((2, 10)), Role::Whirlwind { row: 10 });
-        let mut t = GoalTracker::default();
-        let mut whirlwind = objective(vec![row]);
-        whirlwind.next_rooms = [MapLocation::new(0, 0x45, false)].into_iter().collect();
-        walk(&mut t, &whirlwind, &[((2, 10), 0, false, 0), ((6, 10), 0, false, 16), ((2, 10), 0, false, 16)], 0);
-        assert!(!t.record.way_known && t.record.away_frames == 0, "the row follows Link: no way out");
+        // The whirlwind's row and, on the dock spot, the dock warp's target are Link's own tile as he moves.
+        let row = |at: Tile| (Target::Tile(at), Role::Whirlwind { row: at.1 });
+        let warp = |at: Tile| (Target::Tile(at), Role::DockWarp(at));
+        for spot in [row as fn(Tile) -> (Target, Role), warp] {
+            let mut t = GoalTracker::default();
+            for (tile, frames) in [((2, 10), 0), ((6, 10), 16), ((2, 10), 16)] {
+                let mut carried = objective(vec![spot(tile)]);
+                carried.next_rooms = [MapLocation::new(0, 0x45, false)].into_iter().collect();
+                walk(&mut t, &carried, &[(tile, 0, false, frames)], 0);
+            }
+            assert!(!t.record.way_known && t.record.away_frames == 0, "a spot that follows Link is no way out");
+        }
 
         let mut t = GoalTracker::default();
         let o = objective(vec![EAST]);
