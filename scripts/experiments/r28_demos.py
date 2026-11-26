@@ -62,6 +62,7 @@ from pathlib import Path
 
 RUNS = 30
 SEED0 = 1000
+LAYOUT = None                       # --layout: the room's monster layout (`Env.set_layout`; round 45), else the draw
 REPEAT = {'RECORDER': 40, 'CANDLE': 40, 'BOMB': 40, 'ARROW': 20, 'SWORD': 4, 'BEAMS': 4}
 
 OBJ_X, OBJ_Y, OBJ_DIR, OBJ_STATE, OBJ_TYPE, OBJ_META, OBJ_INVINC = 0x70, 0x84, 0x98, 0xAC, 0x34F, 0x405, 0x4F0
@@ -562,20 +563,26 @@ def rule_env(family, state, hearts):
         containers = Game(seed=0, states_dir=str(STATES_DIR)).load(state, fresh_room=True, seed=0).max_health
         share = float(hearts) / containers
         config = config.replace(ram_randomization={'hp': [share, share]})
-    return Env(config, explicit_starts=True, strict_actions=False, seed=0)
+    env = Env(config, explicit_starts=True, strict_actions=False, seed=0)
+    if LAYOUT is not None:
+        env.set_layout(LAYOUT)
+    return env
 
 
-def write_track(directory, state, seed, what, points, actions, health, ending):
-    """One won run as the curriculum reads it (`r27_d6_rules.py tracks`)."""
+def write_track(directory, state, seed, what, points, actions, health, ending, layout=None):
+    """One won run as the curriculum reads it (`r27_d6_rules.py tracks`); `layout`, the env's `entry` after the
+    run's reset (round 45), as the explorer's tracks keep it."""
     track = directory / f'{state}~rule{seed}'
     track.mkdir(parents=True, exist_ok=True)
     for index, point in enumerate(points[:len(actions)]):
         (track / f'{index:04d}.state').write_bytes(point.state_file())
-    (track / 'trajectory.json').write_text(json.dumps({
-        'start_state': state, 'success': True, 'ending': ending, 'steps': len(actions), 'health': health,
-        'actions': actions,
-        'explore': {'iterations': 0, 'env_steps': len(actions), 'cells': 0, 'seconds': 0.0, 'seed': seed},
-        'crafted': f'round 28: the scripted rule {what} (scripts/experiments/r28_demos.py)'}, indent=1))
+    meta = {'start_state': state, 'success': True, 'ending': ending, 'steps': len(actions), 'health': health,
+            'actions': actions,
+            'explore': {'iterations': 0, 'env_steps': len(actions), 'cells': 0, 'seconds': 0.0, 'seed': seed},
+            'crafted': f'round 28: the scripted rule {what} (scripts/experiments/r28_demos.py)'}
+    if layout is not None:
+        meta['layout'] = layout
+    (track / 'trajectory.json').write_text(json.dumps(meta, indent=1))
     return track
 
 
@@ -649,6 +656,7 @@ def play(args):
         entry = None
         for seed in range(SEED0, SEED0 + args.runs):
             obs, _ = env.reset(seed=seed, options={'start_state': state})
+            layout = getattr(env, 'entry', None)
             rule = RULES[args.what]()
             health, containers, info, n, illegal = env.state.health, env.state.max_health, {}, 0, 0
             points, actions = [], []
@@ -682,7 +690,9 @@ def play(args):
                 steps_won.append(n)
                 if args.tracks and tracks < args.per_state and not illegal and (
                         args.max_loss is None or down <= args.max_loss):
-                    print(f'{write_track(args.tracks, state, seed, args.what, points, actions, health, info["ending"])}'
+                    written = write_track(args.tracks, state, seed, args.what, points, actions, health,
+                                          info['ending'], layout)
+                    print(f'{written}'
                           f': {n} steps, {down} hearts lost', file=sys.stderr)
                     tracks += 1
                 if args.harvest and entry is None and not illegal and (
@@ -743,7 +753,12 @@ def main():
     parser.add_argument('--out', type=Path, default=None, help='write the kept runs\' rows here (.npz)')
     parser.add_argument('--verbose', action='store_true')
     parser.add_argument('--route', default='d2first', help="ROOM: the route whose step and states it plays")
+    parser.add_argument('--layout', default=None, help="route, valid or a spawn cycle N: the room's monster layout "
+                                                       "(`Env.set_layout`; round 45; default: the env's draw)")
     args = parser.parse_args()
+    global LAYOUT                                                 # pylint: disable=global-statement
+    if args.layout is not None:
+        LAYOUT = int(args.layout) if args.layout.isdigit() else args.layout
     from triforce.jobs import require_job  # pylint: disable=import-outside-toplevel
     require_job()
     if args.what == 'scaffold':

@@ -141,6 +141,35 @@ def test_the_d3first_tasks_declare_the_rooms_left_without_a_track():
             assert not any(fnmatch.fnmatchcase(s, g) for s in tracked for g in declared), path
 
 
+# Round 45 (the lead, Nov 26): the walked d3first doors a route step's specialist task deliberately does not draw as a
+# seed state, with the reason. Empty: ow-lynel@d3first's Death Mountain (0x05-0x32), boss-gleeok@d3first's 8:0x3c and
+# ow-tektite@d3first's 0x1e and 0x0d were left out of their `start_states` (round 38 and the rebuilt run tasks) and
+# nothing flagged it; they are seeds now.
+NOT_DRAWN: dict[str, str] = {}
+
+
+def test_every_walked_door_is_a_seed_of_its_steps_task():
+    """Every walked door of d3first (`triforce/states/d3first_walk.json`) is a seed state of its route step's
+    specialist's d3first task (`specialists/d3first/<family>.yaml`), so a reset can start the room the route plays
+    there; a door the task deliberately leaves to the chains is listed in `NOT_DRAWN` with its reason."""
+    require_rom()
+    from triforce import entry_states   # pylint: disable=import-outside-toplevel
+    steps = {step.index: step for step in entry_states.route_steps('d3first')}
+    doors = json.loads((REPO_STATES_DIR / 'd3first_walk.json').read_text(encoding='utf-8'))['doors']
+    seeds = {}
+    missing = []
+    for name, record in doors.items():
+        stem = Path(name).stem
+        family = steps[record['route_step']].specialist
+        if family not in seeds:
+            config = load_specialist(str(ROOT / 'specialists' / 'd3first' / f'{family}.yaml'))
+            seeds[family] = {Path(p).stem for p in config.resolve_start_states(str(REPO_STATES_DIR))}
+        if stem not in seeds[family] and stem not in NOT_DRAWN:
+            missing.append(f'{family}: {stem}')
+    assert not missing, missing
+    assert not set(NOT_DRAWN) - {Path(name).stem for name in doors}, 'NOT_DRAWN names a door the walk lacks'
+
+
 # Round 40, the fresh generation (2.0.1.0): every teacher's task, `specialists/d3first/<family>.yaml` (the lead's pins:
 # four groups and seven bosses, every family of the route).
 GENERATION = ['ow-start', 'ow-tektite', 'ow-leever', 'ow-moblin', 'ow-octorok', 'ow-zora', 'ow-peahat', 'ow-lynel',
@@ -153,19 +182,20 @@ GENERATION = ['ow-start', 'ow-tektite', 'ow-leever', 'ow-moblin', 'ow-octorok', 
 # files, the ones today's team and every `d2first` chain play with: unchanged by the generation's tasks (r40-tasks:
 # the same before and after on `r40-gen` 42d15e02). A deliberate change to a bare task updates its row: Tracks41
 # (r40-gen fee9db0c) dropped `curriculum.untracked` entries from boss-digdogger, boss-gleeok, darknut, goriya,
-# like-like, vire and zol (their states got tracks).
+# like-like, vire and zol (their states got tracks); Tracks45 (round 45) dropped them from boss-dodongo, wizzrobe,
+# pols-voice, lanmola, patra, equipment-room and trap-room (the walked doors got tracks).
 BARE_EFFECTIVE = {
-    'boss-aquamentus': '964037cc7c6772f7', 'boss-digdogger': '9fc25620d8af66a8', 'boss-dodongo': '2837d388d2bb32fc',
+    'boss-aquamentus': '964037cc7c6772f7', 'boss-digdogger': '9fc25620d8af66a8', 'boss-dodongo': '7461eb48c333d15a',
     'boss-gleeok': '7e34d4a6d9495d86', 'boss-gohma': '122a41323615e34b', 'boss-manhandla': 'e051deaf86f9ae1c',
     'd2-rope': '5371a6f5d01257fc', 'darknut': 'c6365d2aab2792a1', 'dodongo-crossing': '57c07e2b82521950',
-    'equipment-room': '2dcc698ea994be84', 'ganon': '8d17a7f7e0532c21', 'gibdo': 'e14a78e5da3f71ca',
-    'goriya': '587eafc639eeb4eb', 'lanmola': 'a863d8e087492eb7', 'like-like': '1fbad86272424f98',
+    'equipment-room': '9104ac87057c87a9', 'ganon': '8d17a7f7e0532c21', 'gibdo': 'e14a78e5da3f71ca',
+    'goriya': '587eafc639eeb4eb', 'lanmola': '8b26e87dc23965cd', 'like-like': '1fbad86272424f98',
     'moldorm': '196755b386307c5b', 'ow-boulder': 'af1cd69733b32f1b', 'ow-ghini': '192f1922e6745cab',
     'ow-leever': '4d74f994b3d7d936', 'ow-lynel': '13553bde87634c4f', 'ow-moblin': '84eafeaa06d972ea',
     'ow-octorok': '796292f6ddc66d68', 'ow-peahat': 'b854f9edb2964622', 'ow-start': '813e16e5602996f8',
-    'ow-tektite': '729c50d784b9d954', 'ow-zora': '29c4b95850a4755e', 'patra': '25980d07f167f5c6',
-    'pols-voice': '2ea6f0ac3df07a2c', 'stalfos-keese-gel': '8039e87cffe1a7ef', 'trap-room': '4bc878609d02e600',
-    'vire': 'da0b4233fc7a3191', 'wallmaster': 'feca0df6d2aac23f', 'wizzrobe': 'f2207f2f47c5422a',
+    'ow-tektite': '729c50d784b9d954', 'ow-zora': '29c4b95850a4755e', 'patra': '64baa281838a7c56',
+    'pols-voice': '6be5d292dfa6538c', 'stalfos-keese-gel': '8039e87cffe1a7ef', 'trap-room': '3baa0e14cfe200be',
+    'vire': 'da0b4233fc7a3191', 'wallmaster': 'feca0df6d2aac23f', 'wizzrobe': 'd0c8d9b6f762e71a',
     'zol': '8baa46c3cd7c7242',
 }
 
