@@ -2379,6 +2379,26 @@ A record at frame `k` applies after input frame `k - 1` and before input frame `
   whose embedded START is that state; `replay_stitch(a, b)` joins the two (frames shifted, a SEGMENT event and a
   CHECKPOINT state at the boundary, reward terms renumbered) when `b` starts in the machine `a` ends in and both
   were played by the same models with the same streams.
+- **Clips: one room of a run** (the owner, Nov 26: "show me just one room"). `tf replay clip FILE|DIR... --room
+  L:RR [--visit N|all] [--playable] --out DIR [--jobs N]` plays each replay and writes each visit to the room as a
+  replay of its own, `<stem>_<L>x<RR>_v<N>.tfreplay` (`7:1b` -> `_7x1b_v1`; the room in hex, `0:77` an overworld
+  room, `0:77:cave` the cave or cellar under it). A visit runs while `$10` CurLevel and `$EB` RoomId say the room
+  (in or out of a cave or cellar by `$12` GameMode `$09-$0C`) and ends at a death there (`$12` = `$11`; the game
+  over screens after it belong to no visit). A scroll out shows the next room's id for two frames and then this
+  one's again until it is done (seen leaving 0:0x77): frames out of the room that Link comes back from without
+  having played anywhere stay in the visit. `--playable` keeps from the visit's first frame in mode 5 (in a cave
+  or cellar its own mode) to its last, so neither the scroll in nor the scroll out is shown and a death ends the
+  clip as the dying starts; a visit never playable is skipped with a line. `replay::clip(replay, from, to, start,
+  end, ending, about)` (`crates/replay/src/edit.rs`) makes the file: its embedded START is the machine before
+  input `from` (after a RESET there, before the frame's edits), its END the machine after input `to - 1`; it
+  carries those frames' inputs, edits, cheats, events, rewards, decisions, targets, masks and keyframes moved back
+  by `from`, and writes the TARGETS, MASKS and ROOM event in force at `from` again at frame 0. META is the
+  source's with `kind` `clip`, `source` checkpoint, the ending (`death`, `other` "left 7:0x1b for 7:0x1c", or the
+  source's when the replay ends in the room) and `clip` (source file name, room, visit and the number of visits,
+  the visit's frames, `from`/`to` in the source's frames, `playable`, the source's `kind`); no `segments` or
+  `rng_phase`, which describe the whole. A clip verifies and plays the source's frames machine for machine
+  (`crates/replay/tests/player.rs`, `crates/tools/tests/cli.rs`); `tf replay info` prints its `clip:`. Like any
+  replay from a state it starts silent.
 - **Compatibility.** `REPLAY_VERSION` is its own integer, bumped by every format change (the owner, Nov 23:
   replays never need to be readable by older readers); a reader refuses a newer version by name and reads every
   older one. `corpus/replays/` holds recorded replays that must keep verifying (`AGENTS.md`, Versioning).

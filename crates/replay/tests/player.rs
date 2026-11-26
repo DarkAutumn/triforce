@@ -223,3 +223,68 @@ fn a_replay_that_leaves_its_recording_says_where() {
     let error = verify(rom, Replay::parse(wrong).unwrap(), &no_files).unwrap_err();
     assert_eq!(error.to_string(), "diverged at frame 10: $0700 holds 0x00, the recording saw 0xff");
 }
+
+/// The machine states [`replay::clip`] cuts between: before input `from` (after its RESET), after input `to - 1`
+/// (before frame `to`'s RESET).
+fn clip_states(rom: &Arc<Rom>, replay: &Replay, from: u32, to: u32) -> (Vec<u8>, Vec<u8>) {
+    let mut player = Player::open(rom.clone(), replay.clone(), &no_files).unwrap();
+    let encode = |player: &Player| state_file::encode(rom, &player.nes().snapshot(), 0);
+    let mut start = Vec::new();
+    loop {
+        if player.frame() == to {
+            return (start, encode(&player));
+        }
+        player.press_resets();
+        if player.frame() == from {
+            start = encode(&player);
+        }
+        assert!(player.step(false).unwrap());
+    }
+}
+
+/// A clip of frames `from..to` is a replay of its own: it starts from the machine there (a RESET at `from` already
+/// pressed), carries the edits, keyframes and events of those frames and the ROOM event in force, verifies, and
+/// plays the frames the source plays there, machine for machine.
+#[test]
+fn a_clip_plays_the_frames_it_was_cut_from() {
+    let Some(rom) = rom() else { return };
+    let mut nes = ZCore::power_on(rom.clone());
+    let mut rec = Recorder::new(Arc::new(RecordOptions::default()));
+    rec.set_source(Source::PowerOn { name: "LINK".into(), delay: 0 });
+    rec.event(Event::Room { level: 7, room: 0x1b, in_cave: false, step: None, policy: None });
+    drive(&mut nes, &mut rec, &rom, 200);
+    nes.reset();
+    rec.event(Event::Reset);
+    drive(&mut nes, &mut rec, &rom, 200);
+    let replay = Replay::parse(finish(&nes, rec, &rom)).unwrap();
+
+    // Edits at 210, 260 and 310, a keyframe at 240, the RESET at `from`; and edits at 60 and 110, a keyframe at 120.
+    for (from, to, report) in [
+        (200, 360, Report { frames: 160, edits: 3, states: 3 }),
+        (60, 125, Report { frames: 65, edits: 2, states: 3 }),
+    ] {
+        let (start, end) = clip_states(&rom, &replay, from, to);
+        let ending = Ending { kind: replay::ENDING_OTHER, result: "left".into(), ..Ending::default() };
+        let mut about = serde_json::Map::new();
+        about.insert("visit".into(), serde_json::json!(1));
+        let clip = Replay::parse(replay::clip(&replay, from, to, &start, &end, &ending, about).unwrap()).unwrap();
+        assert_eq!(verify(rom.clone(), clip.clone(), &no_files), Ok(report), "{from}..{to}");
+        assert_eq!(clip.ending_name(), "other");
+        let meta = clip.meta().unwrap();
+        assert_eq!(meta["kind"], "clip");
+        assert_eq!(meta["clip"], serde_json::json!({"visit": 1, "from": from, "to": to, "kind": null}));
+        assert_eq!(meta["ending"]["result"], "left");
+        let events: Vec<_> = clip.events().map(|e| e.unwrap()).map(|e| (e.frame, e.event)).collect();
+        assert_eq!(events, [(0, Event::Room { level: 7, room: 0x1b, in_cave: false, step: None, policy: None })]);
+
+        let mut source = Player::open(rom.clone(), replay.clone(), &no_files).unwrap();
+        source.seek(from).unwrap();
+        let mut cut = Player::open(rom.clone(), clip, &no_files).unwrap();
+        while cut.step(false).unwrap() {
+            assert!(source.step(false).unwrap());
+            assert_eq!(cut.nes().ram()[..], source.nes().ram()[..], "frame {}", source.frame());
+            assert_eq!(cut.nes().prg_ram()[..], source.nes().prg_ram()[..]);
+        }
+        assert_eq!(source.frame(), to);
+    }
+}
