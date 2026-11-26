@@ -65,10 +65,11 @@ Later rooms (round 32's training of Level 5 to the ending; the walks: docs/route
                   lies (the room item), the N door.
     digdogger-1c  7:0x1c W->N (boss-digdogger, step 171): RECORDER, the bomb fighter on the three small ones, the N
                   shutter.
-    goriya-1b     7:0x1b W->E (goriya, step 170; round 34): the walks' sword fighter (`r32_walks.Fighter`, the wood
-                  sword) on the six Blue Goriyas until the room is all dead, the room's 4 bombs where they lie, the
-                  E key door.  `--hearts chain` draws 1 bomb (`DRAWS`: the route's arrivals spend the bag down to
-                  the reserve before 0x1b, so the bombs are wanted).
+    goriya-1b     7:0x1b W->E (goriya, step 170; round 34; the owner's way, round 45): with 4 bombs or fewer in the
+                  bag on entering, the walks' sword fighter (`r32_walks.Fighter`, the wood sword) on the six Blue
+                  Goriyas until the room is all dead, the room's 4 bombs where they lie, the E key door; with more,
+                  no fight: the floor walk to the E key door.  `--hearts family` takes the task's draws (bag 0-8 on
+                  half the resets, 1-5 Goriyas killed already on half), so both ways are played.
 
 Not ported: 5:0x66 W->N (gibdo, `r32b_d7.Fight` 52/60 in the walks): the env fighter's floor graph has no water, so
 it waits on the near shore while the last Gibdo walks the far one (0 of 12); gibdo's teacher there is the planner."""
@@ -103,10 +104,8 @@ ROOMS = {'darknut-59': ('darknut', 13), 'dash-69': ('darknut', 14), 'garden-05':
 
 # room -> the family's ram_randomization over-ridden for it (every --hearts but reset): what the route brings there.
 DRAWS = {'darknut-59': {'bombs_share': 0.0},
-         'garden-05': {'bombs': [8, 8], 'bombs_share': 1.0, 'room_kills_share': 0.0},
-         'goriya-1b': {'bombs': [1, 1], 'bombs_share': 1.0, 'room_kills_share': 0.0}}
+         'garden-05': {'bombs': [8, 8], 'bombs_share': 1.0, 'room_kills_share': 0.0}}
 ROOM = None                                                       # the room played (main)
-LAYOUT = None                       # --layout: the room's monster layout (`Env.set_layout`; round 45), else the draw
 
 
 def route_step(index, route=ROUTE):
@@ -146,8 +145,8 @@ def rule_env(family, state, hearts):
     else:
         config = config.replace(ram_randomization=dict(config.to_dict()['ram_randomization'], **draws))
     env = Env(config, explicit_starts=True, strict_actions=False, seed=0)
-    if LAYOUT is not None:
-        env.set_layout(LAYOUT)
+    if r29_demos.LAYOUT is not None:                              # --layout (r29_demos.main; round 45)
+        env.set_layout(r29_demos.LAYOUT)
     return env
 
 
@@ -458,6 +457,22 @@ def heart_item_way(door):
     return way
 
 
+def goriya_1b_rule():
+    """7:0x1b the owner's way: the fight for the room's bombs when the bag holds 4 or fewer on the first ask, else
+    the walk to the E key door past the Goriyas."""
+    fight = fight_rule(lambda: r32_walks.Fighter,
+                       lambda bot: Way(room_item(bot, taken(BOMBS, lambda before, now: now > before)),
+                                       go(bot, (0xD0, 0x8D), 'E'), out('E')))
+    cross = walk_rule(lambda bot: Way(go(bot, (0xD0, 0x8D), 'E'), out('E')))
+    state = {}
+
+    def rule(ram, ok):
+        if 'way' not in state:
+            state['way'] = fight if ram[BOMBS] <= 4 else cross
+        return state['way'](ram, ok)
+    return rule
+
+
 RULES = {
     'darknut-59': lambda: fight_rule(bomb_fighter, lambda bot: Way(go(bot, (0x78, 0xBD), 'S'), out('S'))),
     'dash-69': lambda: walk_rule(lambda bot: Way(go(bot, (0xC8, 0x8D), 'E'), out('E'))),
@@ -481,20 +496,13 @@ RULES = {
     'tree-62': lambda: walk_rule(lambda bot: Way(go(bot, (0xA0, 0x5D), 'W'), burn('W'), out('W'))),
     'digdogger-24': lambda: digdogger_rule(heart_item_way((0x78, 0x5D))),
     'digdogger-1c': lambda: digdogger_rule(lambda bot: Way(go(bot, (0x78, 0x5D), 'N'), out('N'))),
-    'goriya-1b': lambda: fight_rule(lambda: r32_walks.Fighter,
-                                    lambda bot: Way(room_item(bot, taken(BOMBS, lambda before, now: now > before)),
-                                                    go(bot, (0xD0, 0x8D), 'E'), out('E'))),
+    'goriya-1b': goriya_1b_rule,
 }
 
 
 def main():
-    global ROOM, LAYOUT                                           # pylint: disable=global-statement
+    global ROOM                                                   # pylint: disable=global-statement
     ROOM = next((a for a in sys.argv[1:] if a in ROOMS), None)
-    if '--layout' in sys.argv:
-        at = sys.argv.index('--layout')
-        value = sys.argv[at + 1]
-        LAYOUT = int(value) if value.isdigit() else value
-        del sys.argv[at:at + 2]
     r29_demos.ROOMS = ROOMS
     r29_demos.RULES = RULES
     r29_demos.rule_env = rule_env
