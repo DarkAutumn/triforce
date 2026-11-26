@@ -5317,3 +5317,49 @@ declared untracked or their curriculum is off.
   the RNG; 261 of 267 replays win from the last decision. The six that do not are ow-zora 0x44 N (3), 0x55 N's second
   visit (2) and goriya's 7x1a cellar (1): the last action, played open-loop under another RNG, ends nowhere (no
   ending); the recorded runs succeed. The others and the bosses, 9 tracks: 108 of 108 and 27 of 27.
+
+## 9x61: the block clip past the Patra, and Dungeon 9 walked again (States44, Nov 25)
+
+The owner, Nov 25: "9x61 - Yes you clip through there. Why would you fight? Do you even need the key in the room? If
+so it's just on the floor you don't have to clear the room. Normally you clip through the block, attack to invuln
+through patra's bees if in the way, on the way out, sword clip twice through him if needed. That's TOUGH to do, and I
+often get hit, but that's the 'fast' path (not a solved path)." Until now `d3first` fought the Patra of 9x61 for its
+push block on the way to the tunnel (`clear: true`) and came back through the empty room (`banked_kills: 15`).
+
+- **The key is not needed.** The route's key ledger (`scripts/experiments/r40_route.py ledger`) takes it at 9x61 and
+  pays no key door after it (Link leaves Level 9 with one). It is the room's item (ROM room data, level block 7-9
+  room $61: E = $19 key at position 1, $D0,$60; F = $10, trigger 0), lying on the floor from the start, not hidden
+  until a clear. The clip way leaves it (`treasure: skip`): every door after 9x61 holds one key fewer.
+- **The route** (`triforce/routes.yaml`, 012c5ba5): the shared block is split (`dungeon-9-from-55`,
+  `dungeon-9-tunnel`, `dungeon-9-to-ganon`) so `d2first` keeps its two fight steps between them (its 354 steps
+  unchanged); `d3first` gets two stretches like the other D9 clips: `patra-61` (E→stairs; clips `clear: false,
+  treasure: skip`, plain today's fight `clear: true`) and `patra-61n` (stairs→N; clips `clear: false`, the Patra
+  alive; plain today's `banked_kills: 15, clear: true`). 292 steps; the steps after 268 move by one, after 279 by two.
+- **The clip.** 9x61's layout is UW $1A, the block diamond with the stairs under its centre block that 0x55, 0x07,
+  0x20, 0x03 and 5:0x64 clip the same way; `zelda::clips` offers it by its general rule (`block_at`), no data added.
+  The explorer did not find it past the Patra (6000 iterations from the walked 9_61e, full hearts or the walk's own:
+  every failure `exit-wrong`). `scripts/experiments/r44_clip61.py` scripts it from the walk's carried machine: MOVE
+  to ($A0, $9D) below the diamond's E block, one CLIP N, MOVE W onto the stairs. Entering after 3-7 WAITs (the Patra
+  elsewhere) it reaches the tunnel unhit with no kill; 0-2 WAITs take a hit on the way and miss the timing; 8 is hit
+  once. `entry_states walk --script STEP=FILE` plays a step by given actions (`play_script`: the machine loaded
+  exactly, the actions through `Game.act`, the pre-entry frame captured; it must reach the target with no more kills
+  than `clear:` allows); the record's `how` says `script` and keeps the actions
+  (`scripts/experiments/r44_clip61.json`, entry after 3 WAITs). On the way out (step 279) the explorer crossed to N
+  past the living Patra by itself (87 steps, half a heart lost).
+- **Walked again** from the walked 9_61e (the D9 segment resumed at step 268, `--last-step 290`), 9_32s from the
+  round-29 `ganon` rule from the new 9_42s (20 of 20, as before). Changed doors, 19: 9_75cave, 9_20c, 9_10s,
+  9_4fcave, 9_10c, 9_20n, 9_75cave_v2, 9_61c, 9_51s, 9_41s, 9_31s, 9_30e, 9_67cave, 9_04c, 9_03e, 9_77cave, 9_52c,
+  9_42s, 9_32s. Every door before 9x61 is unchanged.
+- **Proof** (`r44_states_proof.py table` over the segment): `$524` among the runs' at 43 of 47 doors with runs (their
+  commonest at 42), the composed plan equal to the walk at 32 of 33. The runs fought 9x61, so after it: 9x61 from
+  the tunnel holds 0 banked kills against their 15 (the plan); 9x51 from S holds `$524` 1 against all 59 runs' 0,
+  because 9x61 from the tunnel now makes its Patra and walks the spot list, where the runs found it emptied; from
+  9x41 on the walk is back among the runs' values. The misses before 9x61 are as before (the overworld after D8,
+  the rotated history ring, 9x20 from N).
+- **The reset rule's table** rebuilt (`r43_seeds.py reach` on the new route, Seeds43's scrolls and flips without
+  the old step 268's; `r43_seeds.py rule` from the record): 16 doors' planned values follow the walk (11 overworld,
+  1x73, 4x20, 4x21 and 4x30 as Seeds43's own rebuild found, and 9x51 from S 0 → 1, the one this change makes).
+  `entry_states audit`: 1318 states, 0 problems; `start_audit`: 276 seed states, 0 fail.
+- **The teachers.** Patra's teacher (`others`) waited for this. The walkers at 9x51 and 9x41 and Ganon trained on the
+  states before it: their doors' planned `$524` changed (a reset draws it from the table) and they hold one key
+  fewer, which no room of theirs reads; the hearts are drawn at a reset.

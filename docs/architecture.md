@@ -3207,7 +3207,10 @@ the next): each leg and the dungeon after it from the dungeon exit before it (0_
 0_6dc), its first machine that door's earlier state checked against the route and set to it
 (`scripts/experiments/r44_segments.py start`: containers, triforce, items, maps, compasses, the key ledger, the
 overworld's taken, secret and kill bits, the next dungeon's room flags 0, and `$524`/`$525`/`$52A`/`$50`/`$627`/
-`$621-$626` from the real runs' next arrival at that screen) and `walk --segment <its checks>`. `<out>/walk.json`
+`$621-$626` from the real runs' next arrival at that screen) and `walk --segment <its checks>`. A step the explorer
+does not find a way through is given its actions, `walk --script STEP=FILE` (`play_script`: the machine loaded
+exactly, the actions through `Game.act`, the pre-entry frame captured; no more kills than `clear:` allows; `how:
+script`, the actions kept): 9x61's block clip past its Patra (round 44, `scripts/experiments/r44_clip61.py`). `<out>/walk.json`
 records each walk (`walks[<id>]`: the power-on or the segment's start and checks, the commit, the command, each
 resumption) and per door its walk, `door_facts` (the spawn cycle, edge cell, chase state, dividers, drop cycle,
 help-drop counters, kills since the last hit, room history, banked kills, hearts carried, inventory) and the file's
