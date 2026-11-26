@@ -887,14 +887,19 @@ rest where it always did). Filled only with **`obs.shooter: true`** (`env::confi
 false: zeros; on in `goriya@d3first`'s task, read by the `goriya` teacher). `env::observation::shooter_block`
 computes it from the RAM alone (`zelda::shooter::goriya`: asm:Goriya_Update's "wants to shoot" at each grid point,
 asm:Walker_SetInputDirAndTryThrowBoomerang's throw, ObjTimer `$28` counted down by the NMI before the update reads
-it, the stun's long timer, a knockback, a free monster slot and the 4-shot count `$34C`): no emulator step and no
+it, the stun's long timer, a knockback the game keeps (asm:Shove_Update drops one across the facing axis off a grid
+point on its first frame; one ending on a grid point decides again there), the spawn cloud (asm:Obj_AnimateMetastate:
+live with the timer at 6, deciding on its spawn square), a free monster slot and the 4-shot count `$34C`): no emulator
+step and no
 random byte, so a red Goriya's 2-in-256 roll a frame is given as a chance. Rows only for the Goriyas `$05/$06`; the
 owner: "If the training goes well, apply that (b) not only to goriya but also all enemies that shoot".
 `_native.shooter_blocks(ram)` gives the block for recorded RAM, `_native.shooter_probe(ram)` the raw rule with
 `next` (the throw's conditions but the red roll hold on the next frame). `zelda::shooter`'s unit tests,
 `crates/env/tests/shooter.rs` and `tests/test_obs_shooter.py` check it, the last against the corpus's golden
 `d3first` replay: a blue Goriya throws on exactly the frames the rule says (70 throws; 3 frames excused where the
-rule's input moved under it), a red one 20 times in 3,249 frames it may (2/256 would be 25).
+rule's input moved under it) and every blue throw had `will_throw` = 1 on the 15 frames before it (excused: the chase
+target moved, a kept knockback, a shot ending that freed the room), a red one 20 times in 3,252 frames it may (2/256
+would be 25).
 
 | Key, columns | Names | Value |
 |---|---|---|
@@ -1300,8 +1305,9 @@ record as `goal_*` (`env::chain::RoomRecord::goals`; `runner.RoomRecord`, None i
 
 `reward.block_reward` (nonnegative, default 1) multiplies `REWARD_MEDIUM` for each confirmed shield collision,
 advancing combat decay separately at the collision's room; with `reward.block_own_decay` (round 40, "The Goriya
-teacher"; default false) on the room's own count of blocks instead of the combat count hits and kills share (on that
-count a block late in a long fight pays a sixteenth or less). The detector (`crates/zelda/src/blocks.rs`) checks consecutive executed RAM frames:
+teacher"; default false) the block's value decays on the room's own count of blocks instead of the combat count hits
+and kills share (on that count a block late in a long fight pays a sixteenth or less); every block still advances
+the combat count, so hits and kills pay the same either way. The detector (`crates/zelda/src/blocks.rs`) checks consecutive executed RAM frames:
 projectile transition signature, shield eligibility/facing/proximity and this frame's `$604` parry request.
 Delayed `$605` audio, Darknut/immunity clinks, natural boomerang returns and unrelated disappearance are not enough.
 The executor does not replace the user's frame callback, change inputs/timing, or collect speculative look-ahead.

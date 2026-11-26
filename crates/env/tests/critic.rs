@@ -735,6 +735,19 @@ fn a_block_decays_on_the_combat_count_or_on_its_own() {
         assert!(approx(paid(&mut own), REWARD_MEDIUM * 1.5));
     }
     assert!(approx(paid(&mut own), REWARD_MEDIUM * 0.75));
+    // The blocks advanced the room's combat count all the same (the lead's ruling, Review46): the next hit pays what
+    // it pays without the switch, 12 hits and 10 blocks before it (22 events: 14 halvings).
+    let hit = |critic: &mut GameplayCritic| {
+        value(&critique(critic, &hits(step(&base, &base, "SWORD N"), &[(3, 1)])), "reward-hit")
+    };
+    let mut same = critic();
+    same.block_reward = 1.5;
+    fight(&mut same);
+    for _ in 0..=COMBAT_DECAY_THRESHOLD + 1 {
+        paid(&mut same);
+    }
+    let expected = REWARD_SMALL * 0.5f64.powi(COMBAT_DECAY_THRESHOLD + 6);
+    assert!(approx(hit(&mut own), expected) && approx(hit(&mut same), expected));
 }
 
 #[test]

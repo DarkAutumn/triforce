@@ -296,7 +296,8 @@ pub struct RewardConfig {
     pub block_reward: f64,
     /// Round 40 ("The Goriya teacher"): `reward-block-projectile` decays on its own count of blocks a room (full for
     /// the first `COMBAT_DECAY_THRESHOLD`, then halving), not on the room's combat count that hits and kills share
-    /// (default off: the shared count, under which a block late in a long fight pays almost nothing).
+    /// (default off: the shared count, under which a block late in a long fight pays almost nothing). Blocks still
+    /// advance the shared count, so hits and kills pay as without it.
     #[serde(default, deserialize_with = "de_bool", skip_serializing_if = "is_false")]
     pub block_own_decay: bool,
     #[serde(default, deserialize_with = "de_bool")]

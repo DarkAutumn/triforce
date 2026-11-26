@@ -5508,7 +5508,9 @@ in `specialists/d3first/goriya.yaml` only): `loaded`, `throw_time` (1 − ObjTim
 game's, walked frame by frame from the RAM alone (docs/architecture.md "Schema 10"): the NMI counts ObjTimer down
 before the update reads it, so a timer of 1 throws on the next frame; "wants to shoot" holds until the Goriya's next
 grid point (`zelda::chase::next_grid_point`), where the Goriya rule decides it again against the chase target; a
-stun (a long timer) or a knockback holds the throw back; a free monster slot and fewer than 4 counted shots. A red
+stun (a long timer) or a knockback the game keeps holds the throw back (one across the Goriya's facing axis off a grid
+point is dropped on its first frame, asm:Shove_Update, and that frame's update may throw; one that ends on a grid
+point decides "wants to shoot" again there, Review46's two finds); a free monster slot and fewer than 4 counted shots. A red
 Goriya's `Random,X` roll (`$23` or `$77`, 2 of 256) is given as 1 − (254/256)^n over the n frames the rest allows
 (at most 0.118). The random register shifts by a fixed rule, so the roll itself is computable from the RAM: not done,
 the owner's table asks for a chance.
@@ -5519,12 +5521,16 @@ of a Goriya room, the probe of the frame before against the throw, ObjState bit 
 | Goriya | Frames the rule said "throws next frame" | ... and it threw | Throws the rule did not say | Frames excused |
 |---|---:|---:|---:|---:|
 | Blue (Dungeon 7) | 70 | 70 | 0 | 3 |
-| Red (Dungeons 1, 2) | 3,249 (all but the roll) | 20 (2/256 would be 25.4 ± 5.0) | 0 | |
+| Red (Dungeons 1, 2) | 3,252 (all but the roll) | 20 (2/256 would be 25.4 ± 5.0) | 0 | |
 
 The three excused frames are where the rule's input moved under it: twice the chase target moved and the Goriya
-decided at a grid point that frame (Link moves first in a frame, `asm:Mode5Play_UpdateWorld`), once a knockback a wall
-cut short. `will_throw` = 1 was followed by a blue Goriya's throw within 16 frames in 958 of 1,234 frames (78%): the
-rest are Link's hits, stuns and moves changing the room within the window.
+decided at a grid point that frame (Link moves first in a frame, `asm:Mode5Play_UpdateWorld`), once a knockback the
+game kept and a wall cut short. **The window, after Review46** (the dropped knockback, the knockback ending on a grid
+point, and the spawn cloud, found by this check: three blue throws came 7 frames after the cloud ended): every blue
+throw had `will_throw` = 1 on each of the 15 frames before it, 1,095 frames checked, 111 excused (the chase target
+moved since, a kept knockback ran, or the room had no free slot or 4 shots flying and one ended since: the rule reads
+them as they stand), none missed. `will_throw` = 1 was followed by a blue Goriya's throw within 16 frames in 1,042 of
+1,420 frames (73%): the rest are Link's hits, stuns and moves changing the room within the window.
 
 ### 3. The rewards (`reward.block_own_decay`, `reward.exposed_attack_penalty`; on for the Goriya teacher)
 
@@ -5533,7 +5539,9 @@ boomerang's hit costs without the heart value (1 heart: `penalty-lost-health` 0.
 hearts), so turning into a throw is worth as much as the hit it saves and fills no more than three quarters of the
 step's clamp. The decay mattered more than the size: a block shared the room's combat count with every hit and kill,
 so in 7x1b (six Blue Goriyas, five wooden-sword hits each) a block after the first dozen hits paid 1/16 of its value
-or less; on its own count the first nine blocks in a room pay in full, then halving (farming bounded).
+or less; on its own count the first nine blocks in a room pay in full, then halving (farming bounded). Blocks still
+advance the room's combat count (the lead's ruling on Review46: hits and kills in 7x1b pay as they did), so only the
+block's own value reads its own count.
 
 **The penalty** (`zelda::exposed`; docs/architecture.md "Experimental reward and cutoff controls"):
 `penalty-exposed-attack` on a decision of SWORD, BEAMS, BOMB, BOOMERANG or ARROW made with a harmful shot near, no
@@ -5605,7 +5613,8 @@ teacher only, whose boomerangs any shield parries.
   task's manifest and pinned hash is unchanged; a Python `config.obs.shooter` is absent there (`runner.check_inputs`
   reads it with a default).
 - `will_throw` reads the room as it stands: the target's move into or out of the Goriya rule at the next grid point,
-  Link's hits and stuns within the 16 frames are not foreseen (78% of a blue's 1s are followed by its throw). A shove
+  Link's hits and stuns within the 16 frames are not foreseen (73% of a blue's 1s are followed by its throw), nor a
+  shot ending that frees the room for a throw. A shove
   a wall ends early is not walked. The penalty was measured on the overworld only; how often it fires in Goriya rooms
   shows in the training's `penalty-exposed-attack`.
 - No `VERSION` bump: the generation's pieces land with 2.0.1.0, as schemas 8 and 9 did.

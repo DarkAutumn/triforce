@@ -20,6 +20,12 @@ use crate::chase;
 
 /// asm:ObjType ($34F + slot).
 const OBJ_TYPE: usize = 0x34F;
+/// asm:ObjX / asm:ObjY ($70 / $84 + slot), asm:ObjDir ($98 + slot): 1 right, 2 left, 4 down, 8 up.
+const OBJ_X: usize = 0x70;
+const OBJ_Y: usize = 0x84;
+const OBJ_DIR: usize = 0x98;
+/// asm:ObjGridOffset ($394 + slot): signed pixels from the last grid point.
+const OBJ_GRID_OFFSET: usize = 0x394;
 /// asm:ObjState ($AC + slot): a Goriya's bit 7 while its boomerang is out.
 const OBJ_STATE: usize = 0xAC;
 /// asm:ObjTimer ($28 + slot): frames to a Goriya's next throw (counted down in the NMI, before the update).
@@ -71,14 +77,42 @@ fn long_timer_frames(ram: &[u8], value: u8) -> u32 {
     (ram[LONG_TIMER_CYCLE] as u32).min(9) + 1 + 10 * (value as u32 - 1)
 }
 
+/// Where a kept knockback ends, its pixels walked as asm:Shove_MovePixels moves them (4 a frame; the grid offset moved
+/// with each and set to 0 at a multiple of 16; walls and room bounds, which end it sooner, not walked): the corner
+/// and whether the grid offset is 0 there.
+fn shove_end_point(ram: &[u8], slot: usize) -> (u8, u8, bool) {
+    let dir = ram[OBJ_SHOVE_DIR + slot] & 0x0F;
+    let step: u8 = if dir & 0x05 != 0 { 1 } else { 0xFF };
+    let (mut x, mut y) = (ram[OBJ_X + slot], ram[OBJ_Y + slot]);
+    let mut offset = ram[OBJ_GRID_OFFSET + slot];
+    for _ in 0..(ram[OBJ_SHOVE_DISTANCE + slot] as u32).div_ceil(4) * 4 {
+        offset = offset.wrapping_add(step);
+        if offset & 0x0F == 0 {
+            offset = 0;
+        }
+        if dir & 0x03 != 0 {
+            x = x.wrapping_add(step);
+        } else {
+            y = y.wrapping_add(step);
+        }
+    }
+    (x, y, offset == 0)
+}
+
 /// The throw of the Goriya in RAM `slot` (`None` for any other object). The frames walked, `t` = 1 the next frame:
 /// - the first frame its update can reach the throw: after the stun ([`long_timer_frames`]) and after a knockback
-///   (its first frame, then 4 pixels a frame, then the frame that ends it; a wall ending it sooner is not walked);
+///   the game keeps (its first frame, then 4 pixels a frame, then the frame that ends it; a wall ending it sooner is
+///   not walked). A knockback across the Goriya's facing axis off a grid point is dropped on its first frame
+///   (asm:Shove_Update), and that frame's update goes on to the throw;
 /// - "wants to shoot": the flag as it stands until the frame it reaches its next grid point
-///   ([`chase::next_grid_point`], delayed by the stun; a knocked-back one keeps the flag), from then the Goriya rule
-///   there ([`chase::goriya_facing`]) against the chase target as it stands;
+///   ([`chase::next_grid_point`], delayed by the stun and a dropped knockback's frame), from then the Goriya rule
+///   there ([`chase::goriya_facing`]) against the chase target as it stands; a kept knockback keeps the flag unless it
+///   ends on a grid point, where the frame that ends it decides again ([`shove_end_point`]);
 /// - ObjTimer `T` reads 0 from frame `T` on;
-/// - a free monster slot and the shot count as they stand.
+/// - a free monster slot and the shot count as they stand (a shot that ends within the frames, freeing the room for a
+///   throw, is not foreseen);
+/// - in its spawn cloud (ObjMetastate 1-3) the cloud's frames instead: it decides on its spawn square the frame after
+///   the cloud ends and may throw from the sixth (asm:Obj_AnimateMetastate leaves the timer at 6).
 ///
 /// The test that skips the wait for the boomerang when the next slot holds an Armos (asm:Goriya_Update) is not
 /// modelled: no room holds both.
@@ -88,36 +122,56 @@ pub fn goriya(ram: &[u8], slot: usize) -> Option<Throw> {
         return None;
     }
     let waiting = ram[OBJ_STATE + slot] & 0x80 != 0;
-    let live = ram[OBJ_METASTATE + slot] == 0;
+    let metastate = ram[OBJ_METASTATE + slot];
+    let spawning = (1..=3).contains(&metastate);
     let clock = ram[INV_CLOCK] != 0;
     let stun = ram[OBJ_STUN + slot];
     let timer = ram[OBJ_TIMER + slot];
-    let loaded = live && !waiting && stun == 0 && !clock;
+    let loaded = metastate == 0 && !waiting && stun == 0 && !clock;
     let throw_time = if loaded { (1.0 - timer as f32 / TIMER_MAX).max(0.0) } else { 0.0 };
-    if !live || waiting || clock {
+    if !(metastate == 0 || spawning) || waiting || clock {
         return Some(Throw { loaded, throw_time, will_throw: 0.0, next: false });
     }
     let room = (1..=0x0B).any(|s| ram[OBJ_TYPE + s] == 0) && ram[MONSTER_SHOT_COUNT] < SHOT_LIMIT;
-    let stun_end = long_timer_frames(ram, stun).max(1);
-    let shove = ram[OBJ_SHOVE_DIR + slot];
-    let shoved = shove != 0;
-    let shove_end = if shoved {
-        u32::from(shove & 0x80 != 0) + (ram[OBJ_SHOVE_DISTANCE + slot] as u32).div_ceil(4) + 1
-    } else {
-        1
-    };
-    let free = stun_end.max(shove_end);
-    let wants_now = ram[OBJ_WANTS_TO_SHOOT + slot] != 0;
-    // The grid point it decides at next, counted from the first frame it walks again.
-    let point = if shoved { None } else { chase::next_grid_point(ram, slot) };
     let (tx, ty) = (ram[chase::CHASE_X], ram[chase::CHASE_Y]);
-    let decided = point.map(|p| (p.frames + stun_end - 1, chase::goriya_facing(tx, ty, p.x, p.y).is_some()));
+    // From frame `free` its update can reach the throw, from `fired` its ObjTimer reads 0; "wants to shoot" is
+    // `wants_now` until frame `decided.0`, `decided.1` from then.
+    let (free, fired, wants_now, decided) = if spawning {
+        // The spawn cloud (asm:Obj_AnimateMetastate): each of its three steps ends on the frame ObjTimer reads 0 and
+        // loads 6. The frame the last one ends it is live with timer 6, its update first runs the frame after, on its
+        // spawn square (a grid point: the Goriya rule decides there), and its timer reads 0 six frames after the end.
+        let live = timer as u32 + 6 * (3 - metastate as u32);
+        let (x, y) = (ram[OBJ_X + slot], ram[OBJ_Y + slot]);
+        (live + 1, live + 6, false, Some((live + 1, chase::goriya_facing(tx, ty, x, y).is_some())))
+    } else {
+        let stun_end = long_timer_frames(ram, stun).max(1);
+        let shove = ram[OBJ_SHOVE_DIR + slot];
+        let across = if ram[OBJ_DIR + slot] < 3 { shove & 0x0C != 0 } else { shove & 0x03 != 0 };
+        let dropped = shove & 0x80 != 0 && across && ram[OBJ_GRID_OFFSET + slot] != 0;
+        let shoved = shove != 0 && !dropped;
+        let shove_end = if shoved {
+            u32::from(shove & 0x80 != 0) + (ram[OBJ_SHOVE_DISTANCE + slot] as u32).div_ceil(4) + 1
+        } else {
+            1
+        };
+        // The end of a kept knockback on a grid point decides again, else its next grid point counted from the first
+        // frame it walks again (a dropped knockback's frame moves nothing).
+        let decided = if shoved {
+            let (x, y, on_grid) = shove_end_point(ram, slot);
+            on_grid.then(|| (shove_end, chase::goriya_facing(tx, ty, x, y).is_some()))
+        } else {
+            chase::next_grid_point(ram, slot).map(|p| {
+                (p.frames + stun_end - 1 + u32::from(dropped), chase::goriya_facing(tx, ty, p.x, p.y).is_some())
+            })
+        };
+        (stun_end.max(shove_end), timer as u32, ram[OBJ_WANTS_TO_SHOOT + slot] != 0, decided)
+    };
     let qualifies = |t: u32| {
         let wants = match decided {
             Some((at, wants)) if t >= at => wants,
             _ => wants_now,
         };
-        room && t >= free && t >= timer as u32 && wants
+        room && t >= free && t >= fired && wants
     };
     let p = if obj_type == 0x05 { 1.0 } else { RED_CHANCE };
     let miss: f32 = (1..=HORIZON).filter(|&t| qualifies(t)).map(|_| 1.0 - p).product();
@@ -128,11 +182,8 @@ pub fn goriya(ram: &[u8], slot: usize) -> Option<Throw> {
 mod tests {
     use super::*;
 
-    const OBJ_X: usize = 0x70;
-    const OBJ_Y: usize = 0x84;
     const OBJ_INPUT_DIR: usize = 0x3F8;
     const OBJ_QSPEED: usize = 0x3BC;
-    const OBJ_GRID_OFFSET: usize = 0x394;
 
     /// A loaded Goriya of `obj_type` in slot 1, 8 pixels past a grid point walking right at q-speed $20, wanting to
     /// shoot, Link (the chase target) 32 pixels right of it on its row; slot 2 free, no shot flying.
@@ -222,5 +273,49 @@ mod tests {
         }
         assert_eq!(goriya(&r, 1).unwrap().will_throw, 0.0);
         assert!(goriya(&r, 0).is_none() && goriya(&room(0x01), 1).is_none());
+    }
+
+    #[test]
+    fn a_knockback_across_its_axis_off_the_grid_is_dropped_and_one_ending_on_a_grid_point_decides_again() {
+        let mut r = room(0x05);
+        r[OBJ_DIR + 1] = 1;
+        // A hit from above: shoved down on its first frame 8 px past its grid point walking right. The game drops the
+        // shove (asm:Shove_Update) and the same update throws.
+        (r[OBJ_SHOVE_DIR + 1], r[OBJ_SHOVE_DISTANCE + 1]) = (0x84, 0x40);
+        let t = goriya(&r, 1).unwrap();
+        assert!(t.next && t.will_throw == 1.0);
+        // Along its axis it is kept: 1 + 16 + 1 frames, past the horizon; across it on a grid point too.
+        r[OBJ_SHOVE_DIR + 1] = 0x82;
+        assert_eq!((goriya(&r, 1).unwrap().next, goriya(&r, 1).unwrap().will_throw), (false, 0.0));
+        (r[OBJ_SHOVE_DIR + 1], r[OBJ_GRID_OFFSET + 1]) = (0x84, 0);
+        assert!(!goriya(&r, 1).unwrap().next);
+        // 8 px left from 8 px past the grid point ends on it, on frame 3, and decides there: Link 40 px off, a throw.
+        (r[OBJ_SHOVE_DIR + 1], r[OBJ_SHOVE_DISTANCE + 1], r[OBJ_GRID_OFFSET + 1]) = (0x02, 8, 8);
+        let t = goriya(&r, 1).unwrap();
+        assert_eq!((t.next, t.will_throw), (false, 1.0));
+        // Link $51 px or more away there: the grid point clears the wish.
+        (r[OBJ_X], r[chase::CHASE_X]) = (0xA0, 0xA0);
+        assert_eq!(goriya(&r, 1).unwrap().will_throw, 0.0);
+        // Ending 4 px off the grid it keeps the wish and throws once the shove is over.
+        r[OBJ_SHOVE_DISTANCE + 1] = 4;
+        assert_eq!(goriya(&r, 1).unwrap().will_throw, 1.0);
+    }
+
+    #[test]
+    fn a_goriya_in_its_spawn_cloud_throws_six_frames_after_it_ends() {
+        let mut r = room(0x05);
+        (r[OBJ_METASTATE + 1], r[OBJ_TIMER + 1], r[OBJ_WANTS_TO_SHOOT + 1]) = (3, 1, 0);
+        // The cloud ends next frame, the timer then at 6: it decides on its square and throws on frame 7.
+        let t = goriya(&r, 1).unwrap();
+        assert_eq!((t.loaded, t.throw_time, t.next, t.will_throw), (false, 0.0, false, 1.0));
+        // Its second step with 4 frames left: live on frame 10, the throw on 16, the horizon's last; 5 left: past it.
+        (r[OBJ_METASTATE + 1], r[OBJ_TIMER + 1]) = (2, 4);
+        assert_eq!(goriya(&r, 1).unwrap().will_throw, 1.0);
+        r[OBJ_TIMER + 1] = 5;
+        assert_eq!(goriya(&r, 1).unwrap().will_throw, 0.0);
+        // Link out of the Goriya rule's reach of its square: no wish, no throw.
+        (r[OBJ_METASTATE + 1], r[OBJ_TIMER + 1]) = (3, 1);
+        (r[OBJ_X], r[chase::CHASE_X]) = (0xA0, 0xA0);
+        assert_eq!(goriya(&r, 1).unwrap().will_throw, 0.0);
     }
 }

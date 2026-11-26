@@ -503,6 +503,9 @@ impl GameplayCritic {
         }
     }
 
+    /// `reward-block-projectile`: `REWARD_MEDIUM` × `block_reward` a parried shot, decayed by the room's combat count,
+    /// which every block advances; with `block_own_decay` the value decays by the room's count of blocks instead (the
+    /// combat count still advances, so hits and kills pay as without the switch).
     fn critique_block(&mut self, c: &Critique, rewards: &mut StepRewards) {
         let blocks = &c.change.projectile_blocks;
         if blocks.is_empty() {
@@ -510,11 +513,8 @@ impl GameplayCritic {
         }
         let mut value = 0.0;
         for event in blocks {
-            let decay = if self.block_own_decay {
-                Self::decay(&mut self.blocks, event.full_location)
-            } else {
-                self.combat_decay(event.full_location)
-            };
+            let shared = self.combat_decay(event.full_location);
+            let decay = if self.block_own_decay { Self::decay(&mut self.blocks, event.full_location) } else { shared };
             value += REWARD_MEDIUM * decay * self.block_reward;
         }
         if value != 0.0 {
