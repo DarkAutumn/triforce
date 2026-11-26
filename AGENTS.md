@@ -741,6 +741,14 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   the owner asks for a check-in the lead opens it in the editor without asking (`code-insiders
   target/owner-review/CHECKIN.md`) and gives only a brief console summary with the tables; heavy text and decisions
   stay in the document. After the owner answers, the answered parts move to a dated "answered" section.
+  **Every check-in opens with "How it's going"** (the owner, Nov 26: "I can't course correct from raw numbers, I need
+  them, but I desperately need a qualitative assessment too"): a plain verdict (going well / mixed / off the rails)
+  on whether training is working and whether the model being built is on track to match or beat the previous team,
+  with the reasons, what worries the lead, what he is doing about it and what he would change; then the numbers,
+  each table saying in a line whether it is good or bad and against what (the previous team on its own route, and
+  on the same starts). When something looks off and enough has trained to show it, the lead may record replays for
+  the owner to watch (paths in the check-in, what to look for) and ask what he sees: he often spots what is going on
+  or points somewhere the lead didn't look.
 - **The 250-run test of every versioned build** (the owner, Nov 23: "When you build a new model that looks
   'interesting' [...] I want you do 250 runs and record the best and worst [...] save up to 3 runs that end 'stuck',
   with each [...] having a different room [...] capture detailed statistics about these runs [...] a .json that goes
