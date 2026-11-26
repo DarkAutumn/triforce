@@ -527,4 +527,12 @@ thing and have to be taught again. Swept from this backlog Nov 23 (the lead):
   to 3:0x5b's last pass; 3:0x69's golden line planned, given as `path_costs` and taught by demos, sword only; the
   Moldorm fought again for its key and the route's key and bomb budget redone; goals tracked in the run statistics
   (wrap taken, no kill where the route crosses, the cycle on entering 3:0x5b, hits a visit in 3:0x69).
+- **9x16 northbound: fight the Patra or bypass him** (the owner, Nov 26; after the retrain). Southbound he is never
+  fought; northbound he is in the way and the route fights him every time, which stays for this training run. The
+  owner's intent: if Link lacks the bombs to finish the run, fight him, period; if fighting costs about the same
+  health as bypassing him or less, always fight (the bombs come free). Only if a model can bypass him for very little
+  (about 1.5 Patra hits or fewer) does it become a real choice, weighing the health actually lost against the
+  distribution of bombs Link brings into the room from the south (the bypass also needs 8 bombs to be worth it: the
+  drop is useless with a full bag). Measure: hearts lost fighting vs a trained bypass, and the bag on entering 9x16
+  from S, on the new team's chains.
 
