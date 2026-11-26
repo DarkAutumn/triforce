@@ -334,6 +334,25 @@ def test_room_metrics_split_seed_and_harvested_starts():
     assert not any(k.startswith('room/5:0x76/S/') and ('seed' in k or 'harvested' in k) for k in summary)
 
 
+def test_room_metrics_split_the_layouts_and_count_curriculum_starts():
+    """Round 45: a room's starts by the layout the reset rule served (``info['route_layout']``: the route's spawn cycle
+    or another reachable one; null, as a cave start, adds neither), and its curriculum starts counted apart (they stay
+    out of the room's ``episodes``)."""
+    metrics = RolloutMetrics()
+    for outcome, layout in (('success', True), ('failure', True), ('failure', False), ('failure', None)):
+        metrics.add_episode({'outcome': outcome, 'entry': 'N', 'linger_room': [3, 0x59, False], 'harvested': False,
+                             'route_layout': layout})
+    for outcome in ('success', 'success', 'failure'):
+        metrics.add_episode({'outcome': outcome, 'entry': 'N', 'linger_room': [3, 0x59, False],
+                             'curriculum': {'track': 't', 'index': 1, 'length': 10, 'point': 1}})
+    summary = metrics.summary()
+    assert (summary['room/3:0x59/N/episodes'], summary['room/3:0x59/N/seed_episodes']) == (4, 4)
+    assert (summary['room/3:0x59/N/route_episodes'], summary['room/3:0x59/N/route_success_rate']) == (2, 0.5)
+    assert (summary['room/3:0x59/N/other_episodes'], summary['room/3:0x59/N/other_success_rate']) == (1, 0.0)
+    assert summary['room/3:0x59/N/curriculum_episodes'] == 3
+    assert abs(summary['room/3:0x59/N/curriculum_success_rate'] - 2 / 3) < 1e-12
+
+
 def test_linger_metrics_keep_historical_absence_and_measured_zero_distinct():
     metrics = RolloutMetrics()
     old = {'outcome': 'success'}

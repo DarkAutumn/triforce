@@ -23,3 +23,14 @@ harvested_fraction: 0
 # load would serve a room no play brings there. The reset rule writes the door's spawn cycle, chase state, divider
 # and edge cell, never a kill.
 fresh_rooms: false
+# The drop state (round 43, the owner, Nov 25: "leave 3x5b with current behavior, but every other room should be
+# randomized [...] closer to real values than uniform"; round40.md "The drop state"): at every seed reset, training and
+# evaluation, the forced-drop counters (`$627`, `$50`, `$51`) are a triple real play held at a door of the same kind
+# (dungeon or overworld; `triforce/drop_state.json`, two thirds by real play's kill counts and a third uniform over
+# 0-15) and the drop cycle (`$52A`) is drawn 0-9. A track start keeps its own (mid-room). One rule for every task: no
+# task file lists its own `help_count`. The `help_count` streak below is what an entry that states its own cycle draws
+# (darknut's `room_kill_cycle`, 3:0x5b from S: 0 or 1, its streak 0-9, exactly as before). Where Manhandla's and
+# Dodongo's `drop_bombs` arm their forced bomb drop, the three counters are a real armed triple from the same table.
+ram_randomization:
+  drop_state: real
+  help_count: [0, 9]

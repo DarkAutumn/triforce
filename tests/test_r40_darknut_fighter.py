@@ -115,8 +115,8 @@ def test_the_fighter_keeps_the_reserve_in_3x59(fighter):
 
 def test_a_bomb_is_laid_only_for_two_or_more(fighter):
     """3:0x59 with 8 bombs (three above the reserve), seed 5: the one bomb laid hurt two or more Darknuts."""
-    # round 44: one state per door, from the real walk; seed 2 was pinned on chain 2's old state, seed 5 is the first
-    # of 0-39 that passes on the walked one (seeds 1 and 4 lay a bomb that hurts fewer than two)
+    # round 44: one state per door, from the real walk; seed 2 was pinned on chain 2's old state, seed 5 passes on the
+    # walked one under round 43's reset rule (`room_entry::EntryRule`) as before it
     record = fighter.play(fighter.make_env('59', 8, REPO_STATES_DIR), '59', 5, 'd3first_3_59n_0')
     assert record['ending'] == 'exit-correct' and record['bombs'] >= 1, record
     assert all(hurt >= 2 for hurt in record['bomb_hurt']), record
@@ -184,12 +184,17 @@ def test_the_proposals_read_the_owners_bomb_take():
 
 
 def test_the_first_pass_of_3x5b_kills_one_darknut_and_takes_its_bombs(fighter, monkeypatch):
-    """3:0x5b's first pass (the owner's Dungeon 3 plan): seed 1 on `d3first_3_5bs_0` at 2 hearts, the drop cycle at 0:
-    one Red Darknut killed by the sword, its bombs (the table's drop) taken, out by the N door, no hit, no second kill."""
+    """3:0x5b's first pass (the owner's Dungeon 3 plan; `carriers: fight`): seed 12 on `d3first_3_5bs_0`, hearts
+    drawn, in the route's layout (spawn cycle 3) with the drop cycle at 0: the carriers lit, one Red Darknut killed by
+    the sword, its bombs (the table's drop) taken, out by the N door, no hit, no second kill.  Seed 1, the same layout
+    at drop cycle 1: the carriers dark, Link walks through and kills nothing (seeds chosen under round 43's reset rule
+    on round 44's one state per door; the case draws the cycle 0 or 1, round 45)."""
     monkeypatch.setenv(fighter.HEARTS_VARIANT, 'low')
-    # round 44: one state per door, from the real walk; seed 9 was pinned on chain 2's old state, seed 1 is the first
-    # of 0-39 that passes on the walked one
-    record = fighter.play(fighter.make_env('5b', 0, REPO_STATES_DIR), '5b', 1, 'd3first_3_5bs_0')
-    assert (record['ending'], record['hits'], record['kills'], record['drop_appeared']) == \
-        ('exit-correct', 0, 1, True), record
-    assert record['bag_gain'] > 0, record
+    env = fighter.make_env('5b', 0, REPO_STATES_DIR)
+    record = fighter.play(env, '5b', 12, 'd3first_3_5bs_0')
+    assert (record['ending'], record['hits'], record['kills'], record['drop_appeared'], record['lit']) == \
+        ('exit-correct', 0, 1, True, True), record
+    assert record['bag_gain'] > 0 and record['layout']['planned'] and record['drop_cycle'] == 0, record
+    walked = fighter.play(env, '5b', 1, 'd3first_3_5bs_0')
+    assert (walked['ending'], walked['hits'], walked['kills'], walked['lit'], walked['drop_cycle']) == \
+        ('exit-correct', 0, 0, False, 1), walked

@@ -21,7 +21,7 @@ flowchart LR
 
 | Crate / module | Owns |
 |---|---|
-| `crates/zcore` | Zelda-only NES core (MMC1), cut down from TetaNES (`UPSTREAM.md`), hardware timing. `machine.rs`: `Rom::from_ines`, `ZCore` (`power_on`, `run_frame(buttons, render)`, `pixels`/`rgb`, `ram`/`prg_ram`, `poke`, `snapshot`/`restore` of a `Copy` `MachineState`). `state_file.rs`: `TFZSTATE` `.state` files; gzip (legacy stable-retro) files raise `StateFormatError`. |
+| `crates/zcore` | Zelda-only NES core (MMC1), cut down from TetaNES (`UPSTREAM.md`), hardware timing. `machine.rs`: `Rom::from_ines`, `ZCore` (`power_on`, `reset` (the console's RESET button), `run_frame(buttons, render)`, `pixels`/`rgb`, `ram`/`prg_ram`, `poke`, `snapshot`/`restore` of a `Copy` `MachineState`). `state_file.rs`: `TFZSTATE` `.state` files; gzip (legacy stable-retro) files raise `StateFormatError`. |
 | `crates/zelda` | Game model and session, ported from the old Python stack: `vars`/`tables` (RAM variables, game data), `enums.rs` (object ids and `ObjectClass`, the one classifier), `game.rs` (`GameView`: Link, enemies, items, projectiles, hazards), `room`/`room_state`/`tiles` (wavefront, doors, tile grid), `actions.rs` (`Action`, `ActionMask`, `compute_action_mask`), `executor.rs` (option executor: timed options, interrupts, uncontrollable skip), `blocks.rs` (shield collisions), `change.rs` + `ledger.rs` (`Change`, look-ahead `FutureCreditLedger`), `cheats.rs`, `room_entry.rs`, `game_map.rs` (`game.yaml`/`routes.yaml`), `objectives.rs` (`GameCompletion`), `hearts.rs`, `linger.rs`, `visits.rs`, `session.rs` (`Session`). The `Nes` trait (`nes.rs`) abstracts the core so tests can run on zcore or a scripted double. |
 | `crates/env` | `config.rs` (`SpecialistConfig`, `GameData`, cross-file validation), `rewards.rs` + `critic.rs`, `end_conditions.rs`, `observation.rs` (`ObservationBuilder`, schema v2), `objective.rs`, `start_states.rs`, `curriculum.rs`, `specialist_env.rs` (`SpecialistEnv`), `chain.rs` (`ChainEnv`, `Route`, `RoomRecord`, `RunResult`), `explore.rs` (`Explorer`, `AcceptSpec`). |
 | `crates/pool` | Generic threaded `Pool<E: PoolEnv>` (`pool.rs`), buffer layout (`layout.rs`), frame pacing/render control (`control.rs`); `zelda/` holds the Train/Eval/ChainRun envs and pool events. |
@@ -63,7 +63,7 @@ latest frame. Tools and tests that need a single game use `triforce._native.Game
 
 | Item | Contract |
 |---|---|
-| `zcore::ZCore` | One NES. `run_frame(buttons, render)` runs one frame with the raw NES button byte; with `render=false` no pixels are written but timing is identical. `ram()` 2 KiB, `prg_ram()` 8 KiB; `poke` only `$0000-$07FF`/`$6000-$7FFF`. |
+| `zcore::ZCore` | One NES. `run_frame(buttons, render)` runs one frame with the raw NES button byte; with `render=false` no pixels are written but timing is identical. `ram()` 2 KiB, `prg_ram()` 8 KiB; `poke` only `$0000-$07FF`/`$6000-$7FFF`. `reset()` presses RESET between two frames (a soft reset: CPU RAM and battery RAM kept, the CPU at the reset vector, the PPU's control, mask and latch and the APU's channels cleared; Nov 25, `emu-zelda.py --reset`; `crates/zcore/tests/machine.rs` `reset_keeps_ram_and_restarts_the_game_as_the_console_does`). |
 | `zelda::actions` | `ACTION_SCHEMA_VERSION` (3); `ActionKind` = MOVE, WAIT, SWORD, BEAMS, BOMB, BOOMERANG, ARROW, CLIP, RECORDER, FOOD, CANDLE (head indices 0-10; round 24 added the last three after CLIP, every older index kept); `DIRECTIONS` (N,S,W,E,NW,NE,SW,SE); `DURATIONS` (4,8,16,32). `Action` with index conversion and text parsing (`MOVE N 16`, `CLIP W`: CLIP is directional, cardinal, untimed; `RECORDER` takes no direction and no duration; `FOOD W`, `CANDLE N` are cardinal, untimed). `ActionMask` with `kind[K]`, `direction[K,8]`, `duration[K,4]`; flat form bool[`MASK_SIZE`=143] = K + K·8 + K·4 (K = 11). A kind whose direction (or duration) row is all False doesn't use that head. Python `triforce.actions` keeps `Action`/`parse`/index helpers and a read-only `ActionMask.from_flat`. |
 | `zelda::executor` | `Executor::execute(action, state) -> OptionResult(frames, interrupt, control_frames, projectile_blocks, clip, menu_frames)`; blocks count confirmed shield collisions in executed frames, including attack/settling/uncontrollable frames. Attacks are played with the controller alone ("Attacks by buttons" below): no memory is written; an attack the buttons can't make from the state presses nothing. An attack press the game didn't read (a lag frame) is held one more frame. A BOMB, BOOMERANG, ARROW, RECORDER, FOOD or CANDLE whose item isn't the selected one first chooses it on the item sub-screen; those frames are `menu_frames` (inside `frames`). RECORDER then presses B and waits out the tune's freeze (`FluteTimer` `$3C`, 151 frames without a play update after the press: also `menu_frames`; "Item kinds" below). A CLIP runs the grid-point skip macro ("Grid-point skip" below; MOVE never does); `clip` reports its `ClipOutcome`. |
 | `zelda::Session` | `load(state, LoadOptions { randomize_rng, fresh_room, controllable, overrides }, rng)`; `randomize_rng` writes a natural RNG state and the spawn draws right after the restore ("Randomness at a start" below), `rng_phase()` reports the phase, `write_rng(phase)` writes one at the current frame (a chain checkpoint's redraw); controllable curriculum frames are not advanced before the first action; normal entries gain control through their transition. `act(action) -> Change`; `state()`, `mask()`, `snapshot()`/`restore()` (restore sets `steps`/`total_frames` from the snapshot and clears the look-ahead ledger; `checkpoint()`/`resume()` also keep the frame counter and the ledger), `set_render`, `set_frame_sink`, `capture_pre_entry`/`last_pre_entry`, `set_disabled_kinds`, `set_clips` (both recompute the mask when they change). `just_exited_cave` is set on any cave or dungeon mouth (live entries and loaded states alike) and clears when Link's tile changes. Python: `triforce._native.Game` (`set_clips(enabled)`, `skip_available(direction)`, `Change.clip`). |
@@ -417,6 +417,11 @@ Stored start states were built by the old loads: 132 of the 364 hold `$FF` in th
 compared with room ids, so inert) and 120 an off-ring or corner edge cell (`$E0` in 109; `$10`, `$1F`, `$3F` in
 11): a randomized load replaces the cell, a load without it keeps it. Their own RNG registers are all on the cycle.
 
+Round 44: `EnvOptions::exact_starts` (`SpecialistEnv::set_exact_starts`, `Explorer(exact_starts=True)`) makes a
+reset load its state's machine exactly as saved: none of the writes above, no banked kills, no draw of the reset
+rule below. Only the real walk (`entry_states walk`, "Entry states") uses it: its explorer searches and replays each
+room from the carried machine itself, so the state carried on is the one real play of that room produced.
+
 **The reset rule (round 43; the owner, Nov 25: "never serve an unreal room", "all valid starting positions").** In a
 dungeon (and an overworld room with spawn spots) the monsters' positions come from `$524` alone
 (asm:Spawn_AssignPositions walks a 9-spot list from it; no random byte); `$524` is zeroed only at reset and moved only
@@ -439,10 +444,16 @@ every clear pattern from the values power-on runs bring to the dungeon's entranc
 on, at most five in a row: the six-room history); the overworld's doors, whose maps move with the point Link crosses
 an edge, take the values the runs held (`proof: measured`).
 
-Round 44: `EnvOptions::exact_starts` (`SpecialistEnv::set_exact_starts`, `Explorer(exact_starts=True)`) makes a
-reset load its state's machine exactly as saved: none of the writes above, no banked kills. Only the real walk
-(`entry_states walk`, "Entry states") uses it: its explorer searches and replays each room from the carried machine
-itself, so the state carried on is the one real play of that room produced.
+Round 45 (curriculum tracks in the route's layout): `room_entry::Layout` is `Valid` (the training draw above),
+`Route` (the planned `$524` at every door the rule knows) or `Cycle(v)` (one reachable value; one the door cannot
+hold is not written). `SpecialistEnv::set_layout` (default `Valid`), `Explorer::set_layout` (refuses a `Cycle` the
+start's door lacks), `Env.set_layout`, `python -m triforce.explore --layout route|valid|N` (default `route`; `N` writes
+`<state>~c<N>`). Every pre-entry load reads back what it left for the room entry (`room_entry::EntryValues`,
+`Session::entry_values`: `$524` judged planned and reachable against the door's rule, the chase state, `$4A`, `$26`,
+`$525`, the source), which a track's `trajectory.json` keeps as `layout` (`env::explore::layout_json`) beside
+`start` (`start_json`: the bag, `$52A`, `$50`, `$51`, `$627`, the hearts of its first decision: what a track point
+past the first keeps), `Env.entry` gives a script, and a terminal info carries as `route_layout` (training's
+`room/<room>/<entry>/route_*` and `other_*`).
 
 ### Attacks by buttons (`crates/zelda/src/attack.rs`, `submenu.rs`; round 21)
 
@@ -1483,6 +1494,11 @@ A training config may name a truncation (`max-steps`, `no-damage`, `no-room-prog
 failure (`hard-failure` or `soft-failure`; anything else is refused): the episode then *terminates* as that failure,
 with the terminal failure penalty and no bootstrap (round 34: a boss that waits out the budget is not paid for
 surviving). No shipped family yaml does; chains and evaluation classify as before.
+A task may also name `drops-left` (round 43, Manhandla's and Dodongo's d3first tasks; only as a failure): a correct
+exit that leaves wanted bombs lying in the room (`objective::bombs_left_behind`: Link's own bombs below the bag's
+size, the drop not about to vanish) ends the episode as that failure, with no exit reward (`rewards::score_step`, the
+critic). Leaving a carrier alive where the route step says `carriers: fight` ends it `carrier-left` (a soft failure;
+`zelda::objectives::Objective::carriers_first`). Neither is a chain's: a chain goes on along the route.
 
 Endings, linger, the chain's stall counter and the visit metrics read `Change.observed` (hits, stuns and pickups
 seen in the step itself); only the critic and the bomb counts (`zelda::bombs::BombStats`) read the credited fields,
@@ -1668,6 +1684,26 @@ every step, so following an enemy that moves away pays again, and knockback rese
   earlier run had measured it) or failed. Its Eval tab lists every entry's result and, for a selected entry, the
   outcomes with their share of the evaluation, `108× (10.8%)`: of the chain's runs (where the failed runs ended),
   or of the family evaluation's episodes (start room and ending; `eval` event `by_room_failures`).
+- Each job's CPU and load (`triforce/jobload.py`, `JobLoads`; the owner, Nov 25): the GUI's process alone samples
+  every running job of this host every 3 s (`INTERVAL`; one sampler shared by the window's timer and the web view's
+  thread, rate-limited under a lock). A job's cgroup is read once from its wrapper's `/proc/<pid>/cgroup` (a
+  detached job's `tfjob-...service` unit; a job without one is followed by its wrapper's process tree through
+  `/proc/*/task/*/children`). **CPU** is the cgroup's `cpu.stat` `usage_usec` between two samples (cores, and their
+  share of `os.cpu_count()` threads); **load** is the count of its threads in state R (`cgroup.threads`, each
+  `/proc/<tid>/task/<tid>/stat`) smoothed as the kernel smooths its 1-minute average (`load * e + n * (1 - e)`, `e =
+  exp(-dt/60)`; first seen, as if it had run that many since its admission); **waiting** is `cpu.pressure` `some
+  avg10`. The machine's busy cores (`/proc/stat`) and load average beside the jobs' sums (an ended job's load still
+  in it, fading as the kernel's average still holds it) give what is outside the queue; over 3 cores
+  (`OUTSIDE_CORES`) for 60 s (`OUTSIDE_SECONDS`) warns, and only while over is `/proc/*/stat`
+  read, every 15 s (`OUTSIDE_SCAN`), to name the busiest process outside every job. A unit that ends, a missing
+  file, a vanished pid are skipped, never raised; an ended job keeps its last sample (`final`: total CPU time and
+  mean cores, when that sample came within 8 s of its end). Cost (Nov 25, at load 60): 3.3 ms of CPU a sample on
+  10 jobs of 40 threads (0.11% of a core at one sample in 3 s); the look at every process (650: 6-10 ms) adds under
+  0.07% while it runs. The card shows it at its first line's right (`job_load`, `fit_aside`: the longest variant
+  that fits beside the headline, so it is cut before anything else; the page's `.jload` shrinks first and
+  ellipsizes); the line over the list is `loads_line`.
+  Rates: `fmt_rate` is the one formatter of every counter, chain and evaluation rate, never below one (`s/test`,
+  `min/chain`, `h/chain` under one a second; `singular`).
 - Web view (`training-gui.py`, `WebState`/`WebServer`): beside the window (or alone, `--web-only`, no display
   needed) a stdlib `ThreadingHTTPServer` on `--web-host` (default `0.0.0.0`, every interface) port `--web-port`
   (default 22222; `--no-web` off) answers GET `/` (one page, no external assets, its first snapshot inlined) and
@@ -2017,11 +2053,24 @@ every step, so following an enemy that moves away pays again, and knockback rese
   as likely, in place of the `bombs` and `room_bombs` draws; `room_kill_cycle: {'(3, 0x5b, S)': [0, 1]}` holds the
   game's drop cycle (`$52A`, asm:Drop_SetUpItem) at one of the listed values (darknut@d3first's fresh-generation
   starts: 0x5b's first pass at 0, one Darknut's death drops bombs, or 1, it drops none).
+- The drop state as real play brings it (round 43, the fresh generation's `_generation.yaml`; the owner, Nov 25):
+  `ram_randomization: {drop_state: real}` replaces the `help_count` streak at a seed reset with a triple (`$627`,
+  `$50`, `$51`) real play held at a door of the same kind (dungeon, overworld), from `triforce/drop_state.json`
+  (`scripts/experiments/r43_drop_state.py build` over Seeds43's power-on scans: every triple with its count), the
+  kill count two thirds by real play's distribution and a third uniform over 0-15
+  (`start_states::drop_state_values`, `DROP_STATE_REAL_SHARE`), and draws the drop cycle `$52A` 0-9; after every
+  other draw. An entry listed in `room_kill_cycle` (3:0x5b from S) keeps its cycle and its `help_count` streak, draw
+  for draw. Without the table a task that names it is refused at its first reset.
+- A curriculum start past its track's first point (round 43) keeps its own mid-room state: of the reset's draws only
+  the hearts are written (`start_states::track_point_values`): no bag, kill counters, drop cycle, room value
+  (`room_kill_cycle`, `room_bomb_counts`, `room_bombs`) or drop state. A track's first point draws as a seed start.
 - A forced bomb drop (round 25; boss-manhandla): `ram_randomization: {drop_bombs: P}` arms the game's help drop as
   bombs (`HelpDropCount` $0A, `IsHelpDropBomb` 1, asm:Drop_SetUpItem) in a share P of resets, at the reset and again
   after every step while a monster is in the room (harm to Link clears both), so the room's next drop (Manhandla's
   last hand) is 4 bombs, unless it is the 16th damage-free kill (a fairy). Only a training env draws it
   (`EnvOptions::forced_drops`, set by the training pool; Python `Env(..., forced_drops=True)`, `Env.drop_bombs`).
+  Under `drop_state: real` (round 43) each arming writes a real armed triple (`$627`, `$50` = $0A, `$51`) copied from
+  `triforce/drop_state.json` (`start_states::armed_drop_values`) instead of the two bytes alone.
 - Staged starts (round 24; darknut): `ram_randomization: {room_kills: {'(5, 0x05)': [1, 5]}, room_kills_share: 0.5}`
   banks k kills in `LevelKillCounts` before a pre-entry start's dungeon room is entered (`LoadOptions::banked_kills`,
   asm:RoomHistory_ModifyObjCountUW), so the game makes k fewer monsters and clearing the rest clears the room. Only a
@@ -2521,7 +2570,7 @@ file; the tools write it themselves, nobody runs anything for it.
 
 ## Replays (`crates/replay`, `crates/pool/src/zelda`, `replay.py`)
 
-A replay (`.tfreplay`, `TFREPLAY`, `REPLAY_VERSION` 2; versions 0 and 1 still read) is one run or episode, exact enough to play back bit for
+A replay (`.tfreplay`, `TFREPLAY`, `REPLAY_VERSION` 3; versions 0-2 still read) is one run or episode, exact enough to play back bit for
 bit on the emulator alone: no env, reward or model code is needed, so a replay outlives changes to all three.
 Since version 2 (the owner, Nov 23) it also says on its own what the agent was steered to, what it could do and
 what it chose, named by its own META, so it can be shared and filmed without route data, networks or this code.
@@ -2535,7 +2584,7 @@ The file layout is in `crates/replay/src/lib.rs`. It holds:
 | EDITS | every memory write that was not the game's: `(frame, address, previous byte, new byte)` (load randomization, hp draws, cheat grants, anything poked) |
 | CHEATS | cheated items spent: `(frame, item, count)` |
 | STATES | `TFZSTATE` blobs: START (embedded source), END (always), KEYFRAME (optional, every N frames), CHECKPOINT (a stitch boundary); each with its route step and the cheat grants still held, a room's and (version 1, round 32) a route step's, so a chain can continue from it |
-| EVENTS | CONTROL (the models take over), ROOM (level, room, route step, acting policy), OUTCOME (a room visit's), EPISODE (a training-style episode's ending), SEGMENT (a stitch boundary), VISIT (version 2: a room visit's record as the chain wrote it, at its close) |
+| EVENTS | CONTROL (the models take over), ROOM (level, room, route step, acting policy), OUTCOME (a room visit's), EPISODE (a training-style episode's ending), SEGMENT (a stitch boundary), VISIT (version 2: a room visit's record as the chain wrote it, at its close), RESET (version 3: the console's RESET button, `ZCore::reset`, pressed before the frame and its edits; `emu-zelda.py --reset`) |
 | REWARDS (optional) | every reward term of every step, scored by the code training uses (`rewards::score_step`, `env::RewardTrack`; chains are cut into the acting specialist's episodes) |
 | DECISIONS (always, version 2) | every model decision: policy, action, value, how the act mode drew it (META `tables.draws`), the factored distribution (143 log-probabilities: kind[11], direction[kind][8], duration[kind][4]; version 2 keeps the finite ones, a bitmap and one byte each, -byte/16 nats; META `actions` describes the space, so replays recorded with 7 kinds and 91, or 8 kinds and 104, still read), the hit head's P(Link is hit) per legal action where the network has one, and the planner's vetoes when the act mode plans |
 | TARGETS (version 2) | on change: the objective kind, its targets as (role, entity) (exit direction, monster slot and type, floor item slot and id, key, bomb wall tile and direction, push block, stairs, cave mouth, triforce, tile spot), each `obs` (in the observation's target) or `reward-only` (priced by the reward alone: drops, bag drops, heal targets), the rooms Link may leave to and the retreat rooms, the step's flags (treasure refused, drops first, bag drops, clips known), and a provenance label (route, step, way, stretch) no metric may depend on |
@@ -2724,11 +2773,40 @@ A power-on run is shown from the frame the models took over. When a replay ends 
   (`boss-gleeok: SWORD N 62% hit 3% (temperature) | MOVE S 16 21%`). All of it comes from the replay alone
   (version 2); an older replay shows none.
 
-## Playing a room by hand (`emu-zelda.py`, `emu.py`, `emu_view.py`, `crates/triforce-py/src/emu.rs`)
+## Playing by hand: a room or the whole game (`emu-zelda.py`, `emu.py`, `emu_view.py`, `crates/triforce-py/src/emu.rs`)
 
-The owner plays one room himself to show how it is played, and the take is kept as a replay the agents read
-(`uv run emu-zelda.py 5 05 --bombs 0`: the Olive Garden by the sword alone; `--help` has every flag and key).
+The owner plays one room himself to show how it is played, or the whole game from console power on to see what the
+rooms really do, and the take is kept as a replay the agents read (`uv run emu-zelda.py 5 05 --bombs 0`: the Olive
+Garden by the sword alone; `uv run emu-zelda.py --reset 120 --invincible --bombs infinite`: the whole game; `--help`
+has every flag and key).
 
+- **The whole game** (no LEVEL and ROOM; `emu.GameSpec`, `emu.GameSession`, Nov 25): `LiveGame.power_on(name)`
+  restarts the recording at console power on (TFREPLAY source `power-on`, every frame an input) and runs
+  `zelda::power_on::to_file_select` and `register_and_start` (no idle): the name (`--name`, LINK; 1 to 8 of A-Z,
+  0-9 and space, `power_on::board_cells`; a name starting with ZELDA is typed too and plays the second quest,
+  `QuestNumbers` $062D = 1, which a run's `name_cells` still refuses) in slot 1, the game to its first gameplay
+  frame in 0x77. `--reset [DELAY]` then presses RESET there (`LiveGame.reset_console`: `ZCore::reset`, a RESET event)
+  and `emu.start_after_reset` plays the title to the game: START on the first frame the title takes it
+  (`emu.takes_input`: GameMode 0, IsUpdatingMode set, submode 0, asm:Mode0Demo_Update), DELAY idle frames once the
+  file-select screen takes input (GameMode 1 the same, asm:Mode1Menu_Update_Sub0Choose), START on slot 1 (the cursor
+  checked), on to GameMode 5. The game's reset code seeds the random bytes again (`Random` $40, the other twelve 0,
+  asm:Reset_ClearRam), so the hand-over's thirteen bytes depend on DELAY alone, not the name (the frame does).
+  `LiveGame.hand_over()` writes the CONTROL event; the frame and $18-$24 there (`emu.HandOver`) are printed and on
+  the status strip. DONE only at the ending (`emu.ended`: the first frame of GameMode $13, one frame after Link
+  touches Zelda, asm:Zelda_State1WaitForEnding; the route engine's `exit: end` frame), ending `win`, result
+  `game-completed`. Dying is the game's own CONTINUE / SAVE / RETRY menu. Saved as
+  `start_<name>[_reset<delay>][_invincible][_bombsinf...]_<yymmdd-HHMMSS>.tfreplay`; META `human` holds the name,
+  second quest, reset delay, hand-over, overrides and cheats.
+- **Cheats** (`emu.Cheats`, both forms; each write a memory EDIT before the next frame, so the take verifies):
+  `--invincible` writes Link back to full whenever he is below it (the filled-hearts nibble of `$66F` = its
+  containers nibble, `$670` = `$FF`, as the game holds full health, asm:Item_TakeHeartsNoSound; the knockback and the
+  flashing are the game's); a hit larger than his filled hearts starts the death (GameMode $11, asm:Link_BeHarmed)
+  and on that frame the mode is put back to play (GameMode 5, IsUpdatingMode 1). `--bombs`, `--keys`, `--rupees`
+  take a count or `infinite`: 8, 8, 255 at the start and back to it the frame after one is spent
+  (`emu.COUNTS`).
+- **The state key** (L1, F5; any state, play goes on): `Played.save_state` writes `LiveGame.state_file()` (the
+  machine and the session's flags, a `TFZSTATE` that `Game.load` reads) into `--out` as
+  `<room>[c]_frame<N>_<yymmdd-HHMMSS>.state`, the room Link stands in by the owner's notation.
 - **The start** (`emu.Spec`, `emu.find_start`): the route's own start state for the room (`--route`, default
   `d3first`): the side the route first enters it by, its first visit, chain 0 (`--entry N|S|E|W|cave`,
   `--visit`, `--chain`; `cave` is out of a cave or a dungeon's stairs, a state name's `c`). The route's steps
@@ -2772,12 +2850,15 @@ The owner plays one room himself to show how it is played, and the take is kept 
 - **The window** (`emu_view.Window`, Qt; a thin layer over the session): the states (`emu_view.Machine`):
   READY (loaded, paused, two bars over the picture; a game button starts it and counts on the first frame,
   Create starts it with nothing held), PLAYING, PAUSED (the emulator's hard pause: nothing runs or is recorded,
-  only Create leaves it), DONE. Save (square, `S`) and the resets (triangle / `R` a new seed, R1 / `T` the same)
-  work only in PAUSED and DONE; a reset is READY again with a new recording. The controller is read through
-  SDL's game-controller mapping (`emu_view.Pad`, pygame; `PAD_INPUTS`): the d-pad, cross = B, circle = A, Options
-  = Start, Create = the hard pause, never the sticks or Select; the keyboard (`KEY_INPUTS`) always works too.
+  only Create leaves it), DONE. Save (square, `S`) works only in PAUSED and DONE, the resets (triangle / `R` a new
+  seed, R1 / `T` the same) in PAUSED and DONE for a room and in DONE only for the whole game (a power on again,
+  the take saved first if it holds unsaved frames, as on closing the window); a reset is READY again with a new
+  recording. The controller is read through SDL's game-controller mapping (`emu_view.Pad`, pygame;
+  `PAD_INPUTS`): the d-pad, cross = B, circle = A, Options = Start, L3 = Select, L1 = the state key, Create = the
+  hard pause, never the sticks; the keyboard (`KEY_INPUTS`: Shift = Select, F5 = the state key) always works too.
   Alt-F4 or closing the window quits. The picture is the NES's 256x240 times `--scale` (3), sharp, with a status
-  strip (room, entry, seed, hearts, bombs, keys; the last file saved) and the overlays of the state (`compose()`).
+  strip (the session's line: room, entry, seed or name, hearts, bombs, keys, rupees, the frame; the last file
+  saved, or the hand-over; the last state saved) and the overlays of the state (`compose()`).
   It opens centred on the centermost monitor (`emu_view.centermost`: left to right by position, the middle one,
   of an even count the left of the middle two).
 - **The rate** (the window's pacing only: the session and the replay are frames): the NES's 60.1 frames a
@@ -2799,12 +2880,63 @@ The owner plays one room himself to show how it is played, and the take is kept 
   is built; it imports nothing that brings torch (`provenance` imports `registry` only where a checkpoint is
   described). A plain `uv run` of a project script would sync the project's `.venv` to `uv.lock` (and rebuild
   the module); `.venv/bin/python emu-zelda.py` works as well.
-- **Tested without a window or controller** (`tests/test_emu.py`, `tests/test_emu_zelda.py`, offscreen Qt):
-  the start, the cellar round trip and the exit N in 3x69, death, same-seed resets frame for frame, the saved
-  replay verifying and replaying to the same picture, `--bombs` as an EDIT, the Olive Garden's start, the states
-  and inputs with synthetic events (the snippet sequence: play, pause, save, reset, a new recording; two saves of
-  one recording), the rate, the title, the sound by the rate, the monitor choice on made-up layouts. The real
-  controller's buttons, the monitors, the sound device and the feel of the pacing are the owner's to try.
+- **Tested without a window or controller** (`tests/test_emu.py`, `tests/test_emu_zelda.py`,
+  `tests/test_emu_game.py`, offscreen Qt): the start, the cellar round trip and the exit N in 3x69, death,
+  same-seed resets frame for frame, the saved replay verifying and replaying to the same picture, `--bombs` as an
+  EDIT, the Olive Garden's start, the states and inputs with synthetic events (the snippet sequence: play, pause,
+  save, reset, a new recording; two saves of one recording), the rate, the title, the sound by the rate, the
+  monitor choice on made-up layouts; the whole game's hand-over from power on, the reset's hand-over the same twice
+  for a name and delay, ZELDA's second quest, the cheats' writes, a killing hit undone, an infinite bomb put back,
+  the ending's frame on the corpus's golden race, the state file, the command line of both forms. The real
+  controller's buttons, the monitors, the sound device, the feel of the pacing and a whole game played by hand are
+  the owner's to try.
+
+## The owner's takes and the solved rooms (`scripts/owner_takes.py`, `triforce/solved_rooms.py`, Nov 25)
+
+- **The takes** (`replays/owner/`): the replays the owner plays on `emu-zelda.py` (META `kind` `human`) and names
+  for the project, and only those, under his own file names, in `replays/owner/<room>/` (a whole game from power
+  on: `replays/owner/game/`; the Darknut lesson's three in `replays/owner/darknut/`). `scripts/owner_takes.py add
+  PATH|NAME...` (a queue job) takes each named take, a path or a file name (with or without `.tfreplay`) matched
+  under `~/triforce-review/`, all or none (each must be found, be one take by SHA-1, be his and verify), copies the
+  ones not yet kept, archives what `replays/owner/` holds (`archive_replays.py --kind owner --keep-names`:
+  `/backup/triforce/replays/<version>/owner/<his name>.tfreplay.bz2`; what the archive holds is skipped) and writes
+  `replays/owner/INDEX.md` (a row a
+  take: room, entry, date, seed, frames, ending, `$524` against the route's layout for the door, chase flag, hearts
+  and items at control, cheats and overrides, replay version; a whole game: the rooms it passes with their first
+  frame in play) from `replays/owner/index.json` (each take's facts by SHA-1, so a whole game is read once). The
+  route's layout is `triforce/entry_rule.<namespace>.json`'s `planned` (`--entry-rule PATH` where the checkout has
+  none; "layout unknown" without one).
+- **The solved rooms** (`triforce/solved_rooms.yaml`, `docs/owner/solved-rooms.md`): an entry a room and entry side
+  (`5x47-S`; a cellar never: the loader refuses one), with the owner's words, the lead's description, the
+  conditions (`$524` the route brings, claimed for the route's layout or all), the cost, the takes (repository
+  paths), the phase test's rates and the **criteria**. `solved_rooms.load` checks the file against game.yaml (the
+  room, its exits) and the repository (the takes); `on_route` against `_native.route_steps`.
+- **A pass** (`solved_rooms.read_passes`): one visit of a room read frame by frame from any TFREPLAY: chain and
+  golden replays by their ROOM events (the 400 frames before each, for the `$524` the spawn reads), a take or a
+  power-on game from frame 0 (the frame-0 EDITs give a take's `$524` and `$60`). It opens on the first GameMode-5
+  frame in the room and closes on the first frame of a scroll (the side, from Link's last position), the stairs
+  (`cave`) or death; it keeps Link's position, the controller byte and whether he is mid-swing each frame, every
+  swing with the monsters ahead of him then, the hits (drops of his hearts), the entry side (the edge behind him;
+  `cave` after a cellar or cave mode, or out of a dungeon's mouth; a take's own META entry; `start` at a power-on
+  game's hand-over; from a start state with no transition seen, `cave` when he stands inside the room,
+  `zelda::room_entry::enters_inside`), and `cut` when the replay ends in it by its own stop (not counted).
+  `check(entry, pass)` applies the
+  criteria (`exit`, `hits`, `hold` with `gap` and `grace`, `directions`, `line` with `tolerance`, `bands`,
+  `swings` with `when: in_the_way`, `frames`).
+- **The comparison** (`triforce solved compare TEAM [TEAM ...]`, a queue job): each team's replay folders and
+  chain records (`*.jsonl`: out, hits, frames and deaths only; a visit's side from the room before it and
+  game.yaml's exits), read in parallel processes; one table a team (passes, out by the solved exit, hits a pass,
+  seconds and median frames beside the owner's, the solved way's rate in all and in the route's layout, each
+  criterion's rate) and the teams side by side; `--json` keeps it.
+- **The phase test** (`scripts/solved_phases.py ROOM`): scripted inputs (legs of a path, swings at fixed heights
+  or at a monster in the blade's reach) over thousands of seeds from the route step's entry states, loaded by
+  `LiveGame.load(..., layout='route')` (round 43's load rule: the route's `$524` for the door, the chase flag
+  50/50, the random phase from the seed), measured as a pass is; clean runs of all and by chase flag, frames,
+  which script saves the runs another loses; `--out` keeps takes. It needs a checkout with that load rule.
+- **Tested** (`tests/test_solved_rooms.py`): the file loads, every entry is on its route, every take named exists,
+  verifies and scores as solved; his pure-north take of 5x37 does not; a cellar and malformed entries are refused;
+  made-up passes against 5x47's criteria; chain records counted by entry side. `tests/test_backup_scripts.py`:
+  `--keep-names`.
 
 ## Sound (`crates/zcore/src/sound.rs`, `crates/zcore/src/tracks.rs`)
 
@@ -3077,7 +3209,10 @@ the next): each leg and the dungeon after it from the dungeon exit before it (0_
 0_6dc), its first machine that door's earlier state checked against the route and set to it
 (`scripts/experiments/r44_segments.py start`: containers, triforce, items, maps, compasses, the key ledger, the
 overworld's taken, secret and kill bits, the next dungeon's room flags 0, and `$524`/`$525`/`$52A`/`$50`/`$627`/
-`$621-$626` from the real runs' next arrival at that screen) and `walk --segment <its checks>`. `<out>/walk.json`
+`$621-$626` from the real runs' next arrival at that screen) and `walk --segment <its checks>`. A step the explorer
+does not find a way through is given its actions, `walk --script STEP=FILE` (`play_script`: the machine loaded
+exactly, the actions through `Game.act`, the pre-entry frame captured; no more kills than `clear:` allows; `how:
+script`, the actions kept): 9x61's block clip past its Patra (round 44, `scripts/experiments/r44_clip61.py`). `<out>/walk.json`
 records each walk (`walks[<id>]`: the power-on or the segment's start and checks, the commit, the command, each
 resumption) and per door its walk, `door_facts` (the spawn cycle, edge cell, chase state, dividers, drop cycle,
 help-drop counters, kills since the last hit, room history, banked kills, hearts carried, inventory) and the file's

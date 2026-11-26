@@ -737,17 +737,20 @@ def rule_env(family, state, hearts):
     return Env(config, explicit_starts=True, strict_actions=False, seed=0)
 
 
-def write_track(directory, state, seed, what, points, actions, health, ending):
-    """One won run as the curriculum reads it (`r28_demos.py --tracks`)."""
+def write_track(directory, state, seed, what, points, actions, health, ending, layout=None):
+    """One won run as the curriculum reads it (`r28_demos.py --tracks`); `layout`, the env's `entry` after the
+    run's reset (round 45), as the explorer's tracks keep it."""
     track = directory / f'{state}~rule{seed}'
     track.mkdir(parents=True, exist_ok=True)
     for index, point in enumerate(points[:len(actions)]):
         (track / f'{index:04d}.state').write_bytes(point.state_file())
-    (track / 'trajectory.json').write_text(json.dumps({
-        'start_state': state, 'success': True, 'ending': ending, 'steps': len(actions), 'health': health,
-        'actions': actions,
-        'explore': {'iterations': 0, 'env_steps': len(actions), 'cells': 0, 'seconds': 0.0, 'seed': seed},
-        'crafted': f'round 29: the scripted rule {what} (scripts/experiments/r29_demos.py)'}, indent=1))
+    meta = {'start_state': state, 'success': True, 'ending': ending, 'steps': len(actions), 'health': health,
+            'actions': actions,
+            'explore': {'iterations': 0, 'env_steps': len(actions), 'cells': 0, 'seconds': 0.0, 'seed': seed},
+            'crafted': f'round 29: the scripted rule {what} (scripts/experiments/r29_demos.py)'}
+    if layout is not None:
+        meta['layout'] = layout
+    (track / 'trajectory.json').write_text(json.dumps(meta, indent=1))
     return track
 
 
@@ -811,6 +814,7 @@ def play(args):
         entry = None
         for seed in range(SEED0, SEED0 + args.runs):
             obs, _ = env.reset(seed=seed, options={'start_state': state})
+            layout = getattr(env, 'entry', None)
             rule = RULES[args.what]()
             ram = bytes(env.state.ram)
             health, containers = hearts_of(ram), env.state.max_health
@@ -852,7 +856,9 @@ def play(args):
                 steps_won.append(n)
                 if args.tracks and tracks < args.per_state and not illegal and (
                         args.max_loss is None or down <= args.max_loss):
-                    print(f'{write_track(args.tracks, state, seed, args.what, points, actions, health, info["ending"])}'
+                    written = write_track(args.tracks, state, seed, args.what, points, actions, health,
+                                          info['ending'], layout)
+                    print(f'{written}'
                           f': {n} steps, {down:.2f} hearts lost', file=sys.stderr)
                     tracks += 1
                 # A harvest takes a won run with masked choices too: the WAIT played instead is the run (d3first's

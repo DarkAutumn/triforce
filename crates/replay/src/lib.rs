@@ -11,7 +11,7 @@
 //! readers).  A reader refuses a newer replay ("replay version N; this reader reads up to M: update") and reads
 //! every older one.  Version 0: the first; 1 (round 32): STATES' route grants; 2 (Nov 23): TARGETS, MASKS, the
 //! quantized DECISIONS with the draw, the danger and the foresight, the VISIT event, META `tables`, DECISIONS
-//! always recorded.
+//! always recorded; 3 (Nov 25): the RESET event, the console's RESET button (`emu-zelda.py --reset`).
 //!
 //! # Self-description
 //!
@@ -27,7 +27,7 @@
 //! and `tables` the names TARGETS, MASKS and DECISIONS index.  A new output, role or table entry is written with
 //! its META description.
 //!
-//! # File layout, version 2
+//! # File layout, version 3
 //!
 //! All integers are little-endian; `varint` is unsigned LEB128.
 //!
@@ -57,7 +57,7 @@
 //! | 4 | EDITS | `(varint dframe, addr: u16, prev: u8, value: u8)` |
 //! | 5 | CHEATS | `(varint dframe, item: u8 (0 bombs, 1 keys, 2 rupees), varint count)` |
 //! | 6 | STATES | `(varint dframe, kind: u8, step: u16 (0xFFFF none), granted: [u8; 3] (bombs, keys, rupees: a room's grants), route_granted: [u8; 3] (a route step's grants; version 1, absent in version 0), varint edits, len: u32, blob)`; kind 0 START, 1 END, 2 KEYFRAME, 3 CHECKPOINT; `edits` is the number of EDITS records that precede the state; `blob` is a `TFZSTATE` file |
-//! | 7 | EVENTS | `(varint dframe, code: u8, payload)`: 1 CONTROL (no payload); 2 ROOM `(level: u8, room: u8, flags: u8 (bit 0 in cave), step: u16 (0xFFFF none), policy: u8 (0xFF none))`; 3 OUTCOME `(varint len, text)`; 4 EPISODE `(varint len, ending text, class: u8, flags: u8 (bit 0 terminated, bit 1 truncated))`; 5 SEGMENT (no payload); 6 VISIT `(varint len, JSON object)`: a room visit's record as the env judged it, written when it closes (version 2) |
+//! | 7 | EVENTS | `(varint dframe, code: u8, payload)`: 1 CONTROL (no payload); 2 ROOM `(level: u8, room: u8, flags: u8 (bit 0 in cave), step: u16 (0xFFFF none), policy: u8 (0xFF none))`; 3 OUTCOME `(varint len, text)`; 4 EPISODE `(varint len, ending text, class: u8, flags: u8 (bit 0 terminated, bit 1 truncated))`; 5 SEGMENT (no payload); 6 VISIT `(varint len, JSON object)`: a room visit's record as the env judged it, written when it closes (version 2); 7 RESET (no payload): the console's RESET button pressed before the frame, before its EDITS (version 3) |
 //! | 8 | REWARDS | `(varint dframe, term: u8, value: f32)`; `term` indexes META `reward_terms` |
 //! | 9 | DECISIONS | version 2: `(varint dframe, policy: u8, kind: u8, direction: u8, duration: u8, draw: u8 (bits 0-6 index META tables.draws, bit 7 the act mode's low-health part), value: f32, flags: u8 (bit 0 danger, bit 1 foresight), finite: [u8; ceil(N/8)] (bit i%8 of byte i/8: entry i is finite; the others are masked, -inf), dist: one u8 per finite entry in order (the log-probability is -byte/16 nats), [danger: varint n, [u8; n]: P(hit) x 255 per legal joint action, joint order], [foresight: outcome: u8 (1 safe, 2 replaced, 3 unsafe), varint trials, varint frames, n: u8, [u16; n] vetoed joint actions in the order tried])`; versions 0-1: `(varint dframe, policy: u8, kind: u8, direction: u8, duration: u8, value: f32, dist: [f32; N])`; `N` = META `actions.distribution`, a joint action is legal when its kind's, direction's and duration's entries are finite ([`legal_joint`]) |
 //! | 10 | TARGETS | `(varint dframe, objective: u8 (META tables.objective_kinds), flags: u8 (bit 0 treasure refused, 1 drops first, 2 bag drops, 3 the path search knows the clips), route: u8 (tables.routes, 0xFF none), step: u16 (0xFFFF none), way: u8 (0 none, 1 clips, 2 plain), stretch: u8 (tables.stretches, 0xFF none), n: u8, n x (level, room, in_cave: u8) next rooms, n: u8, n x the same retreat rooms, n: u8, n x (role: u8 (tables.target_roles), flags: u8 (bit 0 obs, bit 1 reward-only), fields: [u8; 4] (the role's named fields)))`, written at a decision when it differs from the last (version 2) |

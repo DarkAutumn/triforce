@@ -2,7 +2,9 @@
 
 use crate::config::SpecialistConfig;
 use crate::critic::{Critique, GameplayCritic};
-use crate::end_conditions::{EndConditions, MAX_STEPS, NO_DAMAGE, NO_ROOM_PROGRESS, StepView, classify_ending};
+use crate::end_conditions::{
+    DROPS_LEFT, EXIT_CORRECT, EndConditions, MAX_STEPS, NO_DAMAGE, NO_ROOM_PROGRESS, StepView, classify_ending,
+};
 use crate::error::EnvError;
 use crate::heart_value::HeartContext;
 use zelda::game::GameView;
@@ -343,6 +345,10 @@ pub fn score_step(
         map: c.map,
         linger_tail_steps: c.quiet_steps,
     });
+    // Round 43 (`endings: {drops-left: ...}`, Manhandla and Dodongo): a correct exit that leaves wanted bombs lying.
+    if ending.as_deref() == Some(EXIT_CORRECT) && config.endings.contains_key(DROPS_LEFT) && drops_left(c) {
+        ending = Some(DROPS_LEFT.to_owned());
+    }
     // A truncation the config's `endings` names (as a failure only: `SpecialistConfig::validated`) ends the episode
     // as that failure: terminated, with the terminal penalty and no bootstrap.
     let overridden = |e: &str| config.endings.contains_key(e);
@@ -377,6 +383,13 @@ pub fn score_step(
         terminated,
         truncated,
     })
+}
+
+/// The step leaves its room with wanted bomb drops lying behind ([`crate::objective::bombs_left_behind`] of the state
+/// before the exit, with the bag as that state's objective counted it).
+pub fn drops_left(c: &Critique) -> bool {
+    c.change.previous.full_location() != c.change.state.full_location()
+        && crate::objective::bombs_left_behind(&c.change.previous, c.prev_objective.own_bombs) > 0
 }
 
 /// `reward.heart_value`'s in-room terms, one `reward-heart-value` / `penalty-heart-value` of their sum:

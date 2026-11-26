@@ -4304,6 +4304,308 @@ two solo runs 20 a state, 60 a room entry; `triforce-gen2/target/darknut-curve/*
 - Open: the first-pass kill the owner's Dungeon 3 plan wants (nothing in the task pays for the bombs against the
   risk); the Olive Garden's ceiling (0.43 at 9.3M; the fighter script 0.95).
 
+## Where a teacher's time goes (Perf43, branches `r43-serve` and `r43-perf`)
+
+anthropic/claude-opus-5-5 (Perf43), on `r40-int` at f8da9361. **The ask** (the owner, Nov 25): "we are back down to
+the 300-400 steps per second in training while the load average is 22 [...] Under this load we expect 1000 sps+. Or
+at least 750+ at worst [...] make sure there wasn't a perf regression", and the steps a second on record and in
+front of whoever waits on a training. His ruling on the first finding: "Lookahead cost is fine, that's just the
+price of our design. Definitely fix the other perf problem though."
+
+### The answer in short
+
+- **No regression** (the same work did not get slower). Every stage-1 teacher made 36-67 steps a second a game; the
+  300-400 the owner saw are the 8- and 10-game teachers (8 x 45 = 360). The teachers on last night's draw
+  (`3e085d3d`) were not slower than those before it: `gen1-darknut/s1` 48 a game against the old draw's
+  `gen1x-darknut/solo-seeds-s1` 37 over the same hours.
+- **The price was the way the generation's network acts, not its size.** The generation's `hitnet` is no network
+  the Rust actor knows: it is served by torch on the GPU from a Python thread inside the training process (docs/lab.md
+  "How an experimental network acts"), and in a training it was served **eagerly with a 5 ms batch window**: CUDA
+  graphs had been switched off in every training process on Nov 23 (f8def785) after a capture on the server thread
+  and the learner's GPU work failed each other. The games slept half their time waiting for the network's answer:
+  `gen1-darknut/s1`'s 20 game threads ran 31% of the time, waited for a CPU 13% and **slept 56%** (07:58, load 25;
+  rooms 54%, others 50%). Width is not it: the 256-wide `hitnet` runs of Nov 24 (`r40-zol-gen`, `t41-rooms`) made
+  37-60 a game like the 768-wide; the Rust actor's 256-wide `zelda` trainings made 80-225 a game (Nov 20-24).
+- **The look-ahead's price**, as the owner ruled, stays: `--try-others 4:0.25` emulates as many frames again as the
+  decisions themselves (`gen1-darknut/s1`: 11.6 frames a decision played, 11.4 tried).
+- **The fix** (`r43-serve`, 14f4e87c): the lab trainer serves with CUDA graphs again, captured where nothing else
+  uses the GPU. Measured below: x1.7-2.2 steps a second for an 8-game teacher, the games' sleep from 38-46% to 18-22%.
+- The learner is never the bottleneck: every stage-1 run's learner idled 7-17 s an iteration waiting for its next
+  rollout (`charts/rollout_wait_seconds`), and the rollout's steps a second equals the whole iteration's within 1-2%.
+
+### What the record says (stage 1, by the other trainings running beside each iteration)
+
+From each run's `metrics.jsonl` (an iteration's rows over the time since the one before) against the queue's db (the
+jobs running at that iteration's end); `/tmp/perf43_hist.py`, not kept. Steps a second a game, the median over the
+iterations of that kind:
+
+| run | games | beside 1 training | beside 2 | beside 3 (Perf43's measurements running too) |
+|---|---:|---:|---:|---:|
+| gen1-boss-aquamentus/s1 | 8 | 66.9 | 57.4 | |
+| gen1-boss-digdogger/s1 | 8 | 67.1 | 57.0 | |
+| gen1-boss-dodongo/s1 | 8 | 46.5 | 55.7 | 43.9 |
+| gen1-boss-gleeok/s1 | 8 | | 47.2 | 36.6 |
+| gen1-boss-gohma/s1 | 8 | | 65.5 | 48.6 |
+| gen1-boss-manhandla/s1 | 8 | | 50.0 | |
+| gen1-ganon/s1 | 8 | | 43.9 | |
+| gen1-rooms/s1 | 8 | | 47.5 | 26.4 |
+| gen1-others/s1 | 10 | | 41.2 | 23.1 |
+| gen1-darknut/s1 | 20 | 57.6 | 47.6 | 27.7 |
+| gen1-overworld/s1 | 20 | 44.9 | | |
+| gen1-walkers/s1 | 20 | 41.1 | 36.3 | |
+| gen1x-darknut/solo-seeds-s1 (old draw, `7c730e1c`) | 20 | | 36.9 | |
+
+The machine was CPU-bound throughout (`vmstat`: 88-94% user at load 25; at load 50-80 this morning, with Carrier43's
+and Emu43's suites at nice 10 and my measurements, the game threads waited for a CPU 30-65% of their time). A
+training's games get the CPU by thread, so a 20-game teacher takes more of a full machine than an 8-game one.
+**My measurements cost the teachers**: from 08:08, beside my express jobs, `gen1-darknut/s1` fell from 48 to 28 a
+game and others and rooms to 23 and 26 (the third column).
+
+### Inside a training (read only from /proc, no ptrace; `scripts/experiments/r43_perf_sleep.py`)
+
+- `perf record -e cpu-clock:u` on `gen1-darknut/s1` (20 s): the emulator 85% of its CPU (`zcore`, 28 points of it
+  the headless PPU), `libgomp` spin 4%, CUDA and torch 2.5%, Python 1%, the env and the pool 0.4%. The process used
+  7.1 cores of 20 threads.
+- Its threads (`/proc/<tid>/schedstat`, 10 s, load 25): the 20 game threads 31% running, 13% waiting for a CPU, 56%
+  asleep; the network server thread 42% running, 27% waiting for a CPU; 9 OpenMP threads 6.5% each spinning (0.6
+  cores).
+
+### The fix (`r43-serve` 14f4e87c; `triforce/nets/serve.py`, `triforce/lab/train.py`)
+
+- **Why f8def785 turned graphs off, and why that no longer bites.** A CUDA graph is captured on the server thread;
+  a capture fails (and fails the other thread) when another thread launches GPU work meanwhile, and in a training
+  the learner recomputes and updates on its main thread while the next rollout runs. The graphs were captured
+  lazily, one batch size at a time, whenever a size first came up, so in a training's second rollout beside the
+  learner. Now the lab trainer (`serve.learner_process(graphs=True)`) has its server capture **every** batch size
+  (1, 2, 4, ..., 64 rows) of a network **at its first batch**: the training's first rollout, during which the learner
+  only waits for it (nothing else in the process uses the GPU then). Nothing is captured later; a batch of a size
+  with no graph is served eagerly. Each later rollout **copies the learner's weights into the same served copy**
+  (`Server.serve_copy`, `load_state_dict` into the kept module) instead of a new deep copy, so the graphs, which
+  read the weights where they lie, stay valid. A rollout starts only once the one before ended, so the copy never
+  lands under a running rollout. The batch window is 1 ms with graphs (5 ms eager).
+- A capture or replay that fails, or one of a graph's first three replays that differs from the eager forward,
+  serves that network eagerly from then on with one line (`triforce: warning: served network N runs without CUDA
+  graphs from now on (served eagerly, the run goes on): ...`); the run goes on. The log says at its start how it
+  serves (`[lab] serving: CUDA graphs on cuda, each batch size captured at the first rollout (1 ms batch window;
+  TRIFORCE_SERVE_GRAPHS=0 serves eagerly)`). `TRIFORCE_SERVE_GRAPHS=0` serves eagerly as before; the manifest records
+  the mode (`training.serve`: forward, device, window, precision).
+- Untouched: `triforce train` (the Rust actor plays its network) and `lab.record` serve as before (eager).
+- Measurement switches, kept for the next time: `TRIFORCE_SERVE_ALTERNATE=1` (a run's rollouts alternate graphs and
+  eager, the first with graphs, so both meet the same load), `TRIFORCE_SERVE_AUDIT=1` (every graphed answer is
+  checked against the eager forward on the same rows: the largest difference and the decisions whose pick would
+  change), and the metrics `charts/serve_rows_per_batch`, `charts/serve_busy` (the server thread's share of the
+  rollout spent answering), `charts/serve_graphs`, `charts/cpu_seconds` (the process's CPU an iteration).
+
+### The gain (`scripts/experiments/r43_perf.sh`, `r43_perf_read.py`)
+
+The darknut teacher's recipe from scratch (seed 4101, models in the worktree, never the store), its rollouts
+alternating graphs and eager in one run (`TRIFORCE_SERVE_ALTERNATE=1`) so both meet the same load; the first
+iteration left out; medians over each mode's iterations; the game threads' shares from `r43_perf_sleep.py` (10 s
+windows inside those rollouts). The load average is the 1-minute one during the run. No row is "alone": the lead
+keeps the teachers' machine; at 08:41 the three teachers were stopped, and the other agents' jobs (Carrier43's and
+Emu43's suites at nice 10, Seeds43's scans) ran throughout.
+
+| run (beside) | load | serving | steps/s | a game | game threads asleep | waiting for a CPU | CPU ms a decision | rows a batch | server busy |
+|---|---:|---|---:|---:|---:|---:|---:|---:|---:|
+| 8 games, `g8-alt/r1` (the 3 teachers, 2 suites) | 65-69 | eager | 86 | 10.7 | 41% | 52% | 19.3 | 3.2 | 0.60 |
+| | | graphs | 185 | 23.1 | 18% | 65% | 13.6 | 2.1 | 0.22 |
+| 8 games, `g8-alt/r2` (Seeds43's 3 scans, 1 suite) | 61-63 | eager | 84 | 10.5 | 41% | 53% | 19.1 | 3.2 | 0.63 |
+| | | graphs | 183 | 22.8 | 16% | 67% | 13.1 | 2.0 | 0.20 |
+| 20 games, `alt/r1` (1 training of mine, 2 suites) | 51-53 | eager | 431 | 21.6 | 54% | 34% | 14.2 | 9.4 | 0.66 |
+| | | graphs | 483 | 24.1 | 32% | 47% | 7.9 | 5.2 | 0.41 |
+| 20 games, `alt/r2` (Seeds43's scans) | 25-26 | eager | 747 | 37.3 | 57% | 13% | 14.1 | 10.3 | 0.57 |
+| | | graphs | 1,047 | 52.3 | 33% | 22% | 6.6 | 5.1 | 0.50 |
+
+- **8 games: x2.2 at any load measured; 20 games: x1.4 at load 25, x1.1 at load 51.** The games stop sleeping on the
+  network (41% to 16-18% asleep for 8 games, 54-57% to 32-33% for 20), and where the machine is full the time they
+  gain goes to waiting for a CPU instead: at load 50-70 the CPU, not the serving, is the limit.
+- **Half the CPU a decision** (6.6-7.9 ms against 14.1-14.2 for 20 games, 13 against 19 for 8): the eager forward's
+  Python and kernel launches and the OpenMP spin beside them cost as much CPU as the emulator. On a full machine that
+  is what lets every training go faster together.
+- Fixed-seed pairs without alternation (4 iterations each, same seed): 20 games `base/r2` graphs 710 against
+  `eager/r3` 446 (both load 46), `base/r3` graphs 584 against `eager/r2` 281 (load 52-62).
+- The server's time a batch: eager 6-40 ms (it swings with the load: Python, the GIL beside the learner, the GPU
+  shared by the trainings), graphs 2.2-5.3 ms, of which the replay itself is about 1 ms (docs/lab.md: 0.67-1.36 ms
+  on a quiet machine).
+
+### The same actions
+
+- **No run is the same run twice, eager or not.** Two fixed-seed runs of the old serving (`eager/r2`, `eager/r3`;
+  darknut, 20 games, seed 4101) played the same first rollout (16,380 decisions: episodes, frames and rewards equal)
+  and differed from the second on (rollout 2's frames 248,391 against 248,237): the eager forward's floats depend on
+  how many rows the 5 ms window gathered, which depends on thread timing; and the learner's GPU update is not
+  bit-reproducible either (every loss differs at the last digits from the first update on, in every pair). So exact
+  identity is impossible for any change of the serving, and was before it.
+- **Graphs against eager, same seed:** the first rollout identical (`base/r0` eager against `graphs/r0`: 130
+  episodes, 251,862 frames, reward -25.739533 in both), and the second too (84 episodes, 248,391 frames) in that
+  pair; from there they differ as two eager runs do.
+- **The action distributions** (`audit/r1`, `TRIFORCE_SERVE_AUDIT=1`, darknut 20 games, 5 iterations): **81,937
+  decisions served by the graphs, each against the eager forward on the same rows: the largest difference of any
+  logit or value 8.1e-6, and 0 decisions whose pick would change** (kind, then direction and duration, the legal
+  logits plus one Gumbel draw shared by both, as the Rust code picks).
+
+### A run started on the old code resumes on the fix
+
+- A store run of my own on `3e085d3d` (the code the stage-1 teachers ran, worktree `triforce-r43-perf-gen2`):
+  `r43-perf-resume/s1`, the `others` teacher's recipe at 10 games, 8,192 steps an update, 20 iterations, seed 4101,
+  stopped by its job's time limit at iteration 7 (57,330 steps; "stays open").
+- Resumed from `r43-serve` (449ca437) with the same command line and `--resume`: the recipe check refuses it and
+  names 8 keys, `code.branch`, `code.commit`, `code.describe`, `code.module.sha1` (another checkout) and
+  `training.serve.device`, `.forward`, `.gather`, `.half` (the fix's record; null in the old run). With
+  `--except code,training.serve` it continued: `[lab] resuming r43-perf-resume/s1 at iteration 7 of 20 (57330
+  steps)`, its tasks' curricula resumed (`curriculum resumes .../tasks/wallmaster@d3first/curriculum.json`), the
+  weights, optimizer and counters from its checkpoint as any resume, `run.json` `resumes` naming the job and commit,
+  `[lab] serving: CUDA graphs on cuda, ...`, and it ended completed and sealed at iteration 20.
+- Its rollouts: iterations 2-7 on the old code 277-383 steps a second (median 341, load 9-25, Seeds43's scans
+  beside it), iterations 8-20 on the fix 429-755 (median 486, load 22-25, the same beside it): x1.4 for this
+  10-game teacher.
+- **For `gen1-others/s1`** (stopped at 08:41), from a worktree of the merged code, its own command with `--resume`
+  and the two keys:
+  `.venv/bin/triforce job run --agent lead --task gen1 --subtask others-s1 --desc "Stage 1 of the retrain: the
+  others teacher from scratch, run s1, resumed on the served-graphs fix." --detach -- .venv/bin/python -m
+  triforce.lab.train --name gen1-others --run-id s1 --resume gen1-others/s1 --group others --parallel 10
+  --steps-per-update 8192 --iterations 1831 --checkpoint-every 114 --seed 4101 --except code,training.serve`
+  (the same for `gen1-darknut/s1` and `gen1-rooms/s1` with their own arguments).
+
+### What is next, with graphs on
+
+The game threads of a 20-game teacher still sleep a third of their time (8 games: a sixth). Not the weight copy
+(one copy of the 5M parameters on the GPU a rollout, about a millisecond in 20-40 s), not the GPU (a replay is about
+1 ms; the GPU ran 40-80% busy with the learners). It is the **server thread itself**: one Python thread answers all
+20 games, 2.2-5.3 ms a batch where the replay is 1 ms, busy 41-50% of a 20-game rollout, and it competes for a CPU
+with the 20+ game threads of the same niceness (the eager server of `gen1-darknut/s1` waited for a CPU 27% of its
+time at load 25; not measured with graphs). Cheap steps, none built or measured (each leaves every action the same):
+- give the server thread the CPU first: raise the game threads' niceness a few steps within the job (allowed without
+  privileges), so the one thread all 20 games wait on is not queued behind them;
+- one host-to-device copy a batch instead of one per observation array (12 of them), from a pinned staging buffer;
+- leave out of a training's answers the hit head's 352 logits a row, which a training never reads (the replays'
+  danger records do).
+Past that the emulator is the floor: 85% of a teacher's CPU, twice the frames a decision with the look-ahead.
+
+### The second step (`r43-serve2`): one staged copy a batch, no hit logits; the niceness not kept
+
+The lead (Nov 25, after the first fix): the three cheap steps above, each measured and proven to change no action.
+One training of mine at a time (other agents' scripts beside it), capped at 40% of the card, never while a suite held
+a tools place; 6 iterations, the first left out; "plain" is the graphs as merged that morning (`TRIFORCE_SERVE_STAGING=0
+TRIFORCE_SERVE_HITS=1`). Steps a second moved with the other agents' jobs more than with any of the steps (the same
+pair in the other order flips its winner), so the server's own time a batch and the games' sleep share decide:
+
+| run | load | steps/s (a game) | server ms a batch | games asleep | waiting for a CPU |
+|---|---:|---:|---:|---:|---:|
+| 20 games plain, `r51` | 18 | 1,378 (68.9) | 2.05 | 43% | 7% |
+| 20 games staged + no hits, `r51` | 16 | 1,411 (70.6) | 1.52 | 40% | 9% |
+| 20 games niced game threads (+3), `r51` | 22 | 1,008 (50.4) | 2.18 | 37% | 22% |
+| 20 games plain, `r52` | 28 | 903 (45.2) | 2.40 | 31% | 26% |
+| 20 games staged + no hits, `r52` | 29 | 932 (46.6) | 1.70 | 34% | 29% |
+| 20 games niced game threads (+3), `r52` | 29 | 940 (47.0) | 2.36 | 34% | 28% |
+| 8 games plain, `r51` / `r52` / `r54` / `r55` (r54, r55 second) | 16 / 15 / 35 / 19 | 702 / 776 / 275 / 568 | 1.31 / 1.38 / 1.85 / 1.68 | 35% / 34% / 35% / 35% | 6% / 0% / 45% / 10% |
+| 8 games staged + no hits, `r51` / `r52` / `r54` / `r55` (r54, r55 first) | 18 / 20 / 24 / 25 | 446 / 392 / 531 / 586 | 1.14 / 1.28 / 1.12 / 1.07 | 26% / 27% / 25% / 30% | 33% / 32% / 16% / 9% |
+
+- **Kept: the staged copy and no hit logits** (on by default in the lab trainer; recorded as `training.serve.staged`
+  and `.hits`; the log's start line says "one staged copy a batch, no hit logits answered"): the server's time a batch
+  falls by a quarter or more (20 games 2.05-2.40 to 1.52-1.70 ms; 8 games 1.31-1.85 to 1.12-1.28), and an 8-game
+  teacher's games sleep 25-30% of their time instead of 34-35% in every pair. Steps a second: +2-3% for 20 games in
+  both pairs and for 8 games in the one pair at a like load (r55: 586 against 568); the other 8-game pairs went with
+  their load.
+- **Not kept: the niceness.** Raising the game threads' niceness 3 steps above the server did nothing to the server's
+  time a batch (2.18, 2.36 ms) and lost the games to everything else on the machine at nice 15 or below (r51: 22% of
+  their time waiting for a CPU, -27% steps a second); removed.
+- **The same actions**: an audit run of the kept steps (`TRIFORCE_SERVE_AUDIT=1`, darknut, 20 games, 6 iterations):
+  98,319 staged graph answers against the eager forward on the same rows: the largest difference of a logit or value
+  7.6e-6, 0 picks changed. The hit logits a training no longer gets are read only by a play's records
+  (`Decided.danger`, `crates/pool/src/pool.rs`), never by a rollout.
+- **Next, for later** (the lead's question; none built): a second server thread would share the GIL and the server is
+  busy only a third to a half of a rollout, so [INFERENCE] 10% at most, about half a day; one server for several
+  teachers (another process, observations through shared memory) batches nothing (each teacher its own network) and
+  shares the same GPU, days of work for no gain I can measure. What is left of the games' sleep is the round trip
+  itself (the 1 ms window, the replay, the answer through the queue); past it the emulator is the floor.
+
+### GPU memory a teacher holds (the lead's question before the restart)
+
+One training at a time (r43-serve2's code), 4 iterations, the whole process as `nvidia-smi` reports it (CUDA
+context, torch's cache, the graphs' pools), capped at 40% of the card (`TRIFORCE_GPU_FRACTION=0.4`) so the suites
+beside it kept their memory:
+
+| teacher's shape | graphs | eager | torch's peak reserved (graphs) |
+|---|---:|---:|---:|
+| 8-game boss (`boss-gohma`, 4,096 steps an update) | 1.85 GB | 1.66 GB | 1.30 GB |
+| 10-game `others` (8,192) | 2.65 GB | 2.46 GB | 2.09 GB |
+| 18-game `walkers` (14,742) | 5.85 GB | 5.50 GB | 5.21 GB |
+| 20-game `darknut` (16,384) | 7.10 GB | 7.12 GB | 6.44 GB |
+| 20-game `overworld` (16,384) | 5.85 GB | not run | 5.21 GB |
+
+- **The graphs are bounded and small**: exactly 7 a served network (batches of 1, 2, 4, ..., 64 rows), captured once
+  at the first rollout and never again (a batch above 64 rows is served eagerly), 166 MB measured in every shape
+  (each training's log now says so at its capture); 0-0.35 GB in all against eager.
+- **The learner is the bulk**, and it grows with the minibatch (the update's steps over its 4 minibatches: 1,024 rows
+  for a boss, 4,096 for darknut): about 0.8 GB plus 1.5 GB a thousand rows. Darknut's extra over walkers is most
+  likely ([INFERENCE], not separated) its demonstration term's own minibatch (4,096 more rows through the network each
+  step), not the demonstrations themselves: its 384,327 rows (4.2 GiB) stay in host memory (`ppo.DEMO_DEVICE_BYTES`,
+  4 GiB, `PPO._demo_rows`) and each update moves a minibatch's sample. `gen1-darknut/s1` held 6.9 GB after 8.7
+  hours eager: no growth over a day. Moving them to the host would save nothing: they are there.
+- So three of the big teachers at once (darknut 7.1, walkers 5.85, overworld 5.85 GB) take 18.8 GB of the 24 with
+  the desktop's 1-5 GB: no room for a suite or an evaluation. The lead sequences the restart accordingly.
+- The same runs, one training of mine at a time (the "alone" rows: other agents' scripts beside it), steps a second
+  with graphs (and the second step's staging, no hit logits) against eager, and the games' sleep: 8-game boss 720 (90
+  a game, load 12) against 389 (49, load 10), asleep
+  34% against 59%; 10-game others 484 (load 29) against 427 (load 25); 18-game walkers 1,406 (78 a game, load 18)
+  against 883 (49, load 13), asleep 35% against 65%; 20-game darknut 1,461 (73 a game, load 16) against 972 (49,
+  load 15), asleep 39% against 61%; overworld (graphs only) 1,131 (57 a game, load 25).
+- A capture that cannot get its memory serves that network eagerly from then on, with the one warning line, and the
+  run goes on (`tests/test_lab_nets.py`: an out-of-memory error inside the capture; the capture ends, the answers are
+  the eager forward's). A training's GPU memory and its peak are in its record (`jobs.Speed` reads `nvidia-smi` every
+  30 s): `triforce job speed` prints `GPU memory peak 7.1 GB (last 7.0 GB)` and the last line carries the peak.
+
+### Steps a second on record (`r43-perf`: `triforce/jobspeed.py`, `triforce/jobs.py`, `triforce/job.py`)
+
+The owner: "I want the resulting steps per second to be visible to the agent that started the training and waits on
+it [...] total sps should also go into the logs/records", and later "you should immediately know if something is
+outside of bounds from the output of training when it returns from a background task. Also you should be able to
+just tell me from the db if I ask."
+
+- **The report.** `triforce train` and `triforce.lab.train` report after each iteration (`jobs.Speed`): steps so
+  far, the last iteration's steps a second, the run's mean, the rollout's alone, and the shape (network and width,
+  for a served network how it is served, games, look-ahead: `hitnet-768 graphs, 20 games, look-ahead 4:0.25`; the
+  same teacher made twice the steps a second with graphs, so eager and graphs are two shapes), into the job's row
+  (`speed`). `train_summary.json` records the mean (`steps_per_second`; the lab's also `rollout_steps_per_second`).
+- **The time series.** The job's wrapper takes a sample every 2 minutes (`speed_samples` in the queue's db): time,
+  steps, the rate since the sample before, the iteration's and the mean rates, the load average, and the jobs running
+  then (their ids; how many were trainings). About 30 rows an hour a training.
+- **Normal.** A shape's normal beside k other trainings (0, 1, 2, 3 or more): the median steps a second a game of
+  the ended trainings of that shape with at least 10 minutes of samples beside k trainings, once 3 such exist; until
+  then `jobspeed.REFERENCE` (the stage-1 medians above: 8 games 66.9 a game beside 1 training, 52.9 beside 2; 20
+  games 44.9 and 36.9; nothing measured alone), else none ("NO NORMAL": nothing is judged).
+- **SLOW.** A running training whose samples are more than a quarter below their normal for more than ten minutes
+  in a row. The wrapper writes the mark into the row (`speed_mark`) and a notice into the job's log (`triforce job:
+  #N SLOW: 31% below its normal (700 steps/s against 1,000) for 12 minutes since 09:12, beside #1376
+  lead-gen1-others-s1 (train) and 1 other job (#1398 eval); load 27.1 (a notice: the job goes on)`), and when it
+  recovers, `speed back within bounds`. `triforce job wait` prints the job's progress and speed every 5 minutes and
+  the SLOW line while it holds; `triforce job list` shows both; the GUI's card draws the speed line under the
+  counters and the SLOW line in the warning colour.
+- **The last line.** Every training's wrapper ends on its verdict, and `triforce job wait` prints it again as its
+  own last line (completed, failed and interrupted alike): `triforce job: #1262 lead-gen1-boss-gohma-s1 (train)
+  completed speed: 432 steps/s mean (54.0 a game) [hitnet-768 eager, 8 games, look-ahead 4:0.25], normal 393 (49.2 a
+  game): IN BOUNDS; beside it: ...` or `... OUT OF BOUNDS: 36% below its normal for 46 minutes (23:58-00:45; 46
+  minutes slow in all), beside #1342 ..., #1371 ...`. OUT OF BOUNDS: SLOW at some time, or the mean more than a
+  quarter below the normal over the same intervals.
+- **From the db alone:** `triforce job speed [JOB...] [--last N] [--since 24h]` (shape, start, end, steps, mean
+  and a game, normal, the verdict, the jobs beside), `--series JOB` (its samples), `--backfill` (trainings of
+  older code: their run folders' `metrics.jsonl`, found through the detached logs' `[lab|train] ... dir=` line; no
+  load average for those). Backfilled at 08:30 into the live db: 43 trainings since Nov 23, the stage-1 teachers
+  among them. What it says of them, for example: `gen1-boss-gleeok/s1` OUT OF BOUNDS (36% below its normal for 46
+  minutes, 23:58-00:45, beside the two darknut runs and 2 evaluations), `gen1-overworld/s1` and `gen1-walkers/s1`
+  OUT OF BOUNDS 53-57% below for 14-20 minutes at 17:03 beside Store41's and the lead's test suites, the other
+  bosses IN BOUNDS.
+- **The lead's standing instruction** (AGENTS.md "The job queue"): an agent that waits on a training and sees SLOW
+  or OUT OF BOUNDS reports it to the lead at once, with the line; the lead starts an investigation agent.
+- **The hearts chart** (`training-gui.py` `run_chart_data`): `total (+wasted)` is drawn only from the first
+  iteration where it differs from `real`, and kept from there; a run that never wastes hearts shows `real` alone.
+- Tests: `tests/test_jobspeed.py` (the normal by the record, the bucket's ten minutes, the reference, none; SLOW
+  only past ten minutes, since when and what ran beside, and back; the last line IN, OUT by a stretch, OUT by the
+  mean, NO NORMAL; the wrapper's watch and its one notice each way; `jobs.Speed`'s row; the backfill and its rerun;
+  a real wrapper run ending on its speed line and `triforce job speed` reading it), `tests/test_training_gui.py`
+  (the card's lines and colours, the hearts series).
+
 ## Why the Darknut teacher walks past 3x5b's bomb carriers, and the forced kill (Carrier43, branch `r43-carrier`)
 
 anthropic/claude-opus-5-5 (Carrier43), on `r40-int` at f8da9361. **The ask** (the owner, Nov 25: "Yes it should force
@@ -4505,6 +4807,92 @@ an entry the task lists: with `room_kill_cycle`, `$050` HelpDropCount = n, `$051
 `room_bomb_counts`, `$658` = a listed count. Nothing else (no hearts, keys, `$524`, positions); an entry not listed
 draws nothing. Seed and curriculum starts are as before.
 
+### 7. The drop state at a reset, and Manhandla's and Dodongo's bombs (the owner's directive, Nov 25)
+
+The owner: "leave 3x5b with current behavior, but every other room should be randomized with possible exceptions for
+the boss. With manhandla, we need to teach it to not skip the bombs [...] Same with dodongo's forced bomb drops [...]
+3x5b needs special rules, and manhandla and dodongo need special rules OR a failed scenario if they leave with bombs on
+the floor [...] we need to make sure training runs see manhandla drop bombs", then on the shape of the draw: "closer
+to real values than uniform [...] somewhere between uniform and what we see in practice [...] make the decision,
+record the reasoning behind it and go". The measurement and the shares are the lead's (decisions 2026-11-25 "The drop
+counters at a reset"); the build, the table's script, the ending and the bosses' settings Carrier43's.
+
+**(A) `ram_randomization.drop_state: real`, one rule** (`_generation.yaml`; every d3first task's own `help_count` line
+removed, 21 files; the bare tasks, `d2first` and the product trainer untouched).
+- *What real play holds.* Seeds43's scan of the archive's power-on replays (507 runs of 2.0.0.0-2.0.0.16, every room
+  entry the scan found whose memory edits before it are only cheated wall bombs and shop rupees, which no counter
+  reads: 48,774 dungeon and 28,627 overworld entries; the lead's count of 77,465 also kept 64 dungeon entries after
+  other edits). Kills since Link was last hit (`$627`) at a room entry:
+
+| kills | dungeon, real | dungeon, drawn | overworld, real | overworld, drawn |
+|---:|---:|---:|---:|---:|
+| 0 | 23.0% | 17.4% | 53.7% | 37.9% |
+| 1-3 | 34.4% | 29.2% | 29.9% | 26.2% |
+| 4-9 | 23.4% | 28.1% | 6.9% | 17.1% |
+| 10-15 | 9.2% | 18.7% | 2.8% | 14.4% |
+| 16+ | 10.0% | 6.7% | 6.6% | 4.4% |
+
+- *The table* (`triforce/drop_state.json`, `scripts/experiments/r43_drop_state.py build SCAN...`; `report` prints the
+  table above): every triple (`$627`, `$50`, `$51`) seen, with its count, by kind of door (370 dungeon, 135 overworld
+  triples; a forced drop armed as bombs in 135 dungeon entries and no overworld one). Triples, never one counter
+  computed from another: 9% of real entries fit no formula between `$50` and `$627`. Rebuilt from the generation's own
+  power-on runs later by the same command.
+- *The draw* (`start_states::drop_state_values`, `apply_drop_state`): at a seed reset, after every other draw, the kill
+  count with probability 2/3 from real play's distribution of the door's kind and 1/3 uniform over 0-15, then a
+  triple with that count at its real frequency; the drop cycle `$52A` uniform 0-9 (a hit zeroes the counters and not
+  the cycle: every pair is one play can bring). The shares are constants beside their reasoning
+  (`DROP_STATE_REAL_SHARE`): closer to real than to uniform as asked; the 10-15 band, where a fairy is one to six
+  unhurt kills away, at twice real play's share, because a better network goes unhurt longer than the old ones did;
+  one table a kind of door, not a door, since a door's own distribution is the old networks' habit there.
+- *3:0x5b from S* keeps its `room_kill_cycle` (0 or 1) and its `help_count` streak 0-9 (`_generation.yaml` keeps
+  `help_count: [0, 9]` for an entry that states its own cycle): its draws are the same draw for draw. Proof: 300
+  resets (seeds 0-99 on `3_5bs_0..2`) give the same RAM, `$000-$7FF` byte for byte, on `r40-int` at 92940375 and
+  on this branch; the unit test runs 300 draws with and without the key and the random stream after them.
+- *A track start* (curriculum, past its track's first point) keeps its own mid-room state, and only the hearts are
+  drawn (`start_states::track_point_values`; the lead, after Tracks45 found the listed-room draws still applied there):
+  no bag, no kill counters, no drop cycle, no room value, no drop state. A point is a moment inside the room's play,
+  after the kills, hits and pickups its track made: before, a 3:0x5b first-pass point after the kill (cycle 1) was
+  drawn back to 0 or 1, so half the time the carriers lit again and `carriers: fight` asked for a second kill, and a
+  3:0x59 point mid-fight got a bag of 4 or 8 its track never held. A track's first point (the room's entry) draws as a
+  seed start. darknut's 3:0x5b first-pass tracks (store trajectories 261124-gen2, the fighter's, three tracks of 74,
+  89 and 97 points): 174 of the 257 points a curriculum start can draw hold the carriers lit (before the kill, cycle
+  0), 83 dark (after it, cycle 1); the curriculum starts near a track's end and walks back, so its early stages train
+  the leaving after the kill and its later ones the kill. Before, every point was lit about half the time. Test
+  `a_track_point_keeps_its_own_cycle_bag_and_counters`.
+- *The values the game can hold*: every triple was held by the game; the cycle is independent of them. Where
+  Manhandla's and Dodongo's `drop_bombs` arm the bomb drop (at the reset, and again after a hit cleared it) the three
+  counters are a real armed triple copied from the table (`start_states::armed_drop_values`; the lead's follow-up, Nov
+  25): 18 distinct triples, all dungeon (no overworld entry held one), all `$50` = 10 and `$51` = 1 with `$627` from 10
+  to 61; by count (135 entries) (10, 10, 1) 41, (11, 10, 1) 25, (20, 10, 1) 18, (13, 10, 1) 13, (16, 10, 1) 12, the
+  other thirteen 1-4 each. Before, the two bytes were written over the drawn `$627`, which could read below 10, a
+  triple no game holds. Tests: `armed_drop_values` draws only those triples at their counts; a Manhandla training
+  reset and its re-arm hold one (`an_armed_bomb_drop_is_a_real_armed_triple`). `d2first`'s tasks (no `drop_state`) arm
+  the two bytes as before.
+
+**(B) `drops-left`, Manhandla (3x4d) and Dodongo (2x0e)**: a task that names `endings: {drops-left: soft-failure}`
+ends an episode whose correct exit leaves wanted bombs lying (`objective::bombs_left_behind`: the bag has room, the
+drop not about to vanish) as a failure, −20, no exit reward (`rewards::score_step`, the critic); a full bag leaves
+nothing wanted. Only those two tasks name it. Chains never end on it: a chain plays the bare task with the route
+task's observation switches only (`for_chain`), and its room records count `bomb_drop_left`.
+- What points the network at the drops stays: `reward.drops_first` (once the fight is over the wanted drops are the
+  only targets until taken or gone; now on for Dodongo too) and Manhandla's `left_drop_penalty` 3.0 a drop left
+  (bombs, and a heart or fairy while hurt, which the ending does not cover: kept, for bombs on top of the ending).
+- **Training sees the drops.** Manhandla's `drop_bombs` 0.75 stays: three resets in four arm his bomb drop, against
+  real play reaching his door with it armed in 3 of 507 entries (the scan) and seeing bombs drop in 44-46% of
+  visits (today's team: 283 of 638, r40-2015-1k-d3; 64 of 139 with it570's Darknut network), from bomb kills during
+  the fight. Dodongo: his sword death on a stunned Dodongo writes `$50` = `$51` = 10, so his own drop is bombs
+  unless Link is hurt before the sparkle ends; his death by a second swallowed bomb drops from the table
+  (asm:Dodongo_CheckCollisions). Today's team: bombs dropped in 887 of 999 visits (678 of them entered with a full
+  bag); his task now arms the bomb drop in half the training resets (`drop_bombs` 0.5) so a network that still kills
+  him by feeding him sees the bombs too.
+- *Proofs*: `leaving_wanted_bombs_behind_ends_drops_left_where_the_task_names_it` (a bomb pack written in 6_79s, the
+  walk out W: `drops-left` with the ending named and room in the bag, `exit-correct` with a full bag or the ending
+  unnamed); chains of today's team on this code, 100 runs each (`target/r43/drops/`): from `3_4dw_0` 90 of 100 to
+  the triforce (10 die to Manhandla), drops in 50 visits, all 50 taken; from `2_0es_0` 100 of 100, drops in 85, all
+  taken; no wrong exit, every run goes on. The stage-1 teachers on their tasks (`triforce evaluate`, 50 a state, no
+  forced drop in evaluation): Manhandla 243 of 300 (`3_4dw` 96 of 150, 56 deaths), drops in 56 episodes, 55 taken, 0
+  left; Dodongo 148 of 150, drops in 127, all taken: neither leaves bombs today, so the ending never fired there.
+
 ## The real walk: one start state per door, from power on (States44, branch `r44-states`, Nov 25)
 
 The owner, Nov 25, after Seeds43 found that the seed states hold a redrawn `$524` and refilled, fresh rooms: "We
@@ -4691,3 +5079,290 @@ problems.
   no real frame to compare.
 - The segments' starts come from old states set to the plan; a power-on walk of the whole route (about 5-8 hours in
   one place) was not run.
+
+## Tracks in the route's layout, and the Darknut demonstrations again (Tracks45, branch `r45-tracks`)
+
+anthropic/claude-opus-5-5 (Tracks45), on `r40-int` (9bd42720, then c0f7381a) with States44's walked states merged
+(83a99a3c, then Dungeon 3's final 329bbfab). The decision of Nov 25 ("Only real starts"): every `d3first` curriculum
+track and the Darknut demonstrations again from the real start states, in the route's layout. This section is
+Dungeon 3's block (route steps 0-30: 0x77 to Dungeon 3 and out to 0x45); the rest of the route follows as States44's
+segments land. Status file `local://r45-tracks-status.md`.
+
+### 1. The explorer plays the route's layout
+
+- **The load.** `zelda::room_entry::Layout` gains `Cycle(v)` (one reachable `$524` value; a value the door's rule
+  does not hold is not written) beside `Route` and `Valid`. `SpecialistEnv::set_layout` (default `Valid`, the
+  training draw) and `Explorer::set_layout` choose what a reset's reset rule serves; `Explorer::explore` refuses a
+  `Cycle` the start's door cannot hold. Python: `Explorer(..., layout=)`, `explore_states(..., layout=)`,
+  `Env.set_layout(...)`; **`python -m triforce.explore --layout route|valid|N`, default `route`** (`N` writes the
+  track `<state>~c<N>`). The route's planned `$524` equals the walked state's own at all 18 Dungeon 3 doors.
+- **What a track says.** `Session::entry_values` reads back, at every pre-entry load, the bytes the room entry reads
+  (`room_entry::EntryValues`: `$524`, `$525`, the chase flag and target `$60-$62`, `$4A`, the divider `$26`, the
+  door, the source (the rule's draw, the uniform draw or the state's own bytes) and, against the door's rule, whether
+  `$524` is the route's planned value and whether it is reachable). A track's `trajectory.json` holds them as
+  `layout: {asked, rng_phase, entry}` (`env::explore::layout_json`), and what its first decision holds of the values
+  a track point keeps as `start: {bombs, drop_cycle, help_count, help_value, kill_streak, health}`
+  (`env::explore::start_json`; the fighter's tracks also say what their reset wrote, `start.written`). `Env.entry`
+  gives the same to a script; training logs each room's starts by layout (`room/<room>/<entry>/route_*`, `other_*`,
+  `info['route_layout']`) and its curriculum starts by room (`.../curriculum_episodes`, `curriculum_success_rate`).
+- **What a track start keeps** (the rule merged in c0f7381a, Carrier43 after this branch's finding: "a track point
+  keeps its own mid-room state"). A curriculum start loads a track's `NNNN.state` (a decision inside the room) through
+  `SpecialistEnv::reset`: `randomize_rng` writes a new random phase; the reset rule's draw, the fresh room and the
+  banked kills act on pre-entry states only, which no `NNNN.state` is; the hearts are drawn; the bag, the kill
+  counters and the drop cycle stay the track's. So every point keeps the track's layout, monsters, bag and counters,
+  and the random phase is redrawn. A track's `0000.state` is never a curriculum start (a point moves a stride earlier
+  per stage and the track is complete, never drawn again, once it reaches 0).
+- **The proof** (`scripts/experiments/r45_tracks.py replay`): for every track, a real curriculum env of the family's
+  task pinned to a point (a progress file at that point, `stages` = the track's length) is reset with 3 seeds at 4
+  points spread over decisions 1 to the last, on the explorer's config (no draws, as the tracks were made). (a) The
+  RAM after the reset equals the state file's but for the RNG registers `$18-$24`: **822 of 822 resets** (explorer
+  282, fighter 540), so a track start in the route's layout is in the route's layout. (b) The track's remaining
+  actions, played open-loop after the new phase, reach the track's own ending from its last decision in **210 of
+  210**; from earlier points less, as monsters that walk by the random numbers part from the recorded play (explorer
+  tracks by the share of the track left: up to 10% 60 of 60, 10-40% 50 of 72, 40-70% 31 of 72, over 70% 19 of 66;
+  the fighter's long fights 81 of 81, 37 of 81, 2 of 81, 0 of 81). The exact replay (the explorer's own, the phase
+  kept) is every track's `success: true`. A training does not replay a track: it starts the network at a point, so
+  (a) is the property the curriculum needs; (b) says how far a point's monsters stay as recorded.
+
+### 2. Every `d3first` track of Dungeon 3's block again
+
+From the walked state of each door (chain 0), in the route's layout, with the generation's tasks (`explore --layout
+route`, 20,000 iterations, patience 3,000; the fighter by `r41_tracks.py fighter`, its unhit visits). Every state
+was solved; no rule track was needed (3x4b, which needed zol-4b before, fell to the explorer, 253 steps unhit).
+
+| family | door | tracks (new) | made by | notes |
+|---|---|---|---|---|
+| darknut | 3x59 from N | 19 | explorer (route, 4 bombs, 2 hits); fighter at 4 bombs and at 8 bombs, each in the route's layout and the 8 others | the 8-bomb tracks: the bag the first Darknut's drop brings (`--bombs 8`) |
+| | 3x5b from S (first pass) | 19 | explorer (route, cycle 0: one kill, 1 hit); fighter at drop cycle 0 (one kill) and at cycle 1 (walk through), route + 8 others | `carriers: fight`: every cycle-0 track shows the kill |
+| | 3x5b from W (last pass) | 10 | explorer (route); fighter route + 8 others | enters at cycle 1 (329bbfab) |
+| | 3x59 from S, 3x5c, 3x69 from N, 3x69 out of the cellar | 4 | explorer | crossings |
+| zol | 3x7c, 3x7b, 3x6b, 3x4b, 3x49, 3x3d | 6 | explorer | all unhit |
+| boss-manhandla | 3x4d | 1 | explorer | |
+| trap-room | 3x4c, 3x5a | 2 | explorer | declared untracked before; now tracked, the declaration left (harmless) |
+| equipment-room | the raft cellar 3x0f | 1 | explorer | declared untracked; tracked, the declaration left |
+| ow-leever | 0x75 from E | 2 | explorer, route and its one other layout (5) | |
+| ow-moblin | 0x73 from E, 0x63 from S | 2 | explorer | |
+| ow-zora | 0x65 from W, 0x55 from S | 4 | explorer; 0x55 also in its two other layouts (0, 8) | |
+
+70 tracks (52 darknut). **Still declared untracked, with the reason**: ow-start 0x77 and its cave (the start, a walk
+with no monster on the way), ow-peahat 0x45 from S (a walk to the dungeon's mouth), ow-tektite 0x76 from E (the
+lead's ruling, Nov 24: its tracks walk across and kill). **Curriculum off, no track** (their old `d3first` tracks of
+these doors dropped): ow-tektite 0x74, ow-octorok 0x64, stalfos-keese-gel 3x4a.
+
+**The staged snapshot: `/home/leculver/git/triforce-r45-tracks/target/trajectories-gen3`** (`r45_tracks.py
+compose`): the store's `261124-gen2` as hard links without every `d3first` track of the 30 walked doors (61, all
+chains), plus the 70 above (copies): **1,426 tracks, 123,311 files, 1,393,045,932 bytes** (recomposed over the whole
+walk in 5 below); `d2first`'s tracks
+untouched. The compose record is `target/trajectories-gen3.compose.json`. For the lead, once the whole route is in:
+
+    triforce-lead data install trajectories <NAME> --from /home/leculver/git/triforce-r45-tracks/target/trajectories-gen3
+
+**Checks** (this worktree's `trajectories -> target/trajectories-gen3`, `TRIFORCE_STATES_DIR` a copy of the states
+without the walked doors' `_1`/`_2` files, which States44 removes at the end): `r40_tracks.py proof` (every task
+loaded as `triforce train` loads it, `Curriculum::new` built): **88 task files, none refused, no red flag**.
+
+### 3. The other reachable layouts: how the hard rooms fare without a track, and the extra tracks
+
+**What the reset serves.** Of the rule's 249 doors (`triforce/entry_rule.d3first.json`), 133 dungeon doors hold all
+nine spawn cycles (the route's on half the resets, each other on 1/16), the other dungeon doors 0-7 others; the
+overworld's doors were measured, 0-5 others (0x75 from E: one, served on half its resets; 0x55 from S: two, a quarter
+each). In Dungeon 3 every door but 3x7c from S (one other) holds all nine.
+
+**The old runs answer it.** Every training reset of the generation's first teachers drew `$524` uniformly from nine,
+and each door's tracks were explored in one layout, so their room starts were (8 times in 9) starts in a layout no
+track of theirs held. Every `d3first` track of those runs completed (the Darknut teacher's 21 by iteration 172 of
+1,627; the walkers' and the overworld's likewise), while the room starts of a few rooms stayed low for hundreds of
+iterations: the skill of a tracked layout did not carry to the others there. Room-start success, first 50 iterations
+/ 50-200 / 200-500 / last 300 (`metrics.jsonl` `room/<room>/<entry>/seed_success_rate`, or `success_rate` where the
+run predates the split; harvested starts mixed in where the task drew them):
+
+| teacher | room entry | its tracks then | room starts |
+|---|---|---|---|
+| darknut `gen1-darknut/s1` | 3x59 from N | 3 (1 explorer, 2 fighter) | 0.00 / 0.19 / 0.50 / 0.92 |
+| | 3x5b from W (last pass) | 3 | 0.18 / 0.43 / 0.74 / 0.96 |
+| | the Olive Garden from E | none | 0.00 / 0.05 / 0.40 / 0.86 |
+| | 8x3e from S | none | 0.16 / 0.37 / 0.64 / 0.97 |
+| | 8x5e from S | none | 0.13 / 0.40 / 0.70 / 0.97 |
+| | 5x64 from the cellar | none | 0.22 / 0.66 / 0.89 / 0.97 |
+| | 3x69 from N | 3 | 0.49 / 0.67 / 0.83 / 0.93 |
+| | 3x5b from S (first pass) | 3 (fighter) | 0.45 / 0.79 / 0.94 / 0.99 |
+| | every other entry | | 0.55-0.85 at the start, 0.97-1.00 by 200 |
+| walkers `gen1-walkers/s1` | 3x59 N / 3x5b W / the Garden E (Darknuts then) | 3 / 3 / none | at the end 0.27; 0.51; 0.16 |
+| | the Breakfast Room 4x32 from W | 3 (rule) | 0.15 / 0.30 / 0.65 / 0.81 |
+| | 7x1b from W | 3 (rule) | 0.20 / 0.32 / 0.52 / 0.71 |
+| | 7x49 from S | none | 0.07 / 0.53 / 0.72 / 0.85 |
+| | 4x12 from N | 3 (rule) | 0.10 / 0.79 / 0.86 / 0.92 |
+| | 5x66 from W | none | 0.00 / 0.50 / 0.81 / 0.92 |
+| | 3x4b from S | 3 (2 rule, 1 explorer) | 0.53 / 0.94 / 0.96 / 0.98 |
+| overworld `gen1-overworld/s1` | 0x55 from N | 3 a visit | 0.05 / 0.48 / 0.66 / 0.65 |
+| | 0x0c from E (ow-tektite) | none (curriculum off) | 0.42 / 0.51 / 0.49 / 0.49 |
+| rooms `gen1-rooms/s1` | 3x4c from S; 3x5a from W (blade traps) | none | 0.01 / 0.44 / 0.83 / 0.93; 0.01 / 0.12 / 0.91 / 0.95 |
+| boss-manhandla `gen1-boss-manhandla/s1` | 3x4d from W | 3 | 0.25 / 0.53 / 0.62 / 0.64 |
+
+**Per family.** *darknut*: the fights lag in the other layouts (3x59 from N, both passes of 3x5b, the Olive Garden
+from E, 8x3e, 8x5e, 5x64 from the cellar); the crossings (3x59 from S, 3x5c, 3x69 out of the cellar, 5x06, 5x37)
+were learned in any layout within 200 iterations. *walkers*: the slow rooms are the Breakfast Room 4x32 from W, 7x1b,
+7x49, 4x12 from N, 5x66 from W, and 5x47 from S (the owner's case: the other layouts put a Gibdo in Link's column in
+55-68% of the phases); the rest learned in any layout. *overworld*: its doors hold few other values, each on a
+quarter to a half of the resets, so a track per value is cheap and covers every start; 0x55 from N (the dock) is the
+slow room. *rooms*: the blade-trap rooms learned without any track. *bosses*: [INFERENCE] a boss is placed by its own
+code, not the spawn list, so the layout question does not arise there (not checked in the ASM here).
+
+**Proposed** (the lead's call): a track in each other reachable layout of the hard Darknut doors (built here for
+Dungeon 3: 3x59 from N at 4 and at 8 bombs, 3x5b from S at cycle 0 and cycle 1, 3x5b from W; the Olive Garden from
+E, 8x3e, 8x5e and 5x64 from the cellar when their walked states land); two or three other layouts each (the fighter's
+or the rule's hardest) for 4x32 W, 7x1b, 7x49, 4x12 N, 5x66 W, 5x47 S; every other value of the overworld doors with
+three or fewer (built here for 0x75 E and 0x55 S). A curriculum draws its incomplete tracks uniformly, so nine tracks
+weigh a door nine times until they complete; every track of the old runs completed early (the Darknut teacher's by
+iteration 172), so that weight is spent while the room is not yet learned.
+
+### 4. The Darknut demonstrations again
+
+The same builders, cases, visits, seeds and groups as Tasks41's (round40.md "The demonstrations again, with the
+inputs on"), from the walked states, under the merged load rule (the reset rule's training draw: the route's layout
+on about half the visits, the door's eight other layouts on the rest; c0f7381a's drop state: `$52A` 0-9 and a real
+counter triple at every seed reset, 3x5b from S keeping its own 0 or 1). 3x5b's first-pass cases now draw the drop
+cycle 0 or 1 as the task does, and the fighter walks through when the carriers are dark (cycle 1, a help count of 9
+or a full bag: `Fighter.carriers_lit`). 3x69's way out draws no harvested handoff (retired). Only hit-free visits
+leaving by the right exit are kept, as before.
+
+| file | case | visits kept / played | in the route's layout (kept) | rows | sha256 (12) |
+|---|---|---:|---:|---:|---|
+| r45-darknut-5b-low.npz | 3x5b first pass, 0 bombs, hearts 0.5-3 | 150 / 150 | 74 | 15,566 | bf1bb2d08758 |
+| r45-darknut-5b-full.npz | 3x5b first pass, 0 bombs, full hearts | 150 / 150 | 74 | 14,214 | fd1ff0f6d513 |
+| r45-darknut-59-b4.npz | 3x59 from N, 4 bombs | 146 / 150 (4 `no-damage`) | 71 | 59,798 | ef13852a01ff |
+| r45-darknut-59-b8.npz | 3x59 from N, 8 bombs | 146 / 150 (4 `no-damage`) | 71 | 47,550 | 9b4d4ed5907c |
+| r45-d3-69-out.npz | 3x69 out of the cellar | 480 / 480 | 233 | 9,824 | c1a97272bba4 |
+| r45-d3-69-in.npz | 3x69 from N (the search; the rule with its look-ahead in 7) | 319 / 320 (1 hit) | 156 | 13,523 | 16c328818783 |
+
+3x5b's first pass: at cycle 0 one kill in 79 and 63 visits (low, full; one visit each killed two, a Darknut walking
+into a swing), at cycle 1 none, a walk through, in 70 and 86. The Olive Garden's two new files are in 5 below;
+`specialists/d3first/darknut.yaml` names the eight new files.
+
+**The staged snapshot: `/home/leculver/git/triforce-r45-tracks/target/demos-gen4`**: the store's `261124-gen3` as hard
+links (226 files) plus the eight new files (copies; 234). For the lead: `triforce-lead data install demos 261125-gen4
+--from /home/leculver/git/triforce-r45-tracks/target/demos-gen4`.
+
+**The fighter's own rates** (`r40_darknut_fighter.py measure`, look 0, seeds 0-299, 300 visits a case on the walked
+state; measured before the drop-state merge, so the counters were the state's own and the task's streak draw):
+
+| case | in the route's layout | under the training draw (the route's 151, the others 149) | Darknut40 on the old starts |
+|---|---:|---:|---:|
+| 3x59 from N, 4 bombs | 98.3% (5 deaths) | 98.0% (route 98.7%, others 97.3%) | 98.0% |
+| 3x59 from N, 8 bombs | 99.0% | 98.3% (98.7%, 98.0%) | 95.7% |
+| 3x5b first pass, hearts 0.5-3 | 99.7% | 99.0% (98.7%, 99.3%) | - |
+| 3x5b first pass, full hearts | 100% | 100% | - |
+
+So the fighter is still 98-100% in Dungeon 3's Darknut rooms, in the route's layout and in the others alike.
+
+### 5. The rest of the Darknut teacher: Dungeons 5 and 8 (r44-states 8e5a0fe7, 7b70e1f7; r40-int fedfd5b7)
+
+- **Tracks.** Every Darknut door of Dungeons 5 and 8 from its walked state, the explorer in the route's layout:
+  5x64 from E and from the cellar, the Olive Garden 5x05 from E (214 steps, 7 of 8 hearts: the explorer now solves
+  it from the walked state, 6 bombs) and from its cellar, 5x06 from W and the cellar, 5x37 from S; 8x5e, 8x4e, 8x3e,
+  8x3f.
+  The two Blue Darknut fights 8x5e and 8x3e also in each of their five other reachable layouts (0, 3, 4, 7, 8; the
+  planned is 5; every one solved, 129-226 steps). The Olive Garden by the fighter (`r41_tracks.py fighter --room
+  garden`, new): at the state's 6 bombs and at 0 bombs, each in the route's layout and the 8 others, 18 tracks, all
+  unhit. darknut@d3first declares nothing untracked any more: **91 new `d3first` tracks** (Dungeon 3 52, Dungeon 5 25,
+  Dungeon 8 14), 167 with the family's bare ones.
+- **Demonstrations.** The Olive Garden again (`--room garden`, 150 visits a case, the training draw): at 0 bombs
+  143 of 150 kept (7 hit, two of them ending `no-damage`), 71 of them in the route's layout, 123,797 rows
+  (47fd08c9a4ca); at 8 bombs 147 of 150 (3 hit), 71 in the route's layout, 89,889 rows in one file (3f4e3ba37e8b;
+  it was two pieces). darknut.yaml's `demos:` names the eight r45 files in the same seven groups.
+- **The staged snapshot** is recomposed over the whole walk record (285 doors): the store's `261124-gen2` without
+  every `d3first` track of those doors (their states are gone), plus the new tracks: 1,211 tracks, 114,388 files,
+  1,293,846,574 bytes. Until the other families' tracks join it, their generation tasks refuse it (34 task files).
+- **Checks.** `r40_tracks.py proof`: darknut@d3first and the bare darknut load, 167 tracks, no red flag. The replay
+  proof over the 91 new tracks: 1,086 of 1,086 curriculum resets hold the track's state but the RNG; 273 of 273
+  reach the track's end from the last decision. A 6-iteration lab training of the darknut group on the staged
+  folders (express, 8 games, 4,096 steps an update): completed, 809 steps a second, its log carrying each room's
+  seed starts by layout and its curriculum starts.
+- **The fighter's own rates in the Olive Garden** (`r40_darknut_fighter.py measure --room garden`, look 0, seeds
+  0-299 on the walked `d3first_5_05e_0`, the task's hp draw):
+
+  | bag | in the route's layout | under the training draw (route / others) | Darknut40 on the old starts |
+  |---|---|---|---|
+  | 0 bombs | 285 of 300 (95.0%), 14 deaths, 0.86 hearts lost a visit | 285 of 300 (96.7% / 93.3%) | 94.7% |
+  | 8 bombs | 286 of 300 (95.3%), 11 deaths, 0.76 hearts lost a visit | 290 of 300 (96.0% / 97.3%) | 97.7% |
+
+  The fighter is as good in the walked Garden as it was on the old starts, and as good in the other layouts as in
+  the route's.
+
+### 6. Every other family's tracks on the walked route
+
+`scripts/experiments/r45_plan.py` lists each generation task's walked doors that are neither tracked nor declared; one
+regular job explored them (`--layout route`, 20,000 iterations, patience 3,000, 8 workers), 80 states in 13 tasks.
+79 were solved; 7x1b W (goriya, the six Blue Goriyas with the wood sword) was not in 20,000 iterations and has round
+34's rule track instead (`r32p_rules.py goriya-1b --hearts reset --layout route`: 12 of 12 runs won, 1 heart lost
+in the first). The explorer now solves the rooms that needed rules on the old starts (4x12 N and 4x31 E and W of
+the Vires, the Like-Likes' 4x32 W, Gleeok 4x13 W; the Gleeok also has the round-32 rule's track, 11 of 12 won).
+`r32p_rules.py --layout` and `r29_demos.write_track` keep the layout in a rule track, as the explorer's do.
+
+| teacher | new `d3first` tracks (doors in the owner's notation) |
+|---|---|
+| walkers | gibdo 7 (5x14, 5x26, 5x47, 5x65 E and W, 5x66, 5x76); zol 1 more (4x40); like-like 2 (4x32 W and its cellar); vire 8 (4x03, 4x12, 4x30, 4x31 E and W, 4x50, 4x61, 4x71); goriya 17 (1x23 S and W, 1x44, 2x1e, 2x5e, 7x18, 7x19, 7x1a W and cellar, 7x1b by rule, 7x28, 7x29 cellar, 7x2b, 7x38, 7x59, 7x69, 7x79) |
+| overworld | ow-leever 11 more (0x0b two ways, 0x29, 0x2a, 0x2b, 0x34 three ways, 0x48 N and W twice); ow-moblin 16 (0x3d, 0x42, 0x4d, 0x51-0x53, 0x5d, 0x63, 0x6d, 0x73); ow-zora 12 more (0x28, 0x2d, 0x38 S and W, 0x3f, 0x44 two ways, 0x46, 0x47, 0x55 N twice, 0x56); ow-lynel 2 (0x50, 0x60); ow-ghini 1 (0x31) |
+| others | wallmaster 2 (1x45, 7x0d) |
+| bosses | boss-aquamentus 2 (1x35, 7x2a); boss-gleeok 2 (4x13, explorer and rule); boss-digdogger 3 for its bare task (curriculum on; the generation's has it off): 5x24 and 7x39 by the explorer, 7x1c by round 32's rule (`digdogger-1c`, 10 of 12 won; the explorer had not solved it in 10 minutes) |
+
+stalfos-keese-gel, d2-rope, dodongo-crossing, moldorm, ow-start, ow-tektite, ow-octorok, ow-peahat, ow-boulder,
+wizzrobe, pols-voice, lanmola, patra and the other bosses' generation tasks needed none: their walked doors are
+declared untracked or their curriculum is off.
+
+- **The staged snapshot**, recomposed: 1,295 tracks, 120,693 files, 1,365,006,816 bytes. Task loader on it: all 88
+  task files load (overworld 10, walkers 9, others 5, rooms 2, darknut, each boss, the bare tasks), none refused, no
+  red flag. `start_audit --route d3first`: 276 seed states of d3first's tasks, none fails.
+- **Replay proof.** Walkers and overworld, 89 new tracks: 1,008 of 1,008 curriculum resets hold the track's state but
+  the RNG; 261 of 267 replays win from the last decision. The six that do not are ow-zora 0x44 N (3), 0x55 N's second
+  visit (2) and goriya's 7x1a cellar (1): the last action, played open-loop under another RNG, ends nowhere (no
+  ending); the recorded runs succeed. The others and the bosses, 9 tracks: 108 of 108 and 27 of 27.
+
+## 9x61: the block clip past the Patra, and Dungeon 9 walked again (States44, Nov 25)
+
+The owner, Nov 25: "9x61 - Yes you clip through there. Why would you fight? Do you even need the key in the room? If
+so it's just on the floor you don't have to clear the room. Normally you clip through the block, attack to invuln
+through patra's bees if in the way, on the way out, sword clip twice through him if needed. That's TOUGH to do, and I
+often get hit, but that's the 'fast' path (not a solved path)." Until now `d3first` fought the Patra of 9x61 for its
+push block on the way to the tunnel (`clear: true`) and came back through the empty room (`banked_kills: 15`).
+
+- **The key is not needed.** The route's key ledger (`scripts/experiments/r40_route.py ledger`) takes it at 9x61 and
+  pays no key door after it (Link leaves Level 9 with one). It is the room's item (ROM room data, level block 7-9
+  room $61: E = $19 key at position 1, $D0,$60; F = $10, trigger 0), lying on the floor from the start, not hidden
+  until a clear. The clip way leaves it (`treasure: skip`): every door after 9x61 holds one key fewer.
+- **The route** (`triforce/routes.yaml`, 012c5ba5): the shared block is split (`dungeon-9-from-55`,
+  `dungeon-9-tunnel`, `dungeon-9-to-ganon`) so `d2first` keeps its two fight steps between them (its 354 steps
+  unchanged); `d3first` gets two stretches like the other D9 clips: `patra-61` (E→stairs; clips `clear: false,
+  treasure: skip`, plain today's fight `clear: true`) and `patra-61n` (stairs→N; clips `clear: false`, the Patra
+  alive; plain today's `banked_kills: 15, clear: true`). 292 steps; the steps after 268 move by one, after 279 by two.
+- **The clip.** 9x61's layout is UW $1A, the block diamond with the stairs under its centre block that 0x55, 0x07,
+  0x20, 0x03 and 5:0x64 clip the same way; `zelda::clips` offers it by its general rule (`block_at`), no data added.
+  The explorer did not find it past the Patra (6000 iterations from the walked 9_61e, full hearts or the walk's own:
+  every failure `exit-wrong`). `scripts/experiments/r44_clip61.py` scripts it from the walk's carried machine: MOVE
+  to ($A0, $9D) below the diamond's E block, one CLIP N, MOVE W onto the stairs. Entering after 3-7 WAITs (the Patra
+  elsewhere) it reaches the tunnel unhit with no kill; 0-2 WAITs take a hit on the way and miss the timing; 8 is hit
+  once. `entry_states walk --script STEP=FILE` plays a step by given actions (`play_script`: the machine loaded
+  exactly, the actions through `Game.act`, the pre-entry frame captured; it must reach the target with no more kills
+  than `clear:` allows); the record's `how` says `script` and keeps the actions
+  (`scripts/experiments/r44_clip61.json`, entry after 3 WAITs). On the way out (step 279) the explorer crossed to N
+  past the living Patra by itself (87 steps, half a heart lost).
+- **Walked again** from the walked 9_61e (the D9 segment resumed at step 268, `--last-step 290`), 9_32s from the
+  round-29 `ganon` rule from the new 9_42s (20 of 20, as before). Changed doors, 19: 9_75cave, 9_20c, 9_10s,
+  9_4fcave, 9_10c, 9_20n, 9_75cave_v2, 9_61c, 9_51s, 9_41s, 9_31s, 9_30e, 9_67cave, 9_04c, 9_03e, 9_77cave, 9_52c,
+  9_42s, 9_32s. Every door before 9x61 is unchanged.
+- **Proof** (`r44_states_proof.py table` over the segment): `$524` among the runs' at 43 of 47 doors with runs (their
+  commonest at 42), the composed plan equal to the walk at 32 of 33. The runs fought 9x61, so after it: 9x61 from
+  the tunnel holds 0 banked kills against their 15 (the plan); 9x51 from S holds `$524` 1 against all 59 runs' 0,
+  because 9x61 from the tunnel now makes its Patra and walks the spot list, where the runs found it emptied; from
+  9x41 on the walk is back among the runs' values. The misses before 9x61 are as before (the overworld after D8,
+  the rotated history ring, 9x20 from N).
+- **The reset rule's table** rebuilt (`r43_seeds.py reach` on the new route, Seeds43's scrolls and flips without
+  the old step 268's; `r43_seeds.py rule` from the record). A door the route passes twice now takes its first walked
+  visit's value (the table's door has no visit; before, the later visit overwrote it, and the overworld's later
+  visits come right after a segment's start). Against r40-int's table 9 doors' planned values change, all to the
+  walk's own: 0x2f, 0x34, 0x37 and 0x3c out of their caves (1 → 5, 8 → 3, 0 → 7, 0 → 4), 0x44 from N (1 → 5), the
+  d4-island plain way's 4x20 from S, 4x21 from W and 4x30 from E (0 → 7, 3, 4), and 9x51 from S (0 → 1, the one this
+  change makes). `entry_states audit`: 1318 states, 0 problems; `start_audit`: 276 seed states, 0 fail.
+- **The teachers.** Patra's teacher (`others`) waited for this. The walkers at 9x51 and 9x41 and Ganon trained on the
+  states before it: their doors' planned `$524` changed (a reset draws it from the table) and they hold one key
+  fewer, which no room of theirs reads; the hearts are drawn at a reset.

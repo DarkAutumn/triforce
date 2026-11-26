@@ -12,7 +12,7 @@ success: [exit-correct]
 reward_profile: default
 reward: {pbrs: true, item_targets: true, heart_value: {exit: true, potential: 20}}
 obs: {objective: true, target: true}
-ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}
+ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5}
 items: {bombs: free}
 curriculum:
   enabled: true

@@ -29,7 +29,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
-from . import build, jobqueue
+from . import build, jobqueue, jobspeed
 
 JOB_ID_ENV = 'TRIFORCE_JOB_ID'              # the job this process belongs to (set by ``triforce job``)
 JOB_LABEL_ENV = 'TRIFORCE_JOB_LABEL'        # its name, ``<agent>-<task>-<subtask>``: the log folders'
@@ -175,6 +175,46 @@ def progress(done: float, total: Optional[float] = None, unit: str = 'runs', lab
     report = {'done': done, 'total': total, 'unit': unit, 'rate': rate, 'ts': now}
     _execute("UPDATE jobs SET progress = json_set(coalesce(progress, '{}'), ?, json(?)) WHERE id = ?",
              (f'$."{key}"', json.dumps(report), job))
+
+
+class Speed:
+    """A training's steps a second for the queue (``jobspeed``; round40.md "Steps a second on record"): after each
+    iteration ``update`` writes the job's ``speed`` (its steps so far, the last iteration's steps a second, the run's
+    mean since ``began``, the rollout's alone, and its shape: ``network``, ``games``, ``lookahead``) and returns it;
+    the job's wrapper samples and judges it.  Outside a job only the numbers are returned."""
+
+    GPU_SECONDS = 30.0          # the GPU memory is read at most this often (``nvidia-smi``, about 30 ms)
+
+    def __init__(self, network: str, games: int, lookahead: Optional[str], total: Optional[float] = None,
+                 began: Optional[float] = None):
+        self.network, self.games, self.lookahead, self.total = network, games, lookahead, total
+        self.began = time.time() if began is None else began
+        self.last: Optional[tuple] = None       # (time, steps) of the last update
+        self.gpu: Optional[float] = None        # megabytes this process held on the GPU at the last reading
+        self.gpu_peak: Optional[float] = None
+        self.gpu_read = 0.0
+
+    def update(self, steps: float, rollout: Optional[float] = None) -> dict:
+        """``steps``: done by this run since ``began``; ``rollout``: the last rollout's steps a second alone.  The
+        report carries the GPU memory the process holds and its peak so far (``jobspeed.gpu_megabytes``)."""
+        now = time.time()
+        since, before = self.last if self.last is not None else (self.began, 0.0)
+        self.last = (now, steps)
+        if now - self.gpu_read >= self.GPU_SECONDS:
+            self.gpu_read = now
+            self.gpu = jobspeed.gpu_megabytes()
+            if self.gpu is not None:
+                self.gpu_peak = max(self.gpu, self.gpu_peak or 0.0)
+        report = {'steps': steps, 'total': self.total,
+                  'sps': (steps - before) / (now - since) if now > since else None,
+                  'mean': steps / (now - self.began) if now > self.began else None, 'rollout': rollout,
+                  'games': self.games, 'network': self.network, 'lookahead': self.lookahead,
+                  'shape': jobspeed.shape(self.network, self.games, self.lookahead), 'ts': now,
+                  'gpu_mb': self.gpu, 'gpu_peak_mb': self.gpu_peak}
+        job = job_id()
+        if job is not None:
+            _execute("UPDATE jobs SET speed = ? WHERE id = ?", (json.dumps(report), job))
+        return report
 
 
 @lru_cache(maxsize=1)

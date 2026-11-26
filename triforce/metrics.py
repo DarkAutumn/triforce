@@ -53,7 +53,11 @@
   hits a visit and exit rate in training's log; the start room is ``info['linger_room']``, the entry the route
   step's, ``info['entry']``); round 42: ``.../seed_episodes``, ``.../seed_success_rate``, ``.../harvested_episodes``
   and ``.../harvested_success_rate`` split them by the start (``info['harvested']``: one of the pool's harvested
-  states), each where the rollout has such episodes.
+  states), each where the rollout has such episodes; round 45: ``.../route_episodes``, ``.../route_success_rate``,
+  ``.../other_episodes`` and ``.../other_success_rate`` split the room starts by the layout the reset rule served
+  (``info['route_layout']``: the route's planned spawn cycle or another reachable one), and
+  ``.../curriculum_episodes`` and ``.../curriculum_success_rate`` count the curriculum starts in the room (not in
+  ``.../episodes``, which are room starts only).
 - ``linger/max_steps``, ``linger/max_frames``, ``linger/tail_steps``, ``linger/tail_frames``: means of the
   longest quiet streak and time since last progress; ``linger/worst_steps`` / ``linger/worst_frames`` are
   maxima across measured episodes. Curriculum starts use ``curriculum/linger/*``; absent data stays absent.
@@ -82,6 +86,15 @@ from .clips import label as clips_label
 def heart_change_total(health_change: float, hearts: Optional[dict]) -> float:
     """Real health change plus the hearts wasted by picking them up at (or near) full health."""
     return health_change + (hearts or {}).get('wasted', 0.0)
+
+
+def room_key(info: dict) -> Optional[tuple[str, str]]:
+    """(``<level>:0x<room>[:cave]``, the route step's entry) of an episode's start room (``info['linger_room']``),
+    None without one."""
+    if info.get('linger_room') is None:
+        return None
+    level, location, in_cave = info['linger_room']
+    return f'{level}:0x{location:02x}' + (':cave' if in_cave else ''), info.get('entry', '-')
 
 
 class RolloutMetrics:
@@ -170,6 +183,10 @@ class RolloutMetrics:
             self.curriculum_successes += int(info.get('outcome') == 'success')
             self.curriculum_start += curriculum['index'] / curriculum['length']
             self.curriculum_point += curriculum['point'] / curriculum['length']
+            room = room_key(info)
+            if room is not None:
+                self.rooms[(*room, 'curriculum_episodes')] += 1
+                self.rooms[(*room, 'curriculum_successes')] += info.get('outcome') == 'success'
             return
         self.episodes += 1
         self.outcomes[info.get('outcome', 'unknown')] += 1
@@ -211,14 +228,17 @@ class RolloutMetrics:
         self.episode_frames += int(info.get('episode_frames', 0))
         self.episode_steps += int(info.get('episode_steps', 0))
         self.hits += int(info.get('hits', 0))
-        if info.get('linger_room') is not None:
-            level, location, in_cave = info['linger_room']
-            room = (f'{level}:0x{location:02x}' + (':cave' if in_cave else ''), info.get('entry', '-'))
+        room = room_key(info)
+        if room is not None:
             self.rooms[(*room, 'episodes')] += 1
             self.rooms[(*room, 'successes')] += info.get('outcome') == 'success'
             self.rooms[(*room, 'hits')] += int(info.get('hits', 0))
             if 'harvested' in info:
                 kind = 'harvested' if info['harvested'] else 'seed'
+                self.rooms[(*room, f'{kind}_episodes')] += 1
+                self.rooms[(*room, f'{kind}_successes')] += info.get('outcome') == 'success'
+            if info.get('route_layout') is not None:
+                kind = 'route' if info['route_layout'] else 'other'
                 self.rooms[(*room, f'{kind}_episodes')] += 1
                 self.rooms[(*room, f'{kind}_successes')] += info.get('outcome') == 'success'
 
@@ -293,7 +313,8 @@ class RolloutMetrics:
                 result[f'room/{room}/{entry}/episodes'] = float(count)
                 result[f'room/{room}/{entry}/success_rate'] = self.rooms[(room, entry, 'successes')] / count
                 result[f'room/{room}/{entry}/hits'] = self.rooms[(room, entry, 'hits')] / count
-            elif field in ('seed_episodes', 'harvested_episodes') and count:
+            elif field in ('seed_episodes', 'harvested_episodes', 'curriculum_episodes', 'route_episodes',
+                           'other_episodes') and count:
                 kind = field.split('_')[0]
                 result[f'room/{room}/{entry}/{kind}_episodes'] = float(count)
                 successes = self.rooms[(room, entry, f'{kind}_successes')]

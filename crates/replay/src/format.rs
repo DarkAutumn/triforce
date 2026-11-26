@@ -9,8 +9,9 @@ pub const MAGIC: &[u8; 8] = b"TFREPLAY";
 /// reading every earlier version (AGENTS.md "Versioning").  Version 1 (round 32): a STATES record's context holds the
 /// route's grants after the room's ([`Context::route_granted`]; a version 0 record has none).  Version 2 (Nov 23):
 /// the TARGETS and MASKS sections, DECISIONS quantized (a byte an entry, the hit head's danger, the act mode's draw
-/// and the foresight's vetoes; version 0 and 1 hold `f32`s) and the VISIT event.
-pub const REPLAY_VERSION: u32 = 2;
+/// and the foresight's vetoes; version 0 and 1 hold `f32`s) and the VISIT event.  Version 3 (Nov 25): the RESET
+/// event (the console's RESET button, `zcore::ZCore::reset`, pressed before that frame; `emu-zelda.py --reset`).
+pub const REPLAY_VERSION: u32 = 3;
 
 pub(crate) const HEADER_LEN: usize = 48;
 pub(crate) const ENTRY_LEN: usize = 32;
@@ -102,6 +103,7 @@ pub(crate) const EVENT_OUTCOME: u8 = 3;
 pub(crate) const EVENT_EPISODE: u8 = 4;
 pub(crate) const EVENT_SEGMENT: u8 = 5;
 pub(crate) const EVENT_VISIT: u8 = 6;
+pub(crate) const EVENT_RESET: u8 = 7;
 
 /// DECISIONS (version 2): a natural-log probability as a byte (`255`: `-inf`, masked; else `-byte / 16` nats).
 pub fn quantize_log_prob(log_prob: f32) -> u8 {
@@ -242,6 +244,9 @@ pub enum Event {
     /// A room visit closed, as the env judged it (version 2): its record, a JSON object (a chain's `RoomRecord`:
     /// room, route step, family, outcome and reason, hearts in and out, hits, cheats, frames, ...).
     Visit(String),
+    /// The console's RESET button was pressed before this frame (version 3; `zcore::ZCore::reset`): a player
+    /// presses it before the frame's edits.
+    Reset,
 }
 
 /// How the recorded run ended.
@@ -562,6 +567,7 @@ impl Stream {
                 out.push(EVENT_VISIT);
                 put_text(out, text);
             }
+            Event::Reset => out.push(EVENT_RESET),
         }
     }
 }

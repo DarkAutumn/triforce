@@ -57,17 +57,24 @@ pub fn nearest_idle(delay: u32) -> u32 {
 }
 
 /// The register board cells of `name`, upper-cased: 1 to 8 of `A-Z`, `0-9` and space, not all spaces.  A
-/// name that starts with `ZELDA` is refused: it starts the second quest.
+/// name that starts with `ZELDA` is refused: it starts the second quest (a run plays the first; [`board_cells`]
+/// is the board's own rule, what a person may type).
 pub fn name_cells(name: &str) -> Result<Vec<u8>, ZeldaError> {
+    if name.to_ascii_uppercase().starts_with("ZELDA") {
+        return boot_error("the name ZELDA starts the second quest");
+    }
+    board_cells(name)
+}
+
+/// The register board cells of `name`, upper-cased: 1 to 8 of `A-Z`, `0-9` and space, not all spaces (`ZELDA`
+/// included: the game starts the second quest for it).
+pub fn board_cells(name: &str) -> Result<Vec<u8>, ZeldaError> {
     let name = name.to_ascii_uppercase();
     if name.is_empty() || name.chars().count() > NAME_LENGTH {
         return boot_error(format!("the name {name:?} must have 1 to {NAME_LENGTH} characters"));
     }
     if name.trim_matches(' ').is_empty() {
         return boot_error("the name is all spaces");
-    }
-    if name.starts_with("ZELDA") {
-        return boot_error("the name ZELDA starts the second quest");
     }
     name.chars()
         .map(|c| match c {
@@ -116,9 +123,10 @@ pub fn idle<N: Nes>(nes: &mut N, frames: u32) {
 }
 
 /// From the file-select screen: registers `name` in slot 1, starts the game and runs to the first gameplay
-/// frame (overworld room 0x77).  Returns the frames run.
+/// frame (overworld room 0x77).  Returns the frames run.  Any name the board can type ([`board_cells`]), `ZELDA`
+/// too: a run checks [`name_cells`] first ([`boot`], `env::chain`).
 pub fn register_and_start<N: Nes>(nes: &mut N, name: &str) -> Result<u32, ZeldaError> {
-    let cells = name_cells(name)?;
+    let cells = board_cells(name)?;
     expect(nes, MODE, MODE_FILE_SELECT, "not on the file-select screen")?;
     let mut frames = hold(nes, START, 2) + hold(nes, 0, 29);
     expect(nes, MODE, MODE_REGISTER, "no register screen after START")?;

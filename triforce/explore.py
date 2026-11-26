@@ -36,6 +36,16 @@ entry (``LevelKillCounts``), so the game makes K fewer monsters, and the track i
 Garden's six Blue Darknuts are beyond the explorer; training stages the same rooms with ``ram_randomization:
 room_kills``).  ``--clips off`` explores with the run-time clips switch off: ``<state>~plain`` (5:0x64's fight and
 push, a room whose one route step both ways share).
+
+``--layout`` (round 45, the owner's "only real starts"): the layout the reset of a pre-entry start serves under the
+reset rule (``triforce/entry_rule.<ns>.json``, ``zelda::room_entry``).  ``route`` (the default) is the route's planned
+spawn cycle ``$524`` at every door the rule knows, with the chase state, ``$4A``, the divider and the edge cell drawn by
+``--seed`` as a training reset draws them; ``N`` (0-8) one other reachable spawn cycle of the door, written as
+``<state>~c<N>`` (refused where the door cannot hold N); ``valid`` the training draw itself (the route's on half the
+seeds).  Every track's ``trajectory.json`` records what its room was entered with under ``layout`` (the layout asked,
+the RNG phase, and ``entry``: ``$524`` with ``planned`` and ``reachable``, the chase flag and target, ``$4A``, ``$26``,
+``$525``; null for a cave or cellar start, which no layout decides).  A curriculum start from a track's
+``NNNN.state`` (mid-room) keeps that layout: the training reset redraws only the RNG phase there.
 """
 
 import argparse
@@ -69,10 +79,20 @@ def check_out(family: str, out) -> None:
 
 
 def track_dir(out, specialist: str, state: str, seed: int, variant: bool, kills: Optional[int] = None,
-              plain: bool = False) -> Path:
+              plain: bool = False, cycle: Optional[int] = None) -> Path:
     """Where the track of ``state`` is written."""
-    name = (state if kills is None else f'{state}~k{kills}') + ('~plain' if plain else '')
+    name = ((state if kills is None else f'{state}~k{kills}') + ('~plain' if plain else '')
+            + ('' if cycle is None else f'~c{cycle}'))
     return Path(out).absolute() / specialist / (f'{name}~s{seed}' if variant else name)
+
+
+def parse_layout(text: str):
+    """'route' | 'valid' | a spawn cycle '0'-'8' (an int)."""
+    if text in ('route', 'valid'):
+        return text
+    if text.isdigit() and int(text) < 9:
+        return int(text)
+    raise ValueError(f"--layout {text!r}: route, valid or a spawn cycle 0-8")
 
 
 def parse_room_kills(text: str) -> tuple:
@@ -89,7 +109,7 @@ def explore_specialist(specialist: str, out: str, states: Optional[List[str]] = 
                        explore_steps: int = 25, patience: int = 300, parallel: int = 1, seed: int = 0,
                        states_dir: Optional[str] = None, variant: bool = False,
                        room_kills: Optional[tuple] = None, clips: Optional[bool] = None,
-                       progress: Optional[Callable[[int, int], None]] = None) -> list:
+                       progress: Optional[Callable[[int, int], None]] = None, layout='route') -> list:
     """Explores every seed start state (or ``states``) of ``specialist``, writing successes under
     ``<out>/<specialist>/<state>`` (``<state>~s<seed>`` with ``variant``); returns [(ExploreResult, replayed)] in
     state order.  ``out`` must be the trajectories root (``check_out``).  ``progress(done, total)``: the states
@@ -103,7 +123,7 @@ def explore_specialist(specialist: str, out: str, states: Optional[List[str]] = 
                               patience=patience, parallel=parallel, seed=seed,
                               states_dir=None if states_dir is None else str(states_dir),
                               room_kills=None if room_kills is None else [room_kills], clips=clips,
-                              progress=progress)
+                              progress=progress, layout=layout)
 
     if not variant:
         return run(str(out))
@@ -137,6 +157,9 @@ def main(argv=None):
                              "<state>~plain, a plain-way track of a room both ways share (5:0x64)")
     parser.add_argument('--room-kills', default=None, metavar='LEVEL:0xRR=K',
                         help="a staged start: K kills banked in that dungeon room before its entry (track <state>~k<K>)")
+    parser.add_argument('--layout', default='route', metavar='route|valid|N',
+                        help="the layout a pre-entry start's reset serves (default route: the route's planned spawn "
+                             "cycle; N: another reachable one, track <state>~c<N>; valid: the training draw)")
     # Today's checkouts write into their trajectories/ as before; one without it (the store's snapshots are read-only)
     # writes into scratch, never a new trajectories/ that would then shadow the snapshot for every reader.
     out = TRAJECTORIES_DIR if TRAJECTORIES_DIR.exists() else scratch('trajectories')
@@ -151,6 +174,7 @@ def main(argv=None):
 
     try:
         room_kills = parse_room_kills(args.room_kills) if args.room_kills else None
+        layout = parse_layout(args.layout)
     except ValueError as error:
         parser.error(str(error))
     jobs.require_job()
@@ -158,13 +182,13 @@ def main(argv=None):
                                  args.iterations, args.explore_steps, args.patience, args.parallel, args.seed,
                                  variant=args.variant, room_kills=room_kills,
                                  clips=None if args.clips is None else args.clips == 'on',
-                                 progress=lambda done, total: jobs.progress(done, total, 'states'))
+                                 progress=lambda done, total: jobs.progress(done, total, 'states'), layout=layout)
     for result, replayed in results:
         status = (f"success in {len(result.actions)} steps, health {result.health}"
                   + ("" if replayed else " (REPLAY MISMATCH)")) if result.success else "no success"
         kills = room_kills[2] if room_kills else None
         track = track_dir(args.out, family_name(args.specialist), result.start_state, args.seed, args.variant,
-                          kills, args.clips == 'off')
+                          kills, args.clips == 'off', layout if isinstance(layout, int) else None)
         written = f"  -> {track}" if result.success and replayed else ''
         print(f"{result.start_state:8} {status:40} iterations={result.iterations} env_steps={result.env_steps} "
               f"cells={result.cells} {result.seconds:.0f}s{written}")

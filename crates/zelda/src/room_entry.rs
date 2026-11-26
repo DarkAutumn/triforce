@@ -129,13 +129,76 @@ pub struct DoorRule {
     pub chase_timers: Vec<u8>,
 }
 
-/// Which `$524` a load takes: the route's planned value (the emulator tool's default), or any valid one by the
-/// training share ([`PLANNED_SHARE`] on the planned value, the rest evenly over the door's others).
+/// Which `$524` a load takes: the route's planned value (the emulator tool's default, a curriculum track's), any valid
+/// one by the training share ([`PLANNED_SHARE`] on the planned value, the rest evenly over the door's others), or one
+/// named reachable value (`Cycle`, round 45: a curriculum track in another layout the door's resets serve; a value the
+/// door's rule does not hold is not written, [`EntryRule::draw`] false).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Layout {
     Route,
     #[default]
     Valid,
+    Cycle(u8),
+}
+
+/// Where a pre-entry load's `$524` came from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EntrySource {
+    /// The reset rule's draw ([`EntryRule::draw`]).
+    Rule,
+    /// The uniform draw ([`randomize_spawn`]): a door the rule does not know.
+    Uniform,
+    /// The state's own bytes: a load without `randomize_rng`.
+    Saved,
+}
+
+impl EntrySource {
+    pub fn name(self) -> &'static str {
+        match self {
+            EntrySource::Rule => "rule",
+            EntrySource::Uniform => "uniform",
+            EntrySource::Saved => "saved",
+        }
+    }
+}
+
+/// The bytes a pre-entry load leaves for the room entry to read, read back before any frame runs (round 45): the
+/// layout a start's room is entered with, which a curriculum track records (its `trajectory.json` `layout`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct EntryValues {
+    pub door: Option<Door>,
+    pub source: EntrySource,
+    pub spawn_cycle: u8,
+    /// `$524` against the door's rule: the route's planned value (None: no rule for the door).
+    pub planned: Option<bool>,
+    /// `$524` one some play can bring to the door, planned or not (None: no rule for the door).
+    pub reachable: Option<bool>,
+    pub chase_flag: u8,
+    pub chase_target: (u8, u8),
+    pub chase_timer: u8,
+    pub long_timer_cycle: u8,
+    pub edge_cell: u8,
+}
+
+impl EntryValues {
+    /// Reads them from a pre-entry machine; `rule` judges `$524` against the door's values.
+    pub fn read<N: Nes>(nes: &N, rule: Option<&EntryRule>, source: EntrySource) -> Self {
+        let door = EntryRule::door_of(nes);
+        let spawn_cycle = nes.peek(SPAWN_CYCLE);
+        let door_rule = door.zip(rule).and_then(|(d, r)| r.door(d));
+        EntryValues {
+            door,
+            source,
+            spawn_cycle,
+            planned: door_rule.map(|r| r.planned == spawn_cycle),
+            reachable: door_rule.map(|r| r.planned == spawn_cycle || r.others.contains(&spawn_cycle)),
+            chase_flag: nes.peek(CHASE_FLAG),
+            chase_target: (nes.peek(CHASE_X), nes.peek(CHASE_Y)),
+            chase_timer: nes.peek(CHASE_LONG_TIMER),
+            long_timer_cycle: nes.peek(LONG_TIMER_CYCLE),
+            edge_cell: nes.peek(EDGE_SPAWN_CELL),
+        }
+    }
 }
 
 /// The reset rule (round 43): per door the values a load may write.  A value no play of the game can bring to the
@@ -191,8 +254,11 @@ impl EntryRule {
 
     /// The `$524` deck of a door: the planned value `PLANNED_SHARE` of the cards, each other value once.
     fn spawn_deck(rule: &DoorRule, layout: Layout) -> Vec<u8> {
-        if layout == Layout::Route || rule.others.is_empty() {
-            return vec![rule.planned];
+        match layout {
+            Layout::Cycle(value) => return vec![value],
+            Layout::Route => return vec![rule.planned],
+            Layout::Valid if rule.others.is_empty() => return vec![rule.planned],
+            Layout::Valid => {}
         }
         let planned = (rule.others.len() as f64 * PLANNED_SHARE / (1.0 - PLANNED_SHARE)).round().max(1.0) as usize;
         let mut deck = vec![rule.planned; planned];
@@ -202,10 +268,16 @@ impl EntryRule {
 
     /// For a pre-entry state of a door the rule knows: `$524` (`layout`), the chase flag 50/50 and its target, `$4A`
     /// from the door's real values, the divider `$26` evenly over its ten values, `$525` from the door's real cells,
-    /// dealt from `decks`.  False, nothing written, for any other state.
+    /// dealt from `decks`.  False, nothing written, for any other state, and for a `Cycle` the door cannot hold.
     pub fn draw<N: Nes, R: Rng + ?Sized>(&self, nes: &mut N, rng: &mut R, decks: &mut Decks, layout: Layout) -> bool {
         let Some(door) = Self::door_of(nes) else { return false };
         let Some(rule) = self.doors.get(&door) else { return false };
+        if let Layout::Cycle(value) = layout
+            && value != rule.planned
+            && !rule.others.contains(&value)
+        {
+            return false;
+        }
         let spawn = decks.deal((door, SPAWN_DECK), || Self::spawn_deck(rule, layout), rng);
         nes.poke(SPAWN_CYCLE, spawn.unwrap_or(rule.planned));
         let flag = decks.deal((door, CHASE_DECK), || vec![0, 1], rng).unwrap_or(0);
@@ -520,6 +592,32 @@ mod tests {
             assert_eq!(other.peek(SPAWN_CYCLE), 3);
         }
         assert_eq!(rule.doors(), 2);
+    }
+
+    /// Round 45: a named cycle (`Layout::Cycle`, a curriculum track in another layout) is written only where the door
+    /// can hold it, the planned one included; the values read back say what the room is entered with and judge
+    /// `$524` against the door's rule (planned, reachable), and nothing for a door the rule lacks.
+    #[test]
+    fn a_named_cycle_is_written_only_where_the_door_holds_it() {
+        use rand::SeedableRng;
+        let rule = EntryRule::new([((5, 0x47, 8, false), door_rule(6, &[2, 7]))]);
+        let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(0);
+        let mut nes = at_door(5, 0x47, 8, false);
+        for value in [2, 6, 7] {
+            assert!(rule.draw(&mut nes, &mut rng, &mut Decks::default(), Layout::Cycle(value)));
+            let read = EntryValues::read(&nes, Some(&rule), EntrySource::Rule);
+            assert_eq!((read.spawn_cycle, read.planned, read.reachable), (value, Some(value == 6), Some(true)));
+            assert_eq!(read.door, Some((5, 0x47, 8, false)));
+            assert_eq!(read.chase_flag, nes.peek(CHASE_FLAG));
+        }
+        nes.0[SPAWN_CYCLE as usize] = 6;
+        assert!(!rule.draw(&mut nes, &mut rng, &mut Decks::default(), Layout::Cycle(3)));
+        assert_eq!(nes.peek(SPAWN_CYCLE), 6);
+        nes.0[SPAWN_CYCLE as usize] = 3;
+        let unreal = EntryValues::read(&nes, Some(&rule), EntrySource::Saved);
+        assert_eq!((unreal.planned, unreal.reachable, unreal.source), (Some(false), Some(false), EntrySource::Saved));
+        let unknown = EntryValues::read(&at_door(5, 0x57, 8, false), Some(&rule), EntrySource::Uniform);
+        assert_eq!((unknown.planned, unknown.reachable), (None, None));
     }
 
     #[test]

@@ -85,7 +85,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from r40_d3_69_line import (CLOUD, FLASH, GAME_DIR, GROW, LINK_SPEED, MARGIN, OPPOSITE, REPEAT, SHOVE, SIDEWAYS,  # noqa: E402
-                            SWING_FRAMES, TOUCH, VEC, mask_ok, on_grid)
+                            SWING_FRAMES, TOUCH, VEC, layout_of, mask_ok, on_grid)
 from r40_darknut_proposals import chasing as chasing_line  # noqa: E402  (`zelda::darknut_rules::chasing`)
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -96,6 +96,7 @@ BOMB_STATE = (0xBC, 0xBD)                           # slots $10/$11 ObjState (as
 INV_BOMBS = 0x658                                   # asm:InvBombs
 INV_CLOCK = 0x66C                                   # asm:InvClock: monsters frozen, Link invincible
 INV_MAX_BOMBS = 0x67C                               # asm:InvMaxBombs
+DROP_CYCLE, HELP_COUNT = 0x52A, 0x50                 # the drop cycle and the damage-free kill count (asm:Drop_SetUpItem)
 OBJ_STATE = 0xAC                                    # asm:ObjState; a dropped item's id (asm:Item_ObjItemId)
 DROPPED_ITEM, ITEM_BOMBS = 0x60, 0x00               # asm:Obj_EndMetastate's drop type; the bombs' item id
 OBJ_GRID_OFFSET = 0x394                             # asm:ObjGridOffset
@@ -367,6 +368,7 @@ class Fighter:
         self.pushed = False
         self.bombs_ok = bombs_used_ok
         self.start_count = None                               # the Darknuts in the room at the first decision
+        self.lit = None                                       # a kill-one room: its carriers lit at the first decision
         self.bag_clear = None                                 # a wall exit: the bag when the room was first clear
         self.item_waits = 0                                   # a wall exit: decisions waited for the room's item
         self.wall_bombed = False                              # a wall exit: its bomb laid
@@ -605,8 +607,18 @@ class Fighter:
         return self.shadow(x, y, d)
 
     def departing(self, nuts) -> bool:
-        """A kill-one room (3:0x5b's first pass) whose one kill is made: from now on Link takes its bombs and leaves."""
-        return bool(self.room.get('kill_one')) and self.start_count is not None and len(nuts) < self.start_count
+        """A kill-one room (3:0x5b's first pass) whose one kill is made, or whose carriers are dark (round 45: the
+        route step's `carriers: fight` asks the kill only while they are lit): from now on Link takes its bombs and
+        leaves."""
+        return bool(self.room.get('kill_one')) and self.start_count is not None and \
+            (len(nuts) < self.start_count or not self.lit)
+
+    @staticmethod
+    def carriers_lit(ram: bytes) -> bool:
+        """The observation's `bomb_carrier` on 3:0x5b's Red Darknuts (round40.md "Why the Darknut teacher walks past
+        3x5b's bomb carriers"): the drop cycle `$52A` at 0, the help count `$50` short of 9 (a 10th damage-free kill
+        forces a drop of its own) and room in the bag."""
+        return ram[DROP_CYCLE] == 0 and ram[HELP_COUNT] != 9 and ram[INV_BOMBS] < ram[INV_MAX_BOMBS]
 
     def exit_spot(self) -> tuple[int, int]:
         """Where Link stands to leave by the room's door (the N door: X $78 on the room's top row)."""
@@ -677,6 +689,7 @@ class Fighter:
         nuts = darknuts(ram)
         if self.start_count is None:
             self.start_count = len(nuts)
+            self.lit = self.carriers_lit(ram)
             if self.room.get('treasure') and ram[INV_BOMBS] + self.room['treasure'] > ram[INV_MAX_BOMBS]:
                 raise ValueError(f"{ram[INV_BOMBS]} bombs in: the route plays the wall first, which is not built")
         departing = self.departing(nuts)
@@ -859,6 +872,7 @@ class Fighter:
 # --- playing visits ---------------------------------------------------------------------------------------------------
 
 HEARTS_VARIANT = 'R40_DARKNUT_HEARTS'                         # `--hearts`: the case task's hearts variant (workers too)
+LAYOUT_VARIANT = 'R40_DARKNUT_LAYOUT'                         # `--layout` (round 45): route, valid or a spawn cycle
 
 
 def task_file(room: str, bombs: int) -> Path:
@@ -870,10 +884,15 @@ def task_file(room: str, bombs: int) -> Path:
 
 
 def make_env(room: str, bombs: int, states_dir=None):
-    """The case's env (`task_file`): every reset names its state, holds exactly `bombs` bombs."""
+    """The case's env (`task_file`): every reset names its state, holds exactly `bombs` bombs; its layout (round 45)
+    the reset rule's training draw (`valid`: the route's spawn cycle on half the seeds, the door's other reachable
+    ones on the rest), or `--layout`'s (`route`, a spawn cycle)."""
     from triforce._native import Env, SpecialistConfig
-    return Env(SpecialistConfig.load(str(task_file(room, bombs))), explicit_starts=True, strict_actions=False, seed=0,
-               states_dir=None if states_dir is None else str(states_dir))
+    env = Env(SpecialistConfig.load(str(task_file(room, bombs))), explicit_starts=True, strict_actions=False, seed=0,
+              states_dir=None if states_dir is None else str(states_dir))
+    layout = os.environ.get(LAYOUT_VARIANT, 'valid')
+    env.set_layout(int(layout) if layout.isdigit() else layout)
+    return env
 
 
 def bomb_hurts(before: bytes, after: bytes) -> int:
@@ -899,6 +918,7 @@ class Tally:
         self.live_bomb = None                                 # index into bomb_hurt while its blast may land
         ram = bytes(env.state.ram)
         self.start_bombs = self.bombs_now = ram[INV_BOMBS]
+        self.cycle, self.lit = ram[DROP_CYCLE], Fighter.carriers_lit(ram)  # the drop cycle and 3:0x5b's carriers
         self.kills, self.first_kill = 0, None                 # Darknuts killed; the frame the first death began
         self.dropped = False                                  # a bomb drop appeared
 
@@ -1027,6 +1047,8 @@ def play(env, room: str, seed: int, start: str, recorder=None, probe=None, depth
 
 
 def record(seed, start, info, tally, fighter, env) -> dict:
+    """A visit's record; `layout` (round 45) is what the reset entered the room with (`Env.entry`: the spawn cycle
+    `$524`, whether it is the route's planned one, the chase state), `lit` a kill-one room's carriers."""
     return {'seed': seed, 'start': Path(start).name, 'ending': info.get('ending'),
             'success': info.get('ending') == 'exit-correct', 'hits': tally.hits,
             'hearts_lost': round(tally.lost, 2),
@@ -1034,7 +1056,8 @@ def record(seed, start, info, tally, fighter, env) -> dict:
             'bombs': len(tally.bomb_hurt), 'bomb_hurt': tally.bomb_hurt, 'bomb_pred': fighter.bomb_pred,
             'chase_frames': tally.chase_frames, 'kills': tally.kills, 'first_kill_frame': tally.first_kill,
             'drop_appeared': tally.dropped, 'bag_gain': int(tally.bombs_now) - int(tally.start_bombs),
-            'where': tally.where}
+            'where': tally.where, 'drop_cycle': tally.cycle, 'lit': tally.lit,
+            'layout': layout_of(env)}
 
 
 def starts(room: str, bombs: int, seed0: int, per_state: int):
@@ -1104,7 +1127,23 @@ def summary(records: list[dict]) -> dict:
         'bombs_hurting_0': sum(h == 0 for h in bombs),
         'endings': dict(collections.Counter(r['ending'] for r in records)),
         'hit_situations': dict(where),
+        'by_layout': by_layout(records),
     }
+
+
+def by_layout(records: list[dict]) -> dict:
+    """Round 45: the visits split by the layout the reset entered the room with (`route`: the route's planned spawn
+    cycle; `other`: the door's other reachable ones), each with its share, wins and unhit wins, and per spawn cycle."""
+    def part(rs):
+        return {'visits': len(rs), 'share': round(len(rs) / len(records), 3), 'wins': sum(r['success'] for r in rs),
+                'win_rate': round(sum(r['success'] for r in rs) / len(rs), 3) if rs else None,
+                'unhit_wins': sum(r['success'] and r['hits'] == 0 for r in rs)}
+    layout = [r.get('layout') or {} for r in records]
+    out = {'route': part([r for r, x in zip(records, layout) if x.get('planned')]),
+           'other': part([r for r, x in zip(records, layout) if x.get('planned') is False])}
+    cycles = sorted({x.get('spawn_cycle') for x in layout if x.get('spawn_cycle') is not None})
+    out['cycles'] = {c: part([r for r, x in zip(records, layout) if x.get('spawn_cycle') == c]) for c in cycles}
+    return out
 
 
 # --- demonstrations ----------------------------------------------------------------------------------------------------
@@ -1320,6 +1359,9 @@ def main(argv) -> int:
         p.add_argument('--room', choices=sorted(ROOMS), required=True)
         p.add_argument('--bombs', type=int, required=True, help="the bag at every reset")
         p.add_argument('--hearts', default=None, help="the case task's hearts variant (3:0x5b: low, full, 1.5)")
+        p.add_argument('--layout', default=None, metavar='route|valid|N',
+                       help="the layout the resets serve (default valid: the training draw; route: the route's spawn "
+                            "cycle; N: that reachable spawn cycle)")
         if name == 'trace':
             p.add_argument('seed', type=int)
             p.add_argument('--start', default=None)
@@ -1340,6 +1382,8 @@ def main(argv) -> int:
     args = parser.parse_args(argv)
     if getattr(args, 'hearts', None):
         os.environ[HEARTS_VARIANT] = args.hearts              # the spawned workers read the same task
+    if getattr(args, 'layout', None):
+        os.environ[LAYOUT_VARIANT] = args.layout              # and the same layout
     if args.cmd == 'trace':
         trace(args.room, args.bombs, args.seed, args.start, args.look)
         return 0

@@ -809,14 +809,17 @@ def cmd_rule(args):
                       'steps': [index]}
     # States44's walk from power on (`<states>/<route>_walk.json`, round 44): each door's own `$524` is the value real
     # play under the plan brings there, so it is the door's planned value, and a value the search did not reach joins
-    # the door's set (a game from power on reached it).  A door whose state the walk did not play (`how` names a rule
-    # that drew it, 9x32's r29 Ganon load) keeps the composed plan.
+    # the door's set (a game from power on reached it).  A door the route passes twice (0x28 from S, 1x73 from S, ...:
+    # the table's door has no visit) takes its first visit's value, the later visit's joining its set (States44: the
+    # overworld's later visits come right after a segment's start).  A door whose state the walk did not play (`how`
+    # names a rule that drew it, 9x32's r29 Ganon load) keeps the composed plan.
     walk = ROOT / 'triforce' / 'states' / f'{args.route}_walk.json'
     joined, drawn = [], []
     if walk.exists():
         from triforce import start_audit  # pylint: disable=import-outside-toplevel
         game = _native.Game()
-        for name, info in json.loads(walk.read_text()).get('doors', {}).items():
+        walked = json.loads(walk.read_text()).get('doors', {})
+        for name, info in sorted(walked.items(), key=lambda kv: kv[1]['route_step']):
             game.load(name.removesuffix('.state'), randomize_rng=False, controllable=True)
             key = start_audit.door_of(game.ram())
             if key is None or info.get('spawn_cycle') is None:
@@ -826,13 +829,16 @@ def cmd_rule(args):
                 continue
             if key not in doors:
                 doors[key] = {'planned': int(info['spawn_cycle']), 'others': [], 'proof': 'walk',
-                              'steps': [info.get('route_step')]}
+                              'planned_from': 'walk', 'steps': [info.get('route_step')]}
                 joined.append((name, int(info['spawn_cycle']), []))
                 continue
             door, value = doors[key], int(info['spawn_cycle'])
             values = {door['planned'], *door['others']}
             if value not in values:
                 joined.append((name, value, sorted(values)))
+            if door.get('planned_from') == 'walk':
+                door['others'] = sorted((values | {value}) - {door['planned']})
+                continue
             door['planned'], door['others'] = value, sorted(values - {value})
             door['planned_from'] = 'walk'
         print(f"walk record: {walk.name}; walked values the search had not reached (joined): {joined}; "
@@ -966,8 +972,10 @@ def main(argv=None):
     p.add_argument('--route', default='d3first')
     p.add_argument('--min-version', default='2.0.0.7')
     p.add_argument('--scrolls', default=str(OUT / 'scroll'))
-    # The plan's clears the runs show the yaml rule gets wrong (`plan` against 445 runs): step -> fought to the end.
-    p.add_argument('--flips', default='{"68": true, "77": false, "37": false, "128": true, "268": true}')
+    # Steps whose clear to take against the route's (step -> fought to the end).  None by default: routes.yaml says
+    # `clear` at every step (States44, round 44); before it, the runs' own clears (`plan` against 445 runs) were
+    # '{"68": true, "77": false, "37": false, "128": true, "268": true}'.
+    p.add_argument('--flips', default='{}')
     p.add_argument('--name', default='reach_d3first.jsonl')
     p.set_defaults(func=cmd_reach)
     p = sub.add_parser('overworld')

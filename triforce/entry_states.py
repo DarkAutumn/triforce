@@ -433,6 +433,7 @@ OBJ_STATE = 0xAC                     # ObjState per slot (asm:Zol_UpdateState, a
 DEATH_SPARKLE = 0x10
 FIGHT_SKIP_FRAMES = 600
 OBJ_TYPE, DROPPED_ITEM, MONSTER_SLOTS = 0x34F, 0x60, range(1, 12)     # ObjType; a death's slot becomes a drop ($60)
+ROOM_KILLS = 0x34F                   # RoomKills (ObjType slot 0): the room's kills so far (asm:Damage_KillMonster)
 DROP_SETTLE_FRAMES = 8
 
 
@@ -667,9 +668,27 @@ def filled_source(source: str, out_dir: str, states_dir: str = STATES_DIR, route
     return path
 
 
+def play_script(source: str, actions: List[str], target: RouteStep, states_dir: str = STATES_DIR,
+                route: Optional[str] = None, clips: bool = True) -> tuple:
+    """``actions`` (option texts) played from ``source`` loaded exactly as saved, clips allowed or not, until Link
+    enters ``target``'s room.  Returns (pre-entry Snapshot or None, final GameState, the most monsters the room counted
+    dead on the way: ``RoomKills``)."""
+    game = Game(seed=0, states_dir=str(states_dir), route=route if route in native_routes() else None)
+    state = game.load(source, randomize_rng=False, fresh_room=False)
+    game.set_clips_allowed(clips)
+    game.capture_pre_entry = True
+    killed = 0
+    for text in actions:
+        if state.full_location == target.location or state.game_over:
+            break
+        killed = max(killed, game.read(ROOM_KILLS))
+        state = game.act(text).state
+    return (game.last_pre_entry if state.full_location == target.location else None), state, killed
+
+
 def walk_crossing(step: RouteStep, target: RouteStep, source: str, route: str, rooms: dict, iterations: int,
                   patience: int, attempts: int, states_dir: str = STATES_DIR, clips: Optional[bool] = None,
-                  fights_dir: Optional[str] = None, parallel: int = 3) -> tuple:
+                  fights_dir: Optional[str] = None, parallel: int = 3, script: Optional[List[str]] = None) -> tuple:
     """One room of the walk: from ``source`` (the carried machine, loaded exactly as saved) the explorer finds a
     way to the step's objective-correct exit that kills what the step's ``clear:`` says and no more (``KillSpec``);
     the replay of that way from the same machine gives the next door's pre-entry frame.  A fight to the end or a
@@ -678,9 +697,20 @@ def walk_crossing(step: RouteStep, target: RouteStep, source: str, route: str, r
     ``how: explorer, hearts filled``).  Attempt 0 runs alone, the rest (each its own seed) ``parallel`` at a time;
     after a batch with an unhurt way the most healthy way of the attempts so far is kept (the lowest attempt on a
     tie), else the next batch runs: no refill on the walk otherwise, so the hearts a room costs are carried on.
-    Deterministic whatever the threads' timing.  Returns (pre-entry Snapshot or None, stats)."""
+    Deterministic whatever the threads' timing.  With ``script`` (a step's actions given to the walk, `walk --script`:
+    round 44, 9x61's block clip, a way the explorer did not find) the step is played by those actions alone, which
+    must reach the target unhit-or-not with no more kills than ``clear:`` allows.  Returns (pre-entry Snapshot or None,
+    stats)."""
     # pylint: disable=too-many-arguments, too-many-positional-arguments, too-many-locals
     stats = {'env_steps': 0, 'attempts': 0, 'seconds': 0.0, 'how': 'explorer'}
+    if script is not None:
+        pre_entry, state, killed = play_script(source, script, target, states_dir, route, clips is not False)
+        allowed = {True: None, False: 0}.get(step.clear, step.clear)
+        if pre_entry is None or (allowed is not None and killed > allowed):
+            raise RuntimeError(f"step {step.index}: the script does not reach {target.location.as_tuple()} "
+                               f"(ends in {state.full_location}, {killed} killed, {allowed} allowed)")
+        return pre_entry, {**stats, 'how': 'script', 'steps': len(script), 'health': state.health,
+                           'actions': list(script), 'attempts': 1}
     kills = step.planned_kills()
     plan = [(source, kills, 'explorer')]
     if fights_dir is not None:
@@ -787,7 +817,7 @@ def walk_record_v2(record: dict) -> dict:
 def walk(route: str, out: str, iterations: int, patience: int, attempts: int = 6, start_step: int = 0,
          source: Optional[str] = None, last_step: Optional[int] = None, boot: tuple = WALK_BOOT,
          states_dir: str = STATES_DIR, command: Optional[str] = None, log: Callable = print,
-         parallel: int = 3, segment: Optional[dict] = None) -> tuple:
+         parallel: int = 3, segment: Optional[dict] = None, scripts: Optional[Dict[int, List[str]]] = None) -> tuple:
     """Walks ``route`` once from console power on (``walk_boot``), or from ``source``: a carried state of
     ``start_step`` from an earlier walk's ``<out>/carry`` (a resumption), or, with ``segment``, a segment's first
     machine (the lead, Nov 25: the legs and dungeons after the first walked in parallel, each from its start door's
@@ -852,7 +882,8 @@ def walk(route: str, out: str, iterations: int, patience: int, attempts: int = 6
     def door(step: RouteStep, target: RouteStep, at: str, clips: Optional[bool]) -> Optional[str]:
         started = time.time()
         pre_entry, stats = walk_crossing(step, target, at, route, rooms, iterations, patience, attempts, states_dir,
-                                         clips, os.path.join(out, 'fights'), parallel)
+                                         clips, os.path.join(out, 'fights'), parallel,
+                                         (scripts or {}).get(step.index))
         label = f"step {step.index} {step.level}:0x{step.room:02x} {step.entry}->{step.exit} clear {step.clear}"
         if pre_entry is None:
             log(f"{label} -> {walk_state_name(target)}: FAILED ({stats})")
@@ -1495,6 +1526,9 @@ def build_parser() -> argparse.ArgumentParser:
                                   "(scripts/experiments/r44_segments.py start), kept in the record")
     walk_parser.add_argument('--last-step', type=int, default=None,
                              help="the last route step whose entry state is written (default: the route's end)")
+    walk_parser.add_argument('--script', action='append', default=[], metavar='STEP=FILE',
+                             help="play route step STEP by the actions in FILE (a JSON list of option texts) instead of "
+                                  "the explorer: a way the explorer does not find (round 44: 9x61's block clip)")
     install_parser = sub.add_parser('install', help="copy a finished staged build into the states dir")
     install_parser.add_argument('staged', help="the build's --out directory")
     install_parser.add_argument('--partial', action='store_true', help="install a build that failed part-way")
@@ -1548,10 +1582,15 @@ def main(argv=None):
         if args.segment:
             with open(args.segment, encoding='utf-8') as file:
                 segment = json.load(file)
+        scripts = {}
+        for item in args.script:
+            index, path = item.split('=', 1)
+            with open(path, encoding='utf-8') as file:
+                scripts[int(index)] = json.load(file)
         manifest, failed = walk(args.route, out, args.iterations, args.patience, args.attempts, args.start_step,
                                 args.source, args.last_step, (WALK_BOOT[0], args.delay), states_dir=states_dir,
                                 command=command, log=lambda text: print(text, flush=True), parallel=args.parallel,
-                                segment=segment)
+                                segment=segment, scripts=scripts)
         _write_build_record(out, command, manifest, [failed] if failed else [])
         print(f"{len(manifest)} walked states in {out}")
         if failed:

@@ -1,0 +1,8 @@
+# Round 43 (Perf43, Nov 25): darknut@d3first with the generation's two input switches off, for the speed
+# measurement "the generation's recipe with one thing changed" (round40.md "Where a teacher's time goes"): the same
+# task without the threat and chase blocks, trained by a network that does not read them. A measurement: never
+# promoted.
+extends: ../../d3first/darknut.yaml
+obs:
+  threat: false
+  chase: false

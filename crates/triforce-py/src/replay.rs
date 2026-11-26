@@ -106,7 +106,8 @@ impl PyReplay {
             .collect()
     }
 
-    /// The events as dicts: `frame`, `type` ('control', 'room', 'outcome', 'episode', 'segment' or 'visit') and the
+    /// The events as dicts: `frame`, `type` ('control', 'room', 'outcome', 'episode', 'segment', 'visit' or 'reset':
+    /// the console's RESET button before the frame) and the
     /// type's fields (room: `level`, `room`, `in_cave`, `step`, `policy`; outcome: `outcome`; episode: `ending`,
     /// `outcome`, `terminated`, `truncated`; visit: `record`, the room visit's record as the env judged it).
     fn events<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
@@ -137,6 +138,7 @@ impl PyReplay {
                     d.set_item("truncated", truncated)?;
                 }
                 Event::Segment => d.set_item("type", "segment")?,
+                Event::Reset => d.set_item("type", "reset")?,
                 Event::Visit(text) => {
                     d.set_item("type", "visit")?;
                     // Python's parser: serde_json's default float parsing can be one ulp off (no

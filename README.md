@@ -173,7 +173,12 @@ uv run training-gui.py --web-only                               # only the web v
 .venv/bin/python play-zelda.py 2x3 runs/replays                  # or a folder of replay files, round and round (one FILE.tfreplay: on loop)
 .venv/bin/python play-zelda.py 1x1 run.tfreplay --thoughts       # over the picture: what the replay says the agent was steered to (objective, targets), could do (the mask) and chose (network, action, probability, danger)
 .venv/bin/python play-zelda.py 1x1 corpus/replays/golden-d3first-single-network.tfreplay   # ONE network in every slot beating the game by a golden path on d3first, from power on (golden-d3first-51-networks: the 51 specialists'; golden-d2first-34-networks: d2first's; single-run-d3first-old-order-51-networks: one unbroken run on 2.0.0.3's order)
-uv run emu-zelda.py 5 05 --bombs 0                              # play a room yourself (Dungeon 5's 0x05; level o = overworld) from d3first's start state, PS5 controller or keyboard; DONE on leaving the room or dying; square/S saves a replay to ~/triforce-review/played/ (paused or DONE); triangle/R1 start over; -/+ the rate (--entry, --visit, --chain, --route, --hearts, --keys, --item bombs|boomerang|..., --enemies N, --seed, --no-sound, --scale; --help for the keys)
+uv run emu-zelda.py 5 05 --bombs 0                              # play a room yourself (Dungeon 5's 0x05; level o = overworld) from d3first's start state, PS5 controller or keyboard; DONE on leaving the room or dying; square/S saves a replay to ~/triforce-review/played/ (paused or DONE); L1/F5 saves the machine state there; triangle/R1 start over; -/+ the rate (--entry, --visit, --chain, --route, --hearts, --keys, --rupees, --item bombs|boomerang|..., --enemies N, --seed, --invincible, --bombs infinite, --no-sound, --scale; --help for the keys)
+uv run emu-zelda.py --reset 120 --invincible --bombs infinite   # the whole game yourself from console power on (--name NAME, LINK by default, ZELDA the second quest; --reset [DELAY]: RESET after the game starts, DELAY frames on the file-select screen; --keys/--rupees N|infinite); DONE at the ending (Link touches Zelda); replays start_<name>[_reset<delay>]..._<time>.tfreplay
+.venv/bin/python scripts/owner_takes.py add NAME...           # (a queue job) file the takes the owner names (file names under ~/triforce-review/ or paths; all or none) into replays/owner/<room>/ under his names: verify, archive, rewrite replays/owner/INDEX.md (sync: nothing new, archive and index only)
+triforce solved check                                           # triforce/solved_rooms.yaml: every entry on its route, every take named verifies and scores as solved (list: the entries)
+triforce solved compare NEW_REPLAYS,NEW.jsonl OLD_REPLAYS --label new --label old   # (a queue job) whether each team plays the solved rooms the solved way: a table a team, then side by side (--json OUT)
+.venv/bin/python scripts/solved_phases.py 5x47-S --seeds 3000  # (a queue job, on a checkout with the round-43 load rule) a solved room's scripted ways over thousands of phases in the route's layout
 .venv/bin/python create-video.py wins.mp4 2x3 runs/wins --sound  # film replays on a grid into a video (needs ffmpeg; 1x1 by default; --sound: the middle cell's, else the top left one's; --no-music, --no-sound-effects, --no-heart-beep; --split-audio: music and effects as two audio tracks; --controller; --thoughts)
 .venv/bin/python zelda-headless.py runs/wins 3 --wins-only       # no window: play until 3 runs won, keep them as replays (--deaths-only, --stuck-only, --power-on, --stop-at step:N, --clips off, --route d2first)
 .venv/bin/python zelda-headless.py runs/golden 1 --golden --power-on   # the golden path on d3first: games race triforce to triforce from each winner's state, stitched into one replay (--route d2first for the other)
@@ -213,6 +218,28 @@ line per live plan with its progress and queue, and the machine line. A run that
 final figures. The page asks for `/api/state` (JSON) every second; nothing else is served. The web view is on unless
 `--no-web` is given; a taken port (a second training-gui) is an error: one line and exit 1 (`--web-port N` for
 another port).
+
+Each running job's card (window and web view) shows at its top right what it costs the machine, sampled every 3
+seconds by the GUI alone (`triforce/jobload.py`; a job is never asked anything), e.g. `CPU 13.4 cores (67%) · load
+21.8 · waiting 38%`; when the card is narrow this text alone is cut (the waiting share first, then the load, then
+the CPU's share), never anything else on the card:
+
+- **CPU**: the cores the job uses now, its systemd unit's cgroup's `cpu.stat` `usage_usec` between two samples, and
+  that as a share of the machine's 20 threads.
+- **load**: what the job adds to the load average (the kernel keeps none per job): its threads that are runnable
+  (running or waiting for a CPU, state R in `/proc`), smoothed over a minute as the kernel smooths its own 1-minute
+  load average (the kernel's also counts threads waiting on the disk, state D).
+- **waiting**: the share of the last 10 seconds in which some of its threads were ready to run and got no CPU (its
+  cgroup's `cpu.pressure`, `some avg10`): a starved job, which its cores alone do not show.
+
+An ended job shows its CPU time in all and its mean cores over its run. Over the list, under the queues' line:
+`LOAD jobs: 31.2 cores · load 33.0 · machine: 19.4 of 20 cores · load 35.1 · outside the queue: 1.8 cores · load
+2.1`, the outside part in the warning colour while more than 3 cores have been busy outside the queue for a minute
+(a job that skipped it), with the busiest process there named (and in the tooltip); a job that just ended still
+counts in the jobs' load as it fades from the kernel's 1-minute average. A job started without
+`--detach` has no unit of its own: it is followed by its wrapper's process tree (no waiting share, no total at its
+end). Every rate the GUI prints is a number of one or more (the owner, Nov 25): `4.5 tests/s`, else the time one
+takes, `4.0 s/test`, `2.5 min/chain`; a training's steps a second stay `steps/s`.
 
 Evaluations go through `triforce eval-batch NAME` (`triforce/eval_batch.py`): one log folder, every evaluation
 listed up front, shown in the training GUI as one group named NAME with a progress bar per evaluation; its Eval tab

@@ -4011,3 +4011,83 @@ make it. Do what's best for the resulting speedruns", without regard to training
   of its episodes clips-off, 5% of ow-tektite's a step back out of the room) stay in the store as the record.
 - **Before a retrain** (with the clips rule of Nov 24): `python -m triforce.harvest_audit audit --snapshot NAME`
   must find nothing invalid.
+
+## 2026-11-25 — Only real starts: the spawn layouts the project served were mostly ones the game never shows (the owner's find)
+
+**The find is the owner's.** Playing rooms on `emu-zelda.py` he saw monster patterns he had never met in years of
+playing the game: "sometimes the patterns of the enemies aren't familiar at all [...] 5x47 [...] The fast path
+through this room is just hold north and never let go. 0-3 gibdos may path through your way in the room's topmost
+(door adjacent) row, and the one under that... never in the third tile from the top [...] That 4th replay above
+does NOT fit that pattern and I've never seen it before", and asked whether the seeds served in the emulator "and
+also for training!" are ever reachable by playing the game.
+
+- **What was served** (Seeds43, round40.md "Real starts"). A dungeon room's monsters stand where the spawn cycle
+  `$524` puts them (nine spots walked from it, asm:Spawn_AssignPositions); the random numbers only decide how they
+  walk. The game zeroes `$524` at power on and reset and moves it by a fixed map at each room entry, so real play
+  on the route brings one value to almost every door (5x47 from S: 6 in 331 of 331 power-on runs). Every start the
+  project served, in `emu-zelda.py` and at every training reset, redrew it uniformly from nine. **Two measures,
+  kept apart:** against "what this route brings to that door", 78-89% of the resets of 5x47, the Olive Garden,
+  3x59, 3x5b and 3x69 were in another layout: the route's own layout got a ninth of the practice. Against "any game
+  of Zelda could reach it" (the owner's definition for 2.0.1.0, below; proven by searching the game's door maps
+  over every order of rooms and every clear pattern), 97% of the uniform draws were reachable and 3.0% were not:
+  of 140 dungeon doors with monsters 132 have four or more reachable layouts. The owner's rule for 5x47 is exactly
+  the route's layout's: with it a Gibdo stands in Link's column on the third row in 0.0% of the random phases, with
+  the other served layouts in 55-68%. His odd take had `$524` = 7, which the game gives a player who first clears
+  5x64's Blue Darknuts: reachable, by a play nobody makes.
+- **What it reached:** the seed states (each built from loads with a drawn value: 80% of the dungeon ones hold a
+  `$524` that is not the route's, and each one fixed chase state where real play has both), the `d3first` dungeon
+  curriculum tracks (172: 25 in the route's layout, 132 in another reachable one, 15 in an unreachable one), the
+  Darknut fighter's demonstrations (the route's layout in 16-34 of 150 visits a case), the harvested states, and
+  every dungeon segment chain started from an entrance (a drawn value lasts 13-16 rooms; the 1000-run baseline's
+  entrance draws were outside the values power-on runs hold there in 44-89% of runs). Full runs from power on and
+  the golden race were never affected. zcore against Mesen over the golden run's 153,136 frames: identical game
+  state on 152,988, one 15-frame stretch at frame 120,480 a frame-interrupt ahead, nothing near 5x47.
+- **The owner's rule from here on** (his "north star", in spirit): one save state per door; the layout real, never
+  written; "We should never train on an un-real state. And the pool of states we train on should be pulled from
+  ALL possible VALID states, with none being a 'surprise' for the model"; `emu-zelda.py` "Never serve an unreal
+  room". **For 2.0.1.0, valid means "any game of zelda not just this route could reach them"**: the generic model
+  first ("Memorizing the rooms and route are for later"; a later retrain may train on the route's layouts alone).
+  The route's own layout may weigh more: the lead set it at one half of a door's resets, the rest spread evenly
+  over the door's other reachable values. Chase state 50/50 and the random phase uniform, as real play has them.
+  Hearts keep their range; harvested states are retired; failed states are still drawn more often in training and
+  evaluation uses the plain distribution. `emu-zelda.py` defaults to the route's layout.
+- **All training stopped** (Nov 25, 08:40) and **every teacher restarts from scratch** on the combined fixes (real
+  starts; the trainer's network served with CUDA graphs, Perf43; `carriers: fight` on 3x5b's first pass,
+  Carrier43), the Darknut teacher first in the queue (the owner: "if it doesn't go well, you can inspect and
+  retrain"). No trained weights are carried over. The route gets `clear: true|false` on every step (the owner:
+  "There's nothing sacred about the route file").
+- **Clips, settled the same morning:** on in every episode of every task, the overworld's screen wrap on every
+  overworld family (ow-ghini too), Patra's rooms included ("9x61 is VERY clippable with a patra in it"); the one
+  exception "I definitely don't want clipping in the equipment rooms".
+- **Power-on memory** (the owner's second question): no value a real console holds at power on in the bytes
+  asm:Reset_ClearRam skips can change the random sequence, the spawn cycle or anything a run sees
+  (asm:Reset_RunGame writes or hides each before use); zcore's all-zero power-on RAM is equivalent.
+
+## 2026-11-25 — The drop counters at a reset: real triples, between real play and uniform (the owner's directive, the lead's shares)
+
+The owner, on finding that 13 tasks kept the start state's own forced-drop counter and every task its drop cycle:
+"Everything else needs to not take in the state's streak count, fairy count, OR global kill count which affects
+drop tables. It should be a distribution of those things and nothing 'unreal'", then: "something closer to real
+values than uniform [...] somewhere between uniform and what we see in practice [...] make the decision, record the
+reasoning behind it and go", from runs "from power on or 0x77 only".
+
+- **The game** (asm:Drop_SetUpItem, asm:Link_BeHarmed): `$627` counts kills since Link was last hit, uncapped, and
+  a death that ends while it reads 16 gives a fairy; `$50` counts the same kills capped at 10, forces a drop at 10
+  (a bomb if that kill was a bomb kill, `$51`) and is zeroed by each forced drop or fairy; `$52A`, the drop cycle
+  0-9, steps with every death and is untouched by a hit. So "fairy count = streak + a random 0-5" (the owner's
+  first thought) is not a pair the game holds.
+- **Measured**: 507 power-on runs, 77,465 room entries (Seeds43's scan). Kills since the last hit at a room entry:
+  dungeons 0: 23.0%, 1-3: 34.4%, 4-9: 23.4%, 10-15: 9.2%, 16+: 10.0%; overworld 0: 53.7%, 1-3: 29.9%, 4-9: 6.9%,
+  10-15: 2.8%, 16+: 6.6%; by level from Dungeon 3's 25.7% at 16+ to Dungeon 7's 61.2% at 0. The drop cycle is
+  close to even. 9% of real entries do not fit a simple formula between `$50` and `$627`.
+- **The rule**: a reset draws the triple (`$627`, `$50`, `$51`) from the triples real play held, never computed;
+  the kills value with probability 2/3 from the real distribution of its kind of door (dungeon or overworld) and
+  1/3 uniform over 0-15; the drop cycle uniform 0-9. For dungeons: 0: 17%, 1-3: 29%, 4-9: 28%, 10-15: 19%, 16+: 7%.
+- **Why these shares**: closer to real than to uniform, as asked; the band where a fairy is one to six unhurt kills
+  away at twice real play's share (and half of uniform's) because a better network goes unhurt longer than the old
+  ones did, and should not meet its first fairy in a chain; pooled by kind of door and not per door, since a door's
+  own distribution is the old networks' habit there (Dungeon 7: hit on entry six times in ten).
+- **Exceptions, the owner's**: 3:0x5b's first pass keeps its draw (cycle 0 or 1: "to train what to do");
+  Manhandla's and Dodongo's rooms get rules of their own so bombs are never left on the floor ("we need to teach
+  it to not skip the bombs [...] and we need to make sure training runs see manhandla drop bombs"): leaving with
+  bombs on the floor and room in the bag fails the training episode, and the armed bomb drop stays frequent there.

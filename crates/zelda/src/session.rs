@@ -146,6 +146,9 @@ pub struct Session<N: Nes> {
     stash: Option<Stash<N>>,
     /// The RNG phase the last `load` or `write_rng` wrote (None: the last load wrote none, or a `restore`).
     rng_phase: Option<u32>,
+    /// What the last `load` of a pre-entry state left for the room entry (`$524` and the rest the reset rule writes;
+    /// None: no load yet, a start that is no pre-entry state, or a `restore` came after it).
+    entry_values: Option<crate::room_entry::EntryValues>,
 }
 
 impl<N: Nes> Session<N> {
@@ -174,6 +177,7 @@ impl<N: Nes> Session<N> {
             look_ahead: LookAhead::All,
             stash: None,
             rng_phase: None,
+            entry_values: None,
         }
     }
 
@@ -403,6 +407,12 @@ impl<N: Nes> Session<N> {
         self.rng_phase
     }
 
+    /// What the last `load` of a pre-entry state left in the bytes the room entry reads (round 45: the layout a
+    /// curriculum track is explored in); None for any other start or after a `restore`.
+    pub fn entry_values(&self) -> Option<crate::room_entry::EntryValues> {
+        self.entry_values
+    }
+
     /// Writes the RNG register `phase` steps after reset (`crate::rng::write`) at the current frame, no
     /// emulation, and rebuilds the state and mask; `rng_phase` becomes `phase`.
     pub fn write_rng(&mut self, phase: u32) -> &Arc<GameView> {
@@ -425,18 +435,25 @@ impl<N: Nes> Session<N> {
         self.ledger.clear();
         self.open_clip = None;
         self.rng_phase = None;
+        self.entry_values = None;
         if opts.randomize_rng {
             let phase = rng::draw_phase(rng);
             rng::write(nes, phase);
             self.rng_phase = Some(phase);
         }
         if is_pre_entry(|a| nes.peek(a)) {
-            if opts.randomize_rng {
-                let drawn = opts.entry.as_ref().is_some_and(|entry| entry.draw(nes, rng));
-                if !drawn {
+            let source = if opts.randomize_rng {
+                if opts.entry.as_ref().is_some_and(|entry| entry.draw(nes, rng)) {
+                    crate::room_entry::EntrySource::Rule
+                } else {
                     randomize_spawn(nes, rng);
+                    crate::room_entry::EntrySource::Uniform
                 }
-            }
+            } else {
+                crate::room_entry::EntrySource::Saved
+            };
+            let rule = opts.entry.as_ref().map(|entry| &*entry.rule);
+            self.entry_values = Some(crate::room_entry::EntryValues::read(&*nes, rule, source));
             let pending = if opts.fresh_room {
                 pending_room(|a| nes.peek(a))
             } else {
@@ -508,6 +525,7 @@ impl<N: Nes> Session<N> {
         self.ledger.clear();
         self.open_clip = None;
         self.rng_phase = None;
+        self.entry_values = None;
         self.rebuild();
         self.state()
     }
