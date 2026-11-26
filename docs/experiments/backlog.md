@@ -535,4 +535,43 @@ thing and have to be taught again. Swept from this backlog Nov 23 (the lead):
   distribution of bombs Link brings into the room from the south (the bypass also needs 8 bombs to be worth it: the
   drop is useless with a full bag). Measure: hearts lost fighting vs a trained bypass, and the bag on entering 9x16
   from S, on the new team's chains.
+- **Statues as "fake" entities, in the next retrain** (the owner, Nov 26: "I don't want statues as enemies YET [...]
+  it can be in the next retrain"; not this generation). A dungeon statue is no object: `Statue_Update` makes type
+  `$55` fireballs at fixed source points in layouts `$24` (4 sources) and `$23` (2), and beside an attacked person
+  (2); the network sees a fireball only once it exists, and the statue only as a solid grid tile. The mechanics, with
+  labels: zelda-asm/enemies.md "Statue fireballs" (sources and where they stand, a volley from every source as play
+  starts in the room, reloads of 81 / 129 / 241 / 97 frames, the 1-in-16 skip of 256 frames, about 154 frames
+  between one source's shots, timers frozen while slots `$06`-`$0B` are full, the magic shield). **The safe square**:
+  a source does not shoot while Link's position is within `$18` px (24 px, 1.5 squares) of its source point on both
+  axes, a 48 by 48 px square (3 by 3 squares) per source; standing against a statue is inside it. The idea: one token
+  per firing source in a new observation key (additive: schema +1, `OLDEST_OBS_SCHEMA` unchanged), with the frames
+  until it can fire (its timer; 0 = may fire this frame), whether Link is in its safe square, its position relative
+  to Link, and whether the room's fireballs are the person's. The tokens are known from RAM (`Statue_FireballTimers`,
+  `IsPersonFireballsEnabled`, the room's layout id), so nothing is guessed; a network then can learn to hug a statue
+  or cross between volleys. Measured Nov 26 (`scripts/experiments/r48_statue_hits.py` on express chains, 100 runs
+  from each dungeon entrance, seeds 0-99, `--act model`; **new** = `2.0.0.15+@darknut=gen1-darknut/s1r+@walkers=
+  gen1-walkers/s1r+@overworld=gen1-overworld/s1r2` with the boss teachers `gen1-boss-digdogger/s1r3`,
+  `-aquamentus/s1r`, `-manhandla/s1r`, `-gohma/s1r`; **old** = `current`, 2.0.0.15). A hit is a `$55` within 16 px
+  of Link vanishing on the frame his health drops; a death counts for the fireballs when the visit's last hit was
+  one. Per room, visits / hits / hearts to fireballs (a visit) / deaths in the room (a fireball's last):
+
+  | Room | new | old |
+  |---|---|---|
+  | 5:0x24 (Digdogger) | 79 / 147 / 73.7 (0.93) / 14 (6) | 44 / 65 / 32.6 (0.74) / 6 (5) |
+  | 7:0x69 | 108 / 23 / 11.5 (0.11) / 3 (1) | 117 / 15 / 7.5 (0.06) / 1 (0) |
+  | 7:0x39 | 100 / 28 / 14.0 (0.14) / 0 | 116 / 25 / 12.5 (0.11) / 0 |
+  | 7:0x1c (Digdogger) | 19 / 23 / 11.5 (0.61) / 4 (1) | 98 / 233 / 116.9 (1.19) / 7 (5) |
+  | 7:0x0c | 15 / 1 / 0.5 (0.03) / 0 | 91 / 0 / 0 / 0 |
+  | 6:0x58 | 100 / 151 / 75.7 (0.76) / 0 | 100 / 143 / 71.7 (0.72) / 0 |
+  | 8:0x5e | 100 / 127 / 63.6 (0.64) / 0 | 100 / 202 / 101.2 (1.01) / 0 |
+  | 8:0x3e | 100 / 109 / 54.7 (0.55) / 0 | 100 / 173 / 86.8 (0.87) / 1 (0) |
+  | 9:0x06 (person attacked) | 7 / 4 / 0.5 (red ring) / 0 | 10 / 8 / 1.0 / 0 |
+
+  Per 100 runs from the entrance, hearts to fireballs (deaths with a fireball last, of all deaths): Dungeon 5 new
+  73.7 (6 of 35), old 32.6 (5 of 61); Dungeon 7 new 37.6 (2 of 94), old 136.9 (5 of 39); Dungeon 6 new 75.7 (0 of
+  69), old 71.7 (0 of 57); Dungeon 8 new 118.3 (0 of 0), old 188.0 (0 of 3); Dungeon 9 about 1 (9:0x66's person was
+  never attacked). About half a heart to a heart a visit in every four-statue room, rarely the killing blow (8 of
+  1000 new runs, 10 old): the cost is the hearts carried into later fights. The four-statue rooms where Link fights
+  fired 9 to 21 fireballs a visit (all sources together); the safe square held shots back mostly in 8:0x3e (about 2.5
+  a visit) and 7:0x69 (about 0.8), almost never elsewhere. Measure again on the next team before building it.
 
