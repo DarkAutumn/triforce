@@ -59,6 +59,7 @@ from pathlib import Path
 
 RUNS = 30
 SEED0 = 1000
+LAYOUT = None                       # --layout: the room's monster layout (`Env.set_layout`; round 45), else the draw
 REPEAT = {'RECORDER': 40, 'CANDLE': 40, 'BOMB': 40, 'ARROW': 40, 'SWORD': 4, 'BEAMS': 4}
 
 OBJ_X, OBJ_Y, OBJ_DIR, OBJ_STATE, OBJ_TYPE, OBJ_META = 0x70, 0x84, 0x98, 0xAC, 0x34F, 0x405
@@ -734,7 +735,10 @@ def rule_env(family, state, hearts):
         containers = Game(seed=0, states_dir=str(STATES_DIR)).load(state, fresh_room=True, seed=0).max_health
         share = float(hearts) / containers
         config = config.replace(ram_randomization={'hp': [share, share], 'full_hp': 0.0})
-    return Env(config, explicit_starts=True, strict_actions=False, seed=0)
+    env = Env(config, explicit_starts=True, strict_actions=False, seed=0)
+    if LAYOUT is not None:
+        env.set_layout(LAYOUT)
+    return env
 
 
 def write_track(directory, state, seed, what, points, actions, health, ending, layout=None):
@@ -920,7 +924,12 @@ def main():
     parser.add_argument('--verbose', action='store_true')
     parser.add_argument('--route', default='d2first', help="the route whose step and states it plays (`r28_demos.py "
                                                            "--route`)")
+    parser.add_argument('--layout', default=None, help="route, valid or a spawn cycle N: the room's monster layout "
+                                                       "(`Env.set_layout`; round 45; default: the env's draw)")
     args = parser.parse_args()
+    global LAYOUT                                                 # pylint: disable=global-statement
+    if args.layout is not None:
+        LAYOUT = int(args.layout) if args.layout.isdigit() else args.layout
     from triforce.jobs import require_job  # pylint: disable=import-outside-toplevel
     require_job()
     sys.path.insert(0, str(Path(__file__).resolve().parent))
