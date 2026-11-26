@@ -12,8 +12,8 @@ The refusals (``Refused``, each naming what to change):
   default is clips on for every task); ``--allow-clips-off`` when he asked for it.
 - ``check_obs_agree``: the tasks of one run set an ``obs.`` switch differently (one network reads one observation).
 - ``check_network_reads``: the network reads an opt-in block (``SWITCH_KEYS``: ``obs.threat``'s ``entity_threat``,
-  ``obs.chase``'s ``chase`` and ``entity_chase``) whose switch is off in the tasks (it would read zeros), or the tasks
-  turn on a switch whose blocks the network does not read.
+  ``obs.chase``'s ``chase`` and ``entity_chase``, ``obs.shooter``'s ``entity_shooter``) whose switch is off in the
+  tasks (it would read zeros), or the tasks turn on a switch whose blocks the network does not read.
 - ``check_demos``: a demonstration file lacks a key the network reads (``PPO``'s cloning term runs the network on the
   file's rows: ``ppo.demo_log_prob``), or holds a switch's block all zeros where the tasks turn the switch on (recorded
   with it off).
@@ -31,12 +31,14 @@ from typing import Optional
 import numpy as np
 
 from .. import manifest, nets, paths
-from ..model import CHASE_KEY, ENTITY_CHASE_KEY, ENTITY_THREAT_KEY, MASK_KEY, TOKEN_KEYS, obs_spec_from_space
+from ..model import (CHASE_KEY, ENTITY_CHASE_KEY, ENTITY_SHOOTER_KEY, ENTITY_THREAT_KEY, MASK_KEY, TOKEN_KEYS,
+                     obs_spec_from_space)
 from ..observation import observation_space
 
 # The switches whose blocks only a network that asks for them reads (``model.TOKEN_KEYS``): switch -> its keys.
 # ``obs.target`` and ``obs.objective`` fill vector blocks every network reads; ``check_obs_agree`` covers them.
-SWITCH_KEYS = {'threat': (ENTITY_THREAT_KEY,), 'chase': (CHASE_KEY, ENTITY_CHASE_KEY)}
+SWITCH_KEYS = {'threat': (ENTITY_THREAT_KEY,), 'chase': (CHASE_KEY, ENTITY_CHASE_KEY),
+               'shooter': (ENTITY_SHOOTER_KEY,)}
 
 
 class Refused(Exception):

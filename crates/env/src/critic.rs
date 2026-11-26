@@ -175,6 +175,8 @@ pub struct Critique<'a> {
 pub struct GameplayCritic {
     pub pbrs: bool,
     pub block_reward: f64,
+    /// `reward.block_own_decay`: blocks decay on their own count a room ([`GameplayCritic::critique_block`]).
+    pub block_own_decay: bool,
     pub quiet_enemy_penalty: f64,
     /// `reward.fixed_pickup_reward`: health gained pays `REWARD_MAXIMUM` instead of the urgency scale.
     pub fixed_pickup_reward: bool,
@@ -207,6 +209,8 @@ pub struct GameplayCritic {
     puzzles_rewarded: HashSet<(MapLocation, String)>,
     /// `reward-beam-timed` payments per room, decayed as combat rewards are ([`COMBAT_DECAY_THRESHOLD`]).
     timed_shots: HashMap<MapLocation, i32>,
+    /// `reward-block-projectile` payments per room with `block_own_decay`, decayed as combat rewards are.
+    blocks: HashMap<MapLocation, i32>,
 }
 
 impl GameplayCritic {
@@ -216,6 +220,7 @@ impl GameplayCritic {
             block_reward,
             quiet_enemy_penalty,
             fixed_pickup_reward: false,
+            block_own_decay: false,
             boss_ate_bomb_penalty: REWARD_MEDIUM,
             left_drop_penalty: 0.0,
             sword_blocked_penalty: crate::config::SWORD_BLOCKED_PENALTY,
@@ -232,6 +237,7 @@ impl GameplayCritic {
             stunned_enemies: HashSet::new(),
             puzzles_rewarded: HashSet::new(),
             timed_shots: HashMap::new(),
+            blocks: HashMap::new(),
         }
     }
 
@@ -248,6 +254,7 @@ impl GameplayCritic {
             config.reward.block_reward,
             config.reward.quiet_enemy_penalty,
         );
+        critic.block_own_decay = config.reward.block_own_decay;
         critic.fixed_pickup_reward = config.reward.fixed_pickup_reward;
         critic.boss_ate_bomb_penalty = config.reward.boss_ate_bomb_penalty;
         critic.left_drop_penalty = config.reward.left_drop_penalty;
@@ -270,6 +277,7 @@ impl GameplayCritic {
         self.stunned_enemies.clear();
         self.puzzles_rewarded.clear();
         self.timed_shots.clear();
+        self.blocks.clear();
     }
 
     /// Decay multiplier for combat rewards in a room (counts the event).
@@ -502,7 +510,12 @@ impl GameplayCritic {
         }
         let mut value = 0.0;
         for event in blocks {
-            value += REWARD_MEDIUM * self.combat_decay(event.full_location) * self.block_reward;
+            let decay = if self.block_own_decay {
+                Self::decay(&mut self.blocks, event.full_location)
+            } else {
+                self.combat_decay(event.full_location)
+            };
+            value += REWARD_MEDIUM * decay * self.block_reward;
         }
         if value != 0.0 {
             rewards.add(Outcome {

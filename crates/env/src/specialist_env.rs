@@ -504,7 +504,8 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
             builder: ObservationBuilder::new(config.obs.objective, config.obs.target)
                 .with_hidden_positions(config.obs.hidden_positions)
                 .with_threat(config.obs.threat)
-                .with_chase(config.obs.chase),
+                .with_chase(config.obs.chase)
+                .with_shooter(config.obs.shooter),
             specialist: Arc::from(config.name.as_str()),
             config,
             data,
@@ -1295,6 +1296,14 @@ impl<N: Nes, St: StateStore<N::State>> SpecialistEnv<N, St> {
         if self.config.reward.chase_penalty > 0.0 && !change.entered_room() && zelda::darknut_rules::chasing(&state) {
             let value = self.config.reward.chase_penalty * f64::from(change.frames) * scale;
             rewards.add(Outcome::penalty("penalty-chase", -value));
+        }
+        // `penalty-exposed-attack` (round 40, "The Goriya teacher", default off): a decision that drops the shield
+        // with a shot near and no monster near or aimed at (`zelda::exposed`), read from the state it was made in.
+        if self.config.reward.exposed_attack_penalty > 0.0
+            && zelda::exposed::exposed(&change.previous, change.action.kind, change.action.direction)
+        {
+            let value = self.config.reward.exposed_attack_penalty * scale;
+            rewards.add(Outcome::penalty("penalty-exposed-attack", -value));
         }
 
         self.episode_steps += 1;

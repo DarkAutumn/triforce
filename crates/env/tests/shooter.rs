@@ -1,0 +1,43 @@
+//! Schema 10's `entity_shooter` (`env::observation::shooter_block`) on hand-built RAM: a blue Goriya about to throw,
+//! a red one with its timer running, one waiting for its boomerang, a Darknut beside them (no row: the Goriyas only).
+
+use env::observation::{ENTITY_SHOOTER_SIZE, TREASURE_SLOT, feature_names, shooter_block};
+
+fn col(name: &str) -> usize {
+    feature_names().entity_shooter.iter().position(|n| n == name).unwrap_or_else(|| panic!("no column {name}"))
+}
+
+/// A Goriya of `obj_type` in RAM slot `slot`, standing (q-speed 0: no grid point ahead), wanting to shoot.
+fn goriya(r: &mut [u8], slot: usize, obj_type: u8, timer: u8) {
+    r[0x34F + slot] = obj_type;
+    (r[0x70 + slot], r[0x84 + slot]) = (0x40, 0x8D);
+    r[0x412 + slot] = 1;
+    r[0x28 + slot] = timer;
+}
+
+#[test]
+fn the_columns_read_the_throw_rule_per_goriya() {
+    assert_eq!(feature_names().entity_shooter.len(), ENTITY_SHOOTER_SIZE);
+    let mut r = vec![0u8; 0x800];
+    (r[0x70], r[0x84]) = (0x60, 0x8D);
+    goriya(&mut r, 1, 0x05, 1);
+    goriya(&mut r, 2, 0x06, 0x38);
+    goriya(&mut r, 3, 0x05, 0);
+    r[0xAC + 3] = 0x80;                                 // its boomerang is out
+    r[0x34F + 4] = 0x0B;                                // a Red Darknut
+    let block = shooter_block(&r);
+    let (loaded, time, will) = (col("loaded"), col("throw_time"), col("will_throw"));
+    // Observation slot i is RAM slot i + 1.
+    assert_eq!((block[0][loaded], block[0][will]), (1.0, 1.0));
+    assert_eq!(block[0][time], 1.0 - 1.0 / 112.0);
+    // The red one's timer reads 0 only past the 16 frames: loaded, no chance yet.
+    assert_eq!((block[1][loaded], block[1][will]), (1.0, 0.0));
+    assert_eq!(block[1][time], 0.5);
+    assert_eq!(block[2], [0.0; ENTITY_SHOOTER_SIZE]);
+    assert_eq!(block[3], [0.0; ENTITY_SHOOTER_SIZE]);
+    assert_eq!(block[TREASURE_SLOT], [0.0; ENTITY_SHOOTER_SIZE]);
+    // Its timer at 4: the red one may throw on frames 4-16, 2 in 256 a frame.
+    r[0x28 + 2] = 4;
+    let p = 1.0 - (1.0f32 - 2.0 / 256.0).powi(13);
+    assert!((shooter_block(&r)[1][will] - p).abs() < 1e-6);
+}

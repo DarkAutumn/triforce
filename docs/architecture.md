@@ -707,6 +707,7 @@ oldest schema whose checkpoints still load, "Checkpoint" below), `ROOM_VOCAB`,
 | `entity_threat` | float32 [12, 15] | schema 8: range-aware contact, the shooter's threat lane, the bomb carrier per entity slot; all zero unless `obs.threat` (below) |
 | `chase` | float32 [7] | schema 9: where the monsters are sent (the chase target, its flip, Link from the mirror's fixed point); all zero unless `obs.chase` (below) |
 | `entity_chase` | float32 [12, 12] | schema 9: per entity slot, what a grid-point walker may do at its next grid point; all zero unless `obs.chase` (below) |
+| `entity_shooter` | float32 [12, 3] | schema 10: per entity slot, when a shooter fires next (the Goriyas for now); all zero unless `obs.shooter` (below) |
 
 When the objective block is on, the env attaches the objective (`crates/env/src/objective.rs`) before calling
 the builder.
@@ -877,6 +878,29 @@ nothing else) check it; round40.md has it against 250 replays.
 | `entity_chase` 8 | `reverse` | that turn is a reversal (the target behind it on its line) |
 | `entity_chase` 9 | `timer_turn` | a wanderer whose turn timer (`$478`) is out by then: without the homing turn it turns perpendicular, toward the target |
 | `entity_chase` 10-11 | `toward_link`, `reverse_link` | the same window test with Link's own corner as the target, and whether that turn reverses onto him (the owner's "don't chase") |
+
+**Schema 10 (round 40, `docs/experiments/round40.md` "The Goriya teacher"; the owner's three columns, Nov 26).** One
+NEW key, `entity_shooter`, after `entity_chase`; no schema 9 key or column changes (`OLDEST_OBS_SCHEMA` stays 6). A
+`model.TOKEN_KEYS` key: a `ZeldaPolicy` and the Rust actor never read it; `hitnet` reads it with the token group
+`shooter` (its columns join each entity token after every older group's, so a network without the group reads the
+rest where it always did). Filled only with **`obs.shooter: true`** (`env::config::ObsConfig::shooter`, default
+false: zeros; on in `goriya@d3first`'s task, read by the `goriya` teacher). `env::observation::shooter_block`
+computes it from the RAM alone (`zelda::shooter::goriya`: asm:Goriya_Update's "wants to shoot" at each grid point,
+asm:Walker_SetInputDirAndTryThrowBoomerang's throw, ObjTimer `$28` counted down by the NMI before the update reads
+it, the stun's long timer, a knockback, a free monster slot and the 4-shot count `$34C`): no emulator step and no
+random byte, so a red Goriya's 2-in-256 roll a frame is given as a chance. Rows only for the Goriyas `$05/$06`; the
+owner: "If the training goes well, apply that (b) not only to goriya but also all enemies that shoot".
+`_native.shooter_blocks(ram)` gives the block for recorded RAM, `_native.shooter_probe(ram)` the raw rule with
+`next` (the throw's conditions but the red roll hold on the next frame). `zelda::shooter`'s unit tests,
+`crates/env/tests/shooter.rs` and `tests/test_obs_shooter.py` check it, the last against the corpus's golden
+`d3first` replay: a blue Goriya throws on exactly the frames the rule says (70 throws; 3 frames excused where the
+rule's input moved under it), a red one 20 times in 3,249 frames it may (2/256 would be 25).
+
+| Key, columns | Names | Value |
+|---|---|---|
+| `entity_shooter` 0 | `loaded` | it holds its boomerang and can act: live (ObjMetastate 0), not waiting for the boomerang (ObjState bit 7), not stunned, no clock |
+| `entity_shooter` 1 | `throw_time` | while loaded, 1 − ObjTimer / 112 (the catch sets `$30`, `$50` or `$70`): its throw timer running down; 0 otherwise |
+| `entity_shooter` 2 | `will_throw` | the chance it throws within the next 16 frames (`zelda::threat::HORIZON`), the room as it stands: the flag until its next grid point, then the Goriya rule there against the chase target as it is; a blue one's 1 or 0, a red one's 1 − (254/256)^n over the n frames the rest of the rule lets it |
 
 Checkpoints saved before r56 carry `model_config.grid_encoder: 'conv'`; the conv encoder is the only one left, so
 `ModelConfig.from_dict` drops that key and refuses any other encoder.
@@ -1275,7 +1299,9 @@ record as `goal_*` (`env::chain::RoomRecord::goals`; `runner.RoomRecord`, None i
 ### Experimental reward and cutoff controls
 
 `reward.block_reward` (nonnegative, default 1) multiplies `REWARD_MEDIUM` for each confirmed shield collision,
-advancing combat decay separately at the collision's room. The detector (`crates/zelda/src/blocks.rs`) checks consecutive executed RAM frames:
+advancing combat decay separately at the collision's room; with `reward.block_own_decay` (round 40, "The Goriya
+teacher"; default false) on the room's own count of blocks instead of the combat count hits and kills share (on that
+count a block late in a long fight pays a sixteenth or less). The detector (`crates/zelda/src/blocks.rs`) checks consecutive executed RAM frames:
 projectile transition signature, shield eligibility/facing/proximity and this frame's `$604` parry request.
 Delayed `$605` audio, Darknut/immunity clinks, natural boomerang returns and unrelated disappearance are not enough.
 The executor does not replace the user's frame callback, change inputs/timing, or collect speculative look-ahead.
@@ -1334,6 +1360,19 @@ Darknut not facing against the bomb; MASKS reason `bomb-catch`; `Session::set_bo
 chain every step). Both are lifted where one bomb is right (`ItemsConfig::bomb_catch_in`,
 `GameplayCritic::short_catch`): a boss hit or alive, the 10th damage-free kill's bomb, a `requires_bombs` room, BOMB
 kept to bomb targets.
+The Goriya teacher's penalty (round 40, "The Goriya teacher"; the owner, Nov 26: "penalize attacking near projectiles
+if there's no enemies near the agent, and let the getting-hit penalty do the rest if there are nearby enemies"):
+`reward.exposed_attack_penalty` (default 0, off; ≥ 0) is `penalty-exposed-attack`, the value times the shaping scale,
+on a decision that drops the shield (`zelda::exposed::lockout`: SWORD and BEAMS 13 frames, BOMB, BOOMERANG and ARROW
+12) made with a harmful shot near, no monster near and, for a ranged attack, none aimed at (`zelda::exposed`, read
+from the state the decision was made in). A shot is near when, flying straight at Link at its own speed (its
+direction not read), it would pass the touch test (middles within 9 px on both axes: Link's box) before the lockout
+ends and after his invincibility; a monster (active, not dying) when, walking straight at him at its q-speed, it is
+inside the box of a swing in one of the four directions by the swing's last hitting frame (11: the sword's point,
+asm:Sword_LinkToWeaponOffsetsX/Y, within `$10` along and `$0C` across, asm:Collision_CheckStabVsMonster); an
+attack is aimed when a monster's middle lies along it within the weapon's hit threshold across (sword shot `$0C`,
+arrow `$0B`, boomerang `$0A`, the wooden boomerang's reach). Training envs only; `_native.exposed_probe` judges
+recorded decisions (`scripts/experiments/r48_exposed_attacks.py`).
 The sword-shot terms (round 38, "Beams at range"; `zelda::beams`; each ≥ 0, 0 drops it, defaults in every family):
 `reward.beam_kill_reward` (default `REWARD_MEDIUM` = 0.5) is `reward-beam-kill` on a step that fires a sword shot
 (`beams::fired`: BEAMS from a state with the beams ready, the shot's slot flying after) when a hit credited to it (the
@@ -2458,9 +2497,10 @@ every step, so following an enemy that moves away pays again, and knockback rese
   (`ChainEnv::config_for_policy`); a key without one (a Rust caller, a family without a network) plays the any-slot
   config. `d2first` has no tasks of its own: its chains play every bare task. **The guard** (`runner.check_inputs`):
   a network that reads a block filled only behind a switch (a `hitnet` token group `threat`: `entity_threat` needs
-  `obs.threat`; `chase`: `chase` and `entity_chase` need `obs.chase`; `lab.recipe.SWITCH_KEYS` and
-  `network_reads`, the lab's own reading) is refused where its chain config has the switch off, naming the policy,
-  the family, the blocks, the switch and the task file, instead of reading zeros.
+  `obs.threat`; `chase`: `chase` and `entity_chase` need `obs.chase`; `shooter`: `entity_shooter` needs
+  `obs.shooter`; `lab.recipe.SWITCH_KEYS` and `network_reads`, the lab's own reading) is refused where its chain
+  config has the switch off, naming the policy, the family, the blocks, the switch and the task file, instead of
+  reading zeros.
 - Handoff harvesting (better-play §1b): `eval-chain --harvest [DIR]` (`Runner(harvest=)`, `ChainPool(harvest=)`,
   `ChainTask(harvest=)`, `ChainEnv::set_harvest`) turns on the session's pre-entry capture and, at every **handoff**
   (a room entry through a correct exit where the acting specialist changes; not same-family entries, retreats,

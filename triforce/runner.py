@@ -501,7 +501,8 @@ def check_inputs(key: str, reads: Dict[str, str], config: SpecialistConfig, rout
     """Raises ``RunnerError`` when the network of policy ``key`` reads a block (``reads``: ``switched_reads``) whose
     ``obs`` switch is off in ``config``, the config it is chained with (``given``: a ``--specialist-config``): it
     would read zeros where it trained on the block."""
-    off = sorted({switch for switch in reads.values() if not getattr(config.obs, switch)})
+    # A switch at its default may be absent from the config's JSON (`obs.shooter`: env::config's `is_false`).
+    off = sorted({switch for switch in reads.values() if not getattr(config.obs, switch, False)})
     if not off:
         return
     family = split_policy(key)[0]

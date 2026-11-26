@@ -59,15 +59,16 @@ ENTITY_FEATURES_KEY = 'entity_features'
 GRID_KEY = 'grid'
 MASK_KEY = 'action_mask'
 # Schema 7's per-entity token blocks (round36.md "Observation v7 and the hit network"), schema 8's (round40.md
-# "Observation v7's danger block") and schema 9's (round40.md "The chase target": ``entity_chase`` per entity,
-# ``chase`` beside Link's own block): read by the token networks (``nets/hitnet.py``), never by ``ZeldaPolicy`` (nor
-# the Rust actor), whose layout leaves them out.
+# "Observation v7's danger block"), schema 9's (round40.md "The chase target": ``entity_chase`` per entity, ``chase``
+# beside Link's own block) and schema 10's (round40.md "The Goriya teacher": ``entity_shooter`` per entity): read by
+# the token networks (``nets/hitnet.py``), never by ``ZeldaPolicy`` (nor the Rust actor), whose layout leaves them out.
 ENTITY_REL_KEY = 'entity_rel'
 ENTITY_CONTACT_KEY = 'entity_contact'
 ENTITY_THREAT_KEY = 'entity_threat'
 CHASE_KEY = 'chase'
 ENTITY_CHASE_KEY = 'entity_chase'
-TOKEN_KEYS = (ENTITY_REL_KEY, ENTITY_CONTACT_KEY, ENTITY_THREAT_KEY, CHASE_KEY, ENTITY_CHASE_KEY)
+ENTITY_SHOOTER_KEY = 'entity_shooter'
+TOKEN_KEYS = (ENTITY_REL_KEY, ENTITY_CONTACT_KEY, ENTITY_THREAT_KEY, CHASE_KEY, ENTITY_CHASE_KEY, ENTITY_SHOOTER_KEY)
 _SPECIAL_KEYS = (ROOM_KEY, ENTITY_TYPES_KEY, ENTITY_FEATURES_KEY, GRID_KEY, MASK_KEY) + TOKEN_KEYS
 
 

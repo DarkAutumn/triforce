@@ -705,6 +705,38 @@ fn a_bubble_touch_costs_once_per_touch() {
     assert!(names(&critique(&mut off, &step(&free, &timer(0x10), "WAIT 8"))).is_empty());
 }
 
+/// Round 40 ("The Goriya teacher"): `reward-block-projectile` is `REWARD_MEDIUM` × `block_reward`; on the room's
+/// combat count a block after a long fight pays a fraction, with `block_own_decay` it decays on the room's blocks
+/// alone (full while at most `COMBAT_DECAY_THRESHOLD` came before, then halving).
+#[test]
+fn a_block_decays_on_the_combat_count_or_on_its_own() {
+    let mut base = Ram::new();
+    base.enemy(3, enemy::STALFOS, 40, 100);
+    let block = |base: &Ram| {
+        let mut change = step(base, base, "WAIT 8");
+        change.projectile_blocks =
+            vec![zelda::blocks::ProjectileBlock { frame: 0, slot: 4, projectile_id: 0x5C, full_location: ROOM }];
+        change
+    };
+    let fight = |critic: &mut GameplayCritic| {
+        for _ in 0..COMBAT_DECAY_THRESHOLD + 4 {
+            critique(critic, &hits(step(&base, &base, "SWORD N"), &[(3, 1)]));
+        }
+    };
+    let paid = |critic: &mut GameplayCritic| value(&critique(critic, &block(&base)), "reward-block-projectile");
+    let mut shared = critic();
+    shared.block_reward = 1.5;
+    fight(&mut shared);
+    assert!(approx(paid(&mut shared), REWARD_MEDIUM * 1.5 / 16.0));
+    let mut own = critic();
+    (own.block_reward, own.block_own_decay) = (1.5, true);
+    fight(&mut own);
+    for _ in 0..=COMBAT_DECAY_THRESHOLD {
+        assert!(approx(paid(&mut own), REWARD_MEDIUM * 1.5));
+    }
+    assert!(approx(paid(&mut own), REWARD_MEDIUM * 0.75));
+}
+
 #[test]
 fn damage_halves_rewards_but_not_pickups() {
     let mut base = Ram::new();

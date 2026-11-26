@@ -76,6 +76,23 @@ def test_the_chase_group_feeds_the_entity_tokens_and_links_token():
     assert torch.equal(plain.evaluate(obs, _mask()).value, plain.evaluate(other, _mask()).value)
 
 
+def test_the_shooter_group_feeds_the_entity_tokens_after_the_older_groups():
+    """Schema 10's group adds `entity_shooter` to each entity token, its columns last: a network without it reads every
+    other block where it always did and ignores the new key."""
+    spec = native_spec()
+    chase = nets.create('hitnet', spec, tokens=['type', 'features', 'rel', 'threat', 'chase'], **SMALL)
+    shooter = nets.create('hitnet', spec, tokens=['type', 'features', 'rel', 'threat', 'chase', 'shooter'], **SMALL)
+    assert shooter.token_proj.in_features == chase.token_proj.in_features + spec['entity_shooter']['shape'][1]
+    assert shooter.token_keys == chase.token_keys + ['entity_shooter']
+    assert shooter.link_proj.in_features == chase.link_proj.in_features
+    obs = _obs()
+    other = {k: v.clone() for k, v in obs.items()}
+    other['entity_shooter'] = torch.rand_like(other['entity_shooter'])
+    chase.eval(), shooter.eval()
+    assert not torch.allclose(shooter.evaluate(obs, _mask()).value, shooter.evaluate(other, _mask()).value)
+    assert torch.equal(chase.evaluate(obs, _mask()).value, chase.evaluate(other, _mask()).value)
+
+
 def test_empty_slots_are_masked_and_link_alone_is_fine():
     network = nets.create('hitnet', native_spec(), **SMALL).eval()
     obs = _obs()

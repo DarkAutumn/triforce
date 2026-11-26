@@ -42,15 +42,18 @@ use zelda::{Action, Change};
 /// to Link, the frames to the next flip, Link's offset from the mirror's fixed point) and `entity_chase` (per entity
 /// slot, what a grid-point walker may do at its next grid point), filled only with `obs.chase` (zeros otherwise:
 /// `chase_blocks`); no schema 8 key or column changes.
-pub const OBS_SCHEMA_VERSION: u32 = 9;
+/// 10 (round 40, "The Goriya teacher"; the owner's three columns, Nov 26): one NEW key, `entity_shooter` (per entity
+/// slot, when a shooter fires next: `loaded`, `throw_time`, `will_throw`; the Goriyas only for now:
+/// `shooter_block`), filled only with `obs.shooter` (zeros otherwise); no schema 9 key or column changes.
+pub const OBS_SCHEMA_VERSION: u32 = 10;
 
 /// The oldest observation schema whose checkpoints still load as they are (AGENTS.md "Versioning": compatibility is
 /// decided by the schema numbers, not the repo version): their `model_config.obs_spec` a subset of `OBS_SPEC` (same
 /// shapes and vocabularies), every column they read meaning what it meant. A change that only adds keys, or columns
 /// at a block's end, leaves it; one that changes what an existing column means raises it to the new
-/// `OBS_SCHEMA_VERSION` (older models are then widened by `triforce convert-model` or retrained). 6: schemas 7, 8 and 9
-/// only added keys (`entity_rel`, `entity_contact`; `entity_threat`; `chase`, `entity_chase`); schema 5 is widened by
-/// `convert-model`.
+/// `OBS_SCHEMA_VERSION` (older models are then widened by `triforce convert-model` or retrained). 6: schemas 7 to 10
+/// only added keys (`entity_rel`, `entity_contact`; `entity_threat`; `chase`, `entity_chase`; `entity_shooter`);
+/// schema 5 is widened by `convert-model`.
 pub const OLDEST_OBS_SCHEMA: u32 = 6;
 
 /// NES object slots 1-$B, then the room item ("treasure").
@@ -82,6 +85,8 @@ pub const ENTITY_THREAT_SIZE: usize = 15;
 pub const CHASE_SIZE: usize = 7;
 /// Schema 9: `entity_chase` columns a slot (`chase_blocks`).
 pub const ENTITY_CHASE_SIZE: usize = 12;
+/// Schema 10: `entity_shooter` columns a slot (`shooter_block`).
+pub const ENTITY_SHOOTER_SIZE: usize = 3;
 
 const PLAY_Y0: f64 = 64.0;
 const PLAY_H: f64 = 176.0;
@@ -351,6 +356,8 @@ pub struct FeatureNames {
     /// Schema 9: `chase` and `entity_chase` columns.
     pub chase: Vec<String>,
     pub entity_chase: Vec<String>,
+    /// Schema 10: `entity_shooter` columns.
+    pub entity_shooter: Vec<String>,
     pub target: Vec<String>,
 }
 
@@ -590,6 +597,7 @@ fn build_feature_names() -> FeatureNames {
         "turns", "grid_time", "toward", "toward_N", "toward_S", "toward_W", "toward_E", "chance", "reverse",
         "timer_turn", "toward_link", "reverse_link",
     ]);
+    let entity_shooter = s(&["loaded", "throw_time", "will_throw"]);
 
     FeatureNames {
         room_state: rs,
@@ -603,6 +611,7 @@ fn build_feature_names() -> FeatureNames {
         entity_threat,
         chase,
         entity_chase,
+        entity_shooter,
     }
 }
 
@@ -620,7 +629,7 @@ pub struct ObsKeySpec {
 }
 
 /// Every observation key, in `observation_space` order.
-pub const OBS_SPEC: [ObsKeySpec; 15] = [
+pub const OBS_SPEC: [ObsKeySpec; 16] = [
     ObsKeySpec {
         key: "room_id",
         shape: &[1],
@@ -741,6 +750,14 @@ pub const OBS_SPEC: [ObsKeySpec; 15] = [
         low: 0.0,
         high: 1.0,
     },
+    ObsKeySpec {
+        key: "entity_shooter",
+        shape: &[NUM_ENTITY_SLOTS, ENTITY_SHOOTER_SIZE],
+        vocab: None,
+        dtype: "float32",
+        low: 0.0,
+        high: 1.0,
+    },
 ];
 
 /// One observation (every key of `OBS_SPEC`).
@@ -770,6 +787,8 @@ pub struct Observation {
     /// Schema 9: per entity slot, what a grid-point walker may do at its next grid point (`chase_blocks`; all zero
     /// with `obs.chase` off).
     pub entity_chase: [[f32; ENTITY_CHASE_SIZE]; NUM_ENTITY_SLOTS],
+    /// Schema 10: per entity slot, when a shooter fires next (`shooter_block`; all zero with `obs.shooter` off).
+    pub entity_shooter: [[f32; ENTITY_SHOOTER_SIZE]; NUM_ENTITY_SLOTS],
 }
 
 /// `room_id` embedding index for (level, in_cave, room).
@@ -1095,6 +1114,24 @@ pub fn chase_blocks(ram: &[u8]) -> ([f32; CHASE_SIZE], [[f32; ENTITY_CHASE_SIZE]
     (global, per)
 }
 
+/// Schema 10's block (round40.md "The Goriya teacher"; `zelda::shooter`): when each shooter fires next, from the
+/// current RAM only (no emulator step, no random byte read). Observation slot `i` is RAM object slot `i + 1`; the
+/// treasure slot and any object `zelda::shooter` does not cover (today: all but the Goriyas `$05/$06`) are all 0.
+///
+/// `entity_shooter` (`[12, 3]`): `loaded` (it holds its boomerang and can act: live, not waiting for the boomerang,
+/// not stunned, no clock); `throw_time` (1 − ObjTimer / 112 while loaded: its throw timer running down to the throw,
+/// 0 otherwise); `will_throw` (the chance it throws within the next 16 frames, the room as it stands: a blue one's 1
+/// or 0 by the game's rule, a red one's by its 2-in-256 roll a frame on the frames the rest of the rule lets it).
+pub fn shooter_block(ram: &[u8]) -> [[f32; ENTITY_SHOOTER_SIZE]; NUM_ENTITY_SLOTS] {
+    let mut out = [[0f32; ENTITY_SHOOTER_SIZE]; NUM_ENTITY_SLOTS];
+    for (i, row) in out.iter_mut().enumerate().take(TREASURE_SLOT) {
+        if let Some(t) = zelda::shooter::goriya(ram, i + 1) {
+            *row = [b(t.loaded), t.throw_time, t.will_throw];
+        }
+    }
+    out
+}
+
 /// `entity_threat`'s `bomb_carrier` per observation slot: the monsters whose death may drop bombs now, by the owner's
 /// Metric B, so the metric and the flag are one definition (`zelda::bomb_windows::bomb_carriers`: while
 /// `bomb_carrier_window` is open, each monster `is_bomb_carrier` says is one; the route's carrier targets are the same
@@ -1135,6 +1172,8 @@ pub struct ObservationBuilder {
     pub threat: bool,
     /// Fill the `chase` and `entity_chase` blocks (`obs.chase`; zeros otherwise).
     pub chase: bool,
+    /// Fill the `entity_shooter` block (`obs.shooter`; zeros otherwise).
+    pub shooter: bool,
     prev_room: Option<(u8, bool, u8)>,
     prev_types: [i64; NUM_ENTITY_SLOTS],
     prev_xy: [[f32; 2]; NUM_ENTITY_SLOTS],
@@ -1155,6 +1194,7 @@ impl ObservationBuilder {
             hidden_positions: HiddenPositions::Ram,
             threat: false,
             chase: false,
+            shooter: false,
             prev_room: None,
             prev_types: [0; NUM_ENTITY_SLOTS],
             prev_xy: [[0.0; 2]; NUM_ENTITY_SLOTS],
@@ -1179,6 +1219,12 @@ impl ObservationBuilder {
     /// The builder with `obs.chase` = `on`.
     pub fn with_chase(mut self, on: bool) -> ObservationBuilder {
         self.chase = on;
+        self
+    }
+
+    /// The builder with `obs.shooter` = `on`.
+    pub fn with_shooter(mut self, on: bool) -> ObservationBuilder {
+        self.shooter = on;
         self
     }
 
@@ -1258,6 +1304,11 @@ impl ObservationBuilder {
         } else {
             ([0.0; CHASE_SIZE], [[0.0; ENTITY_CHASE_SIZE]; NUM_ENTITY_SLOTS])
         };
+        let entity_shooter = if self.shooter {
+            shooter_block(state.ram())
+        } else {
+            [[0.0; ENTITY_SHOOTER_SIZE]; NUM_ENTITY_SLOTS]
+        };
         Observation {
             room_id: room_index(rs.level, rs.in_cave, rs.room),
             room_state: room_state(&rs, state),
@@ -1278,6 +1329,7 @@ impl ObservationBuilder {
             entity_threat,
             chase,
             entity_chase,
+            entity_shooter,
         }
     }
 

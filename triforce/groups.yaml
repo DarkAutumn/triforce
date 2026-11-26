@@ -22,12 +22,19 @@ teachers:
       ow-zora@d3first, ow-peahat@d3first, ow-lynel@d3first, ow-ghini@d3first, ow-boulder@d3first]
   walkers:
     members: [gibdo@d3first, stalfos-keese-gel@d3first, zol@d3first, like-like@d3first, vire@d3first,
-      goriya@d3first, d2-rope@d3first, dodongo-crossing@d3first, moldorm@d3first]
+      d2-rope@d3first, dodongo-crossing@d3first, moldorm@d3first]
   # Darknuts alone, as a boss is (the owner's question and the lead's decision, Nov 24-25; round40.md "Darknuts
   # their own teacher"): in the walkers' group their eighteen room entries shared two games of twenty, and the hard
   # rooms (3:0x59 from N, the Olive Garden, 3:0x5b's last pass) got about 800 attempts each in 15.6M steps.
   darknut:
     members: [darknut@d3first]
+  # Goriyas alone (the owner, Nov 26: "Yes, split goriyas out of the walker group"; round40.md "The Goriya teacher"):
+  # 7:0x1b lost 689 of 1000 runs entering it, a hard room too rare inside the walkers' group. Its network reads
+  # schema 10's `entity_shooter` too (when each Goriya throws next; obs.shooter on in its task).
+  goriya:
+    members: [goriya@d3first]
+    network:
+      arch_config: {tokens: [type, features, rel, threat, chase, shooter]}
   others:
     members: [wizzrobe@d3first, pols-voice@d3first, wallmaster@d3first, lanmola@d3first, patra@d3first]
   rooms:

@@ -29,6 +29,7 @@ fn feature_names_and_spaces_match_python() {
     assert_eq!(n.entity_threat, names("ENTITY_THREAT_FEATURES"));
     assert_eq!(n.chase, names("CHASE_FEATURES"));
     assert_eq!(n.entity_chase, names("ENTITY_CHASE_FEATURES"));
+    assert_eq!(n.entity_shooter, names("ENTITY_SHOOTER_FEATURES"));
     assert_eq!(spec["ROOM_VOCAB"], ROOM_VOCAB);
     assert_eq!(spec["ENTITY_VOCAB"], ENTITY_VOCAB);
     let spaces = spec["spaces"].as_object().unwrap();

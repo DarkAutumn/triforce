@@ -48,9 +48,18 @@ reward:
   heart_value:
     exit: true
     potential: 20
+  # Round 40, "The Goriya teacher" (the owner, Nov 26: "Yes to all four"; round40.md): a parried boomerang pays what
+  # its hit would cost (1 heart: penalty-lost-health 0.5, penalty-lost-beams 0.25 at full hearts): 0.5 x 1.5 = 0.75, on
+  # the room's own count of blocks (on the combat count, a block after 7x1b's first dozen hits paid 1/16 or less) ...
+  block_reward: 1.5
+  block_own_decay: true
+  # ... and an attack that drops the shield with a shot near and no monster near or aimed at costs
+  # (zelda::exposed; measured on the overworld recordings before it was switched on, round40.md).
+  exposed_attack_penalty: 0.1
 obs:
   objective: true
   target: true
+  shooter: true                           # schema 10's entity_shooter: when each Goriya throws next (round40.md)
 ram_randomization:
   hp:
   - 0.15

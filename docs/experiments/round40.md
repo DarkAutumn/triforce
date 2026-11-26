@@ -5477,3 +5477,135 @@ job a scope) on the same seeds, paired by seed.
 overworld cave and dungeon exits (no run frame there: the old table planned the composed or commonest value, the new
 the walk's own). `gen1-overworld/s1r` (50 minutes in) was stopped and `gen1-overworld/s1r2` started from
 `triforce-gen4`; the small teachers were withdrawn and requeued behind it (shortest-first had put the overworld last).
+
+## The Goriya teacher (Goriya48, branch `goriya48`, Nov 26)
+
+The owner's three approvals of `~/zelda/goriya-feedback.md` (Nov 26): "Yes, split goriyas out of the walker group. If
+the training goes well, apply that (b) not only to goriya but also all enemies that shoot. Yes to all four." On the
+penalty: "We should penalize attacking near projectiles if there's no enemies near the agent, and let the
+getting-hit penalty do the rest if there are nearby enemies. [...] boiled down into two proximities from Link is
+probably ok (calculate from all of Link's edges). This is a rough idea, and NOT A DIRECTIVE. Find the right thing to
+check here." Built in the owner's order rule: inputs and rewards first, the architecture untouched (a new token group
+of the same `hitnet`); every trained network plays bit for bit (schema 10 only adds a key, `OLDEST_OBS_SCHEMA` 6).
+
+### 1. The teacher
+
+`triforce/groups.yaml`: `goriya@d3first` leaves `walkers` for its own teacher `goriya`, whose `network:` adds the
+token group `shooter` (`tokens: [type, features, rel, threat, chase, shooter]`; the rest is the file's). Its recipe in
+`scripts/experiments/r41_stage1.sh` is darknut's, `20 16384 1831` (30.0M steps): one family with 18 room entries on
+`d3first` (Dungeon 1's 0x23 twice and 0x44, Dungeon 2's 0x5e and 0x1e, Dungeon 7's 13 with 0x49 and 0x1b), the same
+count as darknut's and the same reason (7x1b, 2.68 hearts a visit for `gen1-walkers/s1r`, got about one episode an
+iteration inside the group). The walkers' line becomes `16 13107 1831` (8 families, 24.0M steps) by the file's rule,
+for a later run of that teacher. The dry call of the training (`TRIFORCE_JOB_ESTIMATE`, every refusal checked: the
+network reads `entity_shooter` and the task turns `obs.shooter` on) answers 29,991,780 steps; the queue's estimate is
+10.0 hours (`gen1-darknut/s1r` took 7 h 38 min for the same size).
+
+### 2. Schema 10: `entity_shooter` (`zelda::shooter`, `env::observation::shooter_block`)
+
+The three columns of the feedback's table, filled for Goriyas `$05/$06` behind `obs.shooter` (default off, zeros; on
+in `specialists/d3first/goriya.yaml` only): `loaded`, `throw_time` (1 − ObjTimer / 112 while loaded), `will_throw`
+(the chance of a throw within the next 16 frames, the threat block's horizon: about one decision). The rule is the
+game's, walked frame by frame from the RAM alone (docs/architecture.md "Schema 10"): the NMI counts ObjTimer down
+before the update reads it, so a timer of 1 throws on the next frame; "wants to shoot" holds until the Goriya's next
+grid point (`zelda::chase::next_grid_point`), where the Goriya rule decides it again against the chase target; a
+stun (a long timer) or a knockback holds the throw back; a free monster slot and fewer than 4 counted shots. A red
+Goriya's `Random,X` roll (`$23` or `$77`, 2 of 256) is given as 1 − (254/256)^n over the n frames the rest allows
+(at most 0.118). The random register shifts by a fixed rule, so the roll itself is computable from the RAM: not done,
+the owner's table asks for a chance.
+
+Checked against the corpus's golden `d3first` replay (153,136 frames; `tests/test_obs_shooter.py`, every play frame
+of a Goriya room, the probe of the frame before against the throw, ObjState bit 7 rising):
+
+| Goriya | Frames the rule said "throws next frame" | ... and it threw | Throws the rule did not say | Frames excused |
+|---|---:|---:|---:|---:|
+| Blue (Dungeon 7) | 70 | 70 | 0 | 3 |
+| Red (Dungeons 1, 2) | 3,249 (all but the roll) | 20 (2/256 would be 25.4 ± 5.0) | 0 | |
+
+The three excused frames are where the rule's input moved under it: twice the chase target moved and the Goriya
+decided at a grid point that frame (Link moves first in a frame, `asm:Mode5Play_UpdateWorld`), once a knockback a wall
+cut short. `will_throw` = 1 was followed by a blue Goriya's throw within 16 frames in 958 of 1,234 frames (78%): the
+rest are Link's hits, stuns and moves changing the room within the window.
+
+### 3. The rewards (`reward.block_own_decay`, `reward.exposed_attack_penalty`; on for the Goriya teacher)
+
+**The block reward.** `block_reward: 1.5` (0.75 a parried boomerang) and `block_own_decay: true`. 0.75 is what the
+boomerang's hit costs without the heart value (1 heart: `penalty-lost-health` 0.5, `penalty-lost-beams` 0.25 at full
+hearts), so turning into a throw is worth as much as the hit it saves and fills no more than three quarters of the
+step's clamp. The decay mattered more than the size: a block shared the room's combat count with every hit and kill,
+so in 7x1b (six Blue Goriyas, five wooden-sword hits each) a block after the first dozen hits paid 1/16 of its value
+or less; on its own count the first nine blocks in a room pay in full, then halving (farming bounded).
+
+**The penalty** (`zelda::exposed`; docs/architecture.md "Experimental reward and cutoff controls"):
+`penalty-exposed-attack` on a decision of SWORD, BEAMS, BOMB, BOOMERANG or ARROW made with a harmful shot near, no
+monster near, and for a ranged attack none aimed at. The two proximities, both from Link's whole box (the game's touch
+test: middles within 9 px on both axes):
+- **a shot is near** when, flying straight at Link at its own speed (rock and sword shots 3 px a frame, the boomerang
+  2.5, the arrow 2, fireballs 1.75 on an axis), it would pass the touch test before the attack's lockout ends: the
+  shield is off for frames 0-12 of a swing (13 frames, BEAMS too) and 0-11 of an item (12; zelda-asm items.md
+  "Shield"). A boomerang 32 px off his box is near a swing, a fireball 22; its direction is not read ("imagine the
+  projectile was on target"); a returning boomerang, a bouncing shot, the clock, or Link invincible through the
+  lockout make none;
+- **a monster is near** when, walking straight at Link at its q-speed, it stands inside the hit box of a swing in one
+  of the four directions by the swing's last hitting frame (11): the sword's point within 16 px along the swing and 12
+  across (asm:Collision_CheckStabVsMonster). A standing monster counts up to about 26 px above Link's middle and 27
+  beside, a Goriya walking at him 5.5 px further;
+- **aimed** (the case the owner's sketch left open, added because a ranged attack at a target is the same trade the
+  hit penalty prices): a sword shot, arrow or boomerang thrown along a monster's middle within the weapon's hit
+  threshold across (12, 11, 10 px) and, for the wooden boomerang, its 83 px.
+
+Value 0.1 a decision, flat: under half of the half-heart hit it risks (`penalty-lost-health` 0.25) and under a
+seventh of the boomerang's (0.75 with the beams), ten times `penalty-attack-miss`. A sure loss for a swing into a shot
+with nothing to gain, small enough that a swing which does reach something next decision is not taught away; where
+a monster is near the hit penalty decides, as the owner asked.
+
+### 4. Measured before it was switched on (`scripts/experiments/r48_exposed_attacks.py`, job #2054)
+
+The overworld recordings of `triforce-gen6/target/ow-shots/` (the new team, `gen1-overworld`, and the old one, 50
+runs a leg for 9 legs each, every decision), each decision judged at its frame by the rule itself
+(`_native.exposed_probe`); overworld play only (level 0, game mode 5).
+
+| Team | Decisions | Attacks | A shot near | ... and a monster near | ... and aimed | **Fires** | of attacks | a 1000 decisions |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| new (`gen1-overworld`) | 76,330 | 3,117 | 478 | 328 | 13 | **137** | 4.4% | 1.8 |
+| old (today's ten families) | 88,637 | 2,057 | 457 | 272 | 25 | **160** | 7.8% | 1.8 |
+
+By kind, new: SWORD 76 of 672 (11.3%), BEAMS 26 of 1,006, BOOMERANG 32 of 1,343, BOMB 3 of 96; old: SWORD 53 of 827,
+BEAMS 47 of 702, BOOMERANG 51 of 428, BOMB 9 of 100 (old by family: ow-octorok 41, ow-leever 40, ow-lynel 30,
+ow-zora 27, ow-moblin 22). Of the attacks with a shot near, about two thirds had a monster near as well and are the hit
+penalty's to price.
+
+**The new teacher's swings near Zora fireballs** (`/tmp/ow_shots2.py`'s set, reproduced: SWORD, BEAMS and BOOMERANG
+with a Zora fireball within 64 px and no monster within 48 px, 97 attacks, 93 aimed at neither the Zora nor the
+fireball):
+
+| Zora in the attack's lane | Fireball in its lane | Attacks | The penalty fires |
+|---|---|---:|---:|
+| no | no | 93 | 18 |
+| no | yes | 3 | 2 |
+| yes | yes | 1 | 0 |
+| all | | 97 | **20** |
+
+The rule catches 20 of them: exactly the 20 whose nearest fireball's touch-test gap was under 22.75 px, what a
+fireball closes at 1.75 px a frame in a swing's 13 frames (job #2065: gaps 0-12 px 7, 12-23 13, 23-32 9, 32-40 16,
+40-48 33, 48-56 14, beyond 5). The other 77 swung with the fireball 23-64 px off, out of reach before the shield is
+back; and no run held the magic shield, so no Zora fireball could have been blocked anyway. As the owner defined
+"near", the rule prices a dropped shield, not the Zora swing-at-nothing habit; that is the feedback's separate
+swing-at-nothing question (the lead: for the owner's check-in), and the penalty stays as defined, on for the Goriya
+teacher only, whose boomerangs any shield parries.
+
+### 5. Not done, and where the risk is
+
+- Not trained: the lead queues `gen1-goriya` (`DRY=1 scripts/experiments/r41_stage1.sh 1 goriya` prints the command).
+- **A team spec `+@walkers=RUN` no longer covers goriya**: until the Goriya teacher is trained, a team that played
+  `gen1-walkers/s1r`'s Goriyas needs `+@goriya=gen1-walkers/s1r` beside it.
+- A student over every family: `obs.shooter` is on in `goriya@d3first`'s task alone, so a run mixing tasks is refused
+  by `check_obs_agree` until the switch is on in every task (it fills only Goriya rows) or the student leaves the
+  `shooter` group out.
+- The new keys stay out of a config's JSON at their defaults (`env::config::is_false`, `is_zero`), so every other
+  task's manifest and pinned hash is unchanged; a Python `config.obs.shooter` is absent there (`runner.check_inputs`
+  reads it with a default).
+- `will_throw` reads the room as it stands: the target's move into or out of the Goriya rule at the next grid point,
+  Link's hits and stuns within the 16 frames are not foreseen (78% of a blue's 1s are followed by its throw). A shove
+  a wall ends early is not walked. The penalty was measured on the overworld only; how often it fires in Goriya rooms
+  shows in the training's `penalty-exposed-attack`.
+- No `VERSION` bump: the generation's pieces land with 2.0.1.0, as schemas 8 and 9 did.

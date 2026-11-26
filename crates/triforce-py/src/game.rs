@@ -930,6 +930,89 @@ pub fn chase_probe<'py>(py: Python<'py>, ram: &Bound<'py, PyAny>) -> PyResult<Bo
     Ok(PyArray::from_vec(py, out).reshape([n, 12, PROBE])?.into_any())
 }
 
+/// Schema 10's `entity_shooter` `[N, 12, 3]` (`env::observation::shooter_block`) of `N` RAM rows: what the engine puts
+/// in that key with `obs.shooter` on, for parity tests and the replay check.
+#[pyfunction]
+pub fn shooter_blocks<'py>(py: Python<'py>, ram: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    use env::observation::{ENTITY_SHOOTER_SIZE, NUM_ENTITY_SLOTS};
+    let (ram, n, width) = ram_rows(py, ram)?;
+    let ram = ram.as_slice()?;
+    let mut out = Vec::with_capacity(n * NUM_ENTITY_SLOTS * ENTITY_SHOOTER_SIZE);
+    for i in 0..n {
+        out.extend_from_slice(env::observation::shooter_block(&ram[i * width..i * width + 0x800]).as_flattened());
+    }
+    Ok(PyArray::from_vec(py, out).reshape([n, NUM_ENTITY_SLOTS, ENTITY_SHOOTER_SIZE])?.into_any())
+}
+
+/// `zelda::shooter::goriya` of every object slot 1-12 of `N` RAM rows, raw: `[N, 12, 5]` float32 per slot `goriya`
+/// (1 a Goriya, else the row is 0), `loaded`, `throw_time`, `will_throw`, `next` (every condition of the throw but a
+/// red one's random byte holds on the next frame). For `tests/test_obs_shooter.py`'s replay check.
+#[pyfunction]
+pub fn shooter_probe<'py>(py: Python<'py>, ram: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    let (ram, n, width) = ram_rows(py, ram)?;
+    let ram = ram.as_slice()?;
+    let mut out = vec![0f32; n * 12 * 5];
+    for i in 0..n {
+        let image = &ram[i * width..i * width + 0x800];
+        for slot in 1..=12usize {
+            if let Some(t) = zelda::shooter::goriya(image, slot) {
+                out[(i * 12 + slot - 1) * 5..(i * 12 + slot) * 5].copy_from_slice(&[
+                    1.0,
+                    t.loaded as u8 as f32,
+                    t.throw_time,
+                    t.will_throw,
+                    t.next as u8 as f32,
+                ]);
+            }
+        }
+    }
+    Ok(PyArray::from_vec(py, out).reshape([n, 12, 5])?.into_any())
+}
+
+/// `zelda::exposed` of `N` decisions: RAM rows `[N, RAM_SIZE]` (CPU RAM and PRG-RAM, as `ReplayPlayer.ram` gives
+/// them) and each decision's action `kinds` (names, `SWORD`) and `directions` (names, `N`; `NONE` for none):
+/// `[N, 4]` float32 `shot_near` (for the kind's lockout; 0 for a kind that is no attack), `monster_near`, `aimed`,
+/// `exposed`. For `scripts/experiments/r48_exposed_attacks.py` (the measurement before the penalty is switched on).
+#[pyfunction]
+pub fn exposed_probe<'py>(
+    py: Python<'py>,
+    ram: &Bound<'py, PyAny>,
+    kinds: Vec<String>,
+    directions: Vec<String>,
+) -> PyResult<Bound<'py, PyAny>> {
+    use std::sync::{Arc, LazyLock};
+    use zelda::tables::RAM_SIZE;
+    use zelda::{ActionKind, Direction, exposed};
+    static MAP: LazyLock<Arc<zelda::GameMap>> = LazyLock::new(|| Arc::new(zelda::GameMap::builtin()));
+    let (ram, n, width) = ram_rows(py, ram)?;
+    if width < RAM_SIZE || kinds.len() != n || directions.len() != n {
+        return Err(PyValueError::new_err(format!(
+            "want ram [N, >= {RAM_SIZE}] and N kinds and directions; got width {width}, N {n}, {} kinds, {} \
+             directions",
+            kinds.len(),
+            directions.len()
+        )));
+    }
+    let ram = ram.as_slice()?;
+    let mut out = vec![0f32; n * 4];
+    for i in 0..n {
+        let kind = ActionKind::from_name(&kinds[i])
+            .ok_or_else(|| PyValueError::new_err(format!("unknown action kind {:?}", kinds[i])))?;
+        let direction = Direction::from_name(&directions[i])
+            .ok_or_else(|| PyValueError::new_err(format!("unknown direction {:?}", directions[i])))?;
+        let image: &[u8; RAM_SIZE] = ram[i * width..i * width + RAM_SIZE].try_into().unwrap();
+        let view = zelda::game::GameView::new(image, 0, false, MAP.clone());
+        let near = exposed::lockout(kind).is_some_and(|frames| exposed::shot_near(&view, frames));
+        out[i * 4..(i + 1) * 4].copy_from_slice(&[
+            near as u8 as f32,
+            exposed::monster_near(&view) as u8 as f32,
+            exposed::aimed(&view, kind, direction) as u8 as f32,
+            exposed::exposed(&view, kind, direction) as u8 as f32,
+        ]);
+    }
+    Ok(PyArray::from_vec(py, out).reshape([n, 4])?.into_any())
+}
+
 /// The name a power-on start registers for `name`: upper-cased.  ValueError if it can't be registered (1 to 8
 /// of A-Z, 0-9 and space, not all spaces) or starts the second quest (ZELDA).
 #[pyfunction]

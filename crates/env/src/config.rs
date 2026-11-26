@@ -240,6 +240,16 @@ fn half() -> f64 {
     0.5
 }
 
+/// The keys added after the generation's tasks were pinned (round 40, "The Goriya teacher") leave a config's JSON
+/// (`to_json`: manifests, `to_dict`, the pinned task hashes) untouched while they hold their default.
+fn is_false(v: &bool) -> bool {
+    !*v
+}
+
+fn is_zero(v: &f64) -> bool {
+    *v == 0.0
+}
+
 /// `reward.sword_blocked_penalty`'s default (round 38): a Bubble's touch, priced flat at `REWARD_TINY`. Measured on
 /// `d3first`'s Bubble rooms (round38.md "A Bubble's touch"): a touch costs 0.07-0.08 hearts (0.04 at
 /// `penalty-lost-health`'s 0.25 a half heart) and about 90 frames of the visit; `REWARD_TINY` is the nearest step.
@@ -280,8 +290,15 @@ fn beam_unfired_penalty() -> f64 {
 pub struct RewardConfig {
     #[serde(default = "yes", deserialize_with = "de_bool")]
     pub pbrs: bool,
+    /// `reward-block-projectile` is `REWARD_MEDIUM` × this per shot the shield parries (`zelda::Change`'s
+    /// `projectile_blocks`).
     #[serde(default = "one")]
     pub block_reward: f64,
+    /// Round 40 ("The Goriya teacher"): `reward-block-projectile` decays on its own count of blocks a room (full for
+    /// the first `COMBAT_DECAY_THRESHOLD`, then halving), not on the room's combat count that hits and kills share
+    /// (default off: the shared count, under which a block late in a long fight pays almost nothing).
+    #[serde(default, deserialize_with = "de_bool", skip_serializing_if = "is_false")]
+    pub block_own_decay: bool,
     #[serde(default, deserialize_with = "de_bool")]
     pub nearby_items: bool,
     #[serde(default)]
@@ -337,6 +354,13 @@ pub struct RewardConfig {
     /// magnitude; 0 = off, the default).
     #[serde(default)]
     pub chase_penalty: f64,
+    /// Round 40 ("The Goriya teacher"; the owner, Nov 26: "penalize attacking near projectiles if there's no enemies
+    /// near the agent, and let the getting-hit penalty do the rest if there are nearby enemies"):
+    /// `penalty-exposed-attack` per decision that attacks (SWORD, BEAMS, BOMB, BOOMERANG, ARROW: the shield down)
+    /// with a harmful shot near for the attack's lockout, no monster near and, for a ranged attack, none aimed at
+    /// (`zelda::exposed`), scaled by `shaping_scale` (positive magnitude; 0 = off, the default).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub exposed_attack_penalty: f64,
     /// Round 40 (Darknut40's switched-off proposal; the owner: "Just hitting a single darknut with a bomb is mostly a
     /// waste"): `reward-bomb-hit` (paid per monster the bomb hurts) is paid only when it hurts at least this many;
     /// fewer leave the bomb's cost (`penalty-bomb-used`) alone. Not where one bomb is right: a hit on a boss, the 10th
@@ -364,6 +388,7 @@ impl Default for RewardConfig {
         RewardConfig {
             pbrs: true,
             block_reward: 1.0,
+            block_own_decay: false,
             nearby_items: false,
             quiet_enemy_penalty: 0.0,
             fixed_pickup_reward: false,
@@ -378,6 +403,7 @@ impl Default for RewardConfig {
             beam_unfired_penalty: BEAM_UNFIRED_PENALTY,
             aimless_penalty: 0.0,
             chase_penalty: 0.0,
+            exposed_attack_penalty: 0.0,
             bomb_catch_min: 0,
             shaping_scale: 1.0,
             frame_penalty: 0.0,
@@ -437,6 +463,11 @@ pub struct ObsConfig {
     /// today's networks were trained.
     #[serde(default, deserialize_with = "de_bool")]
     pub chase: bool,
+    /// Fill the `entity_shooter` observation block (schema 10, round 40, "The Goriya teacher": when each shooter fires
+    /// next, the Goriyas for now; `env::observation::shooter_block`). Default off: zeros, as today's networks were
+    /// trained.
+    #[serde(default, deserialize_with = "de_bool", skip_serializing_if = "is_false")]
+    pub shooter: bool,
 }
 
 impl Default for ObsConfig {
@@ -447,6 +478,7 @@ impl Default for ObsConfig {
             hidden_positions: HiddenPositions::Ram,
             threat: false,
             chase: false,
+            shooter: false,
         }
     }
 }
@@ -1308,6 +1340,7 @@ impl SpecialistConfig {
             ("reward.boss_ate_bomb_penalty", self.reward.boss_ate_bomb_penalty),
             ("reward.aimless_penalty", self.reward.aimless_penalty),
             ("reward.chase_penalty", self.reward.chase_penalty),
+            ("reward.exposed_attack_penalty", self.reward.exposed_attack_penalty),
             ("reward.sword_blocked_penalty", self.reward.sword_blocked_penalty),
             ("reward.beam_kill_reward", self.reward.beam_kill_reward),
             ("reward.beam_timed_reward", self.reward.beam_timed_reward),
@@ -2259,6 +2292,10 @@ mod tests {
             "reward: {aimless_penalty: .nan}",
             "reward: {chase_penalty: -0.001}",
             "reward: {chase_penalty: .nan}",
+            "reward: {exposed_attack_penalty: -0.1}",
+            "reward: {exposed_attack_penalty: .nan}",
+            "reward: {block_own_decay: 2}",
+            "obs: {shooter: maybe}",
             "reward: {bomb_catch_min: -1}",
             "items: {bomb_catch: 256}",
             "reward: {sword_blocked_penalty: -0.25}",
@@ -2290,6 +2327,8 @@ mod tests {
             "reward: {sword_blocked_penalty: 0}",
             "reward: {aimless_penalty: 0.001}",
             "reward: {chase_penalty: 0.002, bomb_catch_min: 2}",
+            "reward: {exposed_attack_penalty: 0.1, block_reward: 1.5, block_own_decay: true}",
+            "obs: {shooter: true}",
             "items: {bombs: free, bomb_catch: 2}",
         ] {
             assert!(minimal(ok).is_ok(), "{ok} should load: {:?}", minimal(ok).err());

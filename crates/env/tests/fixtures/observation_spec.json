@@ -367,6 +367,11 @@
   "toward_link",
   "reverse_link"
  ],
+ "ENTITY_SHOOTER_FEATURES": [
+  "loaded",
+  "throw_time",
+  "will_throw"
+ ],
  "spaces": {
   "action_mask": {
    "shape": [
@@ -489,6 +494,15 @@
    "shape": [
     12,
     12
+   ],
+   "dtype": "float32",
+   "low": 0.0,
+   "high": 1.0
+  },
+  "entity_shooter": {
+   "shape": [
+    12,
+    3
    ],
    "dtype": "float32",
    "low": 0.0,

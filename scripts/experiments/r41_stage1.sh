@@ -1,8 +1,8 @@
 #!/bin/bash
-# Stage 1 of the fresh generation (2.0.1.0): the twelve teachers of triforce/groups.yaml, each from scratch through
+# Stage 1 of the fresh generation (2.0.1.0): the thirteen teachers of triforce/groups.yaml, each from scratch through
 # the lab trainer and the job queue, into the shared store as gen1-<teacher>/s<seed><SUFFIX>.
 #
-#     scripts/experiments/r41_stage1.sh SEED [TEACHER...]        (no TEACHER: all twelve, the long ones first)
+#     scripts/experiments/r41_stage1.sh SEED [TEACHER...]        (no TEACHER: all thirteen, the long ones first)
 #     DRY=1 scripts/experiments/r41_stage1.sh SEED [TEACHER...]  (print the commands only)
 #     SUFFIX=b scripts/experiments/r41_stage1.sh 1 overworld     (the run gen1-overworld/s1b: a restart beside s1)
 #
@@ -21,9 +21,12 @@ cd "$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 recipe() {
     case "$1" in
         overworld)         echo "20 16384 1831" ;;   # 10 families: 30.0M steps
-        walkers)           echo "18 14742 1831" ;;   #  9 families: 27.0M steps (Darknuts their own teacher, Nov 25)
+        walkers)           echo "16 13107 1831" ;;   #  8 families: 24.0M steps (Darknuts, Nov 25, and Goriyas, Nov 26,
+                                                     #  their own teachers)
         darknut)           echo "20 16384 1831" ;;   #  1 family, 18 room entries: 30.0M steps, ten times a family's
                                                      #  (in the walkers' group its hard rooms got ~800 attempts each)
+        goriya)            echo "20 16384 1831" ;;   #  1 family, 18 room entries (D1 3, D2 2, D7 13 with 7:0x1b and
+                                                     #  0x49): 30.0M steps, as darknut's for the same reason
         others)            echo "10 8192 1831" ;;    #  5 families: 15.0M steps
         rooms)             echo "8 4096 1465" ;;     #  2 families:  6.0M steps
         boss-*|ganon)      echo "8 4096 733" ;;      #  1 family:    3.0M steps
@@ -33,7 +36,7 @@ recipe() {
 
 teachers=("$@")
 if [ ${#teachers[@]} -eq 0 ]; then
-    teachers=(darknut walkers overworld others rooms boss-manhandla boss-gleeok boss-aquamentus boss-dodongo
+    teachers=(darknut goriya walkers overworld others rooms boss-manhandla boss-gleeok boss-aquamentus boss-dodongo
               boss-digdogger boss-gohma ganon)
 fi
 
