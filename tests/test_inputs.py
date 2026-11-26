@@ -183,17 +183,17 @@ GENERATION = ['ow-start', 'ow-tektite', 'ow-leever', 'ow-moblin', 'ow-octorok', 
 # the same before and after on `r40-gen` 42d15e02). A deliberate change to a bare task updates its row: Tracks41
 # (r40-gen fee9db0c) dropped `curriculum.untracked` entries from boss-digdogger, boss-gleeok, darknut, goriya,
 # like-like, vire and zol (their states got tracks); Tracks45 (round 45) dropped the rest of them (every walked
-# d3first door got tracks): boss-dodongo, boss-gohma, boss-manhandla, d2-rope, dodongo-crossing, equipment-room, ganon,
-# gibdo, goriya, lanmola, like-like, moldorm, ow-boulder, ow-ghini, ow-moblin, ow-peahat, ow-start, ow-zora, patra,
-# pols-voice, trap-room, vire, wizzrobe and zol.
+# d3first door got tracks): boss-dodongo, boss-gleeok, boss-gohma, boss-manhandla, d2-rope, darknut, dodongo-crossing,
+# equipment-room, ganon, gibdo, goriya, lanmola, like-like, moldorm, ow-boulder, ow-ghini, ow-lynel, ow-moblin,
+# ow-peahat, ow-start, ow-zora, patra, pols-voice, trap-room, vire, wizzrobe and zol.
 BARE_EFFECTIVE = {
     'boss-aquamentus': '964037cc7c6772f7', 'boss-digdogger': '9fc25620d8af66a8', 'boss-dodongo': '7461eb48c333d15a',
-    'boss-gleeok': '7e34d4a6d9495d86', 'boss-gohma': '4dbb47a3c834ff73', 'boss-manhandla': '8743ae0fc9027b57',
-    'd2-rope': '279e4949c7a2486f', 'darknut': 'c6365d2aab2792a1', 'dodongo-crossing': 'c76e737302687a38',
+    'boss-gleeok': '192da91fd33fe237', 'boss-gohma': '4dbb47a3c834ff73', 'boss-manhandla': '8743ae0fc9027b57',
+    'd2-rope': '279e4949c7a2486f', 'darknut': '0954c38e71ae04a5', 'dodongo-crossing': 'c76e737302687a38',
     'equipment-room': '9104ac87057c87a9', 'ganon': 'a9a0946f210b208f', 'gibdo': '73fa4086f6f1bb6f',
     'goriya': 'a24a98a6ca911d59', 'lanmola': '8b26e87dc23965cd', 'like-like': '5456bb8f8dcabd4e',
     'moldorm': '722cf1df9adcfa1f', 'ow-boulder': 'f1e62898c1a86a81', 'ow-ghini': 'a9f2595f23135885',
-    'ow-leever': '4d74f994b3d7d936', 'ow-lynel': '13553bde87634c4f', 'ow-moblin': '44379ed012f710b9',
+    'ow-leever': '4d74f994b3d7d936', 'ow-lynel': 'b494620d0ef3ab8e', 'ow-moblin': '44379ed012f710b9',
     'ow-octorok': '796292f6ddc66d68', 'ow-peahat': 'cf49a64afa791bfe', 'ow-start': 'e37b0a27c4a124dd',
     'ow-tektite': '729c50d784b9d954', 'ow-zora': '3a0353c57ebbb36a', 'patra': '64baa281838a7c56',
     'pols-voice': '6be5d292dfa6538c', 'stalfos-keese-gel': '8039e87cffe1a7ef', 'trap-room': '3baa0e14cfe200be',

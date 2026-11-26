@@ -18,19 +18,7 @@ ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0
 items: {bombs: free}                       # The owner, Nov 11: bombs as a weapon (enemies with more than 3 hits); above the route's bomb reserve (Dungeon 5: 0 in the Olive Garden, 8 elsewhere)
 clips: {enabled: true, off_share: 0}      # round 24: 5:0x64's block clip to the stairs; clips only (the owner, Nov 18; round 30): no episode with CLIP masked
 curriculum:                              # trajectories/darknut (Go-Explore paths per start state)
-  enabled: true
-  untracked:                              # round 40: the seed states that train without a track (triforce.inputs);
-  - d3first_5_05c_[0-9]                   # 3:0x59 from N with 4 and 0x5b's last pass have the fighter's (Tracks41)
-  - d3first_5_05e_[0-9]
-  - d3first_5_06c_[0-9]
-  - d3first_5_06w_[0-9]
-  - d3first_5_37s_[0-9]
-  - d3first_5_64c_[0-9]
-  - d3first_5_64e_[0-9]
-  - d3first_8_3es_[0-9]
-  - d3first_8_3fw_[0-9]
-  - d3first_8_4es_[0-9]
-  - d3first_8_5es_[0-9]
+  enabled: true                           # round 45: d3first's walked doors tracked too (Tracks45)
 # Round 30: a third of the resets start from the chain's own entries at the hearts, bombs and kills the route brings
 # (triforce/states/harvested/darknut, not in git): Dungeon 5's 0x05 from E, 0x64 from the cellar and 0x37, Dungeon 8's
 # four rooms, Dungeon 3's 0x59 from N, 0x69 from N and 0x5b from W; rebuilt by the commands of round30.md "Darknut".
