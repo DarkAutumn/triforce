@@ -200,6 +200,7 @@ triforce eval-batch r71-check --chain 'd3: --from 3_7cs_0 --runs 200' --evaluate
 triforce room-stats r70-1k                                     # per-room stats by scope (full run, segments, room only) of target/r56-chains/r70-1k-*.jsonl -> r70-1k-room-stats.json
 triforce room-stats r72-1k --noclips                           # with r72-1k-noclips-*.jsonl (CLIPS=off TAG=r72-1k-noclips r56_chains.sh): by_clips per room -> r72-1k-both-room-stats.json
 cargo run --release -p triforce-tools --bin tf -- replay verify runs/replays/*.tfreplay   # replay them on the emulator alone (replay info FILE prints one)
+cargo run --release -p triforce-tools --bin tf -- replay clip runs/replays --room 7:1b --playable --out runs/7x1b   # each visit to Dungeon 7's 0x1b as a replay of its own, <stem>_7x1b_v<N>.tfreplay, only the frames in mode 5 (--visit N; 0:77 an overworld room, 0:77:cave its cave)
 cargo run --release -p triforce-tools --bin tf -- --help        # movies, zcore goldens/self-diff, trace, corpus, bench
 ```
 

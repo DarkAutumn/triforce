@@ -3,7 +3,8 @@
 //! ends in, how it ended, what the agent was steered to and could do (TARGETS, MASKS), what it thought
 //! (DECISIONS), and optional streams (rewards, keyframe states).  This crate builds and parses the bytes; callers
 //! read and write the files.  Replays can be joined ([`stitch`]) and cut at a keyframe ([`truncate`]) so a run
-//! continues from there.
+//! continues from there, and a stretch of frames taken out as a replay of its own that starts from the machine
+//! state there ([`clip`], `tf replay clip`).
 //!
 //! # Versions
 //!
@@ -77,7 +78,9 @@
 //! bytes are the frame-0 EDITS of `$18-$24`); `buttons` (the controller byte's bits); `cheat_items`; with
 //! REWARDS `reward_terms` (names in first-use order); `actions` ([`actions`]); the env's entries
 //! ([`Recorder::set_meta`]: `tables`, a chain run's `run`); after a stitch `segments` (`{frames, seed, ending}` per
-//! joined replay, with its `rng_phase` when it has one).
+//! joined replay, with its `rng_phase` when it has one).  A clip ([`clip`]) has `kind` `clip` and `clip`: the
+//! source's input frames `from..to` and `kind`, with what the caller adds (`tf replay clip`: the source file's
+//! name, the room, the visit and how it ended).
 
 mod edit;
 mod format;
@@ -87,7 +90,7 @@ mod player;
 mod reader;
 mod recorder;
 
-pub use edit::{stitch, truncate};
+pub use edit::{clip, stitch, truncate};
 pub use format::{
     BUTTONS, CHEAT_ITEMS, Cheat, Context, Decision, Dist, ENDING_DEATH, ENDING_ERROR, ENDING_OTHER, ENDING_STUCK,
     ENDING_UNKNOWN, ENDING_WIN, ENDINGS, Edit, Ending, Event, EventRecord, Foresight, MAGIC, Mask,
