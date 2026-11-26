@@ -4091,3 +4091,12 @@ reasoning behind it and go", from runs "from power on or 0x77 only".
   Manhandla's and Dodongo's rooms get rules of their own so bombs are never left on the floor ("we need to teach
   it to not skip the bombs [...] and we need to make sure training runs see manhandla drop bombs"): leaving with
   bombs on the floor and room in the bag fails the training episode, and the armed bomb drop stays frequent there.
+
+## 2026-11-26 — The version at the 1000-run check is 2.0.1.0; the next retrain is 2.0.2.0 (the owner)
+
+The owner: "The next retrain will be x.0.2.0 [...] When we do the 1000-chain check, THAT is officially x.0.1.0, and
+any subsequent changes will up the far right number." So the generation being trained now is stamped 2.0.1.0 when
+its finished network is measured on the 1000-run chains; every change after that is 2.0.1.1, 2.0.1.2, ...; the next
+fresh retrain (WAIT with a direction, statues as entities and the rest of the backlog's "next retrain" entries) is
+2.0.2.0. The 1000-run chains of that check are recorded as replays and kept on local disk (not archived to
+`/backup`; they may be deleted early) to be watched and mined (backlog, "The fresh generation (2.0.1.0)").

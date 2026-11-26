@@ -434,6 +434,12 @@ thing and have to be taught again. Swept from this backlog Nov 23 (the lead):
 - **Recipe (the owner: "use your best judgement", not weeks; at least two long jobs at once, never one giant job):**
   time one family from scratch on today's code first (also the repeatability check); then families in parallel
   waves of two to three jobs, three seeds each, each judged on its chains; then the student(s).
+- **The 1000-run validation chains saved as replays** (the owner, Nov 26): when the finished network gets its
+  1000-run chains on every segment and the full route, every run is recorded as a `TFREPLAY` (`--replays DIR`) and
+  kept on local disk (about 3-10 GB at about 115 KB a run). Not archived to `/backup`, and may be deleted early;
+  they're there to watch and to mine (the first question: how often each MOVE and WAIT length is used, per room).
+  That 1000-run check is officially 2.0.1.0; any change after it bumps the last number (2.0.1.1, ...); the next
+  retrain is 2.0.2.0.
 
 ## Carried over from the old backlog
 
@@ -575,3 +581,24 @@ thing and have to be taught again. Swept from this backlog Nov 23 (the lead):
   fired 9 to 21 fireballs a visit (all sources together); the safe square held shots back mostly in 8:0x3e (about 2.5
   a visit) and 7:0x69 (about 0.8), almost never elsewhere. Measure again on the next team before building it.
 
+- **WAIT with a direction, for the next retrain (2.0.2.0)** (the owner, Nov 26): "turning in that direction and
+  stopping is what I mean by wait; it will move him sometimes by more than a pixel or two, that's fine." WAIT D
+  presses D for one frame (Link turns to face D, moving a little) and then holds no buttons; WAIT toward the way Link
+  already faces is today's plain WAIT, so no separate undirected WAIT is needed. It is the way to turn and hold the
+  shield without a sword swing (today the only way to turn in place is a swing, which drops the shield: the "attacks
+  thin air" habit). Lengths: the owner's idea is two, 0 ("look this way") and 4 ("look this way and really wait"), or
+  today's lengths shifted down to 0, 4, 8, 16; or something else, decided from use. Today's networks never trained a
+  direction for WAIT (the mask's WAIT-direction row exists and is unused), so it is a switch for the new generation
+  only. How WAIT is used today (the lead, Nov 26, from recorded replays; "frames" = to the next decision, median):
+
+  | Where | Team | Decisions | WAIT share | WAIT 4 / 8 / 16 / 32 (of WAITs) | Frames per WAIT 4 / 8 / 16 / 32 | MOVE 4 / 8 / 16 / 32 |
+  |---|---|---:|---:|---|---|---|
+  | overworld, every leg (450 runs) | new teachers | 84,236 | 0.6% | 8% / 39% / 44% / 8% | 5 / 9 / 67 / 87 | 27% / 36% / 16% / 21% |
+  | overworld, every leg (450 runs) | 2.0.0.15 | 97,492 | 5.8% | 29% / 29% / 11% / 31% | 5 / 2 / 2 / 2 | 42% / 23% / 12% / 23% |
+  | dungeons 5-9 from the entrance (500 runs) | new teachers | 345,602 | 5.9% | 69% / 15% / 15% / 2% | 5 / 9 / 17 / 31 | 49% / 26% / 9% / 16% |
+  | dungeons 5-9 from the entrance (500 runs) | 2.0.0.15 | 349,580 | 2.9% | 63% / 25% / 10% / 2% | 5 / 9 / 12 / 33 | 31% / 29% / 18% / 21% |
+
+  WAIT 4 dominates in the dungeons and WAIT 32 is rare (2%), which supports shifting the lengths down. The previous
+  team's long overworld WAITs end after about 2 frames (an interrupt already in force, such as a monster near), so on
+  the overworld its WAIT acted as a 2-frame pause; the new overworld teacher's long WAITs run into transitions (67
+  and 87 frames). Measure again on the finished 2.0.1.0's saved 1000-run replays, per room, before choosing.
