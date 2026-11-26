@@ -5502,12 +5502,13 @@ there's not one." (The owner's rule; the agent's the form below and the tests.)
   (game.yaml `treasure: bombs`, taken on the step).
 - **Tests** (`crates/env/tests/specialist_env.rs`): `no_weapon_bomb_where_the_route_fights_for_a_rooms_bombs` (new;
   the session's mask, the observation's mask and `bomb_usable`): 8:0x3f and 7:0x1b with 5 bombs (a fight, above the
-  reserve of 2) offer no BOMB at `$50` 0 or 8 and offer it at 9; 8:0x3f with a full bag none; the same routes.yaml
-  with the switch removed, and `d2first`'s rooms, offer the weapon at 5 (so the switch, not the reserve or
-  `fights_only`, masks it). `a_bomb_on_the_tenth_kill_arms_a_forced_bomb_drop` now plays a second room in the
-  emulator: 8:0x3f on `d3first` with 5 bombs and `$50` = 9, the search for a bomb kill through the env's strict mask,
-  the kill arming the forced drop (`$51`), `reward-armed-bomb-drop` paid once, one bomb spent, the drop falling as
-  bombs. The wall bomb of 3:0x5b's last pass stays offered where it opens the wall:
+  reserve of 2) offer no BOMB at `$50` 0 or 8 and offer it at 9; the same routes.yaml with the switch removed, and
+  `d2first`'s rooms, offer the weapon at 5 (so the switch, not the reserve or `fights_only`, masks it). With a full
+  bag 8:0x3f is a crossing, masked with the switch removed too (`fights_only`, Review46's note): on `d3first` the
+  switch adds nothing to a full-bag crossing. `a_bomb_on_the_tenth_kill_arms_a_forced_bomb_drop` now plays a second
+  room in the emulator: 8:0x3f on `d3first` with 5 bombs and `$50` = 9, the search for a bomb kill through the env's
+  strict mask, the kill arming the forced drop (`$51`), `reward-armed-bomb-drop` paid once, one bomb spent, the drop
+  falling as bombs. The wall bomb of 3:0x5b's last pass stays offered where it opens the wall:
   `the_owners_order_in_3_5b_wall_then_bombs_then_out` lays `BOMB E` through the strict mask in every order (in with
   8, 5, 4 and 0). `a_route_names_its_bomb_rules`: the switch on `d3first` and a non-bool refused.
 - **Not done**: nothing retrained or measured. A Darknut teacher trained before this commit had the weapon bomb in

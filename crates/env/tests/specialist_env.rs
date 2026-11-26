@@ -1009,12 +1009,13 @@ fn the_route_fights_for_a_rooms_bombs_below_its_floor() {
 
 /// Round 40, the owner (Nov 26): "we should NOT be using bombs in rooms we fight for bombs, other than 10th streak to
 /// get more bombs or to open wall-doors" (`d3first`'s `bomb_rules: {treasure_wall_only: true}`): on a step that takes
-/// its room's bombs a `free` family places no weapon bomb, in the fight for them (5 bombs: a fight under the floor,
-/// [`the_route_fights_for_a_rooms_bombs_below_its_floor`]) or crossing with a full bag: 8:0x3f's Darknuts and 7:0x1b's
-/// Blue Goriyas (its step's `bombs: tenth`, now the rule's), above their reserve of 2, at `$50` 0 and 8, neither room a
-/// wall to open; on the 10th damage-free kill (`$50` = 9) BOMB is offered (its bomb kill arms the drop, played in
-/// 8:0x3f by [`a_bomb_on_the_tenth_kill_arms_a_forced_bomb_drop`]). The same routes.yaml without the switch, and
-/// `d2first` (no rules), offer the weapon there.  3:0x5b's last pass keeps its E wall's bomb:
+/// its room's bombs a `free` family places no weapon bomb in the fight for them (5 bombs: a fight under the floor,
+/// [`the_route_fights_for_a_rooms_bombs_below_its_floor`]): 8:0x3f's Darknuts and 7:0x1b's Blue Goriyas (its step's
+/// `bombs: tenth`, now the rule's), above their reserve of 2, at `$50` 0 and 8, neither room a wall to open; on the
+/// 10th damage-free kill (`$50` = 9) BOMB is offered (its bomb kill arms the drop, played in 8:0x3f by
+/// [`a_bomb_on_the_tenth_kill_arms_a_forced_bomb_drop`]). The same routes.yaml without the switch, and `d2first` (no
+/// rules), offer the weapon there. With a full bag 8:0x3f is a crossing, masked without the switch too (`fights_only`):
+/// on `d3first` the switch adds nothing there. 3:0x5b's last pass keeps its E wall's bomb:
 /// [`the_owners_order_in_3_5b_wall_then_bombs_then_out`].
 #[test]
 fn no_weapon_bomb_where_the_route_fights_for_a_rooms_bombs() {
@@ -1023,7 +1024,6 @@ fn no_weapon_bomb_where_the_route_fights_for_a_rooms_bombs() {
         ("darknut", "d3first_8_3fw_0", "MOVE E 16", BombUse::Free, 5, 0, false),
         ("darknut", "d3first_8_3fw_0", "MOVE E 16", BombUse::Free, 5, 8, false),
         ("darknut", "d3first_8_3fw_0", "MOVE E 16", BombUse::Free, 5, 9, true),
-        ("darknut", "d3first_8_3fw_0", "MOVE E 16", BombUse::Free, 8, 0, false),
         ("darknut", "8_3fw_0", "MOVE E 16", BombUse::Free, 5, 0, true),
         ("goriya", "d3first_7_1bw_0", "MOVE E 16", BombUse::Free, 5, 0, false),
         ("goriya", "d3first_7_1bw_0", "MOVE E 16", BombUse::Free, 5, 8, false),
@@ -1038,6 +1038,7 @@ fn no_weapon_bomb_where_the_route_fights_for_a_rooms_bombs() {
     without.map = Arc::new(zelda::GameMap::from_yaml(&read("game.yaml"), &routes.replace(switch, "")).unwrap());
     bomb_cases_on(nes, &Arc::new(without), &[
         ("darknut", "d3first_8_3fw_0", "MOVE E 16", BombUse::Free, 5, 0, true),
+        ("darknut", "d3first_8_3fw_0", "MOVE E 16", BombUse::Free, 8, 0, false),
         ("goriya", "d3first_7_1bw_0", "MOVE E 16", BombUse::Free, 5, 0, true),
     ]);
 }
