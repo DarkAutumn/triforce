@@ -8,9 +8,7 @@ obs: {objective: true, target: true}       # schema 2
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5, help_count: [0, 9]}
 items: {bombs: free}                       # the room is requires_bombs (game.yaml): never without a bomb here
 curriculum:                              # trajectories/boss-dodongo: bomb-stun + sword kill, heart, W exit (round 13)
-  enabled: true
-  untracked:                              # round 40: the seed states that train without a track (triforce.inputs)
-  - d3first_2_0es_[0-9]
+  enabled: true                           # round 45: d3first's walked 2x0e S tracked too (Tracks45)
 one_room: true
 max_steps: 600
 warm_start: null
