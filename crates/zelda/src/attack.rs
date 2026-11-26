@@ -202,6 +202,13 @@ fn border_bands(level: u8, facing: u8, x: u8, y: u8) -> (bool, bool) {
     (inner, outer)
 }
 
+/// Whether asm:Link_FilterInput drops a held `d` for Link facing `facing` at (x, y) on level `level`: in a dungeon's
+/// outer band his input keeps only his facing's axis (asm:Link_MaskInputInBorder), so a press across it does not move
+/// him, on the grid or off it.
+pub fn direction_dropped(level: u8, facing: u8, x: u8, y: u8, d: Direction) -> bool {
+    level != 0 && d.value() & axis(facing) == 0 && border_bands(level, facing, x, y).1
+}
+
 /// Whether a newly pressed A (`b_item` false) or B survives asm:Link_FilterInput for Link facing `facing` at (x, y):
 /// the outer band drops both, the inner band drops B.
 pub fn button_survives(level: u8, facing: u8, x: u8, y: u8, b_item: bool) -> bool {

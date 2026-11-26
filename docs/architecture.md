@@ -89,6 +89,11 @@ blocked: `$4C`/`$52E` mask SWORD and BEAMS) and the buttons can make that strike
 (`GameView::attack_directions(kind)`, `sword_directions()`; `zelda::attack::plan`, below). A B item (BOMB, BOOMERANG,
 ARROW, RECORDER, FOOD, CANDLE) that isn't the selected item also needs the item sub-screen to open
 (`zelda::submenu::can_open`: a play mode, not paused, no flute tune or candle brightening).
+MOVE follows `GameView::can_link_move` (asm:Walker_Move), and so does the wavefront target's descent. In a dungeon's
+outer border band (in a dungeon room only its doorways reach it), asm:Link_FilterInput keeps only the input on Link's
+facing's axis. A press across it is not offered there, off the grid too (`zelda::attack::direction_dropped`; Rooms49,
+Nov 26: before this, one step into 1:0x22's E doorway MOVE S was legal, moved nothing, the target pointed S, and the
+rooms teacher pressed it for a chain's 2000 steps).
 
 ### Item kinds: RECORDER, FOOD, CANDLE (round 24, version 1.4.2.0)
 
