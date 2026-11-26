@@ -48,19 +48,19 @@ Contents (generated; `L` = line in this file):
 - L1625 Ganon
 - L1676 Trap
 - L1707 Statue fireballs
-- L1739 Fireball
-- L1770 Monster shots (rock, sword shot, magic shot)
-- L1806 Monster arrow
-- L1831 Monster boomerang
-- L1856 Standing fire
-- L1881 Guard fire
-- L1904 Zelda
-- L1925 Old men and shopkeepers (cave and dungeon persons)
-- L1983 Grumble Goriya
-- L2008 Rupee stash
-- L2027 Pond fairy
-- L2050 Item fairy
-- L2073 Dropped items
+- L1744 Fireball
+- L1775 Monster shots (rock, sword shot, magic shot)
+- L1811 Monster arrow
+- L1836 Monster boomerang
+- L1861 Standing fire
+- L1886 Guard fire
+- L1909 Zelda
+- L1930 Old men and shopkeepers (cave and dungeon persons)
+- L1988 Grumble Goriya
+- L2013 Rupee stash
+- L2032 Pond fairy
+- L2055 Item fairy
+- L2078 Dropped items
 <!-- /toc -->
 
 # How to read this
@@ -1710,22 +1710,27 @@ Dungeon statues are not objects: a per-frame routine creates type `$55` fireball
 
 **Types**
 - The fireballs are type `$55` (see `# Fireball`). [`Statue_Update`](src/bank4/statues.asm#L86)
-- Pattern 0: room layout id `$24`, 4 sources at (`$24`,`$C0`), (`$C8`,`$BC`), (`$24`,`$64`), (`$C8`,`$5C`). Pattern 1: layout id `$23`, 2 sources at (`$64`,`$94`), (`$88`,`$8C`). The fireball appears 4 pixels right of the source. [`Statue_RoomLayoutIds`](src/bank4/statues.asm#L45) [`Statue_FireballXs`](src/bank4/statues.asm#L64) [`Statue_FireballYs`](src/bank4/statues.asm#L69)
-- Pattern 2: 2 sources at (`$48`,`$82`) and (`$A8`,`$86`), used in any dungeon room once the room's person has been attacked; it takes priority over the layout test. [`Statue_Update`](src/bank4/statues.asm#L86) [`Person_CheckCollisions`](src/bank1/underworld-person-update.asm#L89)
-- Q1 rooms with layout `$24` (the `lay` column of `data/levelblock-uw-*.md`): level 2 `$4F`, level 5 `$24`, level 6 `$58`, level 7 `$0A` `$1C` `$39` `$6C`, level 8 `$1E` `$5C` `$5E`. Layout `$23`: level 7 `$0C` `$69` `$78`, level 8 `$3E` `$4B` `$7D`, level 9 `$37` `$53`. [`Statue_RoomLayoutIds`](src/bank4/statues.asm#L45)
+- Pattern 0: room layout id `$24`, 4 sources at (`$24`,`$C0`), (`$C8`,`$BC`), (`$24`,`$64`), (`$C8`,`$5C`) (statue numbers 0-3). Pattern 1: layout id `$23`, 2 sources at (`$64`,`$94`), (`$88`,`$8C`). The fireball appears 4 pixels right of the source. [`Statue_RoomLayoutIds`](src/bank4/statues.asm#L45) [`Statue_FireballXs`](src/bank4/statues.asm#L64) [`Statue_FireballYs`](src/bank4/statues.asm#L69)
+- Where the statues stand: the floor's 16-pixel square in column c, row r spans X `$20` + 16c and Y `$60` + 16r. Layout `$24` has its four statues in the floor's corners (columns 0 and `$B`, rows 0 and 6: X `$20`-`$2F` and `$D0`-`$DF`, Y `$60`-`$6F` and `$C0`-`$CF`); the left sources lie on the left statues, the right ones 8 pixels left of the right statues. Layout `$23` has two in row 3 (Y `$90`-`$9F`), columns 4 and 7 (X `$60`-`$6F`, `$90`-`$9F`); the first source lies on the left statue, the second 8 pixels left of the right one. Both are solid squares Link walks around (`data/room-layouts.md`, `UW $23`, `UW $24`). [`RoomLayout_LayOutUWFloor`](src/bank5/uw-floor-push-block.asm#L73) [`Statue_FireballXs`](src/bank4/statues.asm#L64)
+- Pattern 2: 2 sources at (`$48`,`$82`) and (`$A8`,`$86`), beside the person's two fires, used in any dungeon room once the room's person has been attacked; it takes priority over the layout test. [`Statue_Update`](src/bank4/statues.asm#L86) [`Person_CheckCollisions`](src/bank1/underworld-person-update.asm#L89)
+- Q1 rooms with layout `$24` (the `lay` column of `data/levelblock-uw-*.md`): level 2 `$4F`, level 5 `$24`, level 6 `$58`, level 7 `$0A` `$1C` `$39` `$6C`, level 8 `$1E` `$5C` `$5E`. Layout `$23`: level 7 `$0C` `$69` `$78`, level 8 `$3E` `$4B` `$7D`, level 9 `$37` `$53`. Q1 rooms with a dungeon person (pattern 2 once he is attacked): level 1 `$41`, 2 `$1F`, 3 `$2B`, 4 `$00`, 5 `$17` `$67`, 6 `$0B` `$6A`, 7 `$48` `$5B`, 8 `$3B` `$3D`, 9 `$02` `$06` `$43` `$66`. [`Statue_RoomLayoutIds`](src/bank4/statues.asm#L45) [`Person_CheckCollisions`](src/bank1/underworld-person-update.asm#L89)
 
 **Damage to Link**
 - `$0080`, half a heart before rings (type `$55`). [`Damage_ObjTypeDamageToLink`](src/bank1/monster-collisions.asm#L200)
 
 **Shield**
-- Magic shield only, with Link idle and facing against the fireball on one axis. [`Link_CheckMonsterTouch_NoReset@FacingOpposite`](src/bank1/link-collision-harm.asm#L138)
+- Magic shield only, with Link's state `$00`-`$0F` (not swinging or using an item) and his facing against the fireball's direction on one axis (see `# Fireball`). [`Link_CheckMonsterTouch_NoReset@FacingOpposite`](src/bank1/link-collision-harm.asm#L138)
 
 **Behaviour**
-- Runs once per frame whenever `CurLevel` is not 0 (no game mode test). [`Statue_Update`](src/bank4/statues.asm#L86)
-- Each source has its own timer, 0 on room entry, so every statue may fire on the first frame. [`Statue_FireballTimers`](src/ObjVars.inc#L99) [`Statue_Update@NextStatue`](src/bank4/statues.asm#L137)
-- When a timer runs out: with `Random,X >= $F0` (X = statue number 0-3) nothing is shot and the statue waits `$100` frames; otherwise the timer is reloaded with `$50`, `$80`, `$F0` or `$60` frames (`Random,X AND 3`) and it shoots. The next chance comes 81, 129, 241 or 97 frames later. [`Statue_FireballStartTimes`](src/bank4/statues.asm#L54) [`Statue_Update@NextStatue`](src/bank4/statues.asm#L137)
-- No shot when Link is within `$18` pixels of the source on both axes (difference -`$18` to +`$17`); the timer is reloaded anyway. [`Statue_Update@LoopAxis`](src/bank4/statues.asm#L194)
-- Nothing happens at all, and timers do not count, on a frame where the highest empty object slot of `$01`-`$0B` is below `$06` or none is empty. [`Statue_Update@Shoot`](src/bank4/statues.asm#L106)
+- Runs once per frame from the play update (modes 5 and 9-`$C`) whenever `CurLevel` is not 0, after the object loop; so not while the room scrolls in or is entered, nor while the flute tune plays, a dark room brightens, the game is paused or the submenu is open: timers stand still then. [`Mode5Play_Update`](src/bank7/mode5-play-update.asm#L59) [`Mode5Play_UpdateWorld@CheckUW`](src/bank7/mode5-play-update.asm#L244)
+- Each source has its own timer, zeroed on every room entry, so every source has its first chance at once when play starts in the room: a volley from all of them together (trace: level 5 room `$24`, all four sources shot within three frames of play starting after the scroll). [`Statue_FireballTimers`](src/ObjVars.inc#L99) [`Room_EnterCommon`](src/bank5/enter-room.asm#L143) [`Statue_Update@NextStatue`](src/bank4/statues.asm#L137)
+- When a timer runs out: with `Random,X >= $F0` (X = statue number 0-3; 16 of the 256 values, 1 chance in 16) nothing is shot and the statue waits `$100` frames for its next chance; otherwise the timer is reloaded with `$50`, `$80`, `$F0` or `$60` frames (`Random,X AND 3`, each 1 in 4) and it shoots. The next chance comes 81, 129, 241 or 97 frames later. [`Statue_FireballStartTimes`](src/bank4/statues.asm#L54) [`Statue_Update@NextStatue`](src/bank4/statues.asm#L137)
+- Rate, from those numbers: 137 frames between chances on average; with the 1-in-16 waits of 256 frames, a source shoots every 154 frames (2.6 seconds) on average while Link stays out of its safe square. A layout `$24` room makes about 1.6 fireballs a second, a layout `$23` room about 0.8. [`Statue_FireballStartTimes`](src/bank4/statues.asm#L54) [`Statue_Update@NextStatue`](src/bank4/statues.asm#L137)
+- **The safe square.** No shot when Link's position (`ObjX`, `ObjY` of slot 0: his top-left corner) minus the source point (without the +4) is from -`$18` to +`$17` on both axes: 24 pixels, 1.5 squares of 16 pixels, either way. Link's positions that silence a source form a 48 by 48 pixel square (3 by 3 squares) around the source point; the timer is reloaded anyway, so the source's next chance is a whole reload time later. [`Statue_Update@LoopAxis`](src/bank4/statues.asm#L194)
+- The safe squares as Link's X and Y: pattern 0: X `$0C`-`$3B`, Y `$A8`-`$D7` (bottom left); X `$B0`-`$DF`, Y `$A4`-`$D3` (bottom right); X `$0C`-`$3B`, Y `$4C`-`$7B` (top left); X `$B0`-`$DF`, Y `$44`-`$73` (top right). Pattern 1: X `$4C`-`$7B`, Y `$7C`-`$AB`; X `$70`-`$9F`, Y `$74`-`$A3`. Pattern 2: X `$30`-`$5F`, Y `$6A`-`$99`; X `$90`-`$BF`, Y `$6E`-`$9D`. Link standing against a statue's square (beside, above or below it) is inside its source's square, except flush against the right side of layout `$23`'s right statue (X `$A0`). [`Statue_FireballXs`](src/bank4/statues.asm#L64) [`Statue_FireballYs`](src/bank4/statues.asm#L69) [`Statue_Update@LoopAxis`](src/bank4/statues.asm#L194)
+- Each source tests only its own square: next to one statue the others still shoot. In layout `$23` the two squares overlap (X `$70`-`$7B`, Y `$7C`-`$A3`): there Link silences both. [`Statue_Update@LoopAxis`](src/bank4/statues.asm#L194)
+- The safe square stops new shots only: a fireball already made waits `$0F` frames at its start, able to hit, before it flies (see `# Fireball`). [`Fireball_Update`](src/bank4/monster-shots-fireballs.asm#L286)
+- Nothing happens at all, and timers do not count, on a frame where the highest empty object slot of `$01`-`$0B` is below `$06` or none is empty (slots `$06`-`$0B` all in use). [`Statue_Update@Shoot`](src/bank4/statues.asm#L106)
 - Statue fireballs are not counted in `MonsterShotCount`: the only limit is a free slot. [`Fireball_Shoot`](src/bank4/monster-shots-fireballs.asm#L58)
 
 **Created by**

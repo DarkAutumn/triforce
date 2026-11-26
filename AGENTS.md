@@ -686,7 +686,10 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
      kill); in a fight the family's mode and the reserve stand; the overworld is untouched.
   2. "0x5b is a great example, the point of fighting the darknuts in that room is to get the bomb drop, wasting the
      bombs to kill them is not the right play. BUT link still needs to bomb the wall to get through there. So no
-     bombs except the 1 to blow up the wall." `wall_only: [3:0x5b]`: no weapon bomb there, a fight or not.
+     bombs except the 1 to blow up the wall." `wall_only: [3:0x5b]`: no weapon bomb there, a fight or not. Made a
+     blanket rule on Nov 26 ("we should NOT be using bombs in rooms we fight for bombs, other than 10th streak to get
+     more bombs or to open wall-doors"): `treasure_wall_only: true`, every step taking its room's bombs plays as a
+     `wall_only` room (2:0x1e, 3:0x4a, 3:0x5b's last pass, 5:0x65 E, 7:0x1b, 8:0x3f, 9:0x16 N).
   3. "I want to raise the 'get bombs from this room' floor, so in 0x5b he should fight the darknuts if he has 7 or
      less bombs, up from whatever it was. This is a blanket rule not for this room." `treasure_below: 8`: every
      step taking a room's bombs fights for them when Link comes in with 7 or fewer (a step's own `if_bombs_below`

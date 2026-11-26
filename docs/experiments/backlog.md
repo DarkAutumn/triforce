@@ -434,6 +434,12 @@ thing and have to be taught again. Swept from this backlog Nov 23 (the lead):
 - **Recipe (the owner: "use your best judgement", not weeks; at least two long jobs at once, never one giant job):**
   time one family from scratch on today's code first (also the repeatability check); then families in parallel
   waves of two to three jobs, three seeds each, each judged on its chains; then the student(s).
+- **The 1000-run validation chains saved as replays** (the owner, Nov 26): when the finished network gets its
+  1000-run chains on every segment and the full route, every run is recorded as a `TFREPLAY` (`--replays DIR`) and
+  kept on local disk (about 3-10 GB at about 115 KB a run). Not archived to `/backup`, and may be deleted early;
+  they're there to watch and to mine (the first question: how often each MOVE and WAIT length is used, per room).
+  That 1000-run check is officially 2.0.1.0; any change after it bumps the last number (2.0.1.1, ...); the next
+  retrain is 2.0.2.0.
 
 ## Carried over from the old backlog
 
@@ -535,4 +541,64 @@ thing and have to be taught again. Swept from this backlog Nov 23 (the lead):
   distribution of bombs Link brings into the room from the south (the bypass also needs 8 bombs to be worth it: the
   drop is useless with a full bag). Measure: hearts lost fighting vs a trained bypass, and the bag on entering 9x16
   from S, on the new team's chains.
+- **Statues as "fake" entities, in the next retrain** (the owner, Nov 26: "I don't want statues as enemies YET [...]
+  it can be in the next retrain"; not this generation). A dungeon statue is no object: `Statue_Update` makes type
+  `$55` fireballs at fixed source points in layouts `$24` (4 sources) and `$23` (2), and beside an attacked person
+  (2); the network sees a fireball only once it exists, and the statue only as a solid grid tile. The mechanics, with
+  labels: zelda-asm/enemies.md "Statue fireballs" (sources and where they stand, a volley from every source as play
+  starts in the room, reloads of 81 / 129 / 241 / 97 frames, the 1-in-16 skip of 256 frames, about 154 frames
+  between one source's shots, timers frozen while slots `$06`-`$0B` are full, the magic shield). **The safe square**:
+  a source does not shoot while Link's position is within `$18` px (24 px, 1.5 squares) of its source point on both
+  axes, a 48 by 48 px square (3 by 3 squares) per source; standing against a statue is inside it. The idea: one token
+  per firing source in a new observation key (additive: schema +1, `OLDEST_OBS_SCHEMA` unchanged), with the frames
+  until it can fire (its timer; 0 = may fire this frame), whether Link is in its safe square, its position relative
+  to Link, and whether the room's fireballs are the person's. The tokens are known from RAM (`Statue_FireballTimers`,
+  `IsPersonFireballsEnabled`, the room's layout id), so nothing is guessed; a network then can learn to hug a statue
+  or cross between volleys. Measured Nov 26 (`scripts/experiments/r48_statue_hits.py` on express chains, 100 runs
+  from each dungeon entrance, seeds 0-99, `--act model`; **new** = `2.0.0.15+@darknut=gen1-darknut/s1r+@walkers=
+  gen1-walkers/s1r+@overworld=gen1-overworld/s1r2` with the boss teachers `gen1-boss-digdogger/s1r3`,
+  `-aquamentus/s1r`, `-manhandla/s1r`, `-gohma/s1r`; **old** = `current`, 2.0.0.15). A hit is a `$55` within 16 px
+  of Link vanishing on the frame his health drops; a death counts for the fireballs when the visit's last hit was
+  one. Per room, visits / hits / hearts to fireballs (a visit) / deaths in the room (a fireball's last):
 
+  | Room | new | old |
+  |---|---|---|
+  | 5:0x24 (Digdogger) | 79 / 147 / 73.7 (0.93) / 14 (6) | 44 / 65 / 32.6 (0.74) / 6 (5) |
+  | 7:0x69 | 108 / 23 / 11.5 (0.11) / 3 (1) | 117 / 15 / 7.5 (0.06) / 1 (0) |
+  | 7:0x39 | 100 / 28 / 14.0 (0.14) / 0 | 116 / 25 / 12.5 (0.11) / 0 |
+  | 7:0x1c (Digdogger) | 19 / 23 / 11.5 (0.61) / 4 (1) | 98 / 233 / 116.9 (1.19) / 7 (5) |
+  | 7:0x0c | 15 / 1 / 0.5 (0.03) / 0 | 91 / 0 / 0 / 0 |
+  | 6:0x58 | 100 / 151 / 75.7 (0.76) / 0 | 100 / 143 / 71.7 (0.72) / 0 |
+  | 8:0x5e | 100 / 127 / 63.6 (0.64) / 0 | 100 / 202 / 101.2 (1.01) / 0 |
+  | 8:0x3e | 100 / 109 / 54.7 (0.55) / 0 | 100 / 173 / 86.8 (0.87) / 1 (0) |
+  | 9:0x06 (person attacked) | 7 / 4 / 0.5 (red ring) / 0 | 10 / 8 / 1.0 / 0 |
+
+  Per 100 runs from the entrance, hearts to fireballs (deaths with a fireball last, of all deaths): Dungeon 5 new
+  73.7 (6 of 35), old 32.6 (5 of 61); Dungeon 7 new 37.6 (2 of 94), old 136.9 (5 of 39); Dungeon 6 new 75.7 (0 of
+  69), old 71.7 (0 of 57); Dungeon 8 new 118.3 (0 of 0), old 188.0 (0 of 3); Dungeon 9 about 1 (9:0x66's person was
+  never attacked). About half a heart to a heart a visit in every four-statue room, rarely the killing blow (8 of
+  1000 new runs, 10 old): the cost is the hearts carried into later fights. The four-statue rooms where Link fights
+  fired 9 to 21 fireballs a visit (all sources together); the safe square held shots back mostly in 8:0x3e (about 2.5
+  a visit) and 7:0x69 (about 0.8), almost never elsewhere. Measure again on the next team before building it.
+
+- **WAIT with a direction, for the next retrain (2.0.2.0)** (the owner, Nov 26): "turning in that direction and
+  stopping is what I mean by wait; it will move him sometimes by more than a pixel or two, that's fine." WAIT D
+  presses D for one frame (Link turns to face D, moving a little) and then holds no buttons; WAIT toward the way Link
+  already faces is today's plain WAIT, so no separate undirected WAIT is needed. It is the way to turn and hold the
+  shield without a sword swing (today the only way to turn in place is a swing, which drops the shield: the "attacks
+  thin air" habit). Lengths: the owner's idea is two, 0 ("look this way") and 4 ("look this way and really wait"), or
+  today's lengths shifted down to 0, 4, 8, 16; or something else, decided from use. Today's networks never trained a
+  direction for WAIT (the mask's WAIT-direction row exists and is unused), so it is a switch for the new generation
+  only. How WAIT is used today (the lead, Nov 26, from recorded replays; "frames" = to the next decision, median):
+
+  | Where | Team | Decisions | WAIT share | WAIT 4 / 8 / 16 / 32 (of WAITs) | Frames per WAIT 4 / 8 / 16 / 32 | MOVE 4 / 8 / 16 / 32 |
+  |---|---|---:|---:|---|---|---|
+  | overworld, every leg (450 runs) | new teachers | 84,236 | 0.6% | 8% / 39% / 44% / 8% | 5 / 9 / 67 / 87 | 27% / 36% / 16% / 21% |
+  | overworld, every leg (450 runs) | 2.0.0.15 | 97,492 | 5.8% | 29% / 29% / 11% / 31% | 5 / 2 / 2 / 2 | 42% / 23% / 12% / 23% |
+  | dungeons 5-9 from the entrance (500 runs) | new teachers | 345,602 | 5.9% | 69% / 15% / 15% / 2% | 5 / 9 / 17 / 31 | 49% / 26% / 9% / 16% |
+  | dungeons 5-9 from the entrance (500 runs) | 2.0.0.15 | 349,580 | 2.9% | 63% / 25% / 10% / 2% | 5 / 9 / 12 / 33 | 31% / 29% / 18% / 21% |
+
+  WAIT 4 dominates in the dungeons and WAIT 32 is rare (2%), which supports shifting the lengths down. The previous
+  team's long overworld WAITs end after about 2 frames (an interrupt already in force, such as a monster near), so on
+  the overworld its WAIT acted as a 2-frame pause; the new overworld teacher's long WAITs run into transitions (67
+  and 87 frames). Measure again on the finished 2.0.1.0's saved 1000-run replays, per room, before choosing.

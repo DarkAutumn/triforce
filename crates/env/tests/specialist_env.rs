@@ -876,20 +876,26 @@ type BombCase = (&'static str, &'static str, &'static str, BombUse, i64, i64, bo
 /// Each case's start with its bombs and `$50` (the damage-free kill count), Link walked off the door tile (items
 /// can't be used there) until the enemies are out of their clouds: the session's mask, the observation's mask and
 /// its `bomb_usable` offer BOMB as the case says.
-fn bomb_cases(mut nes: ZCore, cases: &[BombCase]) -> ZCore {
+fn bomb_cases(nes: ZCore, cases: &[BombCase]) -> ZCore {
+    bomb_cases_on(nes, data(), cases)
+}
+
+/// [`bomb_cases`] on `data` (a routes.yaml of the test's own).
+fn bomb_cases_on(mut nes: ZCore, data: &Arc<GameData>, cases: &[BombCase]) -> ZCore {
     let usable = |obs: &env::observation::Observation| {
         let at = feature_names().link.iter().position(|n| n == "bomb_usable").unwrap();
         obs.link[at] == 1.0
     };
     for &(family, start, walk, mode, bombs, help, legal) in cases {
-        let mut env = make_env(nes, family, Some(start), |c| {
-            c.ram_randomization = RamRandomization {
-                bombs: Some((bombs, bombs)),
-                help_count: Some((help, help)),
-                ..Default::default()
-            };
-            c.items.bombs = mode;
-        });
+        let mut config = (*data.specialists[family]).clone();
+        config.ram_randomization = RamRandomization {
+            bombs: Some((bombs, bombs)),
+            help_count: Some((help, help)),
+            ..Default::default()
+        };
+        config.items.bombs = mode;
+        let opts = EnvOptions { start_state: Some(start.into()), ..Default::default() };
+        let mut env: Env = SpecialistEnv::new(Arc::new(config), data.clone(), nes, TfzStore::new(), opts).unwrap();
         env.reset(Some(0), None).unwrap();
         let mut obs = None;
         for _ in 0..10 {
@@ -999,6 +1005,42 @@ fn the_route_fights_for_a_rooms_bombs_below_its_floor() {
         assert_eq!(objective(&env).kind == ObjectiveKind::Fight, fight, "{what}: {:?}", objective(&env).kind);
         nes = release(env);
     }
+}
+
+/// Round 40, the owner (Nov 26): "we should NOT be using bombs in rooms we fight for bombs, other than 10th streak to
+/// get more bombs or to open wall-doors" (`d3first`'s `bomb_rules: {treasure_wall_only: true}`): on a step that takes
+/// its room's bombs a `free` family places no weapon bomb in the fight for them (5 bombs: a fight under the floor,
+/// [`the_route_fights_for_a_rooms_bombs_below_its_floor`]): 8:0x3f's Darknuts and 7:0x1b's Blue Goriyas (its step's
+/// `bombs: tenth`, now the rule's), above their reserve of 2, at `$50` 0 and 8, neither room a wall to open; on the
+/// 10th damage-free kill (`$50` = 9) BOMB is offered (its bomb kill arms the drop, played in 8:0x3f by
+/// [`a_bomb_on_the_tenth_kill_arms_a_forced_bomb_drop`]). The same routes.yaml without the switch, and `d2first` (no
+/// rules), offer the weapon there. With a full bag 8:0x3f is a crossing, masked without the switch too (`fights_only`):
+/// on `d3first` the switch adds nothing there. 3:0x5b's last pass keeps its E wall's bomb:
+/// [`the_owners_order_in_3_5b_wall_then_bombs_then_out`].
+#[test]
+fn no_weapon_bomb_where_the_route_fights_for_a_rooms_bombs() {
+    let Some(nes) = open_core() else { return };
+    let nes = bomb_cases(nes, &[
+        ("darknut", "d3first_8_3fw_0", "MOVE E 16", BombUse::Free, 5, 0, false),
+        ("darknut", "d3first_8_3fw_0", "MOVE E 16", BombUse::Free, 5, 8, false),
+        ("darknut", "d3first_8_3fw_0", "MOVE E 16", BombUse::Free, 5, 9, true),
+        ("darknut", "8_3fw_0", "MOVE E 16", BombUse::Free, 5, 0, true),
+        ("goriya", "d3first_7_1bw_0", "MOVE E 16", BombUse::Free, 5, 0, false),
+        ("goriya", "d3first_7_1bw_0", "MOVE E 16", BombUse::Free, 5, 8, false),
+        ("goriya", "d3first_7_1bw_0", "MOVE E 16", BombUse::Free, 5, 9, true),
+        ("goriya", "7_1bw_0", "MOVE E 16", BombUse::Free, 5, 0, true),
+    ]);
+    let read = |name: &str| std::fs::read_to_string(common::repo().join("triforce").join(name)).unwrap();
+    let switch = "    treasure_wall_only: true\n";
+    let routes = read("routes.yaml");
+    assert_eq!(routes.matches(switch).count(), 1, "d3first's switch");
+    let mut without = (**data()).clone();
+    without.map = Arc::new(zelda::GameMap::from_yaml(&read("game.yaml"), &routes.replace(switch, "")).unwrap());
+    bomb_cases_on(nes, &Arc::new(without), &[
+        ("darknut", "d3first_8_3fw_0", "MOVE E 16", BombUse::Free, 5, 0, true),
+        ("darknut", "d3first_8_3fw_0", "MOVE E 16", BombUse::Free, 8, 0, false),
+        ("goriya", "d3first_7_1bw_0", "MOVE E 16", BombUse::Free, 5, 0, true),
+    ]);
 }
 
 /// A darknut env at `start` (8:0x3f from W) with Link holding `bombs`, walked in until the room's monsters are
@@ -1133,6 +1175,8 @@ fn toward_target(env: &mut Env, obs: &Observation) -> Observation {
 /// the same order (5 + 4 overflows), 4 after the wall, out with 8. Entered with 4: the fight, the bombs, the wall, out
 /// with 7. Entered with 0: no bomb in the bag through the fight (the wall's cheated bomb only while the wall is the
 /// objective, `wall_grant: objective`), then the room's four open the wall, out with 3 and nothing cheated.
+/// The wall's `BOMB E` goes through the env's strict mask: the bomb `wall_only` and round 40's `treasure_wall_only`
+/// (the owner, Nov 26: no bombs in a room fought for its bombs but "to open wall-doors") keep.
 #[test]
 fn the_owners_order_in_3_5b_wall_then_bombs_then_out() {
     let Some(mut nes) = open_core() else { return };
@@ -1299,15 +1343,25 @@ fn the_link_block_reads_the_routes_rupee_reserve() {
 
 /// The 10th damage-free kill made with a bomb arms a forced bomb drop (`$51`, asm:Damage_KillMonster) and the
 /// drop falls as bombs: the step of the kill pays `reward-armed-bomb-drop`, once.  The search tries every legal
-/// bomb from each position (`save`/`load`) until one kills a Goriya.
+/// bomb from each position (`save`/`load`) until one kills a monster.  `d2first`'s 1:0x44 (Goriyas, a `free` family
+/// with a full bag), and round 40's `treasure_wall_only` on `d3first` (the owner, Nov 26: no bombs in a room fought
+/// for its bombs "other than 10th streak to get more bombs"): 8:0x3f's Darknuts fought for the room's bombs with 5 in
+/// the bag, where BOMB is masked below the 10th kill ([`no_weapon_bomb_where_the_route_fights_for_a_rooms_bombs`]).
 #[test]
 fn a_bomb_on_the_tenth_kill_arms_a_forced_bomb_drop() {
     let Some(nes) = open_core() else { return };
-    let mut env = make_env(nes, "goriya", Some("1_44w_0"), |c| {
+    let nes = tenth_kill_bomb_arms_the_drop(nes, "goriya", "1_44w_0", 8);
+    tenth_kill_bomb_arms_the_drop(nes, "darknut", "d3first_8_3fw_0", 5);
+}
+
+/// [`a_bomb_on_the_tenth_kill_arms_a_forced_bomb_drop`] for `family` at `start`, Link at full hearts with `bombs`
+/// and `$50` = 9.
+fn tenth_kill_bomb_arms_the_drop(nes: ZCore, family: &str, start: &str, bombs: i64) -> ZCore {
+    let mut env = make_env(nes, family, Some(start), |c| {
         c.ram_randomization = RamRandomization {
             hp: Some((HpBound::Max, HpBound::Max)),
             full_hp: Some(1.0),
-            bombs: Some((8, 8)),
+            bombs: Some((bombs, bombs)),
             help_count: Some((9, 9)),
             ..Default::default()
         };
@@ -1337,16 +1391,19 @@ fn a_bomb_on_the_tenth_kill_arms_a_forced_bomb_drop() {
         let w = if env.session().mask().is_allowed(&Action::parse(w).unwrap()) { w } else { "WAIT 8" };
         act(&mut env, w);
     }
-    let results = armed.expect("a bomb killed a Goriya on the 10th kill");
-    assert!(state(&env).help_drop_is_bombs(), "a bomb's 10th kill arms bombs");
+    let what = format!("{family} {start} with {bombs} bombs");
+    let results = armed.unwrap_or_else(|| panic!("{what}: a bomb killed a monster on the 10th kill"));
+    assert!(state(&env).help_drop_is_bombs(), "{what}: a bomb's 10th kill arms bombs");
+    assert_eq!(state(&env).bombs(), bombs as i32 - 1, "{what}: the one bomb");
     let arming = results.iter().filter(|r| term(&r.info, "reward-armed-bomb-drop").is_some()).count();
-    assert_eq!(arming, 1, "paid once, on the step the kill happened");
+    assert_eq!(arming, 1, "{what}: paid once, on the step the kill happened");
     // The drop falls as bombs once the death spark ends.
     for _ in 0..8 {
         act(&mut env, "WAIT 8");
     }
-    assert!(state(&env).items.iter().any(|i| i.id == item::BOMBS), "{:?}", state(&env).items);
-    assert_eq!((state(&env).help_drop_count(), state(&env).help_drop_is_bombs()), (0, false), "spent");
+    assert!(state(&env).items.iter().any(|i| i.id == item::BOMBS), "{what}: {:?}", state(&env).items);
+    assert_eq!((state(&env).help_drop_count(), state(&env).help_drop_is_bombs()), (0, false), "{what}: spent");
+    release(env)
 }
 
 #[test]
