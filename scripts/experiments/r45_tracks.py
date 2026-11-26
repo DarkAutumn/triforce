@@ -187,11 +187,13 @@ def replay(root: Path, points: int, seeds: int, families: list | None, out: Path
     resets = sum(len(r['points']) * seeds for r in results)
     kept = sum(p['kept'] for r in results for p in r['points'])
     last = [p for r in results for p in r['points'] if p['left'] == 1]
+    pointed = [r for r in results if r['points']]       # a one-decision track has no curriculum point past its first
     print(json.dumps({'tracks': len(results), 'recorded success': sum(bool(r['recorded_success']) for r in results),
+                      'without a curriculum point': len(results) - len(pointed),
                       'resets': resets, 'layout kept (RAM = file but the RNG)': kept,
                       'won from the last decision': f"{sum(p['won'] for p in last)}/{len(last) * seeds}",
-                      'won from the first point': f"{sum(r['points'][0]['won'] for r in results)}/"
-                                                  f"{len(results) * seeds}"}))
+                      'won from the first point': f"{sum(r['points'][0]['won'] for r in pointed)}/"
+                                                  f"{len(pointed) * seeds}"}))
     if out:
         out.write_text(json.dumps(results, indent=1), encoding='utf-8')
     return 0 if kept == resets else 1
