@@ -54,6 +54,13 @@ GOLDEN = Path(__file__).parent / 'fixtures' / 'obs_schema5_golden.json'
 ROUND40_CHANGES = json.loads((Path(__file__).parent / 'fixtures' / 'obs_schema5_round40.json').read_text(encoding='utf-8'))
 ROUND40_TARGETS_CHANGES = json.loads(
     (Path(__file__).parent / 'fixtures' / 'obs_schema5_round40_targets.json').read_text(encoding='utf-8'))
+# The doorway band (Rooms49, Nov 26; `zelda::attack::direction_dropped`): asm:Link_FilterInput drops a press across
+# Link's facing in a dungeon's outer border band, and the mask no longer offers it there off the grid. Compared step by
+# step with its base 70fd44a2 (same seeds), each of these 122 traces first differs at a reset or step where Link stands
+# in the band (a doorway, or a cellar's top rows) with the same place and facing, and the mask loses the sideways MOVE
+# it offered (the wavefront target follows the mask); that press moved nothing (interrupt `wall`).
+ROOMS49_BAND_CHANGES = json.loads(
+    (Path(__file__).parent / 'fixtures' / 'obs_schema5_rooms49_band.json').read_text(encoding='utf-8'))
 # The traces both sides of the generation's merges changed, with their hashes on the merged code.
 # - Main's weapon rooms (2.0.0.15) and this branch's closing-frame cut-over: boss-manhandla `3_4dw_2`, which runs out
 #   of bombs within its 50 steps (each side's own hash for it is in `WEAPON_ROOM_CHANGES` and `ROUND40_CHANGES`; the
@@ -322,7 +329,7 @@ def test_schema5_columns_are_unchanged(name):
     changed = (ROUTE_CHANGES.get(name, {}) | BOMB_RULE_CHANGES.get(name, {}) | ROUTE31_CHANGES.get(name, {})
                | WEAPON_ROOM_CHANGES.get(name, {}) | HEARTS_ENCODING_CHANGES.get(name, {})
                | ROUND40_CHANGES.get(name, {}) | ROUND40_TARGETS_CHANGES.get(name, {})
-               | ROUND40_MERGE_CHANGES.get(name, {}))
+               | ROUND40_MERGE_CHANGES.get(name, {}) | ROOMS49_BAND_CHANGES.get(name, {}))
     kept = {state: digest for state, digest in recorded.items() if state not in ROUTE31_DELETED}
     assert family_hashes(name, recorded) == kept | changed
 

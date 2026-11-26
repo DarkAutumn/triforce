@@ -5,3 +5,12 @@
 extends: [../trap-room.yaml, _generation.yaml]
 state_routes: [d3first]
 clips: {enabled: true, off_share: 0}     # 2.0.1.0 trains clips on only (the owner, Nov 18 and Nov 24)
+# A stall is a failure (Rooms49, Nov 26; boss-gleeok's rule): the six traps of 4:0x02 kill a Link who dithers (random
+# legal actions from its track's points die 85-98% within 100 steps), and with the 600-step truncation bootstrapped the
+# rooms teacher gen1-rooms/s1r3 learned to shuffle E-W out of the traps' lines from its curriculum points instead
+# (P(MOVE S) 0.000 two steps from the door): 7 of 5,483 stage-2 starts won, 0.9% from the seed, 59 of 100 D4 runs
+# stuck at the chain's 2000 steps. Those 600-step shuffles were 95% of the family's training steps; a 200-step window
+# gives the rest of the family its share back (2.0.0.15's trap-room network crossed all 1,428 of its successful chain
+# visits with at most 23 actions in a row without damage).
+endings: {no-damage: hard-failure, max-steps: hard-failure}
+no_damage_steps: 200

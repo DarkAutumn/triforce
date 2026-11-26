@@ -906,6 +906,14 @@ impl GameView {
         if self.in_cave() && direction == Direction::N && py < CAVE_PERSON_LINE_Y {
             return false;
         }
+        // asm:Link_FilterInput: in a dungeon's outer border band a press across Link's facing is dropped, off the grid
+        // too (Rooms49, Nov 26: one step into 1:0x22's E doorway, facing W off the grid, MOVE S was offered, moved
+        // nothing and was pressed until the chain's 2000 steps ran out).
+        let (level, facing) = (self.level(), self.byte(Var::LinkDirection));
+        let (x, y) = (self.byte(Var::LinkX), self.byte(Var::LinkY));
+        if crate::attack::direction_dropped(level, facing, x, y, direction) {
+            return false;
+        }
         if self.var(Var::LinkGridOffset) != 0 {
             // Just out of a cave, a step short of the grid below the mouth, any move but S walks Link back in
             // (the game finishes the step along ObjDir first).

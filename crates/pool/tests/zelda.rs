@@ -740,11 +740,12 @@ fn recording(embed_start: bool) -> Option<Arc<RecordOptions>> {
 /// (look-ahead included), the episode's replay, and its other events.
 type Recorded = ([u8; 0x800], [u8; 0x2000], u64, Replay, Vec<ZeldaEvent>);
 
-/// Plays one episode of `env` with attacks preferred, recording it with `options`.
+/// Plays one episode of `env` with attacks preferred (random draws from `seed`), recording it with `options`.
 fn play_recorded<E>(
     env: &mut E,
     control: &EnvControl,
     options: Option<Arc<RecordOptions>>,
+    seed: u64,
     nes: impl Fn(&E) -> &Counted,
 ) -> Recorded
 where
@@ -753,7 +754,7 @@ where
     control.set_recording(options);
     let mut obs = ObsData::new(Arc::new(obs_layout()));
     let mut events = Vec::new();
-    let mut rng = ChaCha8Rng::seed_from_u64(2);
+    let mut rng = ChaCha8Rng::seed_from_u64(seed);
     let start = env.reset(obs.row(), &mut events).unwrap().expect("an episode");
     loop {
         let flat: [bool; MASK_SIZE] = obs.bool(ACTION_MASK).try_into().unwrap();
@@ -807,7 +808,7 @@ fn recorded_eval_episodes_replay_to_the_same_machine() {
     let config = Arc::new(config);
     let mut env = EvalEnv::new(config, data.clone(), nes, TfzStore, opts, jobs, init, None).unwrap();
     let (ram, prg_ram, emulated, replay, events) =
-        play_recorded(&mut env, &control, recording(false), |e| e.env().session().nes().inner());
+        play_recorded(&mut env, &control, recording(false), 2, |e| e.env().session().nes().inner());
     let record = events
         .into_iter()
         .find_map(|e| match e {
@@ -861,8 +862,10 @@ fn recorded_training_episodes_replay_past_their_look_aheads() {
     let control = init.control.clone();
     let config = goriya_full_health(&data);
     let mut env = TrainEnv::new(config, data.clone(), nes, TfzStore, opts, init, None).unwrap();
+    // Seed 10: in the W doorway the mask offers MOVE W and E only (Link_FilterInput's band, Rooms49), and the draws
+    // of seeds 2-8 walk Link straight back out W before any beam flies.
     let (ram, prg_ram, emulated, replay, _) =
-        play_recorded(&mut env, &control, recording(true), |e| e.env().session().nes().inner());
+        play_recorded(&mut env, &control, recording(true), 10, |e| e.env().session().nes().inner());
     // zcore ran every frame since it powered on, look-ahead included; the replay kept only the real ones.
     assert!(emulated > u64::from(replay.frames()), "look-ahead ran: {emulated} frames emulated");
     // Embedded: the replay carries the start state file (and still says which it was).
