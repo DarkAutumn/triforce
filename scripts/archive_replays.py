@@ -25,7 +25,7 @@ files (checked in, uncompressed so they play as they are: the owner, Nov 23). Ev
     <version>/chain/<group>.7z                  segments, one 7z per directory they were found in
 
 ``--keep-names`` names each replay by its own file name instead (the owner's takes: ``--kind owner --keep-names``,
-from ``scripts/owner_takes.py sync``, so a take is found in the backup under the name it has in ``replays/owner/``).
+from ``scripts/owner_takes.py add``, so a take is found in the backup under the name it has in ``replays/owner/``).
 
 Identical files are kept once (by SHA-1); ``index.jsonl`` in the backup records each replay's name, SHA-1, META
 summary, where it is kept (``path``, and ``member`` inside a 7z) and every path it was found at. Run it again at
