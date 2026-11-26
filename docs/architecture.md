@@ -2634,12 +2634,14 @@ has every flag and key).
 
 ## The owner's takes and the solved rooms (`scripts/owner_takes.py`, `triforce/solved_rooms.py`, Nov 25)
 
-- **The takes** (`replays/owner/`): every replay the owner plays on `emu-zelda.py` (META `kind` `human`), under his
-  own file name, in `replays/owner/<room>/` (a whole game from power on: `replays/owner/game/`; the Darknut
-  lesson's three in `replays/owner/darknut/`). `scripts/owner_takes.py sync` (a queue job) finds every take under
-  `~/triforce-review/` by its META, wherever it lies and whatever it is called, copies the new ones (by SHA-1),
-  each verified first, archives them (`archive_replays.py --kind owner --keep-names`:
-  `/backup/triforce/replays/<version>/owner/<his name>.tfreplay.bz2`) and writes `replays/owner/INDEX.md` (a row a
+- **The takes** (`replays/owner/`): the replays the owner plays on `emu-zelda.py` (META `kind` `human`) and names
+  for the project, and only those, under his own file names, in `replays/owner/<room>/` (a whole game from power
+  on: `replays/owner/game/`; the Darknut lesson's three in `replays/owner/darknut/`). `scripts/owner_takes.py add
+  PATH|NAME...` (a queue job) takes each named take, a path or a file name (with or without `.tfreplay`) matched
+  under `~/triforce-review/`, all or none (each must be found, be one take by SHA-1, be his and verify), copies the
+  ones not yet kept, archives what `replays/owner/` holds (`archive_replays.py --kind owner --keep-names`:
+  `/backup/triforce/replays/<version>/owner/<his name>.tfreplay.bz2`; what the archive holds is skipped) and writes
+  `replays/owner/INDEX.md` (a row a
   take: room, entry, date, seed, frames, ending, `$524` against the route's layout for the door, chase flag, hearts
   and items at control, cheats and overrides, replay version; a whole game: the rooms it passes with their first
   frame in play) from `replays/owner/index.json` (each take's facts by SHA-1, so a whole game is read once). The

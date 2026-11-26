@@ -18,10 +18,11 @@ play gets in, what the file says, and how the comparison will read.
 - In the archive: `/backup/triforce/replays/<version>/owner/`, under the same names.
 - Nothing in `~/triforce-review/` is moved or renamed: it is read and copied.
 
-**How a new take gets in:** play it on `emu-zelda.py` as you do (it saves into `~/triforce-review/played/`), tell the
-lead, and `scripts/owner_takes.py sync` (a queue job) finds every take of yours under `~/triforce-review/`, renamed
-or not, copies the new ones, checks each replays exactly, archives them and rewrites the index; the lead commits
-it.
+**How a take gets in:** only the ones you name ("not all save states I play need saving, only the ones I tell you
+about"). Play on `emu-zelda.py` as you do (it saves into `~/triforce-review/played/`), tell the lead which takes to
+keep by their file names, and `scripts/owner_takes.py add NAME...` (a queue job) files those: it checks each is
+yours and replays exactly, copies it, archives it and rewrites the index; the lead commits it. Takes you saved by
+accident or replaced with better ones are left where they are and never filed.
 
 ## The solved rooms: `triforce/solved_rooms.yaml`
 

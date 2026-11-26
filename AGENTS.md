@@ -718,12 +718,16 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   the model [...] Best is defined as 'fewest cheated items, completed in the fewest frames' in that order." Other
   replays (deaths included) may be kept to peek at later, within reason. Near the 2 TB floor: **ask the owner what
   to trim; never trim without asking.**
-- **The owner's takes are kept, every one** (the owner, Nov 25: "Place these somewhere durable (along with the other
-  replays I make for you, this may be an ongoing thing)"): what he plays on `emu-zelda.py` is saved into
-  `~/triforce-review/played/` (his; read and copy, never move, rename or delete there); `scripts/owner_takes.py
-  sync` (a queue job) copies every new one, under his file name, into `replays/owner/<room>/` (a whole game:
-  `replays/owner/game/`), checks it verifies, archives it (`archive_replays.py --kind owner --keep-names`) and
-  rewrites `replays/owner/INDEX.md`. Run it whenever he says he played something, and commit what it brought in.
+- **The owner's takes are filed only when he names them** (the owner, Nov 25: "Place these somewhere durable (along
+  with the other replays I make for you, this may be an ongoing thing)", and the same day: "not all save states I
+  play need saving, only the ones I tell you about. I might save a few by accident, I might save some but make
+  better ones and not use the others"): what he plays on `emu-zelda.py` is saved into `~/triforce-review/played/`
+  (his; read and copy, never move, rename or delete there). The lead files the ones he names, and only those:
+  `scripts/owner_takes.py add NAME...` (a queue job; a file name under `~/triforce-review/` or a path, all or none)
+  checks each is his and verifies, copies it under his file name into `replays/owner/<room>/` (a whole game:
+  `replays/owner/game/`), archives it (`archive_replays.py --kind owner --keep-names`) and rewrites
+  `replays/owner/INDEX.md`; commit what it filed. `owner_takes.py sync` files nothing new (it archives what is
+  filed and rewrites the index). A take the yaml of solved rooms uses must be filed.
 - **Solved rooms are recorded and compared, never trained on** (the owner, Nov 25: "We aren't going to change the
   trainers or this run. However, we are going to compare at the end of this full retraining if the agents learned
   the 'Solved' route or not."): a room he calls solved (a human-perfect way through that works every time) is an
