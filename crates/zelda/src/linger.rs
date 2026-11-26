@@ -106,6 +106,12 @@ pub fn linger_wavefront(
     if let Some(w) = pbrs {
         return w;
     }
+    let targets: Vec<Target> = objective.pbrs_targets.iter().copied().collect();
+    Arc::new(room_wavefront(state, &targets, objective.clips))
+}
+
+/// The wavefront toward `targets` in `state`'s room, locked doors open when Link has keys in a dungeon.
+pub fn room_wavefront(state: &GameView, targets: &[Target], clips: bool) -> Wavefront {
     let locked: Vec<Direction> = if state.level() > 0 && state.keys() > 0 {
         [Direction::N, Direction::S, Direction::E, Direction::W]
             .into_iter()
@@ -114,8 +120,7 @@ pub fn linger_wavefront(
     } else {
         Vec::new()
     };
-    let targets: Vec<Target> = objective.pbrs_targets.iter().copied().collect();
-    Arc::new(state.room().wavefront(&targets, &[], &locked, objective.clips))
+    state.room().wavefront(targets, &[], &locked, clips)
 }
 
 /// `LingerTracker.summary()`.

@@ -379,6 +379,20 @@ class RoomRecord:
     goal_carrier_kills: Optional[int] = None
     goal_carrier_bombs: Optional[int] = None
     goal_carrier_bombs_taken: Optional[int] = None
+    # Round 46 (None/absent in older records; goals.rs): the living monsters on entering, at most and on leaving; the
+    # way out known, the shortest walk to it (8-pixel tiles) from where it was first known, the tiles walked, the
+    # detour (tiles the shortest walk through the farthest-off tile Link stood on adds), the frames of actions that
+    # ended farther from the way out and those of them with no bomb reason, drop-cycle deaths with a bomb reason.
+    goal_alive_in: Optional[int] = None
+    goal_alive_max: Optional[int] = None
+    goal_alive_out: Optional[int] = None
+    goal_way_known: Optional[int] = None
+    goal_way_in: Optional[int] = None
+    goal_walked: Optional[int] = None
+    goal_detour: Optional[int] = None
+    goal_away_frames: Optional[int] = None
+    goal_away_free_frames: Optional[int] = None
+    goal_reason_kills: Optional[int] = None
 
 
 @dataclass
