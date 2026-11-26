@@ -807,18 +807,23 @@ def cmd_rule(args):
                       'steps': [index]}
     # States44's walk from power on (`<states>/<route>_walk.json`): each door's own `$524` is the route's value as real
     # play under the plan brought it: it is the planned value where it lies in the door's set (else left as composed
-    # and reported; `triforce.start_audit` fails such a door).
+    # and reported; `triforce.start_audit` fails such a door).  A door the route passes twice (0x28 from S, 1x73 from
+    # S, ...: the table's door has no visit) takes its first visit's value (States44, round 44: before, the later
+    # visit's overwrote it, and the overworld's later visits come right after a segment's start).
     walk = ROOT / 'triforce' / 'states' / f'{args.route}_walk.json'
     outside = []
     if walk.exists():
         from triforce import start_audit  # pylint: disable=import-outside-toplevel
         game = _native.Game()
-        for name, info in json.loads(walk.read_text()).get('doors', {}).items():
+        walked = json.loads(walk.read_text()).get('doors', {})
+        for name, info in sorted(walked.items(), key=lambda kv: kv[1]['route_step']):
             game.load(name.removesuffix('.state'), randomize_rng=False, controllable=True)
             key = start_audit.door_of(game.ram())
             if key is None or key not in doors or info.get('spawn_cycle') is None:
                 continue
             door, value = doors[key], int(info['spawn_cycle'])
+            if door.get('planned_from') == 'walk':
+                continue
             values = {door['planned'], *door['others']}
             if value in values:
                 door['planned'], door['others'] = value, sorted(values - {value})
