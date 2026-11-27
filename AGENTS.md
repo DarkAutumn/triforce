@@ -537,6 +537,13 @@ there).
 
 ## Goal
 
+**The north star (the owner, Nov 27): "37 minutes or less from the time link is controllable to the time the game
+completes standing next to zelda."** Measured from the first frame Link can be controlled to the frame he stands
+beside Zelda: 37 minutes is 133,419 frames at the NES's 60.0988 frames a second. It sits on top of the program's
+goals (one network, one unbroken run, skilled-looking play): every change is judged also by what it does to the
+time of a finished run. For scale: the first golden path of 2.0.0.0 took 153,308 frames from power on (42.5 minutes,
+name entry included).
+
 Specialist PPO models (one per room family) that carry the two routes of `triforce/routes.yaml` from the game start
 (console power on) to the end of the game: **`d3first`, the main route since 2.0.0.0, in the owner's corrected
 order since round 36** (`docs/routes/d3first.md`, walks `d3first-walks-c.md`: the wood sword through Dungeons 3, 4,
