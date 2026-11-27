@@ -44,7 +44,10 @@ there).
 - **Pitfalls found Nov 27:** give every `eval-batch` job its own NAME (one name over several jobs is refused as a
   duplicate entry); `eval-batch --teacher` adds its own scope entries, so don't combine it with a `--chain` of the same
   scope (use `--team`); read a detached job's log the moment it starts (a refused job only says so there); after
-  merging Rust changes run `triforce job build` before `triforce job test`.
+  merging Rust changes run `triforce job build` before `triforce job test`. A numbered checkpoint is a store run
+  (`NAME/RUN-itNNNNNN`) only once a `--teacher` or `--with ...@itN` has made it: naming it in `--team` before that
+  fails at once with only the team line in the job's log (make it with a 2-run `eval-batch --teacher
+  GROUP=NAME/RUN@itN --scopes dN --runs 2` through the queue).
 - **Talking with the owner:** when he says "talk first" or "not a directive", make no edits and send no instructions
   to agents until he is satisfied; talk big changes through with him before creating agents.
 
