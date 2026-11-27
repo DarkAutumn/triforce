@@ -6,3 +6,12 @@ extends: [../wizzrobe.yaml, _generation.yaml]
 state_routes: [d3first]
 items: {boomerang: true, candle: false}   # round 40 (Switch40): 6:0x38's Bubble room as measured: BOOMERANG on (the
                                           # Like-Likes), CANDLE off (fire cannot hurt a Wizzrobe or a Bubble)
+# A stall is a failure (Wizz50, Nov 27; trap-room's and boss-gleeok's rule): held by a Like-Like no shot or touch
+# reaches Link, and with the 600-step no-damage truncation bootstrapped gen1-others/s1r4 learned to sit in the hold:
+# iterations whose 6:0x38 / 6:0x3a episodes held a 550-step quiet stretch, 0-6 / 0-27 of each 300 before iteration
+# 1500, then 53 / 120 of its last 331; in the chains 39 of 100 Dungeon 6 runs ended stuck in 6:0x38's hold,
+# pressing a MOVE the game discards (no longer offered there: zelda::compute_action_mask). 2.0.0.15's wizzrobe
+# crossed 1,332 of its 1,334 successful Dungeon 6 visits and all 1,497 of Dungeon 9's with at most 200 actions in a
+# row without damage (the chain records' no_damage_max).
+endings: {no-damage: hard-failure, max-steps: hard-failure}
+no_damage_steps: 200

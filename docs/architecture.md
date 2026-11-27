@@ -94,6 +94,10 @@ outer border band (in a dungeon room only its doorways reach it), asm:Link_Filte
 facing's axis. A press across it is not offered there, off the grid too (`zelda::attack::direction_dropped`; Rooms49,
 Nov 26: before this, one step into 1:0x22's E doorway MOVE S was legal, moved nothing, the target pointed S, and the
 rooms teacher pressed it for a chain's 2000 steps).
+While a Like-Like holds Link (asm:IsLinkParalyzed `$512`, `GameView::link_held`) the game discards every direction:
+no MOVE is offered then, not even the all-four fallback of a state with no legal step; WAIT and the strikes in his
+facing stay, and the sword frees him (Wizz50, Nov 27: inside the hold no shot or touch reaches Link, and
+gen1-others/s1r4 pressed a no-op MOVE there for a chain's 2000 steps in 39 of 100 Dungeon 6 runs).
 
 ### Item kinds: RECORDER, FOOD, CANDLE (round 24, version 1.4.2.0)
 

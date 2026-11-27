@@ -5664,3 +5664,70 @@ there's not one." (The owner's rule; the agent's the form below and the tests.)
 - **Not done**: nothing retrained or measured. A Darknut teacher trained before this commit had the weapon bomb in
   8:0x3f and meets the new mask there once its worktree carries the commit. The walked tracks are state sequences,
   not actions: a track whose fight used a bomb there still seeds a valid state.
+
+## Why the others teacher loses Dungeons 6 and 9, and the Like-Like's hold (Wizz50, branch `wizz50`, Nov 27)
+
+The first read of the whole new team (100 runs a segment, 2.0.0.15's seeds) was good everywhere but Dungeon 6 (0%
+from its entrance, 2.0.0.15 43%; 6x38 ends 64 runs, 6x3a 26) and Dungeon 9 (5%, 2.0.0.15 2%), the rooms of
+`gen1-others/s1r4` (wizzrobe, pols-voice, wallmaster, lanmola, patra; 15.0M steps, 10 games, two a family). Diagnosed
+from 40 recorded runs a segment of each team (seeds 0-39, the runs replay the 100-run read exactly), every visit's
+hits attributed frame by frame from the RAM (the object nearest Link at the harm, this frame or the last: Wizzrobe
+magic `$58`/`$59`, Wizzrobe touch, the Like-Like's capture), the run's `metrics.jsonl`, and chains of its
+checkpoints it1254 and it1368.
+
+**6x38 and 6x3a: the Like-Like's hold is a free shelter.** While a Like-Like holds Link (asm:IsLinkParalyzed `$512`)
+no shot or touch reaches him; the mask still offered MOVE there (the game discards every direction: two frames,
+nothing moves), and the 600-step `no-damage` ending was a bootstrapped truncation (free). The teacher found the
+shelter late: iterations whose 6x38 / 6x3a episodes held a 550-step quiet stretch, 0-6 / 0-27 in each 300 before
+iteration 1500, 53 / 120 in its last 331 (wizzrobe's `no-damage` endings 0.3% → 3.3%, its SWORD share 14% → 8%). In
+the chains: 1.05 captures a 6x38 visit (2.0.0.15 0.45), Link held 67% of the room's frames (3%), MOVE 100% of the
+decisions in a hold (2.0.0.15: MOVE 75%, WAIT 13%, SWORD 11%); 10 of 40 recorded runs end held, the read's 39 stuck.
+6x3a: held 80% of its frames, BOOMERANG 54% of its decisions.
+
+**Under it, wizzrobe never learned the two fights.** Training success 6x38 S 0.41 → 0.55, 6x3a W 0.28 → 0.38 over
+the whole run, about 2,900 and 3,000 episodes each (wizzrobe is two games of ten with 16 room entries; 2.0.0.15's
+`r33w-s93` lineage had 13.6M wizzrobe-only steps on a like-like warm start). It barely swings: SWORD 1% of its 6x38
+decisions (2.0.0.15 21%), 4.3 hits a visit (2.35: Blue Wizzrobe touch 1.48 against 1.07, captures 1.6 against 0.47).
+Earlier checkpoints do not stall but die: it1254 6x38 38 passed / 59 deaths / 3 stuck of 100, 6x3a 0 of 29; it1368
+49 / 51 / 0, 6x3a 2 of 40. No checkpoint of s1r4 plays Dungeon 6.
+
+**Dungeon 9** (the new team better than 2.0.0.15 at 9x61 and 9x07): 9x10 from S, three Bubbles, the sword blocked 42%
+of the frames, 4.5 hits a visit (37% of them while cursed), Blue Wizzrobe touch and magic (training 0.74-0.76);
+9x05 3.97 hits a visit (2.48; Blue magic 1.71 against 0.85); 9x17 as 2.0.0.15 (6 deaths each); 9x16's second visit
+(step 262, patra's fight) 5.1 hits (2.0), SWORD 21% of its decisions (34%): training wins it 0.95 with 5.2-5.4 hits
+an episode, by soaking Patra's children. The same undertrained wizzrobe, and a patra that trades hearts. No other
+fault: the FIGHT objective leaves the Like-Likes out only in their spawn cloud; the 6x38 / 6x3a tracks are won walks.
+
+**The fix (no training).** `zelda::compute_action_mask` offers no MOVE while a Like-Like holds Link (nor the all-four
+fallback of a state with no legal step); WAIT and the strikes in his facing stay (the sword frees him: three hits a
+Like-Like, one every second swing). `specialists/d3first/wizzrobe.yaml`: `endings: {no-damage: hard-failure,
+max-steps: hard-failure}`, `no_damage_steps: 200` (trap-room's rule; 2.0.0.15's wizzrobe went past 200 quiet
+actions in 2 of 1,334 successful Dungeon 6 visits and none of 1,497 in Dungeon 9). Tests: `test_like_like_hold`
+(fails on the base: every MOVE offered in a hold, each moving nothing), the task's endings, a WAIT in the hold ending
+as a paid hard failure; `test_obs_legacy` records like-like's three 4x32 traces, each first different at a step where
+Link is held on both sides, in the mask's MOVE alone.
+
+**Before and after, same networks, 100 runs a segment, seeds 0-99** (before: the lead's reads and 2.0.0.15 on the
+base 4147d381; rate / stuck runs; room passes of visits, deaths `d`, stuck `s`). The mask reaches every Like-Like
+room on the route: like-like's (walkers) 4x32, 6x1d, 9x56, 9x14, 9x51, 9x41, 9x03 and wizzrobe's (others) 6x38,
+6x3a, 9x17, 9x31.
+
+| team, segment | before | after | rooms with Like-Likes |
+|---|---|---|---|
+| new, D4 | 80% / 0 | 81% / 0 | 4x32 199/199 → 200/200 |
+| new, D6 | 0% / 43 | 1% / 0 | 6x38 36/100 d25 s39 → 35/100 d65; 6x3a 0/26 d22 s4 → 2/22 d20; 6x1d 0/0 → 2/2 |
+| new, D9 | 5% / 0 | 6% / 0 | 9x17 181/189 d7 → 181/189 d6; 9x31 20/23 → 23/25; 9x56, 9x14, 9x51, 9x41, 9x03 unchanged |
+| 2.0.0.15, D4 | 47% / 0 | 47% / 0 | 4x32 195/201 → 194/200 |
+| 2.0.0.15, D6 | 40% / 0 | 36% / 0 (−4.0 ± 3.7, within noise) | 6x38 92/100 → 90/100; 6x3a 48/77 → 45/79 |
+| 2.0.0.15, D9 | 2% / 1 | 1% / 1 (hearts lost −0.27 ± 0.13) | 9x17 166/175 → 162/172 |
+
+The stall is gone and the Dungeon 6 runs it held now die in 6x38: the mask removes a symptom, the teacher still has
+to learn the fight. Inside a hold, with MOVE taken away, s1r4's own kind probabilities are WAIT 0.39, SWORD 0.18,
+BOOMERANG 0.43 in 6x38 and 0.08 / 0.01 / 0.91 in 6x3a (2.0.0.15: 0.58 / 0.35 / 0.07 and 0.44 / 0.40 / 0.16).
+
+**What the teacher needs (the lead's decision, not started):** wizzrobe as its own teacher (groups.yaml
+`wizzrobe: {members: [wizzrobe@d3first]}`, darknut's and goriya's recipe `20 16384 1831`, 30M steps; `others`
+keeps four families, `8 6554 1831`), continued from s1r4's it001368 (the last checkpoint before the shelter, no stuck
+run in 100) under this commit; a from-scratch arm beside it if the queue allows, judged by D6/D9 chains at equal
+steps. A team spec that keeps s1r4 for the Wizzrobes after the split must say so (`+@wizzrobe=gen1-others/s1r4`):
+without it the group's slots fall back to the base team's wizzrobe. Patra stays in `others`.

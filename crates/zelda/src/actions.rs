@@ -313,17 +313,23 @@ impl fmt::Display for ActionMask {
 /// Grumble waits for it ([`food_wanted`]), and no BOOMERANG while placed food lies (round 26: the boomerang shares its
 /// slot and would take it away, asm:Boomerang_Wield). MOVE also presses into a secret Armos from its side
 /// ([`GameView::is_secret_armos_direction`]) and into the secret gravestone from below (round 27,
-/// [`GameView::is_secret_push_direction`]). A family's `items:` switches mask them further
-/// (`env::config::ItemsConfig`), and a route narrows ARROW and MOVE (`crate::Session::set_arrow_facings`,
-/// `crate::Session::set_vetoed_doorways`).
+/// [`GameView::is_secret_push_direction`]); no MOVE at all while a Like-Like holds Link ([`GameView::link_held`]).
+/// A family's `items:` switches mask them further (`env::config::ItemsConfig`), and a route narrows ARROW and MOVE
+/// (`crate::Session::set_arrow_facings`, `crate::Session::set_vetoed_doorways`).
 pub fn compute_action_mask(state: &GameView) -> ActionMask {
     let mut mask = ActionMask::default();
 
+    // Held by a Like-Like (asm:IsLinkParalyzed) the game discards every direction (asm:Link_Update): no MOVE moves
+    // him, so none is offered, not even the all-four fallback below; WAIT and the strikes in his facing are left
+    // (Wizz50, Nov 27: gen1-others/s1r4 pressed a no-op MOVE inside the hold, where no shot or touch reaches him,
+    // for the chain's 2000 steps in 39 of 100 Dungeon 6 runs).
+    let held = state.link_held();
     for d in CARDINALS {
-        if state.can_link_move(d)
-            || state.is_push_block_direction(d)
-            || state.is_secret_armos_direction(d)
-            || state.is_secret_push_direction(d)
+        if !held
+            && (state.can_link_move(d)
+                || state.is_push_block_direction(d)
+                || state.is_secret_armos_direction(d)
+                || state.is_secret_push_direction(d))
         {
             mask.allow(ActionKind::Move, Some(d));
         }
@@ -376,7 +382,7 @@ pub fn compute_action_mask(state: &GameView) -> ActionMask {
         mask.allow(ActionKind::Recorder, None);
     }
 
-    if !mask.direction[ActionKind::Move.index()].iter().any(|&b| b) {
+    if !held && !mask.direction[ActionKind::Move.index()].iter().any(|&b| b) {
         for d in CARDINALS {
             mask.allow(ActionKind::Move, Some(d));
         }

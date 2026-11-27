@@ -61,6 +61,15 @@ ROUND40_TARGETS_CHANGES = json.loads(
 # it offered (the wavefront target follows the mask); that press moved nothing (interrupt `wall`).
 ROOMS49_BAND_CHANGES = json.loads(
     (Path(__file__).parent / 'fixtures' / 'obs_schema5_rooms49_band.json').read_text(encoding='utf-8'))
+# The Like-Like's hold (Wizz50, Nov 27; `zelda::compute_action_mask`): the game discards every direction while a
+# Like-Like holds Link (asm:IsLinkParalyzed), and the mask no longer offers MOVE then. Compared step by step with its
+# base 4147d381 (same seeds), each of these three traces first differs at a step where Link is held on both sides
+# (steps 45, 28 and 44), and only in the mask's MOVE kind, its four directions and its durations.
+WIZZ50_HOLD_CHANGES = {'like-like': {
+    '4_32c_0.state': 'c7f8e1e703691e4975938d841367a50c6408efbdf2311398c0383eedcee1b402',
+    '4_32c_1.state': '77c7bce9f14d0ad34d6a04278bff42aef6340c4f341e638ad27ea2b3a33a520c',
+    '4_32c_2.state': 'b68a2ac0b64e088195dfb36ee4d13217f040e48184a88e0dcc24d7db6f772be5',
+}}
 # The traces both sides of the generation's merges changed, with their hashes on the merged code.
 # - Main's weapon rooms (2.0.0.15) and this branch's closing-frame cut-over: boss-manhandla `3_4dw_2`, which runs out
 #   of bombs within its 50 steps (each side's own hash for it is in `WEAPON_ROOM_CHANGES` and `ROUND40_CHANGES`; the
@@ -329,7 +338,8 @@ def test_schema5_columns_are_unchanged(name):
     changed = (ROUTE_CHANGES.get(name, {}) | BOMB_RULE_CHANGES.get(name, {}) | ROUTE31_CHANGES.get(name, {})
                | WEAPON_ROOM_CHANGES.get(name, {}) | HEARTS_ENCODING_CHANGES.get(name, {})
                | ROUND40_CHANGES.get(name, {}) | ROUND40_TARGETS_CHANGES.get(name, {})
-               | ROUND40_MERGE_CHANGES.get(name, {}) | ROOMS49_BAND_CHANGES.get(name, {}))
+               | ROUND40_MERGE_CHANGES.get(name, {}) | ROOMS49_BAND_CHANGES.get(name, {})
+               | WIZZ50_HOLD_CHANGES.get(name, {}))
     kept = {state: digest for state, digest in recorded.items() if state not in ROUTE31_DELETED}
     assert family_hashes(name, recorded) == kept | changed
 
