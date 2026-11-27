@@ -33,6 +33,7 @@ import numpy as np
 from .. import manifest, nets, paths
 from ..model import (CHASE_KEY, ENTITY_CHASE_KEY, ENTITY_SHOOTER_KEY, ENTITY_THREAT_KEY, MASK_KEY, TOKEN_KEYS,
                      obs_spec_from_space)
+from ..nets.hitnet import widen_tokens
 from ..observation import observation_space
 
 # The switches whose blocks only a network that asks for them reads (``model.TOKEN_KEYS``): switch -> its keys.
@@ -168,6 +169,23 @@ def create_network(arch: str, arch_config: Optional[dict] = None, families=None)
         check_obs_agree(families)
         check_network_reads(network, families)
     return network
+
+
+def widen_loaded(network, arch: str, arch_config: Optional[dict] = None):
+    """``(network, added)``: a loaded ``hitnet`` widened to the token groups ``arch_config['tokens']`` names beyond its
+    own (``nets.hitnet.widen_tokens``: the new input columns zero, every other weight its own, so it acts exactly as
+    loaded; docs/lab.md "Continuing with a new input"), else ``network`` as loaded and no groups.  Only a run that
+    asks for ``arch`` hitnet with ``tokens`` is widened; a group it would drop is refused (``Refused``)."""
+    tokens = (arch_config or {}).get('tokens')
+    if tokens is None or arch != 'hitnet' or nets.arch_of(network.config.to_dict()) != 'hitnet':
+        return network, []
+    added = [g for g in tokens if g not in network.config['tokens']]
+    if not added:
+        return network, []
+    try:
+        return widen_tokens(network, tokens, obs_spec_from_space(observation_space())), added
+    except ValueError as error:
+        raise Refused(f"--load: {error}") from None
 
 
 # --------------------------------------------------------------------------------------------------- manifest

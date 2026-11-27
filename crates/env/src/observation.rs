@@ -43,8 +43,9 @@ use zelda::{Action, Change};
 /// slot, what a grid-point walker may do at its next grid point), filled only with `obs.chase` (zeros otherwise:
 /// `chase_blocks`); no schema 8 key or column changes.
 /// 10 (round 40, "The Goriya teacher"; the owner's three columns, Nov 26): one NEW key, `entity_shooter` (per entity
-/// slot, when a shooter fires next: `loaded`, `throw_time`, `will_throw`; the Goriyas only for now:
-/// `shooter_block`), filled only with `obs.shooter` (zeros otherwise); no schema 9 key or column changes.
+/// slot, when a shooter fires next: `loaded`, `throw_time`, `will_throw`; the Goriyas first, every shooter
+/// `zelda::shooter::throw` covers since "Every shooter": `shooter_block`), filled only with `obs.shooter` (zeros
+/// otherwise); no schema 9 key or column changes.
 pub const OBS_SCHEMA_VERSION: u32 = 10;
 
 /// The oldest observation schema whose checkpoints still load as they are (AGENTS.md "Versioning": compatibility is
@@ -1114,18 +1115,21 @@ pub fn chase_blocks(ram: &[u8]) -> ([f32; CHASE_SIZE], [[f32; ENTITY_CHASE_SIZE]
     (global, per)
 }
 
-/// Schema 10's block (round40.md "The Goriya teacher"; `zelda::shooter`): when each shooter fires next, from the
-/// current RAM only (no emulator step, no random byte read). Observation slot `i` is RAM object slot `i + 1`; the
-/// treasure slot and any object `zelda::shooter` does not cover (today: all but the Goriyas `$05/$06`) are all 0.
+/// Schema 10's block (round40.md "The Goriya teacher", "Every shooter"; `zelda::shooter`): when each shooter fires
+/// next, from the current RAM only (no emulator step, no random byte read). Observation slot `i` is RAM object slot
+/// `i + 1`; the treasure slot and any object `zelda::shooter::throw` does not cover are all 0. Covered: the Goriyas
+/// `$05/$06`, Lynels `$01/$02`, Moblins `$03/$04`, Octoroks `$07-$0A`, the Zora `$11`, Aquamentus `$3D`, Gohma
+/// `$33/$34`, the red Wizzrobe `$24`.
 ///
-/// `entity_shooter` (`[12, 3]`): `loaded` (it holds its boomerang and can act: live, not waiting for the boomerang,
-/// not stunned, no clock); `throw_time` (1 − ObjTimer / 112 while loaded: its throw timer running down to the throw,
-/// 0 otherwise); `will_throw` (the chance it throws within the next 16 frames, the room as it stands: a blue one's 1
-/// or 0 by the game's rule, a red one's by its 2-in-256 roll a frame on the frames the rest of the rule lets it).
+/// `entity_shooter` (`[12, 3]`): `loaded` (it holds its next shot and can act: a Goriya live, not waiting for its
+/// boomerang, not stunned, no clock; each type's reading in `zelda::shooter`); `throw_time` (1 − the frames until its
+/// timer lets it shoot / 112 while loaded, at least 0: a Goriya's ObjTimer, a walking shooter's stand, the Zora's
+/// surfacing, ...; 0 otherwise); `will_throw` (the chance it shoots within the next 16 frames, the room as it stands:
+/// 1 or 0 by the game's rule, a red Goriya's by its 2-in-256 roll a frame on the frames the rest of the rule lets it).
 pub fn shooter_block(ram: &[u8]) -> [[f32; ENTITY_SHOOTER_SIZE]; NUM_ENTITY_SLOTS] {
     let mut out = [[0f32; ENTITY_SHOOTER_SIZE]; NUM_ENTITY_SLOTS];
     for (i, row) in out.iter_mut().enumerate().take(TREASURE_SLOT) {
-        if let Some(t) = zelda::shooter::goriya(ram, i + 1) {
+        if let Some(t) = zelda::shooter::throw(ram, i + 1) {
             *row = [b(t.loaded), t.throw_time, t.will_throw];
         }
     }

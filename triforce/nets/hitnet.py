@@ -141,3 +141,54 @@ class HitNet(LabNet):
         conditioned = torch.relu(self.kind_condition(policy).unsqueeze(1) + self.kind_embedding.weight)
         return Heads(self.kind_head(policy), self.direction_head(conditioned), self.duration_head(conditioned),
                      self.value_head(self.value_tower(features)).view(-1), aux), None
+
+
+def _blocks(tokens, spec: dict, type_dim: int):
+    """The column blocks of the token projection's and Link's projection's inputs, in order: ``(group, width)``."""
+    token = [(g, spec[TOKEN_GROUPS[g]]['shape'][1]) for g in TOKEN_GROUPS if g in tokens]
+    if 'type' in tokens:
+        token.append(('type', type_dim))
+    link = [(LINK_KEY, spec[LINK_KEY]['shape'][0])] + [(g, spec[LINK_GROUPS[g]]['shape'][0]) for g in LINK_GROUPS
+                                                        if g in tokens]
+    return {'token_proj.weight': token, 'link_proj.weight': link}
+
+
+def widen_tokens(network: HitNet, tokens, obs_spec: dict) -> HitNet:
+    """``network`` rebuilt to read the token groups ``tokens`` (its own and more) on the layout ``obs_spec``: every
+    weight copied, the projections' input columns of the added groups zero, so the widened network computes exactly
+    what ``network`` does whatever the new blocks hold (docs/lab.md "Continuing with a new input"), and training grows
+    them from there.  A dropped group, or a block or layer whose shape the new layout changes, is refused."""
+    old = network.config
+    dropped = sorted(set(old['tokens']) - set(tokens))
+    unknown = sorted(set(tokens) - set(TOKEN_GROUPS) - {'type'})
+    if dropped or unknown:
+        raise ValueError(f"hitnet tokens {old['tokens']} can't become {list(tokens)}: "
+                         + (f"dropped {dropped}" if dropped else f"unknown {unknown}"))
+    ordered = [g for g in ('type', *TOKEN_GROUPS) if g in set(tokens)]
+    wide = HitNet({**old.to_dict(), 'tokens': ordered, 'obs_spec': obs_spec})
+    before, after = _blocks(old['tokens'], old.obs_spec, old['type_dim']), _blocks(ordered, obs_spec, old['type_dim'])
+    state = network.state_dict()
+    with torch.no_grad():
+        for name, value in wide.state_dict().items():
+            if name in after:
+                starts, at = {}, 0
+                for group, width in after[name]:
+                    starts[group], at = (at, width), at + width
+                value.zero_()
+                at = 0
+                for group, width in before[name]:
+                    start, new_width = starts[group]
+                    if new_width != width:
+                        raise ValueError(f"hitnet group {group!r} is {width} columns wide in the network, {new_width} "
+                                         "in the new layout")
+                    value[:, start:start + width] = state[name][:, at:at + width]
+                    at += width
+            elif name not in state:
+                if not name.startswith('type_embedding.'):
+                    raise ValueError(f"widening adds {name}, which only the type embedding may")
+            elif value.shape != state[name].shape:
+                raise ValueError(f"widening changes {name} from {tuple(state[name].shape)} to {tuple(value.shape)}: the "
+                                 "new layout is not the network's plus token blocks")
+            else:
+                value.copy_(state[name])
+    return wide.to(next(network.parameters()).device)

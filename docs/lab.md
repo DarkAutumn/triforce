@@ -281,10 +281,11 @@ Each stops the run before the queue gives it a place (exit 2), with what to chan
 - a task's `warm_start` (the lab never loads one: `--load` names the start, and the generation trains from scratch):
   set it to null, or `--allow-warm-start` to train without it;
 - tasks that set an `obs.` switch differently (one network reads one observation);
-- a network that reads `obs.threat`'s or `obs.chase`'s blocks (`hitnet`'s token groups `threat`, `chase`; also inside a
-  `hitshift`) while the tasks leave the switch off (it would read zeros), or tasks that turn one on that the network
-  does not read (`lab.recipe.SWITCH_KEYS`; `obs.target` and `obs.objective` fill blocks every network reads, so only
-  the agreement covers them);
+- a network that reads `obs.threat`'s, `obs.chase`'s or `obs.shooter`'s blocks (`hitnet`'s token groups `threat`,
+  `chase`, `shooter`; also inside a `hitshift`) while the tasks leave the switch off (it would read zeros), or tasks that
+  turn one on that the network does not read (`lab.recipe.SWITCH_KEYS`; `obs.target` and `obs.objective` fill blocks
+  every network reads, so only the agreement covers them; a loaded `hitnet` is widened first, "Continuing with a new
+  input" below);
 - demonstrations (the tasks' `demos:` and `--demos`) without a key the network reads, or with a switch's block all
   zeros where the tasks turn the switch on: the cloning term runs the network on their rows (`ppo.demo_log_prob`).
   Today's darknut files (schema 8, recorded with the switches off) hold no `chase`/`entity_chase` and a zero
@@ -309,6 +310,37 @@ at`, so it plays fresh episodes: a stopped and resumed run ends at the same iter
 through, not with the same weights (`tests/test_lab_recipe.py`). Not restored: each env's start-state badness (the
 Rust pool's failure weights, in memory, as in `triforce train --resume`) and the early stop's streak. A run stopped
 before its first save starts over in the same run.
+
+### Continuing with a new input
+
+The owner's order (Nov 26): architecture changes are a later option, and nothing already trained is thrown away: a
+trained teacher gets a new input by widening with zero weights (it plays exactly as before) and continuing. For a
+`hitnet` the lab does it at `--load` (`recipe.widen_loaded`, `nets.hitnet.widen_tokens`): when the run asks for
+`--arch hitnet` with `tokens` (the group file's `network:`, or `--arch-config`) naming groups the loaded network does
+not read, it is rebuilt with them on today's observation layout, every weight copied, and the projections' input
+columns of the new groups (the token projection's; Link's own for `chase`) zero. The log says so (`[lab] --load ...:
+widened with the token group(s) shooter (their input columns zero: it acts exactly as loaded)`), `run.json`'s
+`model_config` has the new tokens and `source` the checkpoint loaded. A group the run would drop, or a layout that
+changes another layer's shape, is refused. As with every `--load`, the optimizer starts fresh; the new columns get
+gradient as soon as their blocks are non-zero.
+
+The overworld teacher with schema 10's `shooter` group (round40.md "Every shooter"): `triforce/groups.yaml`'s
+`overworld` reads it and its ten tasks turn `obs.shooter` on, so its continuation is
+`python -m triforce.lab.train --name gen1-overworld --run-id RUN --group overworld --load
+~/triforce-shared/runs/gen1-overworld/s1r2-c1 ...` (the dry call, `TRIFORCE_JOB_ESTIMATE`, passes every check and
+widens it: 6,552,000 steps at the c1 run's 20 × 16384 × 400). **The proof that it plays as before**
+(`scripts/experiments/r49_widen_proof.py`, job #2221; chains #2202 and #2204):
+
+- 1,511 observations recorded from the ten tasks (up to eight seed states each, the source network acting; 609 with a
+  shooter row filled, 212 rows with `will_throw` 1): every head, the value and the hit logits of `s1r2-c1` and its
+  widened copy equal **bit for bit on the CPU** in batches of 1,511, 20 and 1, and on the GPU in whole batches; on the
+  GPU in batches of 20 and 1 the widened copy differs by at most 7.9e-6 (the GPU's matrix kernels follow the inner
+  width, which the three columns change), while the source itself differs by up to 1.9e-3 between those batch sizes; the
+  argmax action of all 1,511 the same in every case;
+- chains, store team `current+@overworld=gen1-overworld/s1r2-c1` against the same with the widened checkpoint in the
+  ten `ow-*@d3first` slots (`--checkpoint`), `post-d5` and `post-d7`, 200 runs each, seeds 0-199: **identical run for
+  run** (157 and 195 of 200; 2,511,024 frames), every record field but the served network's two float diagnostics
+  (`act_entropy`, `surprisal`, within 1.5e-5), as two chains of the source itself differ (within 1.6e-5).
 
 ### What a lab job writes (and the training GUI)
 

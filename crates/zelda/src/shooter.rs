@@ -1,9 +1,24 @@
 //! When a shooter fires next (the fresh generation's observation, `env::observation` `entity_shooter`, schema 10;
-//! round40.md "The Goriya teacher"; the owner's three columns, Nov 26: "Knowing when a Goriya is loaded"). Filled for
-//! the Goriyas `$05/$06` only for now (the owner: "If the training goes well, apply that (b) not only to goriya but
-//! also all enemies that shoot"). Arithmetic on the current RAM only: no emulator step, no random byte read.
+//! round40.md "The Goriya teacher" and "Every shooter"; the owner's three columns, Nov 26: "Knowing when a Goriya is
+//! loaded", and "If the training goes well, apply that (b) not only to goriya but also all enemies that shoot").
+//! Arithmetic on the current RAM only: no emulator step, no random byte read. [`throw`] covers:
 //!
-//! **The game's rule** (asm:Goriya_Update, asm:Walker_SetInputDirAndTryThrowBoomerang, asm:Shooter_ShootIfWanted,
+//! - the Goriyas `$05/$06` ([`goriya`]: the boomerang);
+//! - the walking shooters ([`walking`]: Lynels `$01/$02` sword shots, Moblins `$03/$04` arrows, Octoroks `$07-$0A`
+//!   rocks): a stand of 32 frames on the shoot timer before each shot;
+//! - the Zora `$11` ([`zora`]: one fireball each surfacing), Aquamentus `$3D` ([`aquamentus`]: a volley on its
+//!   ObjTimer), Gohma `$33/$34` ([`gohma`]: a fireball every 65 frames) and the red Wizzrobe `$24` ([`red_wizzrobe`]:
+//!   one magic shot each appearance): shots on a timer, aimed or along the facing, the same three columns.
+//!
+//! Not covered: the blue Wizzrobe `$23` (its shot frame is the frame counter's, but whether it fires there depends on
+//! its own walk over the room's tiles, a random teleport and Link exactly on its row or column: round40.md "Every
+//! shooter"), and the other fireball shooters (Manhandla, Gleeok's heads, Ganon, the statues).
+//!
+//! The columns read the same for every type: `loaded` (it holds its next shot and can act), `throw_time` (1 − the
+//! frames until its timer lets it shoot / [`TIMER_MAX`], at least 0; 0 when not loaded) and `will_throw` (the chance
+//! it shoots within the next [`HORIZON`] frames, the room as it stands).
+//!
+//! **The Goriya's rule** (asm:Goriya_Update, asm:Walker_SetInputDirAndTryThrowBoomerang, asm:Shooter_ShootIfWanted,
 //! asm:Shooter_ShootLimited): every frame a Goriya that is not waiting for its boomerang (ObjState bit 7) moves
 //! (asm:Walker_Move: not while stunned or under the clock; a knockback moves it instead and ends its update), and at
 //! each grid point sets "wants to shoot" (`$412`) when the longer axis to the chase target is under `$51` pixels and
@@ -15,6 +30,18 @@
 //! A red Goriya's random byte is the game's register (`$18-$24`), which the game shifts by a fixed rule; the column
 //! gives its throw as the chance a fair byte would, as the owner's table asks ("its chance of throwing within the
 //! next decision"), not the byte the register will hold.
+//!
+//! **The walking shooters' rule** (asm:Shooter_RunShootTimer, asm:Shooter_ShootAndSetTimer): the shot is a stand on
+//! ObjShootTimer (`$451`). With the timer at 0 and "wants to shoot" set it loads `$30` and the shooter stands; the
+//! update counts it down by one a frame (not the NMI) and the shot leaves on the frame it reaches `$10`, 32 frames
+//! after the stand began, then it stands 16 frames more. "Wants to shoot" is set only while it walks (a wanderer's
+//! turn at a grid point, asm:Wanderer_MoveAndTurn: toward the chase target in line when its turn rate is at least
+//! `Random+1,X`, or perpendicular when its turn timer ran out; a Lynel's Goriya rule at a grid point), so it holds
+//! through the stand. A red type (`$02`, `$04`, `$07`, `$08`) starts a stand
+//! only on a frame whose `Random,X` is `$F8` or more (8 of 256): a stand starts 33 frames or more before its shot, so
+//! no random byte falls inside the horizon and `will_throw` is 1 or 0 for both colours. The shot is lost when, on its
+//! frame, the clock or a stun holds, no slot is free or 4 counted shots fly; a hit (the invincibility timer, counted
+//! down on even frames before the update, asm:Obj_DecInvincibilityTimer) puts the timer back to 0.
 
 use crate::chase;
 
@@ -52,21 +79,79 @@ pub const TIMER_MAX: f32 = 112.0;
 pub const RED_CHANCE: f32 = 2.0 / 256.0;
 /// Frames `will_throw` looks ahead: the threat block's horizon, about one decision.
 pub const HORIZON: u32 = crate::threat::HORIZON as u32;
+/// asm:ObjShootTimer ($451 + slot): a walking shooter's stand, counted down in its update.
+const OBJ_SHOOT_TIMER: usize = 0x451;
+/// The shoot timer's value on the frame the shot leaves, and its load at the start of the stand.
+const SHOT_LEAVES: u8 = 0x10;
+const STAND: u8 = 0x30;
+/// asm:ObjInvincibilityTimer ($4F0 + slot): counted down on even frames, before the slot's update.
+const OBJ_INVINCIBILITY: usize = 0x4F0;
+/// asm:FrameCounter ($15): incremented in the NMI before the frame's updates.
+const FRAME_COUNTER: usize = 0x15;
+/// asm:Gohma_ObjShootTimer ($380 + slot): frames to Gohma's next fireball, counted down in its update.
+const GOHMA_SHOOT_TIMER: usize = 0x380;
+/// Object types.
+const ZORA: u8 = 0x11;
+const AQUAMENTUS: u8 = 0x3D;
+const RED_WIZZROBE: u8 = 0x24;
+/// A Zora's states (ObjState, asm:Burrower_Update): 1 mound, 2 surfacing (`$0F` frames), 3 surfaced (starts at
+/// `$FF`; the fireball when its update reads `$FD`).
+const ZORA_SURFACING_FRAMES: u32 = 0x0F;
+const ZORA_SHOOTS_AT: u8 = 0xFD;
+/// A red Wizzrobe's ObjState on the frame it shoots (asm:Wizzrobe_Red_State2Solid); `$FF` the frame it took its
+/// place (asm:Wizzrobe_Red_State3Appear).
+const RED_WIZZROBE_SHOOTS_AT: u8 = 0xB0;
 
-/// A shooter's throw ([`goriya`]).
+/// A shooter's next shot ([`throw`]).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Throw {
-    /// It holds its boomerang and can act: live (ObjMetastate 0), not waiting for the boomerang, not stunned, no
-    /// clock.
+    /// It holds its next shot and can act (each type's reading in its function): a Goriya live, not waiting for its
+    /// boomerang, not stunned, no clock.
     pub loaded: bool,
-    /// Its throw timer as it runs down: 1 − ObjTimer / [`TIMER_MAX`], at least 0; 0 when not `loaded`.
+    /// Its shot timer as it runs down: 1 − the frames until the timer lets it shoot / [`TIMER_MAX`] (a Goriya's
+    /// ObjTimer), at least 0; 0 when not `loaded`.
     pub throw_time: f32,
-    /// The chance it throws within the next [`HORIZON`] frames, the room as it stands (the chase target where it is,
-    /// no other monster moving): blue 1 or 0, red 1 − (1 − [`RED_CHANCE`])^n over the n frames the rest of the rule
-    /// lets it.
+    /// The chance it shoots within the next [`HORIZON`] frames, the room as it stands (the chase target where it is,
+    /// no other monster moving): 1 or 0 where the game's rule holds no random byte in the horizon, a red Goriya's
+    /// 1 − (1 − [`RED_CHANCE`])^n over the n frames the rest of the rule lets it.
     pub will_throw: f32,
-    /// Every condition of the throw but a red one's random byte holds on the next frame: a blue one throws then.
+    /// Every condition of the shot but a red Goriya's random byte holds on the next frame: it shoots then.
     pub next: bool,
+}
+
+/// The shot of the object in RAM `slot` by its type (`None` for an object no rule covers: the module docstring).
+pub fn throw(ram: &[u8], slot: usize) -> Option<Throw> {
+    match ram[OBJ_TYPE + slot] {
+        0x05 | 0x06 => goriya(ram, slot),
+        0x01..=0x04 | 0x07..=0x0A => walking(ram, slot),
+        ZORA => zora(ram, slot),
+        AQUAMENTUS => aquamentus(ram, slot),
+        0x33 | 0x34 => gohma(ram, slot),
+        RED_WIZZROBE => red_wizzrobe(ram, slot),
+        _ => None,
+    }
+}
+
+/// A monster slot `$01-$0B` is free (asm:Obj_FindEmptyMonsterSlot) and, for a counted shot (type `$53` or more but
+/// a fireball, asm:Shooter_ShootLimited), fewer than 4 counted shots fly; as they stand.
+fn room_for_shot(ram: &[u8], counted: bool) -> bool {
+    (1..=0x0B).any(|s| ram[OBJ_TYPE + s] == 0) && (!counted || ram[MONSTER_SHOT_COUNT] < SHOT_LIMIT)
+}
+
+/// `throw_time` for a shot the timer allows `frames` from now.
+fn time_left(frames: u32) -> f32 {
+    (1.0 - frames as f32 / TIMER_MAX).max(0.0)
+}
+
+/// A shot that comes on frame `at` (`None`: none to come) for sure if the room has space then ([`room_for_shot`] as it
+/// stands); `throw_time` counts to it while `loaded`.
+fn timed(loaded: bool, at: Option<u32>, room: bool) -> Throw {
+    let throw_time = match (loaded, at) {
+        (true, Some(at)) => time_left(at),
+        _ => 0.0,
+    };
+    let within = at.is_some_and(|at| (1..=HORIZON).contains(&at)) && room;
+    Throw { loaded, throw_time, will_throw: if within { 1.0 } else { 0.0 }, next: room && at == Some(1) }
 }
 
 /// Frames until a long timer holding `value` reads 0 at the update (0: it does now).
@@ -176,6 +261,110 @@ pub fn goriya(ram: &[u8], slot: usize) -> Option<Throw> {
     let p = if obj_type == 0x05 { 1.0 } else { RED_CHANCE };
     let miss: f32 = (1..=HORIZON).filter(|&t| qualifies(t)).map(|_| 1.0 - p).product();
     Some(Throw { loaded, throw_time, will_throw: 1.0 - miss, next: qualifies(1) })
+}
+
+/// The walking shooters' shot (Lynels `$01/$02`, Moblins `$03/$04`, Octoroks `$07-$0A`; the module docstring), from
+/// ObjShootTimer `T`:
+/// - `loaded`: live (ObjMetastate 0), not stunned, no clock;
+/// - the frames until the timer lets it shoot: `T − $10` in its stand (`T` above `$10`), 33 at 0 (a stand starting
+///   next frame), `T + 33` in the 16 frames standing after a shot;
+/// - `will_throw`: 1 when its stand releases the shot within the horizon (`T` from `$11` to `$10` + [`HORIZON`]) and on
+///   that frame "wants to shoot" still holds (as it stands: no walk in a stand changes it), no clock, the stun reads 0,
+///   the room has space as it stands, and its invincibility timer reads 0 at the next frame's update (a hit after this
+///   frame's update cancels the stand on the next).
+pub fn walking(ram: &[u8], slot: usize) -> Option<Throw> {
+    if !matches!(ram[OBJ_TYPE + slot], 0x01..=0x04 | 0x07..=0x0A) {
+        return None;
+    }
+    let live = ram[OBJ_METASTATE + slot] == 0;
+    let clock = ram[INV_CLOCK] != 0;
+    let stun = ram[OBJ_STUN + slot];
+    let timer = ram[OBJ_SHOOT_TIMER + slot];
+    let loaded = live && stun == 0 && !clock;
+    let wait = match timer {
+        0 => 1 + (STAND - SHOT_LEAVES) as u32,
+        t if t > SHOT_LEAVES => (t - SHOT_LEAVES) as u32,
+        t => t as u32 + 1 + (STAND - SHOT_LEAVES) as u32,
+    };
+    let inv = ram[OBJ_INVINCIBILITY + slot];
+    let next_even = ram[FRAME_COUNTER].wrapping_add(1) & 1 == 0;
+    let hit = inv > u8::from(next_even);
+    let at = (timer > SHOT_LEAVES).then(|| (timer - SHOT_LEAVES) as u32).filter(|&at| {
+        live && !clock && !hit && ram[OBJ_WANTS_TO_SHOOT + slot] != 0 && long_timer_frames(ram, stun) <= at
+    });
+    let mut t = timed(loaded, at, room_for_shot(ram, true));
+    t.throw_time = if loaded { time_left(wait) } else { 0.0 };
+    Some(t)
+}
+
+/// The Zora's fireball (asm:Zora_Update, asm:Burrower_Update, asm:Fireball_Shoot): one each surfacing, on the frame its
+/// update reads ObjTimer `$FD` in state 3, two frames into it (the NMI counts the timer down first; a state ends on the
+/// frame its update reads 0). From state 1 (the mound) it comes `max(T, 1) + $0F + 2` frames on, from state 2
+/// `max(T, 1) + 2`, in state 3 `T − $FD`. `loaded` while it is to come and there is no clock (its update returns at
+/// once then); no hit or stun holds it; a fireball needs only a free slot (not counted).
+pub fn zora(ram: &[u8], slot: usize) -> Option<Throw> {
+    if ram[OBJ_TYPE + slot] != ZORA {
+        return None;
+    }
+    let timer = ram[OBJ_TIMER + slot];
+    let zero = (timer as u32).max(1);
+    let at = match ram[OBJ_STATE + slot] {
+        1 => Some(zero + ZORA_SURFACING_FRAMES + 2),
+        2 => Some(zero + 2),
+        3 if timer > ZORA_SHOOTS_AT => Some((timer - ZORA_SHOOTS_AT) as u32),
+        _ => None,
+    }
+    .filter(|_| ram[OBJ_METASTATE + slot] == 0 && ram[INV_CLOCK] == 0);
+    Some(timed(at.is_some(), at, room_for_shot(ram, false)))
+}
+
+/// Aquamentus's volley (asm:Aquamentus_Shoot): three fireballs on the frame its update reads ObjTimer 0 (`max(T, 1)`
+/// frames on), unless the clock holds; each takes a free slot (not counted), so one free slot is enough for a shot.
+/// `throw_time` reads ObjTimer as a Goriya's (`1 − T / 112`, reloaded to `$70-$7F` or `$F0-$FF`). In its spawn cloud
+/// (ObjMetastate 1-3) the cloud's frames, as a Goriya's: the volley comes six frames after the cloud ends.
+pub fn aquamentus(ram: &[u8], slot: usize) -> Option<Throw> {
+    if ram[OBJ_TYPE + slot] != AQUAMENTUS {
+        return None;
+    }
+    let metastate = ram[OBJ_METASTATE + slot];
+    let timer = ram[OBJ_TIMER + slot];
+    let clock = ram[INV_CLOCK] != 0;
+    let loaded = metastate == 0 && !clock;
+    let at = match metastate {
+        0 => Some((timer as u32).max(1)),
+        1..=3 => Some(timer as u32 + 6 * (3 - metastate as u32) + 6),
+        _ => None,
+    }
+    .filter(|_| !clock);
+    let mut t = timed(loaded, at, room_for_shot(ram, false));
+    t.throw_time = if loaded { (1.0 - timer as f32 / TIMER_MAX).max(0.0) } else { 0.0 };
+    Some(t)
+}
+
+/// Gohma's fireball (asm:Gohma_Update@ShootAnimateCollide): its own shoot timer (`$380`) counted down in its update,
+/// the fireball on the frame it reaches 0 (`S` frames on; 256 from 0) and reloaded with `$41`. No clock or stun test:
+/// `loaded` while live; a fireball needs only a free slot.
+pub fn gohma(ram: &[u8], slot: usize) -> Option<Throw> {
+    if !matches!(ram[OBJ_TYPE + slot], 0x33 | 0x34) {
+        return None;
+    }
+    let live = ram[OBJ_METASTATE + slot] == 0;
+    let timer = ram[GOHMA_SHOOT_TIMER + slot];
+    let at = live.then_some(if timer == 0 { 256 } else { timer as u32 });
+    Some(timed(live, at, room_for_shot(ram, false)))
+}
+
+/// The red Wizzrobe's magic shot (asm:Wizzrobe_Red_Update): its update counts ObjState down by one and shoots on the
+/// frame it reads `$B0`, the 16th solid frame, once a cycle; `loaded` from the frame it takes its place (`$FF`) to the
+/// shot (ObjState above `$B0`), no clock (its update does nothing then); the shot is counted (`$59`).
+pub fn red_wizzrobe(ram: &[u8], slot: usize) -> Option<Throw> {
+    if ram[OBJ_TYPE + slot] != RED_WIZZROBE {
+        return None;
+    }
+    let state = ram[OBJ_STATE + slot];
+    let loaded = ram[OBJ_METASTATE + slot] == 0 && ram[INV_CLOCK] == 0 && state > RED_WIZZROBE_SHOOTS_AT;
+    let at = loaded.then(|| (state - RED_WIZZROBE_SHOOTS_AT) as u32);
+    Some(timed(loaded, at, room_for_shot(ram, true)))
 }
 
 #[cfg(test)]
@@ -317,5 +506,150 @@ mod tests {
         (r[OBJ_METASTATE + 1], r[OBJ_TIMER + 1]) = (3, 1);
         (r[OBJ_X], r[chase::CHASE_X]) = (0xA0, 0xA0);
         assert_eq!(goriya(&r, 1).unwrap().will_throw, 0.0);
+    }
+
+    #[test]
+    fn a_walking_shooter_shoots_32_frames_into_its_stand_unless_hit_stunned_or_crowded() {
+        for obj_type in [0x01u8, 0x02, 0x03, 0x04, 0x07, 0x08, 0x09, 0x0A] {
+            let mut r = room(obj_type);
+            // Walking (timer 0): its next stand starts next frame at the earliest, the shot 33 frames on.
+            let t = walking(&r, 1).unwrap();
+            assert_eq!((t.loaded, t.will_throw, t.next), (true, 0.0, false), "{obj_type:#x}");
+            assert!((t.throw_time - (1.0 - 33.0 / TIMER_MAX)).abs() < 1e-6);
+            assert_eq!(throw(&r, 1), Some(t));
+            // In the stand: $11 shoots on the next frame, $20 on the horizon's last, $21 past it.
+            r[OBJ_SHOOT_TIMER + 1] = 0x11;
+            let t = walking(&r, 1).unwrap();
+            assert_eq!((t.loaded, t.throw_time, t.will_throw, t.next), (true, 1.0 - 1.0 / TIMER_MAX, 1.0, true));
+            r[OBJ_SHOOT_TIMER + 1] = 0x20;
+            assert_eq!((walking(&r, 1).unwrap().will_throw, walking(&r, 1).unwrap().next), (1.0, false));
+            r[OBJ_SHOOT_TIMER + 1] = 0x21;
+            assert_eq!(walking(&r, 1).unwrap().will_throw, 0.0);
+            // Standing after its shot ($10 to 1): the next stand once the timer is out, its shot 33 frames later.
+            r[OBJ_SHOOT_TIMER + 1] = 0x10;
+            let t = walking(&r, 1).unwrap();
+            assert!(t.will_throw == 0.0 && (t.throw_time - (1.0 - 49.0 / TIMER_MAX)).abs() < 1e-6);
+        }
+        let mut r = room(0x03);
+        r[OBJ_SHOOT_TIMER + 1] = 0x14;
+        assert_eq!(walking(&r, 1).unwrap().will_throw, 1.0);
+        // The wish cleared (a failed shot keeps it; nothing else clears it in a stand): no shot.
+        r[OBJ_WANTS_TO_SHOOT + 1] = 0;
+        assert_eq!(walking(&r, 1).unwrap().will_throw, 0.0);
+        r[OBJ_WANTS_TO_SHOOT + 1] = 1;
+        // A hit: the invincibility timer still running at the next update puts the timer back to 0. It counts down
+        // on even frames before the update: 1 ends there on an even frame, holds on an odd one.
+        r[OBJ_INVINCIBILITY + 1] = 1;
+        r[FRAME_COUNTER] = 0x41;
+        assert_eq!(walking(&r, 1).unwrap().will_throw, 1.0);
+        r[FRAME_COUNTER] = 0x40;
+        assert_eq!(walking(&r, 1).unwrap().will_throw, 0.0);
+        r[OBJ_INVINCIBILITY + 1] = 0;
+        // A stun reading 0 by the shot's frame lets it go (the timer runs while stunned), a longer one skips it.
+        r[OBJ_STUN + 1] = 1;
+        r[LONG_TIMER_CYCLE] = 3;
+        let t = walking(&r, 1).unwrap();
+        assert_eq!((t.loaded, t.throw_time, t.will_throw), (false, 0.0, 1.0));
+        r[LONG_TIMER_CYCLE] = 4;
+        assert_eq!(walking(&r, 1).unwrap().will_throw, 0.0);
+        r[OBJ_STUN + 1] = 0;
+        r[INV_CLOCK] = 1;
+        assert_eq!(walking(&r, 1).unwrap(), Throw::default());
+        r[INV_CLOCK] = 0;
+        r[MONSTER_SHOT_COUNT] = 4;
+        assert_eq!(walking(&r, 1).unwrap().will_throw, 0.0);
+        r[MONSTER_SHOT_COUNT] = 0;
+        r[OBJ_METASTATE + 1] = 2;
+        assert_eq!(walking(&r, 1).unwrap(), Throw::default());
+        assert!(walking(&room(0x05), 1).is_none() && walking(&room(0x11), 1).is_none());
+    }
+
+    #[test]
+    fn a_zora_shoots_two_frames_into_its_surfaced_state() {
+        let mut r = room(ZORA);
+        // State 3 starts at $FF: $FE shoots next frame, $FD has shot (the timer cut to $20 after).
+        (r[OBJ_STATE + 1], r[OBJ_TIMER + 1]) = (3, 0xFE);
+        let t = zora(&r, 1).unwrap();
+        assert_eq!((t.loaded, t.throw_time, t.will_throw, t.next), (true, 1.0 - 1.0 / TIMER_MAX, 1.0, true));
+        r[OBJ_TIMER + 1] = 0x20;
+        assert_eq!(zora(&r, 1).unwrap(), Throw::default());
+        // Surfacing with 14 frames left: state 3 on frame 14, the shot on 16; 15 left: past the horizon.
+        (r[OBJ_STATE + 1], r[OBJ_TIMER + 1]) = (2, 14);
+        assert_eq!(zora(&r, 1).unwrap().will_throw, 1.0);
+        r[OBJ_TIMER + 1] = 15;
+        let t = zora(&r, 1).unwrap();
+        assert!(t.loaded && t.will_throw == 0.0 && (t.throw_time - (1.0 - 17.0 / TIMER_MAX)).abs() < 1e-6);
+        // The mound: 17 frames after it ends.
+        (r[OBJ_STATE + 1], r[OBJ_TIMER + 1]) = (1, 0x20);
+        assert!((zora(&r, 1).unwrap().throw_time - (1.0 - 49.0 / TIMER_MAX)).abs() < 1e-6);
+        // Diving (4, 5) or made this frame (0): none to come from this object.
+        for state in [0u8, 4, 5] {
+            r[OBJ_STATE + 1] = state;
+            assert_eq!(zora(&r, 1).unwrap(), Throw::default());
+        }
+        // A full object table holds the fireball; a full count of shots does not (fireballs are not counted).
+        (r[OBJ_STATE + 1], r[OBJ_TIMER + 1]) = (3, 0xFF);
+        r[MONSTER_SHOT_COUNT] = 4;
+        assert_eq!(zora(&r, 1).unwrap().will_throw, 1.0);
+        for s in 2..=0x0B {
+            r[OBJ_TYPE + s] = 0x55;
+        }
+        assert_eq!(zora(&r, 1).unwrap().will_throw, 0.0);
+        r = room(ZORA);
+        (r[OBJ_STATE + 1], r[OBJ_TIMER + 1], r[INV_CLOCK]) = (3, 0xFF, 1);
+        assert_eq!(zora(&r, 1).unwrap(), Throw::default());
+    }
+
+    #[test]
+    fn aquamentus_gohma_and_the_red_wizzrobe_shoot_on_their_timers() {
+        let mut r = room(AQUAMENTUS);
+        r[OBJ_TIMER + 1] = 1;
+        let t = aquamentus(&r, 1).unwrap();
+        assert_eq!((t.loaded, t.will_throw, t.next), (true, 1.0, true));
+        assert!((t.throw_time - (1.0 - 1.0 / TIMER_MAX)).abs() < 1e-6);
+        r[OBJ_TIMER + 1] = 0x11;
+        assert_eq!(aquamentus(&r, 1).unwrap().will_throw, 0.0);
+        r[OBJ_TIMER + 1] = 0xF0;
+        assert_eq!(aquamentus(&r, 1).unwrap().throw_time, 0.0);
+        // The cloud's last step with 4 frames left: the volley 10 frames on; its second step: 6 more.
+        (r[OBJ_METASTATE + 1], r[OBJ_TIMER + 1]) = (3, 4);
+        let t = aquamentus(&r, 1).unwrap();
+        assert_eq!((t.loaded, t.throw_time, t.will_throw), (false, 0.0, 1.0));
+        r[OBJ_METASTATE + 1] = 2;
+        assert_eq!(aquamentus(&r, 1).unwrap().will_throw, 1.0);
+        r[OBJ_TIMER + 1] = 5;
+        assert_eq!(aquamentus(&r, 1).unwrap().will_throw, 0.0);
+        (r[OBJ_METASTATE + 1], r[OBJ_TIMER + 1], r[INV_CLOCK]) = (0, 1, 1);
+        assert_eq!(aquamentus(&r, 1).unwrap(), Throw::default());
+
+        for obj_type in [0x33u8, 0x34] {
+            let mut r = room(obj_type);
+            r[GOHMA_SHOOT_TIMER + 1] = 1;
+            let t = gohma(&r, 1).unwrap();
+            assert_eq!((t.loaded, t.will_throw, t.next), (true, 1.0, true));
+            r[GOHMA_SHOOT_TIMER + 1] = 0x41;
+            let t = gohma(&r, 1).unwrap();
+            assert!(t.will_throw == 0.0 && (t.throw_time - (1.0 - 65.0 / TIMER_MAX)).abs() < 1e-6);
+            // No clock test: it shoots under the clock too.
+            (r[GOHMA_SHOOT_TIMER + 1], r[INV_CLOCK]) = (16, 1);
+            assert_eq!(gohma(&r, 1).unwrap().will_throw, 1.0);
+        }
+
+        let mut r = room(RED_WIZZROBE);
+        r[OBJ_STATE + 1] = 0xB1;
+        let t = red_wizzrobe(&r, 1).unwrap();
+        assert_eq!((t.loaded, t.will_throw, t.next), (true, 1.0, true));
+        r[OBJ_STATE + 1] = 0xFF;
+        let t = red_wizzrobe(&r, 1).unwrap();
+        assert!(t.loaded && t.will_throw == 0.0 && (t.throw_time - (1.0 - 79.0 / TIMER_MAX)).abs() < 1e-6);
+        // Shot, fading out, hidden: not loaded.
+        for state in [0xB0u8, 0x7F, 0x20, 0x00] {
+            r[OBJ_STATE + 1] = state;
+            assert_eq!(red_wizzrobe(&r, 1).unwrap(), Throw::default());
+        }
+        r[OBJ_STATE + 1] = 0xB8;
+        r[MONSTER_SHOT_COUNT] = 4;
+        assert_eq!(red_wizzrobe(&r, 1).unwrap().will_throw, 0.0);
+        assert!(throw(&room(0x23), 1).is_none() && throw(&room(0x55), 1).is_none());
     }
 }

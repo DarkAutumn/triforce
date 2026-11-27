@@ -884,33 +884,49 @@ nothing else) check it; round40.md has it against 250 replays.
 | `entity_chase` 9 | `timer_turn` | a wanderer whose turn timer (`$478`) is out by then: without the homing turn it turns perpendicular, toward the target |
 | `entity_chase` 10-11 | `toward_link`, `reverse_link` | the same window test with Link's own corner as the target, and whether that turn reverses onto him (the owner's "don't chase") |
 
-**Schema 10 (round 40, `docs/experiments/round40.md` "The Goriya teacher"; the owner's three columns, Nov 26).** One
-NEW key, `entity_shooter`, after `entity_chase`; no schema 9 key or column changes (`OLDEST_OBS_SCHEMA` stays 6). A
-`model.TOKEN_KEYS` key: a `ZeldaPolicy` and the Rust actor never read it; `hitnet` reads it with the token group
-`shooter` (its columns join each entity token after every older group's, so a network without the group reads the
-rest where it always did). Filled only with **`obs.shooter: true`** (`env::config::ObsConfig::shooter`, default
-false: zeros; on in `goriya@d3first`'s task, read by the `goriya` teacher). `env::observation::shooter_block`
-computes it from the RAM alone (`zelda::shooter::goriya`: asm:Goriya_Update's "wants to shoot" at each grid point,
-asm:Walker_SetInputDirAndTryThrowBoomerang's throw, ObjTimer `$28` counted down by the NMI before the update reads
-it, the stun's long timer, a knockback the game keeps (asm:Shove_Update drops one across the facing axis off a grid
-point on its first frame; one ending on a grid point decides again there), the spawn cloud (asm:Obj_AnimateMetastate:
-live with the timer at 6, deciding on its spawn square), a free monster slot and the 4-shot count `$34C`): no emulator
-step and no
-random byte, so a red Goriya's 2-in-256 roll a frame is given as a chance. Rows only for the Goriyas `$05/$06`; the
-owner: "If the training goes well, apply that (b) not only to goriya but also all enemies that shoot".
-`_native.shooter_blocks(ram)` gives the block for recorded RAM, `_native.shooter_probe(ram)` the raw rule with
-`next` (the throw's conditions but the red roll hold on the next frame). `zelda::shooter`'s unit tests,
-`crates/env/tests/shooter.rs` and `tests/test_obs_shooter.py` check it, the last against the corpus's golden
-`d3first` replay: a blue Goriya throws on exactly the frames the rule says (70 throws; 3 frames excused where the
-rule's input moved under it) and every blue throw had `will_throw` = 1 on the 15 frames before it (excused: the chase
-target moved, a kept knockback, a shot ending that freed the room), a red one 20 times in 3,252 frames it may (2/256
-would be 25).
+**Schema 10 (round 40, `docs/experiments/round40.md` "The Goriya teacher" and "Every shooter"; the owner's three
+columns, Nov 26).** One NEW key, `entity_shooter`, after `entity_chase`; no schema 9 key or column changes
+(`OLDEST_OBS_SCHEMA` stays 6). A `model.TOKEN_KEYS` key: a `ZeldaPolicy` and the Rust actor never read it; `hitnet`
+reads it with the token group `shooter` (its columns join each entity token after every older group's, so a network
+without the group reads the rest where it always did; a trained one is widened to it with zero columns, docs/lab.md
+"Continuing with a new input"). Filled only with **`obs.shooter: true`** (`env::config::ObsConfig::shooter`, default
+false: zeros; on in `goriya@d3first`'s task and the overworld teacher's ten `ow-*@d3first` tasks).
+`env::observation::shooter_block` computes it from the RAM alone (`zelda::shooter::throw`): no emulator step and no
+random byte. **The types it fills** (each its own function in `zelda::shooter`, the game's rule walked frame by frame):
+
+- the Goriyas `$05/$06` (`goriya`: asm:Goriya_Update's "wants to shoot" at each grid point,
+  asm:Walker_SetInputDirAndTryThrowBoomerang's throw, ObjTimer `$28` counted down by the NMI before the update reads it,
+  the stun's long timer, a knockback the game keeps (asm:Shove_Update drops one across the facing axis off a grid point
+  on its first frame; one ending on a grid point decides again there), the spawn cloud (asm:Obj_AnimateMetastate: live
+  with the timer at 6, deciding on its spawn square), a free monster slot and the 4-shot count `$34C`; a red Goriya's
+  2-in-256 roll a frame given as a chance);
+- the walking shooters, Lynels `$01/$02` (sword shots), Moblins `$03/$04` (arrows), Octoroks `$07-$0A` (rocks)
+  (`walking`: asm:Shooter_RunShootTimer's stand: ObjShootTimer `$451` loads `$30` once "wants to shoot" holds and counts
+  down in the update, the shot leaves at `$10`, 32 frames in; a hit's invincibility timer still running at the next
+  update cancels it, the clock or a stun on the shot's frame skips it; a red type starts a stand only when `Random,X`
+  is `$F8` or more, 33 frames or more before the shot, so no random byte falls in the 16 frames);
+- the Zora `$11` (`zora`: its fireball when the update reads ObjTimer `$FD` in surfaced state 3, 17 frames after it
+  surfaces; from the mound and the surfacing the frames follow its states' timers), Aquamentus `$3D` (`aquamentus`: the
+  volley when ObjTimer reads 0, as the Goriya's timer; the spawn cloud likewise), Gohma `$33/$34` (`gohma`: its own
+  shoot timer `$380`, a fireball every 65 frames, no clock test) and the red Wizzrobe `$24` (`red_wizzrobe`: ObjState
+  counted down, the magic shot at `$B0`, once each appearance). Their shots need a free slot (the Wizzrobe's and the
+  walking shooters' also fewer than 4 counted shots).
+
+Not filled: the blue Wizzrobe `$23` (its shot frame is the frame counter's, but whether it fires there depends on its
+own walk over the room's tiles, a random teleport and Link exactly on its row or column: round40.md "Every shooter"),
+Manhandla, Gleeok's heads, Ganon and the statues. `_native.shooter_blocks(ram)` gives the block for recorded RAM,
+`_native.shooter_probe(ram)` the raw rule with `next` (the shot's conditions but a red Goriya's roll hold on the next
+frame). `zelda::shooter`'s unit tests, `crates/env/tests/shooter.rs` and `tests/test_obs_shooter.py` check it, the last
+against the corpus's golden `d3first` and `d2first` replays: every shot of every filled type on the frame the rule
+says and with `will_throw` = 1 on the 16 frames before it (round40.md "Every shooter" has the numbers and what is
+excused), a red Goriya's roll 20 times in 3,252 frames it may (2/256 would be 25), the walking shooters' two random
+gates exactly the register's bytes.
 
 | Key, columns | Names | Value |
 |---|---|---|
-| `entity_shooter` 0 | `loaded` | it holds its boomerang and can act: live (ObjMetastate 0), not waiting for the boomerang (ObjState bit 7), not stunned, no clock |
-| `entity_shooter` 1 | `throw_time` | while loaded, 1 − ObjTimer / 112 (the catch sets `$30`, `$50` or `$70`): its throw timer running down; 0 otherwise |
-| `entity_shooter` 2 | `will_throw` | the chance it throws within the next 16 frames (`zelda::threat::HORIZON`), the room as it stands: the flag until its next grid point, then the Goriya rule there against the chase target as it is; a blue one's 1 or 0, a red one's 1 − (254/256)^n over the n frames the rest of the rule lets it |
+| `entity_shooter` 0 | `loaded` | it holds its next shot and can act: a Goriya live (ObjMetastate 0), not waiting for its boomerang (ObjState bit 7), not stunned, no clock; a walking shooter live, not stunned, no clock; a Zora from the mound to its fireball (states 1-3 before it), no clock; Aquamentus live, no clock; Gohma live; a red Wizzrobe from taking its place to its shot (ObjState above `$B0`), no clock |
+| `entity_shooter` 1 | `throw_time` | while loaded, 1 − the frames until its timer lets it shoot / 112, at least 0: a Goriya's and Aquamentus's ObjTimer; a walking shooter's `$451` − `$10` in its stand, 33 at rest, `$451` + 33 standing after a shot; the Zora's frames to its fireball; Gohma's `$380`; a red Wizzrobe's ObjState − `$B0`; 0 otherwise |
+| `entity_shooter` 2 | `will_throw` | the chance it shoots within the next 16 frames (`zelda::threat::HORIZON`), the room as it stands: 1 or 0 by the game's rule (a Goriya's flag until its next grid point, then the Goriya rule there against the chase target as it is); a red Goriya's 1 − (254/256)^n over the n frames the rest of the rule lets it |
 
 Checkpoints saved before r56 carry `model_config.grid_encoder: 'conv'`; the conv encoder is the only one left, so
 `ModelConfig.from_dict` drops that key and refuses any other encoder.

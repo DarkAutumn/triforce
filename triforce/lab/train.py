@@ -63,7 +63,8 @@ from . import groups
 from .auxiliary import AuxLoss, aux_loss, held_out
 from .collect import MultiCollector, NeedSampler, Teachers, parse_families, teacher_paths
 from .recipe import (Refused, build as build_recipe, check_clips_off, check_demos, check_network_reads,
-                     check_obs_agree, check_routes, check_same, check_warm_start, create_network, read_reference)
+                     check_obs_agree, check_routes, check_same, check_warm_start, create_network, read_reference,
+                     widen_loaded)
 from .rehearse import Rehearsal
 
 REFERENCE = Path(__file__).with_name('reference.json')
@@ -105,7 +106,9 @@ def parse_args(argv=None):
                         help=f"the network's class (default: the group file's with --group, else {nets.ZELDA})")
     parser.add_argument('--arch-config', default=None,
                         help="JSON settings of the architecture (with --group: over the group file's, by key)")
-    parser.add_argument('--load', default=None, help="checkpoint or run dir to start from (its arch)")
+    parser.add_argument('--load', default=None,
+                        help="checkpoint or run dir to start from (its arch; a hitnet the run's tokens give more "
+                             "groups is widened, their inputs zero: docs/lab.md \"Continuing with a new input\")")
     parser.add_argument('--mode', default='ppo', choices=['ppo', 'imitate'])
     parser.add_argument('--actor', default='student', choices=['student', 'teacher'],
                         help="who acts in the rollouts (imitate only; ppo always the student)")
@@ -194,9 +197,14 @@ def teacher_coeff(args, iteration: int) -> float:
 
 def initial_network(args):
     """(network, source, parent): ``parent`` the loaded checkpoint's identity (``lineage.identity``), None from
-    scratch."""
+    scratch.  A loaded ``hitnet`` the run's ``--arch-config`` (or group file) gives more token groups is widened to
+    them (``recipe.widen_loaded``: the new inputs start at zero)."""
     if args.load:
         network, checkpoint = registry.load_model(args.load)
+        network, added = widen_loaded(network, args.arch, json.loads(args.arch_config))
+        if added:
+            print(f"[lab] --load {args.load}: widened with the token group(s) {', '.join(added)} (their input "
+                  "columns zero: it acts exactly as loaded)", flush=True)
         return network, str(args.load), lineage.identity(checkpoint, args.load)
     return create_network(args.arch, json.loads(args.arch_config)), None, None
 

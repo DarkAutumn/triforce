@@ -13,7 +13,7 @@ state_routes: [d3first]
 success: [exit-correct]
 reward_profile: default
 reward: {pbrs: true}
-obs: {objective: true, target: true}
+obs: {objective: true, target: true, shooter: true}   # shooter: the overworld teacher reads entity_shooter (round40.md "Every shooter")
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5}
 items: {bombs: tenth}
 clips: {enabled: true, off_share: 0}     # 2.0.1.0 trains clips on only (the owner, Nov 18 and Nov 24)
