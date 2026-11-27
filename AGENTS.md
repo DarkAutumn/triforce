@@ -6,7 +6,49 @@ Nov 21: the program, the experiment queue, what to try next, in order; everythin
 `docs/experiments/backlog.old.md`, called `todo.md` before Nov 8: a "backlog" section named in an older document is
 there).
 
-## Where things stand (Nov 22)
+## Where things stand (Nov 27)
+
+- **Now: the fresh generation, 2.0.1.0, is in its stage 1 → stage 2 handover.** Its documents are on `r40-int`
+  (read them in `../triforce-r40-int`): `docs/experiments/round40.md` "Stage 1 restarted" onward,
+  `docs/model-versions.md` "The current workflow", `docs/decisions.md` (Nov 24-26, the version numbers). Stage 1's
+  teachers, one network per group of families (`triforce/groups.yaml`), are trained in the shared
+  store as `gen1-<group>/<run>`; each is judged by a quick read (100 runs from each dungeon's entrance against the
+  previous team on the same seeds) and its checkpoint chosen by `triforce judge checkpoints` and then **confirmed on
+  fresh seeds** (Nov 27: two of three picks made on seeds 0-99 reversed on seeds 100-299). Chosen for stage 2 so far:
+  darknut `gen1-darknut/s1r` (last), goriya `gen1-goriya/s1` (last), walkers `gen1-walkers/s1r-c2-it000440`,
+  overworld `gen1-overworld/s1r2-c2-it000350`, rooms `gen1-rooms/s1r3-c1`; the Wizzrobes train as their own teacher
+  (`gen1-wizzrobe/s1c1368` continued, `gen1-wizzrobe/s1` from scratch: the better on D6/D9 is kept); the bosses and
+  `others` are still to be judged. Then stage 2 (record, imitate, correct, PPO a dungeon at a time with the teacher
+  fading), the 1000-run chains (= 2.0.1.0, replays kept on local disk), landing. The owner's check-in file is
+  `target/owner-review/CHECKIN.md` in the main checkout (only what's new since he last read it; older ones beside it).
+- **Branches and worktrees for the generation.** `main` holds the 2.0.0.16 team and the tools; **all generation work
+  is on `r40-int`** (worktree `../triforce-r40-int`, the integration branch; `r40-gen` points at its last green
+  commit). A piece of work is a branch from r40-int in its own worktree: `triforce job setup NAME --from r40-int
+  --agent NAME` (`../triforce-NAME`, venv and build included). r40-based branches keep `triforce/data_pins.yaml`
+  **deleted** (main has it, pinning `trajectories: 261124-gen2`; never bring it into r40-int). Order: build → the
+  lead's review (a reviewer agent for anything large) → merge by exact commit hash into r40-int → `triforce job
+  build` (if Rust changed) → `triforce job test python rust check` → push → then run. **Trainings and long
+  judgements run from frozen worktrees** cut at a reviewed commit (`triforce job setup genN --from <commit>`,
+  `../triforce-gen7` … `gen14`): never merge, rebuild or edit a worktree while a job runs from it. Only the lead
+  merges. Run the generation's tools (`triforce judge`, `--team` with `@GROUP` slots, `triforce.lab.train` with
+  groups) from an r40-based worktree: main's copy is older.
+- **The shared store** (`~/triforce-shared/`; `docs/data-layout.md`, `docs/store-paths.md`, `docs/lab.md`): runs as
+  `<name>/<run>` with numbered checkpoints addressable as `<name>/<run>-itNNNNNN`; a team spec is `current` (2.0.0.15's
+  store team) plus slots: `current+@GROUP=gen1-GROUP/RUN` fills every member family of a group (`groups.yaml`; after
+  the Wizzrobe split `@others` no longer covers `wizzrobe`: add `+@wizzrobe=...`). Teachers train with `python -m
+  triforce.lab.train --name gen1-GROUP --run-id RUN --group GROUP [--load NAME/RUN or path]` (a `--load` of a network
+  without a newer token group widens it with zero weights). Chains of a team: `triforce eval-batch NAME --team SPEC
+  --chain 'SEG: --runs N --act model --route d3first --from STATE --stop-at step:N'`, through `triforce job run
+  --express --detach` (`--desc` ≤ 120 characters: r40-int's tool refuses a longer one loudly, main's `--detach`
+  only in the unit's log), then `triforce job wait UNIT`.
+- **Pitfalls found Nov 27:** give every `eval-batch` job its own NAME (one name over several jobs is refused as a
+  duplicate entry); `eval-batch --teacher` adds its own scope entries, so don't combine it with a `--chain` of the same
+  scope (use `--team`); read a detached job's log the moment it starts (a refused job only says so there); after
+  merging Rust changes run `triforce job build` before `triforce job test`.
+- **Talking with the owner:** when he says "talk first" or "not a directive", make no edits and send no instructions
+  to agents until he is satisfied; talk big changes through with him before creating agents.
+
+## Where things stood (Nov 22)
 
 - **The program since Nov 21 (the owner; `docs/experiments/backlog.md`, decisions 2026-11-21 "The program"): the
   corrected d3 route, played by one network.** Two things at once, both needing retraining, in many rounds of
