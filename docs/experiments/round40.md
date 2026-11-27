@@ -6042,3 +6042,46 @@ Tests: `test_inputs` (every generation task has the three switches), `test_lab_g
 generation network is refused), and after the review a teacher reading threat and chase but not shooter passes
 `check_inputs` on a shooter-on task (`test_inputs`); the Python suite 1,359 passed, `check` ok. Reviewed (Review46)
 and merged: r40-int e093604c; frozen worktree `triforce-gen16` for every run below.
+
+Later fixes on the branch: `bench run --team` on the rooms tier (KeyError `full`, e56ccca4, reviewed and merged);
+the imitation files its run in the store (`gen1-one/<run>`, origin `distill`, parent and data recorded, sealed;
+93111f7f) and `scripts/experiments/r52_one_team.py RUN` writes the spec that puts one network in every slot
+(`current+@GROUP=RUN` for each of the 14 groups). Found and left to Perf43: `nets.serve.Server` keeps every served
+copy (a bench of ~100 entries of a 768-wide teacher reached 12.2 GB of GPU memory and died, job #2579); the tiers
+run in key chunks of separate processes until that is fixed.
+
+### 2. The teachers' team: what the student is measured against
+
+The teachers' team is `current` (2.0.0.15) with all fourteen group slots filled (`+@overworld=...+@ganon=...`; every
+family of the route). It played the 18 scopes of a judgement (each dungeon from the previous triforce and from its
+entrance, cut at its exit; `triforce judge`'s plan) at 300 runs each on **fresh seeds 1000-1299** (the teachers'
+checkpoints were chosen on seeds 0-299), from the frozen `triforce-gen15` (jobs #2567, #2568; the lead's smoke on
+gen16 replayed D3's seeds 1000-1049 identically). Files `target/s52/chains/s52-teachers-<scope>.jsonl` (stage52
+worktree). Against 2.0.0.15's 1000-run baseline (`r40-2015-1k`, seeds 0-999: unpaired), success, then the frames a
+successful run takes (median, best; the owner's north star, Nov 27: 37 minutes = 133,419 frames from control to
+Zelda):
+
+| dungeon | from | 2.0.0.15 | teachers | rooms where teachers' runs end (2.0.0.15) | frames, median (best) |
+|---|---|---:|---:|---|---|
+| D3 | start | 43.2% | **73.3%** | 3x4d 19.7% (18.8%), 3x5b 2.7%, 3x69 2.0% (13.9%) | 10,989 (9,970) |
+| D3 | entrance | 45.7% | **77.0%** | 3x4d 19.0% (18.1%) | 9,777 (8,555) |
+| D4 | D3's triforce | 45.8% | **82.7%** | 4x13 14.3% (37.4%) | 13,550 (11,938) |
+| D4 | entrance | 68.4% | **87.7%** | 4x13 10.7% (26.8%) | 12,009 (10,396) |
+| D1 | D4's triforce | 98.5% | 99.7% | | 10,669 (9,701) |
+| D1 | entrance | 98.9% | 100.0% | | 8,775 (7,731) |
+| D2 | D1's triforce | 93.8% | 99.7% | | 10,485 (9,522) |
+| D2 | entrance | 99.8% | 99.7% | | 6,110 (5,366) |
+| D5 | D2's triforce | 57.8% | **77.0%** | 5x24 12.0% (4.1%), 5x65 2.3%, 5x47 2.0% | 18,300 (16,738) |
+| D5 | entrance | 66.1% | **87.3%** | 5x24 7.0% (2.7%) | 13,251 (12,011) |
+| D7 | D5's triforce | 42.5% | **78.3%** | 7x1b 8.3% (21.2%), 7x0d 4.0%, 7x1c 3.3% | 19,499 (17,302) |
+| D7 | entrance | 77.3% | 83.3% | 7x1c 7.0% (5.6%), 7x1b 3.0% | 13,523 (12,229) |
+| D6 | D7's triforce | 18.2% | **78.0%** | 6x3a 10.3% (32.9%), 6x38 3.3% (27.4%), **0x5f 1.7%** (0.0%) | 14,836 (13,483) |
+| D6 | entrance | 35.7% | **92.0%** | 6x3a 8.0% (32.7%) | 9,091 (7,706) |
+| D8 | D6's triforce | 88.9% | **100.0%** | | 9,108 (8,123) |
+| D8 | entrance | 88.6% | **99.0%** | | 6,699 (5,697) |
+| D9 | D8's triforce | 22.6% | **47.3%** | 9x10 12.0%, 9x42 11.7% (4.9%), 9x52 11.3% (2.2%) | 28,401 (26,371) |
+| D9 | entrance | 51.2% | 55.3% | 9x42 10.7% (5.2%), 9x10 9.7% (14.3%), 9x52 7.0% | 23,871 (21,979) |
+
+0x5f, the knockback rule's loss after D7 (the brief: 99% → 90% on the teachers when the rule went in), ends 5 of
+300 runs from D7's triforce here (1.7%); the student is checked on the same seeds there.
+
