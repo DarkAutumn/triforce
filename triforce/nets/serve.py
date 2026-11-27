@@ -236,12 +236,15 @@ class Server:
         self.rows = 0
         self.busy = 0.0                         # seconds spent answering (``answer``): the server thread's load
         self.graph_bytes = 0                    # GPU memory the learner's captures took (``capture_all``)
+        self._graph_bytes: dict[int, int] = {}  # ... per index (given back when the index is freed)
 
     def policy(self, network: torch.nn.Module, key=None):
         """``network`` (moved to the server's device, eval mode) as an ``_native.ExternalPolicy``.  The same
         ``key`` (default: the network object) reuses its model index and replaces the network there; a new key
         gets an index no live policy or pool holds (a freed one, ``_collect``, or a new one).  The same object
-        served again at its index keeps its CUDA graphs."""
+        served again at its index keeps its CUDA graphs.  Served here the network itself is held at its index for
+        the server's life (its id, the default key, names no other object meanwhile) and never freed: a loop that
+        serves network after network uses ``serve_copy`` (freed once the network and its policies are gone)."""
         key = id(network) if key is None else key
         with self._lock:
             self._collect()
@@ -299,9 +302,13 @@ class Server:
     def _collect(self):
         """Frees every orphaned index no policy or pool actor holds any more: its network, CUDA graphs, recurrent
         states; the index is reused.  Nothing can ask for it (an asking env's actor holds its lease till answered),
-        so the answering thread never meets a freed index."""
+        so the answering thread never meets a freed index.  Reentrant: dropping a network or its graphs may run a
+        finalizer (``_forget``) that collects again on this thread, freeing indices of this call's list; each is
+        taken out of ``_orphans`` before anything is dropped and skipped once gone, so it is freed once."""
         with self._lock:
             for index in [i for i in self._orphans if self.queue.leases(i) == 0]:
+                if index not in self._orphans:
+                    continue
                 self._orphans.discard(index)
                 self.models.pop(index, None)
                 for key in [k for k in list(self._graphs) if k[0] == index]:
@@ -310,6 +317,7 @@ class Server:
                     self._states.pop(key, None)
                 self._eager.discard(index)
                 self._captured.discard(index)
+                self.graph_bytes -= self._graph_bytes.pop(index, 0)
                 self._free.append(index)
 
     def _start(self):
@@ -398,6 +406,7 @@ class Server:
                                                          self.half, self.device, self.hits, self.staged)
                 grown = torch.cuda.memory_reserved(self.device) - reserved
                 self.graph_bytes += grown
+                self._graph_bytes[model] = grown
                 print(f"triforce: served network {model}: {len(GRAPH_BUCKETS)} CUDA graphs captured (batches of "
                       f"{', '.join(map(str, GRAPH_BUCKETS))} rows; never more), {grown / 2 ** 20:.0f} MB of GPU memory",
                       flush=True)

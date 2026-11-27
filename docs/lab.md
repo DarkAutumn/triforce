@@ -98,9 +98,14 @@ after 5,320 of 5,980 episodes. Each `ExternalPolicy` now holds a lease on its in
 built from it (`pool::zelda::ModelLease`; `ExternalQueue.leases(model)` counts them). Once the network's key has
 died (`serve_copy`'s default key: the network object) and no lease is left, the server drops the copy, its graphs
 and recurrent states, and gives the index to the next new network. An index whose key lives (a training's learner,
-an explicit key) is kept as before. Eight loads served, played and dropped in a row: one index, nothing left
-served, the GPU memory allocated the same after each, every load's answer to a recorded batch identical bit for
-bit and its plays' actions the same (`tests/test_lab_nets.py`).
+an explicit key, a network handed to `Server.policy` itself: held there for the server's life) is kept as before.
+A collection may run again inside itself (dropping a network runs another one's finalizer): each index is taken out
+of the orphans before anything is dropped and freed once. Eight loads served, played and dropped in a row: one
+index, nothing left served, the GPU memory allocated the same after each, every load's answer to a recorded batch
+identical bit for bit and its plays' actions the same (`tests/test_lab_nets.py`, with the pool still playing after
+its policy is gone and the reentrant collection). A short bench of a 768-wide hitnet (`gen1-darknut/s1r`, one
+darknut entry six times, 2 episodes each): 1 network served and 19.0 MB allocated after every entry; before the fix
+1 to 6 networks, 19.0 to 115.2 MB allocated and 90 to 408 MB reserved.
 
 **Chosen: (c) with (a) as the generic path.** A network the Rust actor knows (`ZeldaPolicy`) plays as before, bit
 for bit (100 chain runs of `d3first` from `3_7cs_0`, seeds 0-99, today's networks: every run's record identical,

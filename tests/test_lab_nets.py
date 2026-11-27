@@ -590,6 +590,70 @@ def test_a_bench_loop_of_served_networks_stays_flat(states_dir, observations):
         server.close()
 
 
+def test_a_collection_inside_a_collection_frees_each_index_once():
+    """Dropping a freed network may run a finalizer that collects again on the same thread (a dead network's
+    ``_forget``): each index is freed once, never twice into ``_free``, and two live networks never share one."""
+    import weakref
+    server = Server(device='cpu')
+    try:
+        for index in range(3):
+            dropped = torch.nn.Linear(1, 1)
+            weakref.finalize(dropped, server._collect)          # runs inside the collection that drops it
+            server.models[index] = dropped
+            del dropped
+        server._orphans, server._next = {0, 1, 2}, 3
+        server._collect()
+        assert sorted(server._free) == [0, 1, 2] and not server._orphans and not server.models
+        live = [nets.create('wide', native_spec(), hidden_dim=32, depth=1) for _ in range(4)]
+        indices = [server.serve_copy(network).model for network in live]
+        assert sorted(indices) == [0, 1, 2, 3] and not server._free
+    finally:
+        server.close()
+
+
+def test_a_freed_index_waits_for_every_policy_and_pool_that_holds_it(states_dir):
+    """A network whose key died stays served while an ``ExternalPolicy`` of it lives, and while a pool plays with
+    it after that policy is gone (the actor holds its own lease); a new network meanwhile gets another index."""
+    import gc
+    import threading
+    server = Server(device='cpu')
+    config = _native.SpecialistConfig.load('ow-start').replace(start_states=['start'], max_steps=20)
+    task = _native.EvalTask(config, [('start', seed) for seed in range(2)], states_dir=str(states_dir))
+    pool = _native.EnvPool(task, num_envs=2, threads=2, seed=1)
+    gate = threading.Event()
+    answer = server.answer
+    server.answer = lambda batch: (gate.wait(), answer(batch))
+    try:
+        network = nets.create('wide', native_spec(), hidden_dim=32, depth=1)
+        kept = server.serve_copy(network)
+        del network
+        gc.collect()
+        server._collect()
+        assert server._orphans == {0} and 0 in server.models          # the policy still holds it
+        assert server.serve_copy(other := nets.create('wide', native_spec(), hidden_dim=32, depth=1)).model == 1
+        pool.play([kept], act='argmax')                                # its first request waits at the gate
+        del kept
+        gc.collect()
+        server._collect()
+        assert server.queue.leases(0) == 1 and 0 in server.models     # the pool's actor holds it
+        gate.set()
+        records = []
+        while not pool.wait_idle(timeout=0.1):
+            records += [e['record'] for e in pool.poll_events() if e['type'] == 'eval']
+        records += [e['record'] for e in pool.poll_events() if e['type'] == 'eval']
+        assert len(records) == 2 and server.error is None
+        pool.close()
+        gc.collect()
+        server._collect()
+        assert server._free == [0] and 0 not in server.models and server.queue.leases(0) == 0
+        assert server.serve_copy(nets.create('wide', native_spec(), hidden_dim=32, depth=1)).model == 0
+        assert server._keys[id(other)] == 1
+    finally:
+        gate.set()
+        pool.close()
+        server.close()
+
+
 def test_architectures_side_by_side_save_load_and_play(states_dir, tmp_path):
     assert nets.names()[0] == 'zelda' and {'wide', 'gru', 'hithead'} <= set(nets.names())
     wide = nets.create('wide', native_spec(), hidden_dim=64, depth=2)
