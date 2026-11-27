@@ -10,7 +10,8 @@ start_states: ['2_3e*_[0-9]']
 state_routes: [d3first]
 success: [exit-correct]
 reward_profile: default
-reward: {pbrs: true, item_targets: true, heart_value: {exit: true, potential: 20}}
+# exposed_attack_penalty: the owner, Nov 26 (the walkers' eight, as the Goriya teacher's; round40.md).
+reward: {pbrs: true, item_targets: true, heart_value: {exit: true, potential: 20}, exposed_attack_penalty: 0.1}
 obs: {objective: true, target: true}
 ram_randomization: {hp: [0.15, max], full_hp: 0.5, bombs: [0, 8], bombs_share: 0.5}
 items: {bombs: free}

@@ -5619,6 +5619,15 @@ teacher only, whose boomerangs any shield parries.
   shows in the training's `penalty-exposed-attack`.
 - No `VERSION` bump: the generation's pieces land with 2.0.1.0, as schemas 8 and 9 did.
 
+### 6. The penalty on the walkers' eight (branch `walkers48`, Nov 26)
+
+The owner said yes to the lead's question: `exposed_attack_penalty: 0.1` also in the walkers' eight tasks (gibdo,
+stalfos-keese-gel, zol, like-like, vire, d2-rope, dodongo-crossing, moldorm `@d3first`), for the walkers'
+continuation; not `block_own_decay` and not `obs.shooter` (no Goriya in their rooms, and their network reads no
+`shooter` group). Each task differs from before by that key alone (loaded beside `r40-int`'s files); the bare tasks
+(today's team, `d2first`) are untouched; `tests/test_inputs.py` pins which generation tasks carry it (these eight and
+goriya). The lab's dry call of `--group walkers` passes every check (23,993,424 steps).
+
 ## No weapon bomb in a room fought for its bombs (Bombs48, branch `bombs48`, Nov 26)
 
 The owner, Nov 26: "we should NOT be using bombs in rooms we fight for bombs, other than 10th streak to get more bombs

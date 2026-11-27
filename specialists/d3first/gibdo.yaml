@@ -28,6 +28,7 @@ reward:
   heart_value:
     exit: true
     potential: 20
+  exposed_attack_penalty: 0.1             # the owner, Nov 26 (the walkers' eight, as the Goriya teacher's; round40.md)
 obs:
   objective: true
   target: true
