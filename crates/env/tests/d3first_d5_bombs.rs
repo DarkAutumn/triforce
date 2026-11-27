@@ -66,6 +66,9 @@ fn next_action(c: &C, objective: &Objective, nudge: usize) -> Action {
     let state = c.session().state();
     let mask = c.session().mask();
     let wait = Action::parse("WAIT 4").unwrap();
+    if let Some(shove) = zelda::actions::shove_move(state) {
+        return shove;
+    }
     if !matches!(state.mode(), 5 | 9 | 11) || state.link.status != 0 {
         return wait;
     }

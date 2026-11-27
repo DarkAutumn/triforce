@@ -71,7 +71,7 @@ fn an_empty_bag_is_never_empty_here(nes: ZCore, route_name: &str, state: &str, r
                 break;
             }
             assert_eq!(c.session().state().bombs(), 1, "{what}: the bag while bomb {} burns", laid - 1);
-            if let ChainStatus::Done(result) = c.step(wait).unwrap() {
+            if let ChainStatus::Done(result) = c.step(common::or_shove(c.session().state(), wait)).unwrap() {
                 panic!("{what}: the run ended while waiting to lay bomb {laid}: {result:?}");
             }
             action = bomb(&c);

@@ -315,9 +315,10 @@ impl Controller {
 /// Where the skip in `direction` is available in `state`, and where it goes (mechanics.md; round 21 contract
 /// "Availability"). Overworld W/E: the wrap, E also the wrap exit, else (round 24) the ladder clip in a room where the
 /// game lays the ladder (0x5f's heart container from the wrap arrival on its water); dungeon: the ladder clip, else
-/// (N/S) the block clip when it is useful. None elsewhere.
+/// (N/S) the block clip when it is useful. None elsewhere, and none while a Like-Like holds Link: the game discards
+/// every direction then (asm:Link_Update; Noops52, Nov 27: in 9:0x51 CLIP N was pressed 33 times in a hold, to death).
 pub fn skip_target(state: &GameView, direction: Direction) -> Option<SkipTarget> {
-    if state.mode() != MODE_PLAY || state.link.status != 0 || state.var(Var::LinkShoveDir) != 0 {
+    if state.mode() != MODE_PLAY || state.link.status != 0 || state.var(Var::LinkShoveDir) != 0 || state.link_held() {
         return None;
     }
     let ladder_out = state.var(Var::LadderSlot) != 0;
@@ -506,6 +507,12 @@ pub fn dock_clip_target(state: &GameView) -> Option<SkipTarget> {
 pub fn dock_spot(room: &Room) -> Option<(i32, i32)> {
     let (dock_x, row) = room.dock()?;
     (0..dock_x).rev().step_by(8).map(|x| x & !7).find(|&x| dock_clip_at(room, x, row + 16).is_some()).map(|x| (x, row))
+}
+
+/// Link at (x, y), on the grid, stands where a MOVE W or E along the land below the dock ends on a dock-warp step
+/// while the clip is offered (`Executor::run_timed`): on [`dock_spot`]'s column, where [`dock_clip_at`] is legal.
+pub fn on_dock_column(room: &Room, x: i32, y: i32) -> bool {
+    dock_spot(room).is_some_and(|(column, _)| column == x) && dock_clip_at(room, x, y).is_some()
 }
 
 /// Link stands in the water on the dock's row W of the dock (where the clip ends), in play.

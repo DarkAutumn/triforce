@@ -475,6 +475,14 @@ impl Room {
         }
     }
 
+    /// A move of Link at (px, py) in `direction` steps onto a ladder crossing ([`Room::can_link_move_from`] lets him
+    /// over its water; the game does only on a ladder it lays, `crate::game::GameView::can_link_move`).
+    pub fn enters_ladder_crossing(&self, px: i32, py: i32, direction: Direction) -> bool {
+        Self::hotspot_tiles(px, py, direction)
+            .into_iter()
+            .any(|(c, r)| in_bounds(c, r) && self.ladder_axes[index(c, r)] != 0 && !self.is_tile_walkable(c, r))
+    }
+
     /// Link at (px, py) is in overworld room `$1F`'s gap column above Y `$56`, where up and down read walkable.
     fn in_gap(&self, px: i32, py: i32) -> bool {
         self.link_gap && px == GAP_X && py < GAP_BELOW_Y

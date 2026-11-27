@@ -802,8 +802,8 @@ fn walk_to<St: StateStore<MachineState>>(c: &mut ChainEnv<ZCore, St>, target: Ma
         let (snap, actions) = nodes[node].clone();
         c.session_mut().restore(&snap);
         for d in c.session().mask().directions(zelda::ActionKind::Move) {
-            let a = Action::new(zelda::ActionKind::Move, d, 4).unwrap();
             c.session_mut().restore(&snap);
+            let a = common::or_shove(c.session().state(), Action::new(zelda::ActionKind::Move, d, 4).unwrap());
             let hc = c.session().state().hearts_and_containers();
             c.session_mut().apply_ram(&[(zelda::Var::HeartsAndContainers, (hc & 0xF0) | (hc >> 4))]);
             let change = c.session_mut().act(a).unwrap();

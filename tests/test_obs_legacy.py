@@ -70,6 +70,17 @@ WIZZ50_HOLD_CHANGES = {'like-like': {
     '4_32c_1.state': '77c7bce9f14d0ad34d6a04278bff42aef6340c4f341e638ad27ea2b3a33a520c',
     '4_32c_2.state': 'b68a2ac0b64e088195dfb36ee4d13217f040e48184a88e0dcc24d7db6f772be5',
 }}
+# Frames where Link can't act (Noops52, Nov 27; docs/architecture.md beside the action mask): while Link's shove runs
+# the mask offers one MOVE, the shove's way, and no WAIT, and that MOVE ends with the shove; the boomerang's catch
+# pose (`$AC` `$20`/`$21`) is played inside the running MOVE or WAIT and no decision comes in it. Compared step by
+# step with its base d735a666 (same seeds, the test's own procedure, Link's RAM dumped at every step), each of
+# these 203 traces first differs at one of the two: 87 at a decision in a shove (86 in the mask alone: the shove's
+# one MOVE, WAIT and every other MOVE gone; one also in a catch pose), 116 at a catch pose (82 a decision the base
+# handed out in the pose, 34 an action that ran the pose's frames longer, 7 or 8 more, fewer when cut short).
+# Review46's fixes (a shove's MOVE presses nothing; no closing frame after a wait for the pose alone) moved 22 of
+# these hashes; compared again, each still first differs from the base at a shove or a catch pose.
+NOOPS52_CHANGES = json.loads(
+    (Path(__file__).parent / 'fixtures' / 'obs_schema5_noops52.json').read_text(encoding='utf-8'))
 # The traces both sides of the generation's merges changed, with their hashes on the merged code.
 # - Main's weapon rooms (2.0.0.15) and this branch's closing-frame cut-over: boss-manhandla `3_4dw_2`, which runs out
 #   of bombs within its 50 steps (each side's own hash for it is in `WEAPON_ROOM_CHANGES` and `ROUND40_CHANGES`; the
@@ -339,7 +350,7 @@ def test_schema5_columns_are_unchanged(name):
                | WEAPON_ROOM_CHANGES.get(name, {}) | HEARTS_ENCODING_CHANGES.get(name, {})
                | ROUND40_CHANGES.get(name, {}) | ROUND40_TARGETS_CHANGES.get(name, {})
                | ROUND40_MERGE_CHANGES.get(name, {}) | ROOMS49_BAND_CHANGES.get(name, {})
-               | WIZZ50_HOLD_CHANGES.get(name, {}))
+               | WIZZ50_HOLD_CHANGES.get(name, {}) | NOOPS52_CHANGES.get(name, {}))
     kept = {state: digest for state, digest in recorded.items() if state not in ROUTE31_DELETED}
     assert family_hashes(name, recorded) == kept | changed
 

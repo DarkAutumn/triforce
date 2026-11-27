@@ -28,6 +28,15 @@ pub fn open_core() -> Option<ZCore> {
     rom().map(ZCore::power_on)
 }
 
+/// A test's MOVE or WAIT as the mask has it (Noops52, Nov 27): while Link's shove runs the mask offers one MOVE, the
+/// shove's, and no WAIT; a timed action becomes that MOVE then (it plays the shove out), anything else is kept.
+pub fn or_shove(state: &zelda::GameView, action: zelda::Action) -> zelda::Action {
+    match zelda::actions::shove_move(state) {
+        Some(shove) if matches!(action.kind, zelda::ActionKind::Move | zelda::ActionKind::Wait) => shove,
+        _ => action,
+    }
+}
+
 /// In-memory `StateStore` (tests): `load` finds a state by name or by the label of a saved path; `save` keeps
 /// the machine state under the path.
 #[derive(Default)]

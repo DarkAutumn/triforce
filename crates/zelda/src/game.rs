@@ -787,7 +787,17 @@ impl GameView {
         let tiles = self.current_tiles();
         let armos = |&(x, y): &Tile| (0xC0..=0xC3).contains(&tiles[(x * crate::room::ROWS + y) as usize]);
         let (x, y) = (self.link.position.x, self.link.position.y);
+        // Once the statue's Armos is made it fades in on the square for `$3F` frames, and a press there makes nothing
+        // (asm:Spawn_CheckTouchedArmosOrGravestone@FindObjAtLocation: an object at the square's X and Y; Noops52,
+        // Nov 27: in 0:0x34 the push was offered again about ten times a run at four frames each).
+        let (sx, sy) = (c * 8, r * 8 + 0x40);
+        let woken = (1..=0x0B).any(|slot| {
+            table(&self.ram, tables::OBJ_ID, slot) != 0
+                && i32::from(table(&self.ram, tables::OBJ_POS_X, slot)) == sx
+                && i32::from(table(&self.ram, tables::OBJ_POS_Y, slot)) == sy
+        });
         statue.iter().all(armos)
+            && !woken
             && self.var(Var::LinkGridOffset) == 0
             && Room::hotspot_tiles(x, y, direction).iter().any(|t| statue.contains(t))
     }
@@ -903,7 +913,10 @@ impl GameView {
     /// Whether Link can move in `direction` (the NES flow of asm:Walker_Move).
     pub fn can_link_move(&self, direction: Direction) -> bool {
         let (px, py) = (self.link.position.x, self.link.position.y);
-        if self.in_cave() && direction == Direction::N && py < CAVE_PERSON_LINE_Y {
+        if direction == Direction::N
+            && py < CAVE_PERSON_LINE_Y
+            && (self.in_cave() || (self.person_line() && !self.doorway_passes_north(px, py)))
+        {
             return false;
         }
         // asm:Link_FilterInput: in a dungeon's outer border band a press across Link's facing is dropped, off the grid
@@ -914,15 +927,27 @@ impl GameView {
         if crate::attack::direction_dropped(level, facing, x, y, direction) {
             return false;
         }
+        let doorway_dir = self.byte(Var::DoorwayDir);
+        // A cellar has no doorways or room bounds (asm:Walker_Move skips both in mode 9): only its tiles block.
+        let underworld_room = self.level() > 0 && !self.in_cellar();
         if self.var(Var::LinkGridOffset) != 0 {
             // Just out of a cave, a step short of the grid below the mouth, any move but S walks Link back in
             // (the game finishes the step along ObjDir first).
             if self.just_exited_cave {
                 return direction == Direction::S;
             }
+            // Off the grid no tile is tested, but in a dungeon room outside a doorway the room bounds are, at any
+            // offset (asm:Walker_Move@CheckBoundary, then asm:Doorway_CheckLink): a press along Link's line past a
+            // bound moves him only through a doorway that lets him, or with the ladder out (asm:Ladder_CheckAndDraw
+            // sets his move again: 4:0x21's ladder clip N; Noops52, Nov 27: in 8:0x6e, a pixel past the N bound below
+            // the bombable wall, MOVE N was offered and moved nothing).
+            let along = Direction::from_value(facing).is_some_and(|f| direction == f || direction == f.opposite());
+            let ladder_out = self.byte(Var::LadderSlot) != 0;
+            if underworld_room && doorway_dir == 0 && !ladder_out && along && at_dungeon_bound(px, py, direction) {
+                return self.can_pass_doorway(px, py, direction);
+            }
             return true;
         }
-        let doorway_dir = self.byte(Var::DoorwayDir);
         if doorway_dir != 0
             && let Some(dw) = Direction::from_value(doorway_dir)
             && direction != dw
@@ -938,8 +963,6 @@ impl GameView {
         if let Some(on) = self.ladder_move(direction) {
             return on;
         }
-        // A cellar has no doorways or room bounds (asm:Walker_Move skips both in mode 9): only its tiles block.
-        let underworld_room = self.level() > 0 && !self.in_cellar();
         if underworld_room && direction == Direction::N && py <= OW_EDGE_N {
             return px == DOORWAY_REQUIRED_X && self.is_door_open(Direction::N);
         }
@@ -963,7 +986,13 @@ impl GameView {
                 return walkable(room.tile(0x1F, row).max(past));
             }
         }
-        if room.can_link_move_from(px, py, direction) || self.lays_ladder(px, py, direction) {
+        if room.can_link_move_from(px, py, direction) {
+            // A ladder crossing (water the room model lets Link over) is walked only on the ladder the game lays,
+            // which takes an object slot ([`GameView::ladder_slot_ready`]; Noops52, Nov 27: 7:0x18 with its eleven
+            // objects laid none, and MOVE E onto the water was offered and moved nothing).
+            return !room.enters_ladder_crossing(px, py, direction) || self.ladder_slot_ready();
+        }
+        if self.lays_ladder(px, py, direction) {
             return true;
         }
         if room.is_cave_entry_direction(px, py, direction) && !self.just_exited_cave {
@@ -1010,8 +1039,7 @@ impl GameView {
     /// Link on a grid point (the caller's offset test) of a room where the game lays the ladder (a dungeon room, an
     /// overworld ladder room: `crate::room::lays_ladder_in`) with the ladder, out of a doorway, facing water: the game
     /// lays the ladder one square ahead and walks him onto it (asm:Link_EndMoveAndAnimate@CheckLadder; over water
-    /// wider than one square he stops on it at its distance-0 point). It needs a monster slot, free or the one of a
-    /// ladder out that he is off (`ladder_move` is None there: it is put away first).
+    /// wider than one square he stops on it at its distance-0 point). It needs a slot ([`GameView::ladder_slot_ready`]).
     fn lays_ladder(&self, px: i32, py: i32, direction: Direction) -> bool {
         let here = self.full_location();
         if !crate::room::lays_ladder_in(here) || self.in_cellar() || !self.ladder() || self.byte(Var::DoorwayDir) != 0 {
@@ -1022,9 +1050,34 @@ impl GameView {
         let water = Room::hotspot_tiles(px, py, direction)
             .into_iter()
             .all(|(c, r)| inside(c, r) && room.is_water(room.tile(c, r)));
-        water
-            && (self.byte(Var::LadderSlot) != 0
-                || (1..tables::OBJ_ID.1).any(|slot| self.ram[tables::OBJ_ID.0 + slot] == 0))
+        water && self.ladder_slot_ready()
+    }
+
+    /// The game has a slot to lay the ladder in: a free monster slot (asm:Obj_FindEmptyMonsterSlot), or the one of a
+    /// ladder out that Link is off (`ladder_move` is None there: it is put away first).
+    fn ladder_slot_ready(&self) -> bool {
+        self.byte(Var::LadderSlot) != 0 || (1..tables::OBJ_ID.1).any(|slot| self.ram[tables::OBJ_ID.0 + slot] == 0)
+    }
+
+    /// Object slot 1 holds the Grumble Goriya (`$36`) or a dungeon person (`$4B`-`$52`): Link cannot move up while
+    /// his Y is below `$8E` (asm:Walker_Move calls asm:Person_BlockLinkMovingUp then; a cave always does).
+    fn person_line(&self) -> bool {
+        let id = self.ram[tables::OBJ_ID.0 + 1];
+        id == 0x36 || (0x4B..=0x52).contains(&id)
+    }
+
+    /// In a dungeon room Link is in its N doorway, or at its mouth with the door letting him through: asm:Walker_Move
+    /// runs asm:Doorway_CheckLink after asm:Person_BlockLinkMovingUp, and it sets his move up again there (the person
+    /// line holds him only inside the room; Review46: 7:0x28 left N past the Grumble).
+    fn doorway_passes_north(&self, px: i32, py: i32) -> bool {
+        let doorway = self.byte(Var::DoorwayDir);
+        self.level() > 0
+            && !self.in_cellar()
+            && (doorway == Direction::N.value()
+                || (doorway == 0
+                    && px == DOORWAY_REQUIRED_X
+                    && at_dungeon_bound(px, py, Direction::N)
+                    && self.can_pass_doorway(px, py, Direction::N)))
     }
 
     pub(crate) fn can_pass_doorway(&self, px: i32, py: i32, direction: Direction) -> bool {
@@ -1305,6 +1358,62 @@ impl GameView {
     /// Like-Like dies): the game discards his directions, so he cannot move.
     pub fn link_held(&self) -> bool {
         self.peek(0x512) != 0
+    }
+
+    /// Link's shove (knockback, `ObjShoveDir` `$C0` set), if one runs: its direction and the pixels it will still
+    /// carry him. It moves him `ObjShoveDistance` (`$D3`, `$20` from asm:Shove_Begin) pixels at 4 a frame, one at a
+    /// time, and ends early where asm:Shove_MovePixels stops it: on a grid point (snapped to it) facing an unwalkable
+    /// tile, or at a room bound (`RoomBoundLeft`-`RoomBoundDown`, at any grid offset). A shove's first frame only
+    /// validates it (asm:Shove_Update), turning one across Link's facing axis off the grid to the opposite of his
+    /// facing.
+    pub fn link_shove(&self) -> Option<(Direction, i32)> {
+        let dir = self.byte(Var::LinkShoveDir);
+        if dir == 0 {
+            return None;
+        }
+        let facing = self.byte(Var::LinkDirection);
+        let mut offset = self.byte(Var::LinkGridOffset) as i8 as i32;
+        let mut direction = Direction::from_value(dir & 0x0F)?;
+        if dir & 0x80 != 0 && offset != 0 {
+            let across = if facing < 3 { dir & 0x0C != 0 } else { dir & 0x03 != 0 };
+            if across {
+                direction = Direction::from_value(facing)?.opposite();
+            }
+        }
+        let (mut x, mut y) = (self.link.position.x, self.link.position.y);
+        let bounds = [0x346u16, 0x347, 0x348, 0x349].map(|a| i32::from(self.peek(a)));
+        let room = self.room();
+        let (dx, dy, step) = match direction {
+            Direction::N => (0, -1, -1),
+            Direction::S => (0, 1, 1),
+            Direction::W => (-1, 0, -1),
+            Direction::E => (1, 0, 1),
+            _ => return None,
+        };
+        let mut travel = 0;
+        for _ in 0..i32::from(self.peek(0xD3)) {
+            if offset == 0 {
+                (x, y) = (x & 0xF8, (y & 0xF8) | 5);
+                if !Room::hotspot_tiles(x, y, direction).into_iter().all(|(c, r)| room.is_tile_walkable(c, r)) {
+                    break;
+                }
+            }
+            let past = match direction {
+                Direction::W => x < bounds[0],
+                Direction::E => x >= bounds[1],
+                Direction::N => y < bounds[2],
+                _ => y >= bounds[3],
+            };
+            if past {
+                break;
+            }
+            (x, y, travel) = (x + dx, y + dy, travel + 1);
+            offset += step;
+            if offset % 8 == 0 {
+                offset = 0;
+            }
+        }
+        Some((direction, travel))
     }
 
     /// The game would start `kind`'s weapon now (Link_HandleInput and the *_Wield routines): Link is in his normal

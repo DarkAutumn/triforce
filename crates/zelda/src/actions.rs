@@ -215,6 +215,14 @@ impl ActionMask {
         }
     }
 
+    /// Allows timed `kind` in `direction` with the one `duration` (beside any other direction it has).
+    pub fn allow_duration(&mut self, kind: ActionKind, direction: Direction, duration: u8) {
+        let k = kind.index();
+        self.kind[k] = true;
+        self.direction[k][direction_index(direction).expect("mask direction")] = true;
+        self.duration[k][duration_index(duration).expect("mask duration")] = true;
+    }
+
     pub fn disallow_kind(&mut self, kind: ActionKind) {
         let k = kind.index();
         self.kind[k] = false;
@@ -314,6 +322,8 @@ impl fmt::Display for ActionMask {
 /// slot and would take it away, asm:Boomerang_Wield). MOVE also presses into a secret Armos from its side
 /// ([`GameView::is_secret_armos_direction`]) and into the secret gravestone from below (round 27,
 /// [`GameView::is_secret_push_direction`]); no MOVE at all while a Like-Like holds Link ([`GameView::link_held`]).
+/// While Link's shove (knockback) runs, one MOVE alone besides the attacks: the shove's way, ended by the shove
+/// ([`shove_duration`], `Executor::run_shove`), and no WAIT.
 /// A family's `items:` switches mask them further (`env::config::ItemsConfig`), and a route narrows ARROW and MOVE
 /// (`crate::Session::set_arrow_facings`, `crate::Session::set_vetoed_doorways`).
 pub fn compute_action_mask(state: &GameView) -> ActionMask {
@@ -324,8 +334,14 @@ pub fn compute_action_mask(state: &GameView) -> ActionMask {
     // (Wizz50, Nov 27: gen1-others/s1r4 pressed a no-op MOVE inside the hold, where no shot or touch reaches him,
     // for the chain's 2000 steps in 39 of 100 Dungeon 6 runs).
     let held = state.link_held();
+    // Shoved, Link goes where the shove takes him and the game reads no direction until it ends
+    // (asm:Link_HandleInput); A and B still work. The one non-attack action is a MOVE the shove's way, of the
+    // duration whose walk covers about the shove's distance, played until the shove ends (the owner, Nov 27: its
+    // outcome is what a MOVE's is; a WAIT that carried Link 32 pixels would teach that a WAIT moves him).
+    let shove = shove_move(state);
     for d in CARDINALS {
         if !held
+            && shove.is_none()
             && (state.can_link_move(d)
                 || state.is_push_block_direction(d)
                 || state.is_secret_armos_direction(d)
@@ -334,7 +350,10 @@ pub fn compute_action_mask(state: &GameView) -> ActionMask {
             mask.allow(ActionKind::Move, Some(d));
         }
     }
-    mask.allow(ActionKind::Wait, None);
+    match shove {
+        Some(m) => mask.allow_duration(ActionKind::Move, m.direction, m.duration),
+        None => mask.allow(ActionKind::Wait, None),
+    }
 
     let has_enemies = state.has_active_enemies();
     let has_items = !state.items.is_empty();
@@ -396,6 +415,22 @@ fn usable(state: &GameView, available: &[bool; NUM_KINDS], kind: ActionKind, men
     available[kind.index()]
         && state.weapon_ready(kind)
         && !(crate::submenu::needs_selection(state, kind) && !menu_opens)
+}
+
+/// The MOVE duration whose ordinary walk (1.5 pixels a frame, asm:Link_InitSpeed) is closest to a shove of `pixels`
+/// (the shorter on a tie): Link's full shove of `$20` pixels is a MOVE 16 (24 pixels walked).
+pub fn shove_duration(pixels: i32) -> u8 {
+    DURATIONS.into_iter().min_by_key(|&d| (i32::from(d) * 3 - pixels * 2).abs()).expect("durations")
+}
+
+/// The one MOVE the mask offers while Link's shove runs (none while a Like-Like holds him): the shove's direction,
+/// with the duration [`shove_duration`] gives the pixels it will still carry him ([`GameView::link_shove`]).
+pub fn shove_move(state: &GameView) -> Option<Action> {
+    if state.link_held() {
+        return None;
+    }
+    let (direction, pixels) = state.link_shove()?;
+    Some(Action { kind: ActionKind::Move, direction, duration: shove_duration(pixels) })
 }
 
 /// The game would play the recorder now, and the buttons can from here (the game's rules only: where the route wants

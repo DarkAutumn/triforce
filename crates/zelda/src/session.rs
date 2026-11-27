@@ -587,6 +587,7 @@ impl<N: Nes> Session<N> {
     pub fn act(&mut self, action: Action) -> Result<Change, ZeldaError> {
         let prev = self.state.clone().ok_or(ZeldaError::NotLoaded)?;
         let (total, steps) = (self.total_frames, self.steps);
+        self.executor.dock_clips = self.clips_effective();
         let result = self.executor.execute(
             &mut self.machine,
             &action,
@@ -706,8 +707,10 @@ impl<N: Nes> Session<N> {
                 }
             }
         }
+        // A shove's MOVE is the shove's (it stops at the room bound, never in a doorway: `Executor::run_shove`).
+        let shoved = state.var(crate::Var::LinkShoveDir) != 0;
         for d in crate::actions::CARDINALS {
-            if self.vetoed_doorways & d.value() != 0 && state.at_doorway_mouth(d) {
+            if !shoved && self.vetoed_doorways & d.value() != 0 && state.at_doorway_mouth(d) {
                 mask.disallow(ActionKind::Move, d);
             }
         }
@@ -815,6 +818,11 @@ fn unaided_dock_mask(mask: &mut ActionMask, state: &GameView, level: u8, clips_o
         }
     } else if clips_on && clips::dock_clip_target(state).is_some() {
         mask.allow(ActionKind::Clip, Some(Direction::N));
+        // On the clip's column a MOVE W or E ends before its first frame (`Executor::run_timed`): not offered there.
+        if state.var(crate::Var::LinkGridOffset) == 0 && clips::on_dock_column(state.room(), x, y) {
+            mask.disallow(ActionKind::Move, Direction::W);
+            mask.disallow(ActionKind::Move, Direction::E);
+        }
     } else if x == dock_x && (row + 1..row + 8).contains(&y) {
         for d in [Direction::N, Direction::W, Direction::E] {
             mask.disallow(ActionKind::Move, d);
