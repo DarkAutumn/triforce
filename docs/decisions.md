@@ -4100,3 +4100,16 @@ its finished network is measured on the 1000-run chains; every change after that
 fresh retrain (WAIT with a direction, statues as entities and the rest of the backlog's "next retrain" entries) is
 2.0.2.0. The 1000-run chains of that check are recorded as replays and kept on local disk (not archived to
 `/backup`; they may be deleted early) to be watched and mined (backlog, "The fresh generation (2.0.1.0)").
+
+## 2026-11-27 — The north star: 37 minutes (the owner)
+
+The owner, Nov 27: "We have a new goal for the project: 37 minutes or less from the time link is controllable to the
+time the game completes standing next to zelda. That's our north star."
+
+- **Measured** from the first frame Link can be controlled (after the file select and the name) to the frame he
+  stands beside Zelda: 37 minutes = 133,419 frames at 60.0988 frames a second. A run's time is read from its replay.
+- **It sits on top of the program** (backlog "The program": one network, one unbroken run, skilled-looking play).
+  Every experiment reports what it does to a finished run's time beside its success; a route, an action or a reward
+  is also judged by the frames it costs or saves.
+- **For scale:** the first golden path of 2.0.0.0 took 153,308 frames from power on (42.5 minutes, name entry
+  included).
