@@ -707,8 +707,10 @@ impl<N: Nes> Session<N> {
                 }
             }
         }
+        // A shove's MOVE is the shove's (it stops at the room bound, never in a doorway: `Executor::run_shove`).
+        let shoved = state.var(crate::Var::LinkShoveDir) != 0;
         for d in crate::actions::CARDINALS {
-            if self.vetoed_doorways & d.value() != 0 && state.at_doorway_mouth(d) {
+            if !shoved && self.vetoed_doorways & d.value() != 0 && state.at_doorway_mouth(d) {
                 mask.disallow(ActionKind::Move, d);
             }
         }

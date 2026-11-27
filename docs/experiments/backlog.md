@@ -621,8 +621,14 @@ thing and have to be taught again. Swept from this backlog Nov 23 (the lead):
 
 - **Decisions during a knockback, for the next retrain** (the owner, Nov 27). Noop51's census: decisions are handed
   out mid-shove (a hit interrupts the running action on the shove's first frames); the game ignores directions then
-  but reads A and B (419 attacks chosen mid-knockback, all effective). For 2.0.1.x (Noops52): MOVE masked during a
-  shove, attacks kept, one WAIT offered that ends when the shove ends. The owner: "the problem with letting link
+  but reads A and B (419 attacks chosen mid-knockback, all effective). For 2.0.1.x (Noops52; the owner's final call,
+  Nov 27, replacing the WAIT first briefed): during a shove the mask offers the attacks and exactly one MOVE, in the
+  shove's direction, with the duration whose ordinary walk covers about the shove's distance (`$20` pixels: MOVE 16;
+  a wall-shortened shove a shorter one), and no WAIT; that MOVE plays until the shove ends, so the next decision sees
+  where Link landed (docs/architecture.md, `GameView::link_shove`, `Executor::run_shove`). The owner's reasoning: a
+  WAIT that carries Link 32 pixels teaches the network that WAIT sometimes moves him; a MOVE in the shove's direction
+  has the outcome a MOVE normally has. One behaviour, committed for this model; revisit at the next retrain. The
+  owner earlier: "the problem with letting link
   move after the shove is that the agent sees the state of the world during the shove, not at the end of the shove.
   So he's choosing to move from a position that he won't start walking from. I feel like there's a bigger fix to
   this in the next retrain." Ideas: the observation says where the shove lands and how many frames are left

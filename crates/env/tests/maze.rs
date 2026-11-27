@@ -66,8 +66,8 @@ fn search(
         let (snap, actions) = nodes[node].clone();
         s.restore(&snap);
         for d in s.mask().directions(ActionKind::Move) {
-            let a = Action::new(ActionKind::Move, d, 4).unwrap();
             s.restore(&snap);
+            let a = common::or_shove(s.state(), Action::new(ActionKind::Move, d, 4).unwrap());
             let change = s.act(a).unwrap();
             let mut next = actions.clone();
             next.push(a);

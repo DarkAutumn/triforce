@@ -265,6 +265,11 @@ fn a_hit_aborts_the_skip_and_link_can_go_on() {
     assert_eq!(clip.abort, Some(zelda::clips::ClipAbort::Interrupted(zelda::Interrupt::Damage)));
     assert!(c.health_lost > 0.0);
     assert_eq!((s.state().full_location(), s.state().mode()), (ow(0x5B), 5), "{}", describe(&s));
+    // Noops52 (Nov 27): the hit's shove is ridden out first (the mask offers its one MOVE then).
+    if let Some(shove) = zelda::actions::shove_move(s.state()) {
+        assert!(s.mask().is_allowed(&shove), "{}", describe(&s));
+        s.act(shove).unwrap();
+    }
     let after_hit = describe(&s);
     let before = s.state().link.position;
     assert!(s.mask().is_allowed(&Action::parse("MOVE E 8").unwrap()), "{after_hit}");

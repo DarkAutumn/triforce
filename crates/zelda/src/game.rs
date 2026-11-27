@@ -1343,6 +1343,62 @@ impl GameView {
         self.peek(0x512) != 0
     }
 
+    /// Link's shove (knockback, `ObjShoveDir` `$C0` set), if one runs: its direction and the pixels it will still
+    /// carry him. It moves him `ObjShoveDistance` (`$D3`, `$20` from asm:Shove_Begin) pixels at 4 a frame, one at a
+    /// time, and ends early where asm:Shove_MovePixels stops it: on a grid point (snapped to it) facing an unwalkable
+    /// tile, or at a room bound (`RoomBoundLeft`-`RoomBoundDown`, at any grid offset). A shove's first frame only
+    /// validates it (asm:Shove_Update), turning one across Link's facing axis off the grid to the opposite of his
+    /// facing.
+    pub fn link_shove(&self) -> Option<(Direction, i32)> {
+        let dir = self.byte(Var::LinkShoveDir);
+        if dir == 0 {
+            return None;
+        }
+        let facing = self.byte(Var::LinkDirection);
+        let mut offset = self.byte(Var::LinkGridOffset) as i8 as i32;
+        let mut direction = Direction::from_value(dir & 0x0F)?;
+        if dir & 0x80 != 0 && offset != 0 {
+            let across = if facing < 3 { dir & 0x0C != 0 } else { dir & 0x03 != 0 };
+            if across {
+                direction = Direction::from_value(facing)?.opposite();
+            }
+        }
+        let (mut x, mut y) = (self.link.position.x, self.link.position.y);
+        let bounds = [0x346u16, 0x347, 0x348, 0x349].map(|a| i32::from(self.peek(a)));
+        let room = self.room();
+        let (dx, dy, step) = match direction {
+            Direction::N => (0, -1, -1),
+            Direction::S => (0, 1, 1),
+            Direction::W => (-1, 0, -1),
+            Direction::E => (1, 0, 1),
+            _ => return None,
+        };
+        let mut travel = 0;
+        for _ in 0..i32::from(self.peek(0xD3)) {
+            if offset == 0 {
+                (x, y) = (x & 0xF8, (y & 0xF8) | 5);
+                if !Room::hotspot_tiles(x, y, direction).into_iter().all(|(c, r)| room.is_tile_walkable(c, r)) {
+                    break;
+                }
+            }
+            let past = match direction {
+                Direction::W => x < bounds[0],
+                Direction::E => x >= bounds[1],
+                Direction::N => y < bounds[2],
+                _ => y >= bounds[3],
+            };
+            if past {
+                break;
+            }
+            (x, y, travel) = (x + dx, y + dy, travel + 1);
+            offset += step;
+            if offset % 8 == 0 {
+                offset = 0;
+            }
+        }
+        Some((direction, travel))
+    }
+
     /// The game would start `kind`'s weapon now (Link_HandleInput and the *_Wield routines): Link is in his normal
     /// state ($AC = 0), the sword is not blocked and its slot ($B9) is free for SWORD/BEAMS, the boomerang ($BB) and
     /// arrow ($BE) slots are free or hold a state with bit 7 (in $0F food, which a throw replaces; never in $12;

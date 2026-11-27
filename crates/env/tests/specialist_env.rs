@@ -112,7 +112,8 @@ fn hp(lo: f64, hi: f64) -> RamRandomization {
 }
 
 fn act(env: &mut Env, text: &str) -> StepResult {
-    env.step(Action::parse(text).unwrap()).unwrap()
+    let action = common::or_shove(env.session().state(), Action::parse(text).unwrap());
+    env.step(action).unwrap()
 }
 
 fn term(info: &StepInfo, name: &str) -> Option<f64> {
@@ -189,6 +190,9 @@ fn random_legal_action(flat: &[bool; MASK_SIZE], rng: &mut ChaCha8Rng) -> [usize
 /// the shorter on a tie (round 40: an item's targets are the tiles Link takes it from, and a bomb pack on the bottom
 /// row is taken from that row alone; eight frames carry Link past its grid line to Y $BE, from which E goes nowhere).
 fn greedy_step(env: &mut Env) -> Result<StepResult, EnvError> {
+    if let Some(shove) = zelda::actions::shove_move(env.session().state()) {
+        return env.step(shove);
+    }
     let attached = env.objective().expect("episode started").clone();
     let wanted = attached.objective.next_rooms;
     let wavefront = attached.wavefront;

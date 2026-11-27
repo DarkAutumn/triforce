@@ -378,7 +378,8 @@ fn a_wrap_that_lands_only_on_a_wrong_exit_is_not_offered() {
 /// it, which finishes the clip (`Change::clip_finished_by_move`, counted once in `ClipStats::finished_by_move`; the
 /// clip stays in `aborted`). The first seed of 64 whose cut clip a MOVE N 16 finishes. Round 40 (no closing frame of
 /// no buttons): seed 0's hit now comes a frame apart and leaves Link on the ladder at Y $7D, where the ladder only
-/// goes back down (asm:Ladder_CheckAndDraw) and no MOVE N gets off; such a seed is passed over.
+/// goes back down (asm:Ladder_CheckAndDraw) and no MOVE N gets off; such a seed is passed over. Noops52 (Nov 27): the
+/// hit's shove is ridden out first (the mask offers its one MOVE then), and the MOVE N 16 follows from the landing.
 #[test]
 fn a_ladder_clip_cut_by_a_hit_and_finished_by_a_move_is_counted() {
     let Some(mut nes) = open_core() else { return };
@@ -399,6 +400,9 @@ fn a_ladder_clip_cut_by_a_hit_and_finished_by_a_move_is_counted() {
         let damage = zelda::clips::ClipAbort::Interrupted(zelda::Interrupt::Damage);
         let hit = cut.clip.is_some_and(|c| c.abort == Some(damage));
         if hit && s.state().full_location() == MapLocation::new(4, 0x21, false) && s.state().link.position.y > 0x5D {
+            if let Some(shove) = zelda::actions::shove_move(s.state()) {
+                stats.update(&s.act(shove).unwrap());
+            }
             let on = s.act(move_n).unwrap();
             stats.update(&on);
             if on.clip_finished_by_move {
