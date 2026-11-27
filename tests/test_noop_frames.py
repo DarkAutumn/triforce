@@ -5,9 +5,10 @@ that ends where the shove does (the mask's no-ops: `test_noop_decisions.py`).
 
 import pytest
 
-from .test_noop_decisions import OBJ_TYPE, OBJ_X, OBJ_Y, clear_monsters, game_at, link
+from .test_noop_decisions import (LADDER_SLOT, OBJ_TYPE, OBJ_X, OBJ_Y, STATUS, clear_monsters, game_at, link,
+                                  place_link)
 
-STATUS, SHOVE_DIR, BOOMERANG_SLOT = 0xAC, 0xC0, 0xBB
+SHOVE_DIR, SHOVE_DISTANCE, BOOMERANG_SLOT = 0xC0, 0xD3, 0xBB
 DURATIONS = (4, 8, 16, 32)
 
 
@@ -95,3 +96,19 @@ def test_an_attack_chosen_in_a_shove_still_strikes():
     kind = 'SWORD' if game.is_allowed(f'SWORD {swords[0]}') else 'BEAMS'
     change = game.act(f'{kind} {swords[0]}')
     assert change.frames >= 12, f'{kind} {swords[0]}: no swing ({change.frames} frames)'
+
+
+def test_a_shove_onto_the_waters_edge_lays_no_ladder():
+    """Review46: during a shove the game moves Link by no direction, but a held one stays in `ObjInputDir`, where the
+    ladder's setup reads it (asm:Link_EndMoveAndAnimate@SetUpLadder: the ladder laid when it equals his facing). The
+    shove's MOVE presses nothing, so a shove E that ends on 7:0x18's grid point before the water, Link facing E with
+    the ladder, lays no ladder (holding E laid it in slot 11). SETUP: Link placed and the shove written ($81, $20)."""
+    game = game_at('d3first_7_18s_0')
+    game.act('MOVE N 8')
+    clear_monsters(game, keep=(0x5F,))
+    place_link(game, 0x90, 0x8D, 'E')
+    game.write(SHOVE_DIR, 0x81)
+    game.write(SHOVE_DISTANCE, 0x20)
+    assert moves(game) == {('E', 8)} and not game.is_allowed('WAIT 4'), game.legal
+    game.act('MOVE E 8')
+    assert (link(game), game.read(SHOVE_DIR), game.read(LADDER_SLOT)) == ((0xA0, 0x8D), 0, 0)

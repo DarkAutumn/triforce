@@ -111,9 +111,14 @@ fn hp(lo: f64, hi: f64) -> RamRandomization {
     }
 }
 
+/// Plays `text`, first riding out Link's shove when one runs (its one MOVE until the shove ends; Noops52: the mask
+/// offers nothing else then), so a test's WAIT or MOVE is always the action it names.
 fn act(env: &mut Env, text: &str) -> StepResult {
-    let action = common::or_shove(env.session().state(), Action::parse(text).unwrap());
-    env.step(action).unwrap()
+    while let Some(shove) = zelda::actions::shove_move(env.session().state()) {
+        let ridden = env.step(shove).unwrap();
+        assert!(!(ridden.terminated || ridden.truncated), "the episode ended riding out a shove before {text}");
+    }
+    env.step(Action::parse(text).unwrap()).unwrap()
 }
 
 fn term(info: &StepInfo, name: &str) -> Option<f64> {

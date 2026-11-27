@@ -913,7 +913,10 @@ impl GameView {
     /// Whether Link can move in `direction` (the NES flow of asm:Walker_Move).
     pub fn can_link_move(&self, direction: Direction) -> bool {
         let (px, py) = (self.link.position.x, self.link.position.y);
-        if direction == Direction::N && py < CAVE_PERSON_LINE_Y && (self.in_cave() || self.person_line()) {
+        if direction == Direction::N
+            && py < CAVE_PERSON_LINE_Y
+            && (self.in_cave() || (self.person_line() && !self.doorway_passes_north(px, py)))
+        {
             return false;
         }
         // asm:Link_FilterInput: in a dungeon's outer border band a press across Link's facing is dropped, off the grid
@@ -1061,6 +1064,20 @@ impl GameView {
     fn person_line(&self) -> bool {
         let id = self.ram[tables::OBJ_ID.0 + 1];
         id == 0x36 || (0x4B..=0x52).contains(&id)
+    }
+
+    /// In a dungeon room Link is in its N doorway, or at its mouth with the door letting him through: asm:Walker_Move
+    /// runs asm:Doorway_CheckLink after asm:Person_BlockLinkMovingUp, and it sets his move up again there (the person
+    /// line holds him only inside the room; Review46: 7:0x28 left N past the Grumble).
+    fn doorway_passes_north(&self, px: i32, py: i32) -> bool {
+        let doorway = self.byte(Var::DoorwayDir);
+        self.level() > 0
+            && !self.in_cellar()
+            && (doorway == Direction::N.value()
+                || (doorway == 0
+                    && px == DOORWAY_REQUIRED_X
+                    && at_dungeon_bound(px, py, Direction::N)
+                    && self.can_pass_doorway(px, py, Direction::N)))
     }
 
     pub(crate) fn can_pass_doorway(&self, px: i32, py: i32, direction: Direction) -> bool {

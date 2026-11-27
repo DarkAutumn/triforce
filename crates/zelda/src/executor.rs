@@ -480,7 +480,7 @@ impl<S> Executor<S> {
                 clip = Some(outcome);
                 interrupt
             } else if in_shove {
-                self.run_shove(m, action)
+                self.run_shove(m)
             } else if timed {
                 self.run_timed(m, action, state)
             } else {
@@ -490,8 +490,7 @@ impl<S> Executor<S> {
             };
             let control_frames = (m.frame - start) as u32;
             if interrupt != Some(Interrupt::GameOver) && !is_game_over_mode(m.read(ADDR_MODE)) {
-                let walking = m.frame;
-                self.skip_uncontrollable(m, Some(location), capture)?;
+                let transition = self.skip_uncontrollable(m, Some(location), capture)?;
                 // Every action but a MOVE keeps one frame of no buttons after it (round 40, measured): only after a
                 // MOVE does the frame cost anything (Link standing still between two steps), and without it after
                 // the others the docks broke: a WAIT cut short by the raft's landing at 0x55 and 0x3f, then MOVE N on
@@ -502,8 +501,9 @@ impl<S> Executor<S> {
                 // no input and its RECORDER's sub-screen never opened). So does a MOVE that played no frame (one that
                 // stops before its first frame): no action passes without the game running a frame (post-d7: 2 runs
                 // in 0x3f repeated MOVE E so, to the 2000-step limit in a few hundred frames). An action that ended
-                // with Link's shove keeps none either: the next decision comes on his first free frame.
-                if (action.kind != ActionKind::Move && !in_shove) || m.frame != walking || m.frame == start {
+                // with Link's shove keeps none either: the next decision comes on his first free frame. Nor does a
+                // MOVE after which only the boomerang's catch pose was waited out (Link is free again, `$31`).
+                if (action.kind != ActionKind::Move && !in_shove) || transition || m.frame == start {
                     self.step(m, 0, 1);
                     // A boomerang caught on that frame puts Link in its pose: no decision comes in it either.
                     if m.read(ADDR_LINK_STATUS) & 0xF0 == CATCH_POSE {
@@ -711,12 +711,15 @@ impl<S> Executor<S> {
     /// the next decision sees where Link landed. Link's shove is `$20` pixels at 4 a frame (asm:Shove_MovePixels;
     /// shorter against a wall or a room bound), after a first frame that only validates it and before a last that
     /// clears it. A hit, a room change or game over end it sooner (Noops52, Nov 27: a MOVE decided in a shove did
-    /// nothing in 573 of 2,000, cut by a monster coming near before the shove was over).
-    fn run_shove<N: Nes>(&mut self, m: &mut Machine<N>, action: &Action) -> Option<Interrupt> {
-        let buttons = if action.kind == ActionKind::Move { direction_buttons(action.direction) } else { 0 };
+    /// nothing in 573 of 2,000, cut by a monster coming near before the shove was over). Nothing is pressed: the game
+    /// moves Link by no direction during the shove, but the held bits stay in `ObjInputDir` (asm:Link_HandleInput
+    /// returns before filtering them), where the ladder (asm:Link_EndMoveAndAnimate@SetUpLadder), a push block's timer
+    /// (asm:PushBlock_State0Idle) and a gravestone (asm:Rock_Update) read them, and a shove ends on the grid point
+    /// before an unwalkable square: holding the MOVE's direction would push or lay what nobody chose (Review46).
+    fn run_shove<N: Nes>(&mut self, m: &mut Machine<N>) -> Option<Interrupt> {
         let mut before = FrameWatch::new(m.ram());
         for _ in 0..MAX_SHOVE_FRAMES {
-            self.step(m, buttons, 1);
+            self.step(m, 0, 1);
             let after = FrameWatch::new(m.ram());
             match detect_interrupt(&before, &after, 0) {
                 Some(i @ (Interrupt::GameOver | Interrupt::Transition | Interrupt::Damage)) => return Some(i),
@@ -1057,37 +1060,38 @@ impl<S> Executor<S> {
     }
 
     /// Steps (no buttons) through scrolls, cave entries, stuns, the boomerang's catch pose and level transitions until
-    /// Link is controllable.
+    /// Link is controllable. Returns whether it stepped any frame but the catch pose's (a transition, a stun, a halt).
     fn skip_uncontrollable<N: Nes>(
         &mut self,
         m: &mut Machine<N>,
         start_location: Option<(u8, u8, bool)>,
         capture: &mut dyn FnMut(&Machine<N>, &Self) -> S,
-    ) -> Result<(), ZeldaError> {
+    ) -> Result<bool, ZeldaError> {
         let mut controllable = false;
-        let mut halted = false;
+        let (mut halted, mut transition) = (false, false);
         for _ in 0..MAX_UNCONTROLLABLE_FRAMES {
             let mode = m.read(ADDR_MODE);
             if is_game_over_mode(mode) {
-                return Ok(());
+                return Ok(transition);
             }
             if mode == MODE_CAVE && !self.was_in_cave {
                 self.step(m, 0, CAVE_COOLDOWN);
                 self.was_in_cave = true;
+                transition = true;
                 continue;
             }
             let status = m.read(ADDR_LINK_STATUS);
-            if SCROLLING_MODES.contains(&mode)
+            let other = SCROLLING_MODES.contains(&mode)
                 || is_cellar_entry(m)
                 || status & STUN_FLAG != 0
-                || status & 0xF0 == CATCH_POSE
                 || is_level_transition(m, start_location)
-                || (halted && halts_next_frame(m))
-            {
+                || (halted && halts_next_frame(m));
+            if other || status & 0xF0 == CATCH_POSE {
                 if self.capture_pre_entry && is_pre_entry(|a| m.read(a as usize)) {
                     self.last_pre_entry = Some(capture(m, self));
                 }
                 halted = status & STUN_FLAG != 0;
+                transition |= other;
                 self.step(m, 0, 1);
                 continue;
             }
@@ -1100,7 +1104,7 @@ impl<S> Executor<S> {
             });
         }
         self.was_in_cave = m.read(ADDR_MODE) == MODE_CAVE;
-        Ok(())
+        Ok(transition)
     }
 }
 
@@ -1601,7 +1605,28 @@ pub(crate) mod tests {
             let result = execute(&mut m, action).unwrap();
             assert_eq!((result.interrupt, result.frames), (None, 10), "{action}");
             assert_eq!((m.nes.ram[ADDR_LINK_X], m.nes.ram[ADDR_LINK_SHOVE_DIR]), (120 - 32, 0), "{action}");
+            assert_eq!(m.nes.buttons, vec![0; 10], "{action}: nothing pressed in the shove");
         }
+    }
+
+    /// The catch on frame 2 and a Stalfos appearing next to Link on frame 4 (the MOVE ends `spawn` in the pose).
+    fn catch_then_a_monster_near(frame: u64, ram: &mut [u8; 0x800]) {
+        catch_on_frame_2(frame, ram);
+        if frame == 4 {
+            object(ram, 3, enemy::STALFOS, 120, 150);
+        }
+    }
+
+    /// Review46 (D2): a MOVE cut short in the catch pose waits the pose out and keeps no closing frame after it (only a
+    /// transition, a stun or a halt does): its last frame is Link's `$31`, already free.
+    #[test]
+    fn a_move_cut_in_the_pose_keeps_no_closing_frame() {
+        let mut ram = playable();
+        ram[0x34A] = 0xFF;
+        let mut m = scripted(ram, catch_then_a_monster_near);
+        let result = execute(&mut m, "MOVE W 16").unwrap();
+        assert_eq!((result.interrupt, result.control_frames, result.frames), (Some(Interrupt::Spawn), 4, 9));
+        assert_eq!(m.nes.ram[ADDR_LINK_STATUS], 0x31);
     }
 
     /// Ganon's entrance (asm:Ganon_Init's halt): Link halted, free for a single frame (11), halted again to frame 20.

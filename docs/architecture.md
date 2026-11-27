@@ -111,10 +111,13 @@ MOVE's normally is. A route's vetoed doorway takes nothing from it (the shove st
 `GameView::can_link_move` also follows the game where it once offered a MOVE that did nothing (Noops52, Nov 27, from
 Noop51's census of 544 runs): no MOVE N past a person's line (`Y` < `$8E`) while object slot 1 holds the Grumble
 Goriya (`$36`) or a dungeon person (`$4B`-`$52`), in a dungeon as in a cave (asm:Walker_Move,
-asm:Person_BlockLinkMovingUp; 9:0x06); no step onto a ladder crossing without an object slot for the ladder
-(asm:Obj_FindEmptyMonsterSlot; 7:0x18 with eleven objects); off the grid, a press along Link's line past a dungeon
-room bound only through a doorway that lets him (the bounds are tested at any offset, asm:Walker_Move@CheckBoundary;
-8:0x6e below its bombable wall). A secret Armos's statue push (`GameView::is_secret_armos_direction`) is not offered
+asm:Person_BlockLinkMovingUp; 9:0x06), but in the room's N doorway or at its mouth with the door letting him through,
+where asm:Doorway_CheckLink sets the move up again (7:0x28 left N past the Grumble); no step onto a ladder crossing
+without an object slot for the ladder (asm:Obj_FindEmptyMonsterSlot; 7:0x18 with eleven objects); off the grid, a
+press along Link's line past a dungeon room bound only through a doorway that lets him or with the ladder out
+(asm:Ladder_CheckAndDraw sets the move again: 4:0x21's ladder clip N; the bounds are tested at any offset,
+asm:Walker_Move@CheckBoundary; 8:0x6e below its bombable wall). A secret Armos's statue push
+(`GameView::is_secret_armos_direction`) is not offered
 while an object sits on the statue's square (the Armos fading in for `$3F` frames: a press makes nothing,
 asm:Spawn_CheckTouchedArmosOrGravestone; 0:0x34, about ten a run).
 
@@ -125,9 +128,11 @@ A and B) is played inside the running MOVE or WAIT and not counted (a MOVE N or 
 `skip_uncontrollable` never hands out a decision in it, nor after a catch on the closing frame of no buttons an
 attack, a WAIT or a CLIP keeps (the pose is skipped after it; Noops52's first branch census still handed out 105
 decisions there, in 259,325). A
-MOVE (or WAIT) decided while Link is shoved is `Executor::run_shove`: its frames are the shove's, it ends on the frame
-`ObjShoveDir` is cleared (asm:Shove_Reset), with no closing frame, so the next decision is Link's first free frame
-and sees where he landed (`$20` pixels: a validation frame, eight of 4 pixels, the clearing frame). A halt that lets go
+MOVE (or WAIT) decided while Link is shoved is `Executor::run_shove`: its frames are the shove's, with nothing pressed
+(the held bits would stay in `ObjInputDir`, where the ladder, a push block's timer and a gravestone read them: Review46),
+it ends on the frame `ObjShoveDir` is cleared (asm:Shove_Reset), with no closing frame, so the next decision is Link's
+first free frame and sees where he landed (`$20` pixels: a validation frame, eight of 4 pixels, the clearing frame).
+A MOVE after which only the catch pose was waited out keeps no closing frame either. A halt that lets go
 for one frame only (Ganon's entrance, `$40` -> 0 -> `$40`) is no control: after a halt `skip_uncontrollable` looks one
 frame ahead (emulated and undone, `halts_next_frame`) and goes on skipping when Link is halted again. Not changed: the
 opening of a key door (`TriggeredDoorCmd` `$54` 6, then 7, Link's `ObjTimer` `$20`, asm:Door_TouchKey) blocks only

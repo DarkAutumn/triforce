@@ -77,6 +77,8 @@ WIZZ50_HOLD_CHANGES = {'like-like': {
 # these 203 traces first differs at one of the two: 87 at a decision in a shove (86 in the mask alone: the shove's
 # one MOVE, WAIT and every other MOVE gone; one also in a catch pose), 116 at a catch pose (82 a decision the base
 # handed out in the pose, 34 an action that ran the pose's frames longer, 7 or 8 more, fewer when cut short).
+# Review46's fixes (a shove's MOVE presses nothing; no closing frame after a wait for the pose alone) moved 22 of
+# these hashes; compared again, each still first differs from the base at a shove or a catch pose.
 NOOPS52_CHANGES = json.loads(
     (Path(__file__).parent / 'fixtures' / 'obs_schema5_noops52.json').read_text(encoding='utf-8'))
 # The traces both sides of the generation's merges changed, with their hashes on the merged code.
