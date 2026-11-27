@@ -113,6 +113,13 @@ def check_description(text: Optional[str]) -> str:
     return text
 
 
+def fit_description(text: str) -> str:
+    """A generated ``--desc`` (one line) cut to ``DESC_LIMIT`` characters, ``...`` marking the cut: the last guard of
+    a tool that writes ``triforce job run`` commands, which should say its meaningful part within the limit itself."""
+    text = ' '.join(text.split())
+    return text if len(text) <= DESC_LIMIT else text[:DESC_LIMIT - 3].rstrip() + '...'
+
+
 def check_command(command: list[str], options: bool = False):
     """Refuses a priority, I/O priority, time limit or cargo job count given after ``--``: they are the queue's.
     A command (``run``): the program it starts (after ``env`` and its ``NAME=value`` assignments) must not be one
@@ -655,7 +662,14 @@ def detach(args, head: list[str], extra: list[str]) -> int:
     caller's process tree, and the caller returns at once.  A job that waits its turn for hours then no longer dies
     with the shell or the agent that queued it (Nov 23: with 30 jobs in line, callers' own time limits killed
     waiting wrappers).  Its output goes to ``detached_dir()/<unit>.log``; ``triforce job wait UNIT`` follows it;
-    ``systemctl --user stop UNIT`` stops it (one SIGTERM to the wrapper, as for any job)."""
+    ``systemctl --user stop UNIT`` stops it (one SIGTERM to the wrapper, as for any job).  What the job would refuse
+    at once (a ``--desc`` past ``DESC_LIMIT``, a refused command) is refused here, before the unit starts: the
+    caller's exit code and stderr say so, not only the unit's log (Rooms49, Nov 27)."""
+    if args.verb == 'run':
+        check_description(args.desc)
+        check_command(extra)
+    elif args.verb == 'golden' and args.desc is not None:
+        check_description(args.desc)
     if shutil.which('systemd-run') is None:
         raise JobError("--detach needs systemd-run (a systemd user session); run the job without it")
     label = '-'.join(str(part) for part in (args.agent, args.task, getattr(args, 'subtask', None) or args.verb)
@@ -987,7 +1001,8 @@ def cmd_golden(args, extra: list[str]) -> int:
         version = 'unknown'
     subtask = args.subtask or (Path(models).name if models else version)
     minutes = args.timeout / 60
-    description = check_description(args.desc or f"Golden race of {subtask} for at most {minutes:g} minutes.")
+    description = check_description(args.desc or fit_description(f"Golden race of {subtask} for at most {minutes:g} "
+                                                                 f"minutes."))
     out = Path(args.out or root / 'runs' / 'golden' / time.strftime('%y%m%d-%H%M%S'))
     python = checkout_python(root)
     command = [python, str(root / 'zelda-headless.py'), str(out), str(args.count), *GOLDEN_FLAGS, *extra]

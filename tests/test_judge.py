@@ -2,6 +2,7 @@
 base measurement, the files found in a folder or in the store."""
 
 import json
+import shlex
 from pathlib import Path
 
 import pytest
@@ -258,6 +259,32 @@ def test_checkpoints_are_planned_one_chain_a_job_then_collected_in_one_table(sha
     assert '- `gen1-gleeok/s1-it000004`: iteration 4 of `gen1-gleeok/s1`, 4,000 steps' in text
     assert '| Measured (it 4, 0.00M steps) |' in text
     assert judge.main([*common[:1], 'boss-gleeok=gen1-gleeok/s1', '--its', '2,6', '--runs', '4']) == 2
+
+
+# Ten other teachers beside the judged one, each a long-named run at a numbered checkpoint: the control's team spec
+# alone runs past 381 characters (the lead's ten `--with`s, Nov 27).
+OTHERS = ('overworld', 'walkers', 'darknut', 'goriya', 'wizzrobe', 'others', 'rooms', 'boss-manhandla',
+          'boss-aquamentus', 'boss-dodongo')
+
+
+def test_every_job_the_checkpoints_plan_writes_has_a_description_the_queue_takes(shared, tmp_path, capsys):
+    store.create_team('t1', {'boss-gleeok': store.slot_of(_sealed('boss-gleeok', 'r1'))}, 'test')
+    judged = 'gen1-boss-gleeok-a-teacher-with-a-long-name/s1r3-continued-from-s1r2'
+    _training(*judged.split('/'))
+    withs = []
+    for group in OTHERS:
+        family = f'gen1-{group}-a-teacher-with-a-long-name'
+        _training(family, 's1r3-continued-from-s1r2')
+        withs += ['--with', f'{group}={family}/s1r3-continued-from-s1r2@it2']
+    assert judge.main(['checkpoints', f'boss-gleeok={judged}', '--dungeons', 'd4', '--runs', '100', '--chains-dir',
+                       str(tmp_path / 'chains'), '--agent', 'Tester', '--team-base', 't1', '--plan', *withs]) == 0
+    lines = _job_lines(capsys.readouterr().out)
+    descs = [(words := shlex.split(line))[words.index('--desc') + 1] for line in lines]
+    assert len(descs) == 6 and max(len(desc) for desc in descs) <= 120, descs
+    teams = [(words := shlex.split(line))[words.index('--team') + 1] for line in lines if ' --team ' in line]
+    assert teams and min(len(team) for team in teams) > 381                    # the team spec rides in the command
+    assert "the control of boss-gleeok's checkpoints: t1 with 10 other teachers' runs on to-d4, 100 runs" in descs
+    assert f"{judged} it 4 on d4 with 10 other teachers' runs, 100 runs" in descs
 
 
 def test_the_darknut_rooms_of_dungeon_3_are_counted_by_pass_cycle_and_bombs():

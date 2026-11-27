@@ -944,3 +944,27 @@ def test_a_detached_job_is_the_same_command_as_a_user_unit_and_wait_reads_its_en
     monkeypatch.setattr(job, 'unit_active', lambda name: True)
     monkeypatch.setattr(job, 'WAIT_POLL_SECONDS', 0.01)
     assert job.main(['wait', unit, '--timeout', '1s']) == 124
+
+
+def test_a_detached_run_is_refused_before_its_unit_when_the_job_would_refuse_it(tmp_path, monkeypatch, capsys):
+    """A ``--desc`` past the limit or a refused command fails the caller (exit 2, the reason on stderr) before any unit
+    starts: detached, the job's own refusal reached only the unit's log, and the caller saw "detached as" (Nov 27:
+    `judge checkpoints --submit`'s control jobs, 381 characters of desc, would never have run)."""
+    monkeypatch.setenv('TRIFORCE_QUEUE_DIR', str(tmp_path))
+    monkeypatch.setattr(job.shutil, 'which', lambda name: '/usr/bin/systemd-run')
+    started = []
+    monkeypatch.setattr(job.subprocess, 'run', lambda command, **_: started.append(command))
+    head = ['run', '--agent', 'A', '--task', 'T', '--subtask', 's', '--detach', '--timeout', '5m']
+    assert job.main([*head, '--desc', 'x' * (job.DESC_LIMIT + 1), '--', 'tool']) == 2
+    assert f'at most {job.DESC_LIMIT} characters (this one has {job.DESC_LIMIT + 1})' in capsys.readouterr().err
+    assert job.main([*head, '--desc', 'A refused command.', '--', 'nice', 'tool']) == 2
+    assert "priority, time limits and the cargo job count are the queue's" in capsys.readouterr().err
+    assert job.main(['golden', '--agent', 'A', '--task', 'T', '--timeout', '5m', '--detach', '--desc', 'y' * 200]) == 2
+    assert not started and not (tmp_path / 'detached').exists()
+    assert job.main([*head, '--desc', 'x' * job.DESC_LIMIT, '--', 'tool']) == 0 and len(started) == 1
+
+
+def test_a_generated_description_is_cut_to_the_limit():
+    assert job.fit_description('  Measure\nthe d3   segment. ') == 'Measure the d3 segment.'
+    cut = job.fit_description('word ' * 60)
+    assert len(cut) <= job.DESC_LIMIT and cut.endswith('...') and job.check_description(cut) == cut

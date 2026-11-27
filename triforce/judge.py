@@ -575,9 +575,18 @@ def checkpoints_plan(teacher: str, its: Optional[str], runs: int, dungeons: Opti
 
 def _job(agent: str, task: str, subtask: str, desc: str, timeout: str) -> list[str]:
     # The program beside this interpreter, not a bare name: `--submit` from a shell without the venv on its path
-    # found no `triforce` (the lead's watcher, Nov 24).
-    return [_triforce(), 'job', 'run', '--agent', agent, '--task', task, '--subtask', subtask, '--desc', desc,
-            '--express', '--timeout', timeout, '--detach', '--']
+    # found no `triforce` (the lead's watcher, Nov 24).  The description says its meaningful part within the queue's
+    # limit (`_others`, never the whole team spec: 381 characters with ten `--with`s, Nov 27); `fit_description` is
+    # the last guard (`triforce job run` refuses a longer one).
+    from .job import fit_description  # pylint: disable=import-outside-toplevel
+    return [_triforce(), 'job', 'run', '--agent', agent, '--task', task, '--subtask', subtask,
+            '--desc', fit_description(desc), '--express', '--timeout', timeout, '--detach', '--']
+
+
+def _others(plan: CheckpointsPlan) -> str:
+    """The ``--with`` runs in a job's description: their count, not their names (the command carries them)."""
+    count = len(plan.with_)
+    return '' if not count else f" with {count} other teacher{'s' if count > 1 else ''}' runs"
 
 
 def _triforce() -> str:
@@ -589,8 +598,8 @@ def piece_command(plan: CheckpointsPlan, piece: Piece, agent: str, task: str, ti
     """The queue's command for one piece: an express job (``--timeout``, detached) of ``eval-batch`` with the teacher
     at that checkpoint on that scope alone (``--with`` the others), no report (``judge checkpoints`` collects)."""
     name = f"{plan.group}-it{piece.iteration:06d}-{piece.judged.scope.name}"
-    return [*_job(agent, task, name, f"{plan.parent.identity} it {piece.iteration} judged on "
-                                     f"{piece.judged.scope.name}, {plan.runs} runs", timeout),
+    return [*_job(agent, task, name, f"{plan.parent.identity} it {piece.iteration} on {piece.judged.scope.name}"
+                                     f"{_others(plan)}, {plan.runs} runs", timeout),
             _triforce(), 'eval-batch', piece.tag,
             '--teacher', f"{plan.group}={plan.parent.identity}@it{piece.iteration}",
             *[arg for item in plan.with_ for arg in ('--with', item)],
@@ -603,8 +612,9 @@ def control_command(plan: CheckpointsPlan, judged: Judged, agent: str, task: str
     the same seeds, as ``<control>-<file>.jsonl``."""
     output = plan.chains_dir / f"{plan.control}-{judged.scope.file}.jsonl"
     args = shlex.join([*judged.chain_args(plan.runs, plan.route), '--output', str(output)])
+    base = plan.control_team.split('+', 1)[0]
     return [*_job(agent, task, f"control-{judged.scope.name}", f"the control of {plan.group}'s checkpoints: "
-                  f"{plan.control_team} on {judged.scope.name}, {plan.runs} runs", timeout),
+                  f"{base}{_others(plan)} on {judged.scope.name}, {plan.runs} runs", timeout),
             _triforce(), 'eval-batch', plan.control, '--team', plan.control_team,
             '--chain', f"{judged.scope.file}: {args}"]
 
