@@ -63,6 +63,17 @@ def test_a_lab_run_records_its_manifest_and_two_seeds_differ_only_in_seed_and_id
          seed='4')
 
 
+def test_an_edit_of_the_checkout_between_two_runs_does_not_change_their_recipe(tmp_path, monkeypatch):
+    """The suite records the code once a worker (``conftest._pin_code``): a tracked file someone edits in the checkout
+    while the suite runs (job #2587: the lead's edit of tests/test_job_queue.py landed between two of the runs above,
+    and ``--same-recipe-as`` refused the later one for ``code.dirty``) changes no run's recorded recipe."""
+    first = _run(tmp_path, 's1')
+    edited = {('diff', '--name-only', 'HEAD'): 'tests/test_job_queue.py', ('describe', '--always', '--dirty'): 'x-dirty'}
+    monkeypatch.setattr(manifest, '_git', lambda *args: edited.get(args, 'x'))
+    second = _run(tmp_path, 's2', '--same-recipe-as', str(first), seed='2')
+    assert manifest.read(second)['code'] == manifest.read(first)['code']
+
+
 def _recipe(tmp_path, families, *argv, group=None) -> dict:
     """``recipe.build`` of a run of ``families`` (KEY=YAML items) without training it; ``group``'s network applied as
     ``--group`` applies it (``lab.train.apply_network``)."""

@@ -141,6 +141,30 @@ def pytest_configure(config):  # pylint: disable=unused-argument
         if name and (linked / name).exists():
             (linked / paths.CURRENT).write_text(f'{name}\n', encoding='utf-8')
     os.environ['TRIFORCE_SHARED'] = _session['shared']
+    if not _controller(config):
+        _pin_code()
+
+
+def _pin_code():
+    """What a manifest and a record say of the code (``manifest.code``: commit, describe, the tracked files that
+    differ from HEAD, the module's stamp; ``provenance.code_version``) is read once a worker and served from then on.
+    Read live, a test that records two runs and compares them depended on nobody editing the checkout in between:
+    the lead's edit of tests/test_job_queue.py in r40-int at 14:03:53 (Nov 27) landed inside the 11 seconds of
+    test_lab_recipe's runs (19:03:44-19:03:55 UTC), a later run saw ``code.dirty`` and ``-dirty``, and
+    ``--same-recipe-as`` refused it (job #2587).  A suite tests the code as it was when its worker started; the live
+    reading stays the tools' own (child processes the tests start still read it)."""
+    import copy  # pylint: disable=import-outside-toplevel
+    import sys  # pylint: disable=import-outside-toplevel
+    from triforce import manifest, provenance  # pylint: disable=import-outside-toplevel
+    code, version = manifest.code(), provenance.code_version()
+    originals = {'code': manifest.code, 'code_version': provenance.code_version}
+    pinned = {'code': lambda: copy.deepcopy(code), 'code_version': lambda: version}
+    # Modules that imported the function by name before this (``from .provenance import code_version``) are pointed
+    # at the pinned one too.
+    for module in [m for name, m in sys.modules.items() if name == 'triforce' or name.startswith('triforce.')]:
+        for name, original in originals.items():
+            if getattr(module, name, None) is original:
+                setattr(module, name, pinned[name])
 
 
 def _report_suite(force: bool = False):
