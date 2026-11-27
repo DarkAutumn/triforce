@@ -98,6 +98,45 @@ While a Like-Like holds Link (asm:IsLinkParalyzed `$512`, `GameView::link_held`)
 no MOVE is offered then, not even the all-four fallback of a state with no legal step; WAIT and the strikes in his
 facing stay, and the sword frees him (Wizz50, Nov 27: inside the hold no shot or touch reaches Link, and
 gen1-others/s1r4 pressed a no-op MOVE there for a chain's 2000 steps in 39 of 100 Dungeon 6 runs).
+No CLIP either in a hold (`clips::skip_target`; Noops52, Nov 27: CLIP N was pressed 33 times in 9:0x51's hold, to
+death).
+While Link's shove (knockback) runs (asm:ObjShoveDir `$C0` set) the game reads no direction (asm:Link_HandleInput)
+while A and B still work: the mask offers the attacks it otherwise would and exactly one MOVE, in the shove's
+direction, with the duration whose ordinary walk (1.5 pixels a frame) is closest to the pixels the shove will still
+carry him (`GameView::link_shove`: asm:ObjShoveDistance `$D3`, 4 a frame, stopped on a grid point facing an
+unwalkable tile or at a room bound, asm:Shove_MovePixels; `actions::shove_duration`: the whole `$20` is a MOVE 16),
+and no WAIT; the executor plays that MOVE until the shove ends (`Executor::run_shove`, below). The owner's rule for
+this model (Nov 27): a WAIT that carried Link 32 pixels would teach that WAIT moves him; the MOVE's outcome is what a
+MOVE's normally is. A route's vetoed doorway takes nothing from it (the shove stops at the room bound).
+`GameView::can_link_move` also follows the game where it once offered a MOVE that did nothing (Noops52, Nov 27, from
+Noop51's census of 544 runs): no MOVE N past a person's line (`Y` < `$8E`) while object slot 1 holds the Grumble
+Goriya (`$36`) or a dungeon person (`$4B`-`$52`), in a dungeon as in a cave (asm:Walker_Move,
+asm:Person_BlockLinkMovingUp; 9:0x06); no step onto a ladder crossing without an object slot for the ladder
+(asm:Obj_FindEmptyMonsterSlot; 7:0x18 with eleven objects); off the grid, a press along Link's line past a dungeon
+room bound only through a doorway that lets him (the bounds are tested at any offset, asm:Walker_Move@CheckBoundary;
+8:0x6e below its bombable wall). A secret Armos's statue push (`GameView::is_secret_armos_direction`) is not offered
+while an object sits on the statue's square (the Armos fading in for `$3F` frames: a press makes nothing,
+asm:Spawn_CheckTouchedArmosOrGravestone; 0:0x34, about ten a run).
+
+Frames where Link can't act are the executor's, not a decision's (Noops52, Nov 27). The boomerang's catch pose
+(Link's state `$20` one frame, `$21` six: asm:Walker_Move@SetMovingDir zeroes his move, asm:Link_HandleInput refuses
+A and B) is played inside the running MOVE or WAIT and not counted (a MOVE N or WAIT N runs N frames and the pose's
+7, or 8 when its `$20` lasts a lag frame longer; a MOVE holds its direction through it, so Link still turns), and
+`skip_uncontrollable` never hands out a decision in it, nor after a catch on the closing frame of no buttons an
+attack, a WAIT or a CLIP keeps (the pose is skipped after it; Noops52's first branch census still handed out 105
+decisions there, in 259,325). A
+MOVE (or WAIT) decided while Link is shoved is `Executor::run_shove`: its frames are the shove's, it ends on the frame
+`ObjShoveDir` is cleared (asm:Shove_Reset), with no closing frame, so the next decision is Link's first free frame
+and sees where he landed (`$20` pixels: a validation frame, eight of 4 pixels, the clearing frame). A halt that lets go
+for one frame only (Ganon's entrance, `$40` -> 0 -> `$40`) is no control: after a halt `skip_uncontrollable` looks one
+frame ahead (emulated and undone, `halts_next_frame`) and goes on skipping when Link is halted again. Not changed: the
+opening of a key door (`TriggeredDoorCmd` `$54` 6, then 7, Link's `ObjTimer` `$20`, asm:Door_TouchKey) blocks only
+the press into that door (asm:Door_Touch_BlockWhileTimer, until the door's bit lands in `CurOpenedDoors` about nine
+frames later; nothing in Link's own update reads the door command, asm:Link_Update); Link is not frozen: from the
+frame after the key is spent (30 doors of 30 runs), a step along the wall moved him on its first frame at all 30, back
+from the door wherever that way is open (16), and A swung the sword on its first frame at 29 (the 30th's sword was
+blocked by a Bubble, `$4C`); the press into the door went through on frame 9 or 10. The 2-frame wall stop into the
+opening door stays a MOVE the network may choose.
 
 ### Item kinds: RECORDER, FOOD, CANDLE (round 24, version 1.4.2.0)
 
@@ -189,7 +228,10 @@ route step wants it) and in the objective (targets, outcomes).
   leaves MOVE S on the dock below its trigger (SWORD S instead while a monster stands on the land below), CLIP N where
   the block clip into the water is legal (`zelda::clips::dock_clip_at`), and RECORDER on the water spot
   (`clips::dock_spot`: 0x55 X `$78`, 0x3f X `$58`; WAIT instead while a shot is in the air); elsewhere the family's own
-  mask, and a MOVE W/E on the step stops on the clip's column. RECORDER there is `Executor::run_warp` (in the water):
+  mask, and a MOVE W/E on the step stops on the clip's column where the clip is offered there (clips on, the whirlwind
+  still to be called, `clips::on_dock_column`), and is not offered on that column (it would stop before its first
+  frame; Noops52, Nov 27: with the whirlwind gone by the stop held Link facing N there with no clip, every MOVE W/E
+  ending at once, 887 decisions in one run). RECORDER there is `Executor::run_warp` (in the water):
   the plays the index needs from `whirlwind::plays` (N for a step up, W for a step down, a one-frame turn before the
   B), then nothing pressed until the pickup (`$522`), the whirlwind gone, or an interrupt. The objective targets the
   clip's G tile. A whirlwind out of a dock room into any other room ends a chain run `stuck` (`dock-warp-missed`).

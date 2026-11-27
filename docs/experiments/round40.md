@@ -5879,3 +5879,107 @@ Wizzrobe's magic shot, "Every shooter"; the blue's rows stay 0), two arms dry-ru
 - **Length.** The same 30M for both arms, so the checkpoints compare at equal steps (it1368 had about 2.2M Wizzrobe
   steps behind it, a fifth of s1r4's 11.2M); the continuation's checkpoints chained first, and stopped early if D6
   and D9 flatten.
+
+## Decisions that did nothing, fixed (Noops52, branch `noops52`, Nov 27)
+
+Noop51's census (544 recorded runs replayed frame by frame, every decision checked for an effect;
+`~/triforce-review/watch/noops/REPORT.md`) found about one non-WAIT decision in 40 a MOVE that did nothing. The
+owner's decisions of Nov 27, one by one (docs/architecture.md beside the action mask has the rules; base `d735a666`):
+
+1. **The dock column (0:0x55, 0:0x3f).** `Executor::run_timed` stopped a MOVE W/E on `clips::dock_spot`'s column
+   before its first frame on every dock-warp step; the session offers the CLIP there only while the whirlwind is
+   still to be called. With the whirlwind gone by (`whirlwind::Plan::Missed`) Link stood facing N on the column, MOVE
+   W and E offered and ending at once. Now the stop holds only where the CLIP is offered (clips on, `Plan::Play`,
+   `clips::dock_clip_at` legal), and on that column the mask drops MOVE W/E (`clips::on_dock_column`).
+2. **The boomerang's catch pose** (`$AC` `$20`, `$21`): its frames are played inside the running MOVE or WAIT and
+   not counted (a MOVE holds its direction through them), and no decision is handed out in it, after a closing frame
+   of no buttons either.
+3. **Key doors: investigated, nothing changed.** asm:Door_TouchKey sets `TriggeredDoorCmd` 6 and Link's `ObjTimer`
+   `$20`, and asm:Door_Touch_BlockWhileTimer blocks only the press into that door until its bit lands in
+   `CurOpenedDoors`; nothing in Link's own update (asm:Link_Update, asm:Link_HandleInput, asm:Walker_Move) reads the
+   door command or his timer. In the emulator, from the frame after the key is spent on 30 doors of 30 census runs:
+   a step along the wall moved Link on its first frame at all 30, back from the door wherever that way is open (16),
+   A swung the sword on its first frame at 29 (the 30th's sword was blocked by a Bubble, `$4C` = 11), and the press
+   into the door went through on frame 9 or 10. **Link is not frozen**: no frames are skipped and no mask is added.
+4. **Knockback** (the owner's final call): while `ObjShoveDir` (`$C0`) is set the mask offers the attacks and exactly
+   one MOVE, in the shove's direction, with the duration whose walk is closest to the pixels the shove will still
+   carry Link (`GameView::link_shove`: `ObjShoveDistance` `$D3` at 4 a frame, stopped on a grid point facing an
+   unwalkable tile or at a room bound; the whole `$20` is a MOVE 16), and no WAIT; that MOVE ends on the frame the
+   shove does, with no closing frame, so the next decision sees the landing. Checked on real hits (6:0x38 32 pixels,
+   10 frames: a validation frame, eight of 4 pixels, the clearing one; 7:0x18 7 pixels and 1:0x33 3 against a wall:
+   MOVE 4). The executor's older rule (a shove's frames inside a MOVE don't count) stays for a MOVE a hit interrupts.
+5. **The woken secret Armos (0:0x34, 0:0x3d):** the statue push is not offered while an object sits on the statue's
+   square (asm:Spawn_CheckTouchedArmosOrGravestone makes nothing then; the Armos fades in `$3F` frames there).
+6. **CLIP in a Like-Like's hold:** not offered (`clips::skip_target`), as MOVE is not.
+7. **The small ones:** the person line in a dungeon (slot 1 `$36` or `$4B`-`$52`, Y < `$8E`); a ladder crossing only
+   with an object slot for the ladder; off the grid, no press along Link's line past a dungeon room bound but through
+   a doorway that lets him or with the ladder out; Ganon's entrance halt (`$40` -> 0 -> `$40`): after a halt the
+   executor looks one frame ahead (emulated and undone) and takes control only where it holds.
+
+Tests, each failing on the base: `tests/test_noop_decisions.py` (Armos, CLIP in a hold, person line, ladder slot, off
+the grid: every masked press also pressed, moving nothing), `tests/test_noop_frames.py` (no decision in a real catch
+pose; real shoves offering one MOVE of the distance rule and landing where they end), the executor's unit tests
+(catch pose, closing-frame catch, shove, halt lapse), `whirlwind_macro.rs`'s dock column test. `test_obs_legacy`
+re-records 203 traces (`tests/fixtures/obs_schema5_noops52.json`), each compared step by step with the base: 87 first
+differ at a decision in a shove, 116 at a catch pose. Test walkers that waited or stepped by fixed durations ride a
+shove out (`common::or_shove`). The corpus replays verify (`tf replay verify`, 11 of 11).
+
+### The census again (Noop51's scripts, the new team, 32 runs a segment, base and branch on the same seeds)
+
+Ten segments from the game start to Dungeon 9 (`target/noops52/record.sh`, Noop51's `submit.sh`), Noop51's
+`scan.py`, `probe.py`, `analyze.py` with each arm's own code; 253,073 / 252,688 non-WAIT decisions.
+
+| Noop51's cluster | base n (+turned only) | /1000 | branch n | /1000 |
+|---|---:|---:|---:|---:|
+| MOVE W/E at the dock column (executor stop before frame 1) | 2,398 | 9.48 | 0 | 0 |
+| MOVE into a door while its open command runs (item 3, kept) | 1,603 + 4 | 6.33 | 1,605 | 6.35 |
+| MOVE in the boomerang catch pose | 1,250 + 132 | 4.94 | 0 | 0 |
+| MOVE decided in a knockback | 450 + 32 | 1.78 | 1,611 (see below) | 6.38 |
+| MOVE into a woken Armos | 404 + 22 | 1.60 | 0 | 0 |
+| MOVE N past a dungeon person's line | 5 + 8 | 0.02 | 0 | 0 |
+| MOVE while Link halted (Ganon) | 2 | 0.01 | 0 | 0 |
+| MOVE off the grid into a wall | 1 | 0.00 | 0 | 0 |
+| MOVE onto a ladder crossing with no free slot | 1 | 0.00 | 0 | 0 |
+| CLIP in a Like-Like's hold | 0 | 0 | 0 | 0 |
+| push timer building (not a no-op) | 383 | 1.51 | 356 | 1.41 |
+| cut by a hit, beams without a beam, presses cut (not maskable) | 197 + 42 | 0.78 | 247 + 52 | 0.98 |
+
+Every decision (WAIT included, 257,940 / 257,750): in the catch pose 1,856 → 0; in a shove 2,383 → 1,920, of them
+MOVE or WAIT ended while the shove still ran 498 → 0, WAIT 151 → 0, attacks 397 → 339. The branch's 1,611 "knockback"
+MOVEs are the shove's own MOVE: by the census's definition (Link's own walk, no shove before or after) a MOVE whose
+motion is the shove's counts as no effect; each ends where the shove does. Remaining, outside the fixes: five MOVEs
+(two of them turning Link) on 0:0x5f's laid ladder in the E water that the mask offers and the game refuses (W/E at
+(`$E8`, `$85`) and (`$F8`, `$8D`); the base offers them too there, its runs did not get there), one MOVE N at 0:0x32
+(`$70`, `$4D`), 3 SWORD W/E at 9:0x07 (`$80`, `$8E`) off the grid facing N that the executor could not press. Census
+segment results, base → branch (of 32): ow0 32 → 32, d3 23 → 25, d4 28 → 28, d1 32 → 32, d2 32 → 32, d5 27 → 26,
+d7 25 → 28, d6 0 → 0, d8 32 → 32, d9 0 → 5. The dock column held 14 of the base's runs, one for 1,573 decisions.
+
+### Chains: the segments the fixes touch (100 runs, seeds 0-99, the same networks; `triforce stats compare`)
+
+| team, segment | base | branch | difference | the rest |
+|---|---:|---:|---|---|
+| new, after D5 (0x55's dock, 0x34's Armos) | 90% | 100% | +10.0 ± 3.0, better | hearts lost 1.78 → 1.39 (better); base lost 6 runs stuck 2000 steps, 3 deaths and a retreat limit at 0:0x55 |
+| new, D7 | 83% | 87% | +4.0 ± 5.3, within noise | kills from range 0.80 → 1.19 (better); one wallmaster stall in 7:0x0d |
+| new, after D7 (0x3f's dock) | 99% | 90% | −9.0 ± 2.9, worse | 7 runs lost at 0:0x5f, 3 dock-warp-missed at 0x3f (base 1) |
+| new, D9 | 5% | 7% | +2.0 ± 3.5, within noise | hearts and time within noise |
+| 2.0.0.15, after D5 | 0% | 0% | within noise | 61 → 68 stuck at the dock (bounce limit) in both |
+| 2.0.0.15, D7 | 61% | 61% | +0.0 ± 7.2 | within noise everywhere |
+| 2.0.0.15, after D7 | 0% | 0% | within noise | all 100 die at 0:0x3f in both |
+| 2.0.0.15, D9 | 1% | 1% | +0.0 ± 1.4 | within noise everywhere |
+
+**The loss after D7 is the knockback rule meeting a network trained without it.** All seven 0:0x5f runs play the
+same: the ladder clip W onto the water from the wrap arrival (X `$F0`), a hit at (`$C2`, `$85`) shoving Link
+E. Before, a decision in the shove could press W (MOVE W 16), which walked on W once the shove ended; now
+the shove's one MOVE (E 4) lands him at (`$C8`, `$85`), where the overworld teacher picks CLIP E back to the wrap
+and then wanders the E water on the laid ladder, dying or stalling 2000 steps (three of the four stalls pressing
+MOVE W on the ladder near the S edge, (`$D8`, `$E5`) or (`$D8`, `$ED`), which the mask offers in the base too). In
+seed 3 the base took the same hit and chose MOVE W 16 there. A network trained under the rule sees the landing before
+it chooses; today's has not. Seed 70's dock-warp miss at 0x3f is a hit during the recorder's plays on the water spot.
+
+**The previous team is unchanged within noise where it plays** (D7 61 → 61, D9 1 → 1; it does not pass either dock
+leg on today's code in either arm).
+
+**Not done, and the risk.** Nothing retrained. The knockback rule changes what every network decides after a hit
+(and the 0x5f loss shows a trained habit can depend on the old mid-shove choice); stage 2 trains under it. The
+closing-frame catch case was found by the first branch census (105 decisions in the pose) and fixed before the numbers
+above. 0:0x5f's ladder MOVE W/E and 9:0x07's sideways sword off the grid are mask gaps left as found.
