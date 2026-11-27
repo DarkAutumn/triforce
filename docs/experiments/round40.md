@@ -6103,3 +6103,38 @@ a second), and the every-room harvest of the teachers' own chains as a third sou
 120 runs, seeds 400000-400119, 51,249 room entries; job #2603, 34 keys, 696,320 rows, 45 minutes): 2,088,960 rows,
 102 sources.
 
+### 3. Imitation: `gen1-one/im256` and `gen1-one/im768`
+
+One cache of the 102 sources (2,088,960 rows, 15 GB; 1,880,064 train, 208,896 held out: the last env of each
+rollout), then `r36_merge_distill.py train --arch hitnet --arch-config '{"tokens": [type, features, rel, threat,
+chase, shooter], "feed": true, "room": true, "hidden_dim": W}' --aux hit=hit:0.5`, round 38's first pass (20 epochs,
+lr 1e-3, value 0.02, batch 4,096), both widths side by side from the frozen `triforce-gen18` (affde0e6; jobs #2617,
+#2618, 20 minutes each, about a minute an epoch). Both are sealed store runs (origin `distill`).
+
+| | parameters | held-out KL | joint top-1 | kind | direction | duration | value SE | hit loss (train / held out) | hit P=R taken / judged |
+|---|---:|---:|---:|---:|---:|---:|---:|---|---|
+| im256 | 1,609,220 | 0.0314 | 0.928 | 0.986 | 0.977 | 0.955 | 0.238 | 0.0096 / 0.0195 | 0.645 / 0.668 |
+| im768 | 4,960,772 | **0.0238** | **0.941** | 0.988 | 0.980 | 0.966 | 0.187 | 0.0083 / 0.0192 | 0.657 / 0.680 |
+
+(Round 38's 768-wide student: 0.118 on its first data, 0.089 after the every-room rows and a correction round.) 768
+is lower on every one of the 34 keys (by about a quarter). The keys whose KL stays highest, 256 / 768: darknut
+0.138 / 0.106 (joint 0.80 / 0.83), wizzrobe 0.097 / 0.077, goriya 0.075 / 0.057, boss-gleeok 0.053 / 0.047,
+like-like 0.050 / 0.035, gibdo 0.044 / 0.035, boss-manhandla 0.040 / 0.031; the overworld keys and the simple rooms
+0.001-0.04 (per key: `target/s52/im-keys.md`). The hit head (256): train loss 0.054 → 0.0096 over the 20 epochs,
+held-out loss 0.0325 → 0.0192 by epoch 12 and flat after (0.0195 at 20); held-out P=R on judged candidates 0.41 →
+0.67 by epoch 11, flat after: the last eight epochs fit the head's labels and gain nothing held out.
+
+**The yardstick** (gen18; one network for every key, route tasks; paired with the teachers' team on the same
+episodes; ± one standard error):
+
+| | cheap: success | hearts lost | hits a visit | losing rows | rooms: success | hearts lost | hits a visit | losing rows |
+|---|---:|---:|---:|---|---:|---:|---:|---|
+| teachers | 97.8% | -0.007 | 0.430 | | 96.0% | 0.256 | 0.607 | |
+| im256 | 97.3% (-0.5 ± 0.2) | +0.011 ± 0.009 | +0.014 ± 0.008 | none | 95.6% (-0.3 ± 0.2) | +0.031 ± 0.014 | +0.030 ± 0.011 | wizzrobe 9_07s -8.3 ± 3.6, darknut 5_37s -6.7 ± 3.2 |
+| im768 | 97.4% (-0.4 ± 0.2) | +0.017 ± 0.009 | +0.018 ± 0.009 | none | **96.3% (+0.4 ± 0.3)** | -0.007 ± 0.014 | -0.005 ± 0.011 | **none** |
+
+Play speed (decisions a second over the tiers, the two benches running side by side on the same machine): 256 1,254
+and 1,245, 768 1,181 and 1,135 (cheap, rooms), the teachers' team 940 and 1,154. The served network is not what the
+play waits on: 768 costs 6-9% in decisions a second. (`bench speed` fails on r40-int: `_play_policy` calls
+`evaluate._play` with one argument too many; not used here.)
+
