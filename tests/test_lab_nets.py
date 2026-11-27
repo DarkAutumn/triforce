@@ -654,6 +654,55 @@ def test_a_freed_index_waits_for_every_policy_and_pool_that_holds_it(states_dir)
         server.close()
 
 
+EXIT_WHILE_PLAYING = """
+import sys, time
+import torch
+from triforce import _native, nets
+from tests.networks import native_spec
+torch.set_num_threads(2)
+config = _native.SpecialistConfig.load('ow-start').replace(start_states=['start'], max_steps=400)
+task = _native.EvalTask(config, [('start', seed) for seed in range(64)], states_dir=sys.argv[1])
+pool = _native.EnvPool(task, num_envs=8, threads=8, seed=1)
+networks = [nets.create('wide', native_spec(), hidden_dim=1024, depth=4) for _ in range(3)]
+policies = [network.to_native() for network in networks]
+pool.play([policies[0]], act='argmax')
+time.sleep(1.0)
+print('exiting', flush=True)
+"""
+
+
+def test_a_process_ends_cleanly_while_its_served_networks_are_still_playing(states_dir):
+    """A chain's process ends with its pool and the server's thread busy (several served networks, eight envs on
+    a network slow enough on the CPU that the thread is nearly always inside torch): the exit code is 0. Before
+    ``serve._close_servers`` the interpreter ended the daemon thread inside torch's C++ and the process died with
+    "terminate called without an active exception" (gen18's chain job #2626, after its 100 runs; 7 exits of 10
+    here, and one hung), so a job that had done its work was marked failed."""
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+    env = {**os.environ, 'CUDA_VISIBLE_DEVICES': ''}
+    for _ in range(3):
+        done = subprocess.run([sys.executable, '-c', EXIT_WHILE_PLAYING, str(states_dir)],
+                              cwd=Path(__file__).parents[1], env=env, capture_output=True, text=True, timeout=120,
+                              check=False)
+        assert done.returncode == 0 and 'exiting' in done.stdout, (done.returncode, done.stderr[-2000:])
+        assert 'terminate called' not in done.stderr
+
+
+def test_every_server_is_closed_and_its_thread_joined_at_exit(monkeypatch):
+    """``_close_servers`` (atexit): each live server's queue closed and its thread ended before the interpreter
+    finalizes."""
+    import weakref
+    monkeypatch.setattr(serve_module, '_SERVERS', weakref.WeakSet())   # this test's servers only
+    servers = [Server(device='cpu') for _ in range(2)]
+    for server in servers:
+        server.policy(nets.create('wide', native_spec(), hidden_dim=32, depth=1))
+    assert all(server._thread.is_alive() for server in servers)
+    serve_module._close_servers()
+    assert all(server.queue.closed and not server._thread.is_alive() for server in servers)
+
+
 def test_architectures_side_by_side_save_load_and_play(states_dir, tmp_path):
     assert nets.names()[0] == 'zelda' and {'wide', 'gru', 'hithead'} <= set(nets.names())
     wide = nets.create('wide', native_spec(), hidden_dim=64, depth=2)

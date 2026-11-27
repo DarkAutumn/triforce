@@ -107,6 +107,16 @@ its policy is gone and the reentrant collection). A short bench of a 768-wide hi
 darknut entry six times, 2 episodes each): 1 network served and 19.0 MB allocated after every entry; before the fix
 1 to 6 networks, 19.0 to 115.2 MB allocated and 90 to 408 MB reserved.
 
+**Every server closed at exit (Nov 27).** Gen18's chain job #2626 (D4 from its entrance, 100 runs) played all its
+runs, then died at exit with "terminate called without an active exception": the batch marked it failed and kept
+only the `.tmp` output. The server's thread is a daemon; when the interpreter finalized while it was inside a
+torch op, Python 3.12 ended the thread as it took the GIL back inside torch's C++, and C++ aborted the process.
+Reproduced on the CPU: a pool of 8 envs still playing a 1024-wide network served beside two others, the process
+exiting after 1 s: 7 exits of 10 aborted (exit code 134) and one hung. Now an `atexit` hook
+(`serve._close_servers`) closes every live server and joins its thread before the interpreter finalizes (a pool
+still playing fails its waiting envs: the process is ending): 18 exits of 18 clean, and
+`tests/test_lab_nets.py` runs that process three times and asks for exit code 0.
+
 **Chosen: (c) with (a) as the generic path.** A network the Rust actor knows (`ZeldaPolicy`) plays as before, bit
 for bit (100 chain runs of `d3first` from `3_7cs_0`, seeds 0-99, today's networks: every run's record identical,
 field for field, between main and this branch; again at 2.0.0.5 on the corrected route, between the route's branch

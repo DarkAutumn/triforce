@@ -12,8 +12,12 @@ Recurrent networks: the state of each env (the queue's ``slot``) is kept here an
 new job; a bootstrap request (a truncation's value) reads the state without advancing it.
 
 The thread runs while the process lives (a daemon); a failure in a network closes the queue, so every waiting env
-fails with the error instead of hanging.
+fails with the error instead of hanging.  At exit every server is closed and its thread joined before the
+interpreter finalizes (``_close_servers``): a daemon thread still inside a torch op then was ended by the
+interpreter mid-op (Python 3.12 ends it as it takes the GIL back, inside torch's C++), and the process died with
+"terminate called without an active exception" after its work was done (Nov 27, gen18's chain job #2626).
 """
+import atexit
 import copy
 import hashlib
 import json
@@ -232,6 +236,7 @@ class Server:
         self._lock = threading.RLock()
         self._thread: Optional[threading.Thread] = None
         self.error: Optional[BaseException] = None
+        _SERVERS.add(self)
         self.batches = 0
         self.rows = 0
         self.busy = 0.0                         # seconds spent answering (``answer``): the server thread's load
@@ -481,8 +486,20 @@ class Server:
     def close(self, reason: str = "the network server stopped"):
         """Fails every waiting and later request and ends the thread."""
         self.queue.close(reason)
-        if self._thread is not None:
+        if self._thread is not None and self._thread is not threading.current_thread():
             self._thread.join()
+
+
+_SERVERS: 'weakref.WeakSet[Server]' = weakref.WeakSet()
+
+
+@atexit.register
+def _close_servers():
+    """Closes every live server and joins its thread while the interpreter still runs (atexit runs before it
+    finalizes): no daemon thread of ours is inside torch when it does.  A pool still playing then fails its
+    waiting envs with the reason (the process is ending)."""
+    for server in list(_SERVERS):
+        server.close("the process is exiting")
 
 
 _DEFAULT: Optional[Server] = None
