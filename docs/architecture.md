@@ -908,12 +908,14 @@ random byte. **The types it fills** (each its own function in `zelda::shooter`, 
 - the Zora `$11` (`zora`: its fireball when the update reads ObjTimer `$FD` in surfaced state 3, 17 frames after it
   surfaces; from the mound and the surfacing the frames follow its states' timers), Aquamentus `$3D` (`aquamentus`: the
   volley when ObjTimer reads 0, as the Goriya's timer; the spawn cloud likewise), Gohma `$33/$34` (`gohma`: its own
-  shoot timer `$380`, a fireball every 65 frames, no clock test) and the red Wizzrobe `$24` (`red_wizzrobe`: ObjState
+  shoot timer `$380`, a fireball every 65 frames, no clock test; before its init on entering the room, its first
+  fireball 2 frames on) and the red Wizzrobe `$24` (`red_wizzrobe`: ObjState
   counted down, the magic shot at `$B0`, once each appearance). Their shots need a free slot (the Wizzrobe's and the
   walking shooters' also fewer than 4 counted shots).
 
 Not filled: the blue Wizzrobe `$23` (its shot frame is the frame counter's, but whether it fires there depends on its
-own walk over the room's tiles, a random teleport and Link exactly on its row or column: round40.md "Every shooter"),
+own walk over the room's tiles, a random teleport and Link in its 16-pixel row band or exactly on its column (Link's X
+its X rounded down to 16), asm:Wizzrobe_Blue_TryShooting: round40.md "Every shooter"),
 Manhandla, Gleeok's heads, Ganon and the statues. `_native.shooter_blocks(ram)` gives the block for recorded RAM,
 `_native.shooter_probe(ram)` the raw rule with `next` (the shot's conditions but a red Goriya's roll hold on the next
 frame). `zelda::shooter`'s unit tests, `crates/env/tests/shooter.rs` and `tests/test_obs_shooter.py` check it, the last

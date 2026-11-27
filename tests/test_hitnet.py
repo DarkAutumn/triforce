@@ -131,6 +131,9 @@ def test_a_network_widened_with_a_token_group_computes_exactly_what_it_did():
     assert wide.link_proj.in_features == old.link_proj.in_features + spec['chase']['shape'][0]
     with pytest.raises(ValueError, match='dropped'):
         widen_tokens(wide, ['type', 'features'], spec)
+    old.register_buffer('stray', torch.zeros(1))            # a loaded parameter the rebuilt network has no place for
+    with pytest.raises(ValueError, match="drop the loaded parameters \\['stray'\\]"):
+        widen_tokens(old, ['type', 'features', 'rel', 'threat', 'shooter'], spec)
 
 
 def test_empty_slots_are_masked_and_link_alone_is_fine():

@@ -5679,16 +5679,16 @@ nothing trained thrown away). Nothing trained; the overworld teacher's widened c
 
 - **Lynels `$01/$02`, Moblins `$03/$04`, Octoroks `$07-$0A`** (`walking`; asm:Shooter_RunShootTimer): a shot is a stand
   on ObjShootTimer `$451`, loaded with `$30` once "wants to shoot" holds and counted down by the update (not the NMI);
-  the shot leaves on the frame it reaches `$10`, then 16 more frames standing. "Wants to shoot" is set only while it
-  walks (a wanderer's turn at a grid point, asm:Wanderer_MoveAndTurn: toward the chase target in line on a turn rate at
-  least `Random+1,X`, or perpendicular when its turn timer `$478` ran out; a Lynel's Goriya rule), so nothing clears
-  it in the stand. Lost on its frame by the clock, a stun still running, no free slot or 4 counted shots; a hit's
-  invincibility timer still running at the next update (counted down on even frames before it,
+  the shot leaves on the frame it reaches `$10`, then 15 more frames standing (`$0F` to 1). "Wants to shoot" is set
+  only while it walks (a wanderer's turn at a grid point, asm:Wanderer_MoveAndTurn: toward the chase target in line on
+  a turn rate at least `Random+1,X`, or perpendicular when its turn timer `$478` ran out; a Lynel's Goriya rule), so
+  nothing clears it in the stand. Lost on its frame by the clock, a stun still running, no free slot or 4 counted
+  shots; a hit's invincibility timer still running at the next update (counted down on even frames before it,
   asm:Obj_DecInvincibilityTimer) puts the timer back to 0. A red type starts a stand only on a frame whose `Random,X`
   is `$F8` or more; the stand starts 33 frames or more before its shot, so no random byte falls inside the 16 frames and
   `will_throw` is 1 or 0 for both colours. `loaded`: live, not stunned, no clock. `throw_time` reads the Goriya's
-  scale, 1 − the frames until the timer lets it shoot / 112: `$451` − `$10` in a stand, 33 at rest, `$451` + 33
-  standing after a shot.
+  scale, 1 − the frames until the timer lets it shoot / 112: `$451` − `$10` in a stand, 33 at rest, `$451` + 33 from
+  the shot's frame to the end of the stand.
 - **The Zora `$11`** (`zora`; asm:Zora_Update, asm:Burrower_Update): one fireball a surfacing, on the frame its update
   reads ObjTimer `$FD` in state 3 (two frames in; the NMI counts the timer first, a state ends on the frame its update
   reads 0), so `max(T, 1) + 17` frames from the mound, `max(T, 1) + 2` from the surfacing, `T − $FD` in state 3.
@@ -5697,7 +5697,8 @@ nothing trained thrown away). Nothing trained; the overworld teacher's widened c
   timer (and its spawn cloud the same way); no clock. `throw_time` 1 − ObjTimer / 112 (reloaded `$70-$7F` or
   `$F0-$FF`).
 - **Gohma `$33/$34`** (`gohma`; asm:Gohma_Update@ShootAnimateCollide): its own shoot timer `$380` counted down every
-  update, a fireball at 0, reloaded `$41`; no clock test.
+  update, a fireball at 0, reloaded `$41`; no clock test. On entering its room, before its init has run
+  (ObjUninitialized `$492`), its first fireball 2 frames on (asm:Gohma_Init sets the timer to 1; Review46's find).
 - **The red Wizzrobe `$24`** (`red_wizzrobe`; asm:Wizzrobe_Red_Update): ObjState counted down by the update, its magic
   shot at `$B0`, once each appearance; `loaded` from the frame it took its place (`$FF`) to the shot; a counted shot.
 
@@ -5707,10 +5708,10 @@ Wizzrobe's state), none of which the network sees anywhere else; the aim is not 
 its first update and the threat block covers it from then). **The blue Wizzrobe `$23` is left out** (its rows stay
 0): its shot can only come on a frame whose `FrameCounter AND $1F` is 0, but whether it comes then depends on its own
 walk over the room's tiles (a wall reverses it, a block or water starts a teleport), on a random teleport target and
-on Link standing exactly on its row or on its column rounded to 16 pixels (asm:Wizzrobe_Blue_TryShooting): a
-`will_throw` to the others' standard would have to walk it over the tile map and give the teleport as a chance over
-the four targets' tiles. Not done; the agent's call, for the lead. Manhandla, Gleeok's heads, Ganon and the statues
-(their fireballs, the corpus's unmatched `$55`/`$56` shots) were not asked for.
+on Link in its 16-pixel row band (`Y AND $F0` equal) or exactly on its column (Link's X its X rounded down to 16;
+asm:Wizzrobe_Blue_TryShooting): a `will_throw` to the others' standard would have to walk it over the tile map and
+give the teleport as a chance over the four targets' tiles. Not done; the agent's call, for the lead. Manhandla,
+Gleeok's heads, Ganon and the statues (their fireballs, the corpus's unmatched `$55`/`$56` shots) were not asked for.
 
 ### 2. Against recorded games (`tests/test_obs_shooter.py`)
 
@@ -5727,16 +5728,18 @@ the same walk over the five corpus replays (golden `d3first` 51 networks and sin
 | Octorok | 215 | 0 | 0 | 82,730 | 3,440 (0) | 3,242 of 3,645 (89%) |
 | Zora | 167 | 0 | 0 | 31,218 | 2,672 (0) | 2,630 of 2,830 (93%) |
 | Aquamentus | 17 | 0 | 0 | 2,742 | 272 (0) | 272 of 282 (96%) |
-| Gohma | 7 | 0 | 0 | 1,046 | 47 (10) | 33 of 57 (58%) |
+| Gohma | 7 | 0 | 0 | 1,046 | 47 (0) | 43 of 67 (64%) |
 | red Wizzrobe | 189 | 0 | 0 | 44,583 | 3,040 (3) | 2,966 of 3,113 (95%) |
 
 **Every shot said, nothing said that did not come**, but six frames in all excused where the rule's reading of the
 room moved under it inside the frame itself: five a shot of a higher slot (updated first) filled the room, or a lag
 frame (the frame counter did not move) held every update; one a higher slot's shot ended and freed the room. In the
-windows the excused frames are a shooter whose init had not run (Gohma's two first frames in its room) or a room with no
-space then that a shot ending freed. The frames saying 1 without the shot following (frames under a freeze, the
-submenu, the flute's tune or a lag frame, left out of that column) are Link's hits and stuns within the 16 frames and
-the room filling; Gohma's are its death (the arrow in its eye) before its next fireball.
+windows the excused frames are a room with no space then that a shot ending freed (Gohma's first frames in its room,
+before its init, were excused at first; since Review46's follow-ups the rule reads them: 2 frames to its fireball).
+The frames saying 1 without the shot following (frames under a freeze, the submenu, the flute's tune or a lag frame,
+left out of that column) are Link's hits and stuns within the 16 frames and the room filling; Gohma's are its death
+(the arrow in its eye) before its next fireball. The test holds each type to more than 80% followed on each golden
+replay (at least 40 frames a type), Gohma excepted for that reason.
 
 **The random gates, read from the register** (the game steps `$18-$24` before the frame's updates, so the frame's own
 bytes are the ones its updates read): over the five replays every walking shooter's stand started exactly when the
@@ -5769,9 +5772,9 @@ and columns are as they were, more types' rows filled), `OLDEST_OBS_SCHEMA` stay
   differ by as much, within 1.6e-5);
 - **the dry call of the continuation** (`TRIFORCE_JOB_ESTIMATE`; every refusal checked, nothing created):
   `python -m triforce.lab.train --name gen1-overworld --run-id s1r2-c2 --group overworld --load
-  ~/triforce-shared/runs/gen1-overworld/s1r2-c1 --parallel 20 --steps-per-update 16384 --iterations 400
-  --checkpoint-every 50 --seed 4113` prints `widened with the token group(s) shooter` and answers 6,552,000 steps. The
-  c1 run also had `--shares ow-lynel@d3first=3`: the lead's to keep or drop.
+  gen1-overworld/s1r2-c1 --parallel 20 --steps-per-update 16384 --iterations 400 --checkpoint-every 50 --seed 4113`
+  (the store path at first; the store name since Review46's follow-ups) prints `widened with the token group(s)
+  shooter` and answers 6,552,000 steps. The c1 run also had `--shares ow-lynel@d3first=3`: the lead's to keep or drop.
 
 ### 4. Not done, and where the risk is
 
@@ -5784,5 +5787,3 @@ and columns are as they were, more types' rows filled), `OLDEST_OBS_SCHEMA` stay
 - On the GPU the widened network is equal to its source up to 7.9e-6 in small batches, not bit for bit; the chains
   show it plays the same, as the source plays itself. A split projection (the new groups through their own zero matrix,
   added) would make it exact everywhere at the cost of a second layout; not built.
-- Found on the way: the lab trainer's `--load` takes a path only (a store name `gen1-overworld/s1r2-c1` is not
-  resolved, as its `--team` help suggests); the lead's own command already used the store path.

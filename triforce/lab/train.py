@@ -58,7 +58,7 @@ from ..nets.serve import learner_process, serve_mode
 from ..metrics import MetricsLogger, format_summary
 from ..ppo import PPO, IterationResult, PPOConfig, joint_kl, minibatch_forward
 from ..train import (CONFIRM_EPISODES, EXIT_INTERRUPTED, EarlyStop, curriculum_spec, interrupt_on_sigterm,
-                     interrupts_held, run_status)
+                     interrupts_held, resolve_warm_start, run_status)
 from . import groups
 from .auxiliary import AuxLoss, aux_loss, held_out
 from .collect import MultiCollector, NeedSampler, Teachers, parse_families, teacher_paths
@@ -195,17 +195,22 @@ def teacher_coeff(args, iteration: int) -> float:
     return args.teacher_coeff * max(0.0, 1.0 - (iteration - args.teacher_hold) / args.teacher_fade)
 
 
-def initial_network(args):
+def initial_network(args, models):
     """(network, source, parent): ``parent`` the loaded checkpoint's identity (``lineage.identity``), None from
-    scratch.  A loaded ``hitnet`` the run's ``--arch-config`` (or group file) gives more token groups is widened to
-    them (``recipe.widen_loaded``: the new inputs start at zero)."""
+    scratch.  ``--load`` resolves as ``triforce train``'s (``train.resolve_warm_start``: a path, a store run
+    ``FAMILY/RUN``, a team slot ``family@route``, a family). A loaded ``hitnet`` the run's ``--arch-config`` (or group
+    file) gives more token groups is widened to them (``recipe.widen_loaded``: the new inputs start at zero)."""
     if args.load:
-        network, checkpoint = registry.load_model(args.load)
+        try:
+            path = resolve_warm_start(args.load, models)
+        except MissingInput as error:
+            raise SystemExit(f"--load: {error}") from None
+        network, checkpoint = registry.load_model(path)
         network, added = widen_loaded(network, args.arch, json.loads(args.arch_config))
         if added:
             print(f"[lab] --load {args.load}: widened with the token group(s) {', '.join(added)} (their input "
                   "columns zero: it acts exactly as loaded)", flush=True)
-        return network, str(args.load), lineage.identity(checkpoint, args.load)
+        return network, str(path), lineage.identity(checkpoint, path)
     return create_network(args.arch, json.loads(args.arch_config)), None, None
 
 
@@ -628,7 +633,7 @@ def main(argv=None) -> Path:
             raise SystemExit(f"--resume {args.resume}: its checkpoint is at iteration {start_iteration} of "
                              f"{args.iterations}: nothing left to train")
     else:
-        network, source, parent = initial_network(args)
+        network, source, parent = initial_network(args, models)
     check_network_reads(network, families)
     check_demos(network, families, args.demos)
     tried = parse_try_others(args.try_others)
