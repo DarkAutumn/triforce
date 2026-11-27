@@ -2,11 +2,16 @@
 
 import json
 
-from triforce import registry
+import pytest
+
+from triforce import nets, registry
 from triforce.events import PLAN_FILE, PROGRESS_FILE, progress_job
 from triforce.lab import bench
+from triforce.runner import RunnerError, chain_config, switched_reads
+from triforce.specialist import load_specialist
 
-from .networks import random_network
+from .conftest import require_rom
+from .networks import native_spec, random_network
 
 
 def test_states_spread_over_room_entries_prefer_the_route_and_fall_back_to_seed_states(tmp_path):
@@ -106,6 +111,32 @@ def test_an_arrived_entry_plays_its_states_without_the_familys_randomization(tmp
     assert config.to_dict()['ram_randomization']['hp'] is None
     config, _ = bench.entry_task({**entry, 'arrived': False}, tmp_path)
     assert config.to_dict()['ram_randomization']['hp'] is not None
+
+
+def test_a_generation_network_plays_the_bench_on_the_routes_task_and_todays_on_its_own(tmp_path):
+    """Stage52: a network that reads the generation's switched blocks (`runner.switched_reads`) plays an entry with
+    the config its chain slot has (`runner.chain_config(..., trained=True)`: the route task's inputs and rules), not
+    the family's bare task, where its blocks would read zeros; today's networks play the bare task, as the
+    references were played; a block the route's task still leaves off is refused as a chain refuses it."""
+    require_rom()
+    small = {'d_model': 32, 'layers': 1, 'link_out': 32, 'hidden_dim': 32, 'depth': 1, 'hit_dim': 32, 'hit_depth': 1}
+    student = nets.create('hitnet', native_spec(), tokens=['type', 'features', 'rel', 'threat', 'chase', 'shooter'],
+                          feed=True, **small)
+    entry = {'key': 'darknut@d3first', 'family': 'darknut', 'source': bench.ROOMS, 'arrived': True,
+             'states': [f'{bench.ROOMS}/darknut/d3first_3_59n_h5_7']}
+    (tmp_path / bench.ROOMS).mkdir()
+    reads = switched_reads(student)
+    config, _ = bench.network_task('darknut@d3first', entry, None, 'd3first', tmp_path, reads)
+    routed = chain_config('darknut', 'd3first', trained=True).to_dict()
+    want = {k: v for k, v in routed.items() if k not in ('start_states', 'ram_randomization')}
+    assert {k: v for k, v in config.to_dict().items() if k in want} == want
+    assert config.obs.threat and config.obs.chase and config.to_dict()['obs'].get('shooter')
+    assert config.items.bomb_catch == 2 and config.to_dict()['ram_randomization']['hp'] is None
+    plain, _ = bench.network_task('darknut@d3first', entry, None, 'd3first', tmp_path, {})
+    bare = load_specialist('darknut').to_dict()
+    assert plain.to_dict()['obs'] == bare['obs'] and plain.items.bomb_catch == 0
+    with pytest.raises(RunnerError, match=r'obs\.chase and obs\.shooter and obs\.threat are off'):
+        bench.network_task('darknut', {**entry, 'key': 'darknut'}, None, 'd2first', tmp_path, reads)
 
 
 def test_the_rooms_manifest_keeps_the_room_entries_that_cost_the_team(tmp_path):

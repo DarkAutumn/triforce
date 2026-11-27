@@ -6,8 +6,6 @@ extends: [../wizzrobe.yaml, _generation.yaml]
 state_routes: [d3first]
 items: {boomerang: true, candle: false}   # round 40 (Switch40): 6:0x38's Bubble room as measured: BOOMERANG on (the
                                           # Like-Likes), CANDLE off (fire cannot hurt a Wizzrobe or a Bubble)
-obs: {shooter: true}                       # schema 10's entity_shooter for the wizzrobe teacher: the red Wizzrobe's
-                                          # magic shot (round40.md "Every shooter"; the blue's rows stay 0)
 # A stall is a failure (Wizz50, Nov 27; trap-room's and boss-gleeok's rule): held by a Like-Like no shot or touch
 # reaches Link, and with the 600-step no-damage truncation bootstrapped gen1-others/s1r4 learned to sit in the hold:
 # iterations whose 6:0x38 / 6:0x3a episodes held a 550-step quiet stretch, 0-6 / 0-27 of each 300 before iteration

@@ -109,19 +109,16 @@ def test_group_expands_to_its_members_on_its_route():
     assert train.expand_group(args) is None and args.families == ['zol']
 
 
-GENERATION = {'arch': 'hitnet', 'arch_config': {'tokens': ['type', 'features', 'rel', 'threat', 'chase'],
+GENERATION = {'arch': 'hitnet', 'arch_config': {'tokens': ['type', 'features', 'rel', 'threat', 'chase', 'shooter'],
                                                 'feed': True, 'room': True, 'hidden_dim': 768},
               'aux': ['hit=hit:0.5'], 'try_others': '4:0.25'}
 
 
 def test_the_files_network_block_is_every_teachers_and_group_applies_it(capsys):
     """The owner's width (768 everywhere) and the lead's pins live in the file: ``--group NAME`` alone trains them.
-    The Goriya, overworld and Wizzrobe teachers' networks read schema 10's ``entity_shooter`` besides (their own
-    ``network:`` keys, by key)."""
-    shooter = {**GENERATION, 'arch_config': {**GENERATION['arch_config'],
-                                             'tokens': ['type', 'features', 'rel', 'threat', 'chase', 'shooter']}}
-    assert all(group.network == (shooter if name in ('goriya', 'overworld', 'wizzrobe') else GENERATION)
-               for name, group in groups.load().items())
+    Every teacher's network reads schema 10's ``entity_shooter`` (Stage52: every generation task fills it, and stage
+    2's one network reads every teacher's inputs); no teacher overrides the block."""
+    assert all(group.network == GENERATION for group in groups.load().values())
     args = train.parse_args(['--name', 'rooms', '--group', 'rooms'])
     sources = train.apply_network(args, train.expand_group(args))
     assert (args.arch, json.loads(args.arch_config), args.aux, args.try_others) == (
@@ -172,7 +169,7 @@ def test_a_teacher_overrides_a_key_and_a_file_without_the_block_behaves_as_befor
 
 def test_the_generations_hitnet_builds_at_768_and_runs_a_forward_pass():
     network = recipe.create_network(GENERATION['arch'], GENERATION['arch_config'])
-    assert network.parameter_count() == 4_960_388
+    assert network.parameter_count() == 4_960_772       # with the shooter group (Stage52): 384 more than without
     obs = {key: (torch.randint(0, spec['vocab'], (2, *spec['shape'])) if spec['vocab']
                  else torch.rand(2, *spec['shape'])) for key, spec in native_spec().items() if key != 'action_mask'}
     heads, _ = network.heads(obs)

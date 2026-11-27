@@ -331,7 +331,8 @@ names what `triforce train`'s does (`train.resolve_warm_start`): a checkpoint or
 a team slot `family@route`, a family.
 
 The overworld teacher with schema 10's `shooter` group (round40.md "Every shooter"): `triforce/groups.yaml`'s
-`overworld` reads it and its ten tasks turn `obs.shooter` on, so its continuation is
+`overworld` reads it (since Stage52 every teacher's network block does, and every generation task turns
+`obs.shooter` on), so its continuation is
 `python -m triforce.lab.train --name gen1-overworld --run-id RUN --group overworld --load gen1-overworld/s1r2-c1 ...`
 (the dry call, `TRIFORCE_JOB_ESTIMATE`, passes every check and
 widens it: 6,552,000 steps at the c1 run's 20 × 16384 × 400). **The proof that it plays as before**
@@ -560,10 +561,11 @@ its numbers are the defaults and the scale below. A teacher is named per family 
    last env of each rollout: whole episodes). A field is kept when every shard has it: data recorded before round
    40 has no hit labels, and a cache that mixes it in has none.
 3. **Imitate** (`r36_merge_distill.py train --cache CACHE --name NAME --run-id RUN --arch hitnet --arch-config
-   '{"tokens": ["type", "features", "rel", "threat", "chase"], "feed": true}' --aux hit=hit:C`): KL(teacher ‖
+   '{"tokens": ["type", "features", "rel", "threat", "chase", "shooter"], "feed": true}' --aux hit=hit:C`): KL(teacher ‖
    student) over the 352 joint actions, `--value-coeff` (0.02) · ½(V − V_teacher)², and the lab's own auxiliary
    loss (`lab.auxiliary.aux_loss`: the hit head's binary cross-entropy on the action taken and the tried
-   candidates) in one pass; the network from `lab.recipe.create_network` (1,608,836 parameters as above). From
+   candidates) in one pass; the network from `lab.recipe.create_network` (1,609,220 parameters at 256 wide with the
+   `shooter` group, the union of the teachers' inputs: every generation task fills it, `_generation.yaml`). From
    scratch it runs round 38's first pass (20 epochs, lr 1e-3); `--init NAME/RUN` (a second pass on more data, or a
    correction round's imitation) its later passes (5 epochs, lr 3e-4). Writes a normal run (`ckpt.pt`, playable
    and loadable by `lab.train --load`) and `distill.json`: per epoch the training KL, value and auxiliary losses, and
@@ -611,7 +613,11 @@ held-out KL and the hit head's precision on held-out rows, then the rooms tier a
 - `run --team --out team.json` (today's networks), `run --network CKPT --keys zol stalfos-keese-gel --out
   student.json` (one network for some keys), `run --checkpoint KEY=CKPT ...`, `compare team.json student.json`;
   `run --act MODE` plays another act mode than the manifest's (the planner beside a result:
-  `temperature:0.5+relax:16+plan:16:1`, for networks the Rust actor plays).
+  `temperature:0.5+relax:16+plan:16:1`, for networks the Rust actor plays). A network that reads the generation's
+  switched blocks (`runner.switched_reads`: `threat`, `chase`, `shooter`) plays each entry with the config its chain
+  slot has (`runner.chain_config(family, route, trained=True)`: the route task's inputs and rules of play), today's
+  networks on the family's own task as the references were played (`bench.network_task`); teachers and their student
+  are compared on the same footing. A store team spec plays as `TRIFORCE_TEAM=SPEC ... run --team`.
 - **Full tier** (`bench.json` `full`): the route's segment chains as the landings run them, `triforce eval-batch
   TAG --chains TAG --route d3first --runs 1000 --act model`, a candidate's networks given with `--checkpoint`; the
   `full` segment is the route from the start. It is what decides; the cheap tier only shortlists.

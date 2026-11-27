@@ -941,7 +941,8 @@ columns, Nov 26).** One NEW key, `entity_shooter`, after `entity_chase`; no sche
 reads it with the token group `shooter` (its columns join each entity token after every older group's, so a network
 without the group reads the rest where it always did; a trained one is widened to it with zero columns, docs/lab.md
 "Continuing with a new input"). Filled only with **`obs.shooter: true`** (`env::config::ObsConfig::shooter`, default
-false: zeros; on in `goriya@d3first`'s task and the overworld teacher's ten `ow-*@d3first` tasks).
+false: zeros; on in every generation task, `specialists/d3first/_generation.yaml`, since Stage52: stage 2's one network
+reads every teacher's inputs; the Goriya, Wizzrobe and overworld teachers read it, the others leave it unread).
 `env::observation::shooter_block` computes it from the RAM alone (`zelda::shooter::throw`): no emulator step and no
 random byte. **The types it fills** (each its own function in `zelda::shooter`, the game's rule walked frame by frame):
 

@@ -52,6 +52,7 @@ from ..eval_batch import route_segments
 from ..evaluate import evaluate_specialist
 from ..events import progress_job, write_json_atomic
 from ..jobs import announce, work
+from ..runner import chain_config, check_inputs, switched_reads
 from ..specialist import load_specialist
 
 MANIFEST = Path(__file__).with_name('bench.json')
@@ -175,34 +176,60 @@ def summarize(episodes: list[dict]) -> dict:
             'beam_unfired_share': beams['lined_unfired'] / beams['lined'] if beams['lined'] else 0.0}
 
 
-def entry_task(entry: dict, states_dir=None):
+def entry_task(entry: dict, states_dir=None, trained: bool = False, route: str = ROUTE):
     """(config, states dir) that play a manifest entry's states: a harvested entry's from its family's folder under
     the entry's source (``harvested``, ``harvested-rooms``; start states resolve by bare name in one folder), seed
-    states from the states dir; an ``arrived`` entry with the family's ``ram_randomization`` off."""
+    states from the states dir; an ``arrived`` entry with the family's ``ram_randomization`` off. The family's own
+    task, as the references were played; ``trained`` (the network reads the generation's switched blocks,
+    ``runner.switched_reads``): the config a chain of ``route`` plays such a network's slot with
+    (``runner.chain_config``: the route task's inputs and rules of play), so the bench plays it as it trained and as
+    its chains play it."""
     base = Path(states_dir or _native.paths()['states_dir'])
     names = [Path(state).name for state in entry['states']]
     if entry['source'] != 'seed':       # harvested, harvested-rooms: the states dir's folder, else the snapshot
         base = paths.data_dir(entry['source'], base / entry['source']) / entry['family']
-    config = load_specialist(entry['family']).replace(start_states=names)
+    own = chain_config(entry['family'], route, trained=True) if trained else load_specialist(entry['family'])
+    config = own.replace(start_states=names)
     if entry.get('arrived'):
         config = config.replace(ram_randomization={})
     return config, str(base)
 
 
+def manifest_route(manifest: dict) -> str:
+    """The route a manifest's entries are on: the rooms tier's ``route``, the cheap tier's full tier's."""
+    return manifest.get('route') or manifest.get('full', {}).get('route') or ROUTE
+
+
+def network_task(key: str, entry: dict, checkpoint, route: str, states_dir=None, reads=None):
+    """``entry_task`` for the network in ``checkpoint`` playing ``key``: on the route's task where it reads the
+    generation's switched blocks (``reads``: its ``runner.switched_reads``, loaded when not given), refused
+    (``runner.check_inputs``) where that config still leaves one off."""
+    if reads is None:
+        reads = switched_reads(registry.load_model(checkpoint)[0])
+    config, directory = entry_task(entry, states_dir, trained=bool(reads), route=route)
+    check_inputs(key, reads, config, route)
+    return config, directory
+
+
 def run_bench(networks: dict[str, str], manifest: dict, parallel: int, states_dir=None, act: Optional[str] = None,
               log=print, progress=None) -> dict:
     """Plays every manifest entry whose key ``networks`` names (key -> checkpoint), one row per entry (its
-    ``name``, else its key); ``progress`` (an ``events.JobProgress``) hears the episodes played and their success
-    after each entry."""
+    ``name``, else its key), each on the config ``network_task`` gives its network; ``progress`` (an
+    ``events.JobProgress``) hears the episodes played and their success after each entry."""
     rows, total_seconds, decisions = {}, 0.0, 0
+    route = manifest_route(manifest)
+    reads: dict[str, dict] = {}
     for entry in manifest['entries']:
         key = entry['key']
         if key not in networks:
             continue
         label = entry.get('name', key)
-        config, directory = entry_task(entry, states_dir)
+        checkpoint = networks[key]
+        if checkpoint not in reads:
+            reads[checkpoint] = switched_reads(registry.load_model(checkpoint)[0])
+        config, directory = network_task(key, entry, checkpoint, route, states_dir, reads[checkpoint])
         began = time.time()
-        result = evaluate_specialist(config, networks[key], episodes_per_state=manifest['episodes'],
+        result = evaluate_specialist(config, checkpoint, episodes_per_state=manifest['episodes'],
                                      parallel=parallel, seed=manifest['seed'], act=act or manifest['act'],
                                      states_dir=directory, clips=manifest['clips'])
         seconds = time.time() - began
@@ -368,9 +395,10 @@ def speed(key: str, manifest: dict, parallel: int, devices: list[str], states_di
     the Rust actor (``rust``) and the same network served by torch (``cpu``, ``cuda``, ``cuda-half``: autocast
     float16; ``nets.serve``)."""
     from ..nets import serve  # pylint: disable=import-outside-toplevel
-    checkpoint = checkpoint or registry.policy_checkpoint(key, root, manifest['full']['route'])
+    route = manifest_route(manifest)
+    checkpoint = checkpoint or registry.policy_checkpoint(key, root, route)
     entry = next(e for e in manifest['entries'] if e['key'] == key)
-    config, directory = entry_task(entry, states_dir)
+    config, directory = network_task(key, entry, checkpoint, route, states_dir)
     out = {}
     for path in devices:
         network = registry.load_model(checkpoint)[0]

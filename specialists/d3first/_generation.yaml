@@ -5,6 +5,10 @@
 obs:
   threat: true              # schema 8's entity_threat (round40.md "Observation v7's danger block")
   chase: true               # schema 9's chase and entity_chase (round40.md "The chase target")
+  # Schema 10's entity_shooter (round40.md "Every shooter": when each Octorok, Moblin, Lynel, Zora, Goriya and red
+  # Wizzrobe fires next). The overworld, Goriya and Wizzrobe teachers read it; stage 2's one network reads every
+  # teacher's inputs, so every task fills it (Stage52, Nov 27). A teacher that does not read it plays as before.
+  shooter: true
 reward:
   aimless_penalty: 0.002    # the lead's default (round40.md "What came after the report"); the owner may change it
 warm_start: null            # from scratch: no family's run under it

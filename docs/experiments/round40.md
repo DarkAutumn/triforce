@@ -5993,3 +5993,48 @@ closing-frame catch case was found by the first branch census (105 decisions in 
 above; Review46's pass (the shove's MOVE pressing nothing, no closing frame after a pose-only wait, the N doorway)
 was measured again: the same after-D7 loss, the same seven 0:0x5f runs. 0:0x5f's ladder MOVE W/E and 9:0x07's
 sideways sword off the grid are mask gaps left as found.
+
+## Stage 2: one network from its teachers (Stage52, branch `stage52`, Nov 27)
+
+anthropic/claude-opus-5-5 (Stage52). The owner's go (Nov 27, 15:40): the student from the fourteen teachers chosen in
+stage 1 (overworld `gen1-overworld/s1r2-c2-it000350`, walkers `gen1-walkers/s1r-c2-it000440`, darknut
+`gen1-darknut/s1r`, goriya `gen1-goriya/s1`, wizzrobe `gen1-wizzrobe/s1c1368`, others `gen1-others/s1r4`, rooms
+`gen1-rooms/s1r3-c1`, the bosses `gen1-boss-manhandla/s1r`, `gen1-boss-gleeok/s1r-c3`, `gen1-boss-aquamentus/s1r`,
+`gen1-boss-dodongo/s1r2`, `gen1-boss-digdogger/s1r3`, `gen1-boss-gohma/s1r`, `gen1-ganon/s1r`), by `docs/lab.md`
+"Stage 2: one network from its teachers".
+
+### 1. What the student needed that r40-int (4a90b087) lacked
+
+Each step dry-run on the frozen `triforce-gen15` (4a90b087): the teachers' record of every group and boss
+(`r36_merge_record.py --group <all 14> --teacher-group ... --try-others 4:0.25 --sources resets entries --dry-run`)
+resolves every teacher and plans 50 keys × 2 sources; nothing there is refused. Three things were:
+
+- **`shooter` in the student's inputs.** The overworld, Goriya and Wizzrobe teachers read schema 10's
+  `entity_shooter`, so the student must (its token groups are the union of its teachers'). Only those twelve tasks
+  turned `obs.shooter` on: a correction round's record with such a student (`--student`, any hitnet with the
+  `shooter` group) is refused on 38 other keys' tasks ("reads obs.shooter (entity_shooter), off in the task"), and so
+  would be its imitation on the walkers' rows (recorded with zeros), its PPO (`check_network_reads`) and every chain
+  slot outside those families (`runner.check_inputs`). **Changed:** `obs.shooter: true` in
+  `specialists/d3first/_generation.yaml` (every generation task; the twelve per-task lines removed), and
+  `groups.yaml`'s `network` block reads `shooter` for every teacher (the three per-teacher overrides removed): with
+  the block filled everywhere, a teacher training without it would now be refused (`obs.shooter is on in the tasks
+  and the network reads none`), and a `--load` of one of the trained teachers widens it with zero columns. The switch
+  only fills an observation block (`env::observation::shooter_block`, RAM arithmetic, no emulator step or random
+  byte), so the teachers that do not read it play exactly as before. 256 wide the student is 1,609,220 parameters
+  (768: 4,960,772; 384 more than without the group either way).
+- **The yardstick played a generation network on the bare task.** `lab.bench` built every entry's config from
+  `load_specialist(family)`: `obs.threat`, `obs.chase` and `obs.shooter` off (the blocks read zeros) and the bare
+  rules of play (darknut's `bomb_catch` 0, wallmaster without CANDLE), where a chain plays the same network with its
+  route task (`runner.chain_config(..., trained=True)`, Tasks41). No generation network had been benched before.
+  **Changed:** `bench.network_task`: a network that reads a switched block (`runner.switched_reads`) plays each
+  entry with its chain slot's config (and is refused where that config leaves a block off, as a chain is); today's
+  networks keep the bare task, so `reference.json` and `reference-rooms.json` stay comparable for them. A store team
+  spec is benched as `TRIFORCE_TEAM=SPEC python -m triforce.lab.bench run --team`.
+- **The width** is a judgement, not a change: `groups.yaml` says 768 (the owner, Nov 24: "768 wide everywhere"), the
+  lab's stage 2 text says the student is 256 (Stage41's proof). Both are built from the same cache and compared
+  below.
+
+Tests: `test_inputs` (every generation task has the three switches), `test_lab_groups` (every teacher's block has
+`shooter`; 4,960,772 parameters at 768), `test_lab_recipe` (the group run's task with the switch), `test_lab_bench`
+(a generation network gets the route task's config and rules, today's the bare task, and a `d2first` bench of a
+generation network is refused); the Python suite 1,359 passed, `check` ok.

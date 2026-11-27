@@ -11,20 +11,21 @@ route: d3first
 # The network every teacher trains (the owner, Nov 24: 768 wide everywhere; the lead's pins): `--group NAME` alone
 # trains it. A teacher may override a key with its own `network:` (an `arch_config` key by key); a command-line
 # `--arch`, `--arch-config` (by key), `--aux` or `--try-others` overrides the file, and the run's log says which.
+# Every token group reads schema 10's `entity_shooter` too (Stage52, Nov 27): every generation task fills it
+# (`specialists/d3first/_generation.yaml`), which stage 2's one network needs (it reads every teacher's inputs), and
+# a network that leaves a filled block unread is refused (`lab.recipe.check_network_reads`). The overworld, Goriya
+# and Wizzrobe teachers read it from the start (round40.md "Every shooter"); the others trained before without it,
+# and a `--load` of one adds its input columns at zero (docs/lab.md "Continuing with a new input").
 network:
   arch: hitnet
-  arch_config: {tokens: [type, features, rel, threat, chase], feed: true, room: true, hidden_dim: 768}
+  arch_config: {tokens: [type, features, rel, threat, chase, shooter], feed: true, room: true, hidden_dim: 768}
   aux: [hit=hit:0.5]
   try_others: "4:0.25"
 teachers:
-  # The overworld teacher reads schema 10's `entity_shooter` too (round40.md "Every shooter": when each Octorok,
-  # Moblin, Lynel and Zora shoots next; obs.shooter on in its ten tasks). Its trained run is continued widened: `--load`
-  # of a run without the group adds its input columns at zero (docs/lab.md "Continuing with a new input").
+  # The overworld teacher's trained run was continued widened by the shooter group (round40.md "Every shooter").
   overworld:
     members: [ow-start@d3first, ow-tektite@d3first, ow-leever@d3first, ow-moblin@d3first, ow-octorok@d3first,
       ow-zora@d3first, ow-peahat@d3first, ow-lynel@d3first, ow-ghini@d3first, ow-boulder@d3first]
-    network:
-      arch_config: {tokens: [type, features, rel, threat, chase, shooter]}
   walkers:
     members: [gibdo@d3first, stalfos-keese-gel@d3first, zol@d3first, like-like@d3first, vire@d3first,
       d2-rope@d3first, dodongo-crossing@d3first, moldorm@d3first]
@@ -34,21 +35,16 @@ teachers:
   darknut:
     members: [darknut@d3first]
   # Goriyas alone (the owner, Nov 26: "Yes, split goriyas out of the walker group"; round40.md "The Goriya teacher"):
-  # 7:0x1b lost 689 of 1000 runs entering it, a hard room too rare inside the walkers' group. Its network reads
-  # schema 10's `entity_shooter` too (when each Goriya throws next; obs.shooter on in its task).
+  # 7:0x1b lost 689 of 1000 runs entering it, a hard room too rare inside the walkers' group.
   goriya:
     members: [goriya@d3first]
-    network:
-      arch_config: {tokens: [type, features, rel, threat, chase, shooter]}
   # Wizzrobes alone (the lead, Nov 27; round40.md "Why the others teacher loses Dungeons 6 and 9"): inside `others`
   # the family had two games of ten for its 16 room entries, about 3,000 episodes each of 6:0x38 and 6:0x3a in 15.0M
-  # steps, and learned neither fight. Its network reads `entity_shooter` too (the red Wizzrobe's magic shot; the
-  # blue's rows stay 0). A team that keeps gen1-others/s1r4 for the Wizzrobes says so: `+@wizzrobe=gen1-others/s1r4`
-  # (`@others` no longer fills their slots, which then fall back to the base team's wizzrobe).
+  # steps, and learned neither fight. A team that keeps gen1-others/s1r4 for the Wizzrobes says so:
+  # `+@wizzrobe=gen1-others/s1r4` (`@others` no longer fills their slots, which then fall back to the base team's
+  # wizzrobe).
   wizzrobe:
     members: [wizzrobe@d3first]
-    network:
-      arch_config: {tokens: [type, features, rel, threat, chase, shooter]}
   others:
     members: [pols-voice@d3first, wallmaster@d3first, lanmola@d3first, patra@d3first]
   rooms:

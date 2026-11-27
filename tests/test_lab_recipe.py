@@ -96,7 +96,7 @@ def test_manifest_diff_names_a_task_switch_a_group_member_and_an_architecture_ke
 def test_a_group_run_records_where_its_network_came_from_and_diff_names_an_override(tmp_path, capsys):
     """``groups.yaml``'s ``network:`` block (the generation's ``hitnet`` at 768) trains with ``--group`` alone; a
     command-line ``--arch-config`` key over it is printed in one line and named by ``manifest diff``."""
-    both = _task(tmp_path, 'both', obs={'threat': True, 'chase': True})
+    both = _task(tmp_path, 'both', obs={'threat': True, 'chase': True, 'shooter': True})
     pinned = groups.get('rooms').network
     group = Group('pair', 'd3first', ('ow-start@d3first',), {}, pinned)
     families = [f'ow-start@d3first={both}']
