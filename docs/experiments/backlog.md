@@ -7,6 +7,11 @@ named below with its place there.
 
 ## The program (the owner, Nov 21): the corrected d3 route, played by one network
 
+**The north star (the owner, Nov 27): "37 minutes or less from the time link is controllable to the time the game
+completes standing next to zelda."** From the first frame Link can be controlled to the frame he stands beside
+Zelda: 37 minutes = 133,419 frames (60.0988 frames a second). Every experiment reports what it does to a finished
+run's time beside its success rate. (The first golden path, 2.0.0.0: 153,308 frames from power on, 42.5 minutes.)
+
 **The end goal:** beat the game on the d3 route with a single neural network. A handful is acceptable and is likely
 where the project starts and may end; one is still what to try for. "You should consider this a reset of
 expectations": the merged models are not gated on matching today's specialists segment by segment (they are still
