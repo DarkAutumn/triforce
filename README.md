@@ -371,6 +371,8 @@ Coverage (`cargo llvm-cov --release --workspace --features zelda/zcore --summary
 ## History
 
 This is the third version of the project. The older two are kept on their own branches.
+Every version of the model, from v1 to the generation training now, with what each changed and how far it got:
+[`docs/model-versions.md`](docs/model-versions.md).
 
 **v1** ([`v1-original-design`](https://github.com/DarkAutumn/triforce/tree/v1-original-design)) was a hand-written
 project to learn reinforcement learning, built on stable-retro and stable-baselines3. It used a few models (overworld
