@@ -206,8 +206,12 @@ python -m triforce.lab.train --name zol-skg --families zol@d3first stalfos-keese
 
 `triforce/groups.yaml` names each teacher of the fresh generation (2.0.1.0) and its members, each a policy key
 `family@d3first` (its task: `specialists/d3first/<family>.yaml` where there is one, else the family's), with optional
-env shares by member: four groups (`overworld`, `walkers`, `others`, `rooms`) and the seven bosses, one teacher each
-(`boss-manhandla`, `boss-gleeok`, `boss-aquamentus`, `boss-dodongo`, `boss-digdogger`, `boss-gohma`, `ganon`).
+env shares by member: four groups (`overworld`, `walkers`, `others`, `rooms`), three families alone (`darknut`,
+`goriya`, `wizzrobe`) and the seven bosses, one teacher each (`boss-manhandla`, `boss-gleeok`, `boss-aquamentus`,
+`boss-dodongo`, `boss-digdogger`, `boss-gohma`, `ganon`). A team spec's `+@GROUP=FAMILY/RUN` fills the slots of the
+group's members as the file names them now: when a family leaves a group, a run trained with it there serves it
+only by its own slot (the Wizzrobes after Nov 27: `+@others=gen1-others/s1r4+@wizzrobe=gen1-others/s1r4`; without
+the second, their slots keep the base team's run).
 `lab.groups.load()` reads and checks it (a member on another route, a family in two teachers, a share of no member,
 a name with `+` are refused); `tests/test_lab_groups.py` holds every family `_native.route_steps('d3first')` names to
 exactly one teacher and loads every member's task with and without `--state-route d3first`.

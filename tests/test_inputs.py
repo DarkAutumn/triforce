@@ -210,12 +210,13 @@ def test_every_generation_task_trains_from_scratch_with_the_generations_inputs()
     """Round 40 (the lead's pins): every teacher's d3first task has `obs.threat` and `obs.chase` on, the aimless
     penalty at 0.002 (`_generation.yaml`, one place), no chase penalty (an arm, not a default), no warm start, and
     the route's states only; the exposed-attack penalty at 0.1 in the Goriya teacher's task and the walkers' eight
-    (the owner, Nov 26), nowhere else; `obs.shooter` in the Goriya teacher's task and the overworld teacher's ten
-    ("Every shooter"), nowhere else; darknut's bombs catch two or more; the Bubble rooms' items as Switch40 measured."""
+    (the owner, Nov 26), nowhere else; `obs.shooter` in the Goriya teacher's task, the overworld teacher's ten
+    ("Every shooter") and the Wizzrobe teacher's (Nov 27), nowhere else; darknut's bombs catch two or more; the Bubble
+    rooms' items as Switch40 measured."""
     exposed = {'goriya', 'gibdo', 'stalfos-keese-gel', 'zol', 'like-like', 'vire', 'd2-rope', 'dodongo-crossing',
                'moldorm'}
-    shooter = {'goriya', 'ow-start', 'ow-tektite', 'ow-leever', 'ow-moblin', 'ow-octorok', 'ow-zora', 'ow-peahat',
-               'ow-lynel', 'ow-ghini', 'ow-boulder'}
+    shooter = {'goriya', 'wizzrobe', 'ow-start', 'ow-tektite', 'ow-leever', 'ow-moblin', 'ow-octorok', 'ow-zora',
+               'ow-peahat', 'ow-lynel', 'ow-ghini', 'ow-boulder'}
     require_rom()
     tasks = sorted(p.stem for p in task_files(ROOT / 'specialists' / 'd3first'))
     assert tasks == sorted(GENERATION) == sorted(SpecialistConfig.names())

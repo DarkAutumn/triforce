@@ -5725,12 +5725,9 @@ The stall is gone and the Dungeon 6 runs it held now die in 6x38: the mask remov
 to learn the fight. Inside a hold, with MOVE taken away, s1r4's own kind probabilities are WAIT 0.39, SWORD 0.18,
 BOOMERANG 0.43 in 6x38 and 0.08 / 0.01 / 0.91 in 6x3a (2.0.0.15: 0.58 / 0.35 / 0.07 and 0.44 / 0.40 / 0.16).
 
-**What the teacher needs (the lead's decision, not started):** wizzrobe as its own teacher (groups.yaml
-`wizzrobe: {members: [wizzrobe@d3first]}`, darknut's and goriya's recipe `20 16384 1831`, 30M steps; `others`
-keeps four families, `8 6554 1831`), continued from s1r4's it001368 (the last checkpoint before the shelter, no stuck
-run in 100) under this commit; a from-scratch arm beside it if the queue allows, judged by D6/D9 chains at equal
-steps. A team spec that keeps s1r4 for the Wizzrobes after the split must say so (`+@wizzrobe=gen1-others/s1r4`):
-without it the group's slots fall back to the base team's wizzrobe. Patra stays in `others`.
+**What the teacher needs:** wizzrobe as its own teacher, continued from s1r4's it001368 (the last checkpoint before
+the shelter, no stuck run in 100) with a from-scratch arm beside it, judged by D6/D9 chains at equal steps; patra
+stays in `others`. Taken by the lead the same day: "The Wizzrobe teacher" below.
 
 ## Every shooter (Shooters49, branch `shooters49`, Nov 27)
 
@@ -5853,3 +5850,31 @@ and columns are as they were, more types' rows filled), `OLDEST_OBS_SCHEMA` stay
   added) would make it exact everywhere at the cost of a second layout; not built.
 - Found on the way: the lab trainer's `--load` takes a path only (a store name `gen1-overworld/s1r2-c1` is not
   resolved, as its `--team` help suggests); the lead's own command already used the store path.
+
+## The Wizzrobe teacher (Wizz50, branch `wizz50`, Nov 27)
+
+The lead's call on the diagnosis above: the Wizzrobes their own teacher, reading `entity_shooter` (the red
+Wizzrobe's magic shot, "Every shooter"; the blue's rows stay 0), two arms dry-run.
+
+- `triforce/groups.yaml`: `wizzrobe: {members: [wizzrobe@d3first]}` with goriya's `network:` (`tokens: [type,
+  features, rel, threat, chase, shooter]`); `others` keeps pols-voice, wallmaster, lanmola and patra.
+  `specialists/d3first/wizzrobe.yaml`: `obs: {shooter: true}`. `scripts/experiments/r41_stage1.sh`: `wizzrobe` on
+  darknut's and goriya's `20 16384 1831` (30.0M steps, 16 room entries), `others` by the file's rule `8 6554 1831`
+  (four families, 12.0M steps). Pins: `tests/test_lab_groups.py` (the teachers, the shooter network),
+  `tests/test_inputs.py` (`obs.shooter` in the Wizzrobe task).
+- **Team specs.** `+@GROUP=` fills the slots of the group's members as groups.yaml names them now, so
+  `+@others=gen1-others/s1r4` no longer reaches the Wizzrobes (their slots would keep the base team's run): a team
+  that keeps s1r4 for them adds `+@wizzrobe=gen1-others/s1r4` (docs/lab.md "Groups of families"). With it, the new
+  team on this commit plays D6 and D9 (100 runs each, seeds 0-99) run for run as before the split (100 of 100
+  identical; the team's sha256 3559b5c59b2f, as before): s1r4 has no shooter token and reads nothing new.
+- **The dry calls** (`TRIFORCE_JOB_ESTIMATE`, every refusal checked, nothing created):
+  - (a) the continuation: `python -m triforce.lab.train --name gen1-wizzrobe --run-id s1c1368 --group wizzrobe --load
+    ~/triforce-shared/runs/gen1-others/s1r4/checkpoints/it001368 --parallel 20 --steps-per-update 16384 --iterations
+    1831 --checkpoint-every 114 --seed 4101` prints `widened with the token group(s) shooter (their input columns
+    zero: it acts exactly as loaded)` and answers 29,991,780 steps;
+  - (b) from scratch: the same without `--load`, `--run-id s1`: 29,991,780 steps;
+  - `others` without the Wizzrobes: `--name gen1-others --run-id s2 --group others --parallel 8 --steps-per-update
+    6554 --iterations 1831 --checkpoint-every 114 --seed 4102`: 11,996,712 steps (not needed now: s1r4 serves them).
+- **Length.** The same 30M for both arms, so the checkpoints compare at equal steps (it1368 had about 2.2M Wizzrobe
+  steps behind it, a fifth of s1r4's 11.2M); the continuation's checkpoints chained first, and stopped early if D6
+  and D9 flatten.

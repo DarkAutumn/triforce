@@ -40,8 +40,17 @@ teachers:
     members: [goriya@d3first]
     network:
       arch_config: {tokens: [type, features, rel, threat, chase, shooter]}
+  # Wizzrobes alone (the lead, Nov 27; round40.md "Why the others teacher loses Dungeons 6 and 9"): inside `others`
+  # the family had two games of ten for its 16 room entries, about 3,000 episodes each of 6:0x38 and 6:0x3a in 15.0M
+  # steps, and learned neither fight. Its network reads `entity_shooter` too (the red Wizzrobe's magic shot; the
+  # blue's rows stay 0). A team that keeps gen1-others/s1r4 for the Wizzrobes says so: `+@wizzrobe=gen1-others/s1r4`
+  # (`@others` no longer fills their slots, which then fall back to the base team's wizzrobe).
+  wizzrobe:
+    members: [wizzrobe@d3first]
+    network:
+      arch_config: {tokens: [type, features, rel, threat, chase, shooter]}
   others:
-    members: [wizzrobe@d3first, pols-voice@d3first, wallmaster@d3first, lanmola@d3first, patra@d3first]
+    members: [pols-voice@d3first, wallmaster@d3first, lanmola@d3first, patra@d3first]
   rooms:
     members: [equipment-room@d3first, trap-room@d3first]
   # The bosses: one teacher each (no head-per-boss network is built).

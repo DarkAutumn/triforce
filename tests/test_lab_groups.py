@@ -13,14 +13,15 @@ from triforce.specialist import load_specialist
 from .conftest import REPO_STATES_DIR
 from .networks import native_spec
 
-# The lead's pins for 2.0.1.0 (four groups; Darknuts, Goriyas and the seven bosses each their own teacher).
+# The lead's pins for 2.0.1.0 (four groups; Darknuts, Goriyas, Wizzrobes and the seven bosses each their own teacher).
 TEACHERS = {
     'overworld': ['ow-start', 'ow-tektite', 'ow-leever', 'ow-moblin', 'ow-octorok', 'ow-zora', 'ow-peahat', 'ow-lynel',
                   'ow-ghini', 'ow-boulder'],
     'walkers': ['gibdo', 'stalfos-keese-gel', 'zol', 'like-like', 'vire', 'd2-rope', 'dodongo-crossing', 'moldorm'],
     'darknut': ['darknut'],
     'goriya': ['goriya'],
-    'others': ['wizzrobe', 'pols-voice', 'wallmaster', 'lanmola', 'patra'],
+    'wizzrobe': ['wizzrobe'],
+    'others': ['pols-voice', 'wallmaster', 'lanmola', 'patra'],
     'rooms': ['equipment-room', 'trap-room'],
     **{boss: [boss] for boss in ('boss-manhandla', 'boss-gleeok', 'boss-aquamentus', 'boss-dodongo', 'boss-digdogger',
                                  'boss-gohma', 'ganon')},
@@ -115,11 +116,11 @@ GENERATION = {'arch': 'hitnet', 'arch_config': {'tokens': ['type', 'features', '
 
 def test_the_files_network_block_is_every_teachers_and_group_applies_it(capsys):
     """The owner's width (768 everywhere) and the lead's pins live in the file: ``--group NAME`` alone trains them.
-    The Goriya and overworld teachers' networks read schema 10's ``entity_shooter`` besides (their own ``network:``
-    keys, by key)."""
+    The Goriya, overworld and Wizzrobe teachers' networks read schema 10's ``entity_shooter`` besides (their own
+    ``network:`` keys, by key)."""
     shooter = {**GENERATION, 'arch_config': {**GENERATION['arch_config'],
                                              'tokens': ['type', 'features', 'rel', 'threat', 'chase', 'shooter']}}
-    assert all(group.network == (shooter if name in ('goriya', 'overworld') else GENERATION)
+    assert all(group.network == (shooter if name in ('goriya', 'overworld', 'wizzrobe') else GENERATION)
                for name, group in groups.load().items())
     args = train.parse_args(['--name', 'rooms', '--group', 'rooms'])
     sources = train.apply_network(args, train.expand_group(args))
