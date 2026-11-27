@@ -144,6 +144,20 @@ impl Walk {
         }
         (self.s.state().full_location(), self.s.state().link.position.x)
     }
+
+    /// Waits (monsters removed) for the raft's ride down to end on the dock below its trigger.
+    fn ride_down(&mut self) {
+        for _ in 0..100 {
+            let st = self.s.state();
+            let (_, row) = st.room().dock().expect("a dock room");
+            if st.mode() == 5 && st.link.status == 0 && st.link.position.y > row && st.link.position.y < row + 8 {
+                return;
+            }
+            self.tidy();
+            self.act("WAIT 4");
+        }
+        panic!("no end of the ride down");
+    }
 }
 
 /// routes.yaml as landed (2.0.0.14): `d3first` plays its two whirlwinds as macros and its docks helped, and no other
@@ -224,20 +238,8 @@ fn one_recorder_plays_the_whole_whirlwind() {
 /// own actions, and the warp's part of the mask the same with and without them; as landed (aided) it is not.
 #[test]
 fn the_unaided_dock_never_looks_at_monsters() {
-    let raft_end = |w: &mut Walk| {
-        for _ in 0..100 {
-            let st = w.s.state();
-            let (_, row) = st.room().dock().expect("a dock room");
-            if st.mode() == 5 && st.link.status == 0 && st.link.position.y > row && st.link.position.y < row + 8 {
-                return;
-            }
-            w.tidy();
-            w.act("WAIT 4");
-        }
-        panic!("no end of the ride down");
-    };
     let Some(mut w) = Walk::start(&map_on(), "d3first_0_55n_v2_0", 0x55) else { return };
-    raft_end(&mut w);
+    w.ride_down();
     w.tidy();
     w.wire();
     assert!(matches!(w.gc.warp(w.s.state()), Some(Warp::Dock { level: 4, unaided: true })));
@@ -271,7 +273,7 @@ fn the_unaided_dock_never_looks_at_monsters() {
     // As landed the dock gives way: a shot in the air takes the plays away.
     // The helped dock is 2.0.0.14's entry (`LANDED`); this branch's routes.yaml has the fresh generation's (round 40).
     let Some(mut aided) = Walk::start(&map_with(LANDED), "d3first_0_55n_v2_0", 0x55) else { return };
-    raft_end(&mut aided);
+    aided.ride_down();
     aided.tidy();
     aided.wire();
     aided.act("MOVE S 8");
@@ -287,4 +289,36 @@ fn the_unaided_dock_never_looks_at_monsters() {
     let clear = aided.warp_part();
     aided.place(0x55, 0xC0, 0x7D);
     assert_ne!(aided.warp_part(), clear, "aided, a shot holds the plays back");
+}
+
+/// Noops52 (Nov 27): a MOVE W or E on the dock's land stops on the clip's column only while the clip is offered there,
+/// and is not offered where it would stop before its first frame. Once the whirlwind has gone by (none again until
+/// the room is entered again) no clip is offered and the column stops nothing: before, Link facing N on it was offered
+/// MOVE W and E that ended at once, 887 times in one run.
+#[test]
+fn the_dock_column_stops_a_move_only_where_the_clip_is_offered() {
+    let Some(mut w) = Walk::start(&map_on(), "d3first_0_55n_v2_0", 0x55) else { return };
+    w.ride_down();
+    w.tidy();
+    w.wire();
+    w.act("MOVE S 8");
+    for _ in 0..8 {
+        if w.allowed("CLIP N") {
+            break;
+        }
+        w.tidy();
+        w.act("MOVE W 8");
+    }
+    let (column, _) = zelda::clips::dock_spot(w.s.state().room()).expect("a dock");
+    let at = |w: &Walk| (w.s.state().link.position.x, w.s.state().link.position.y);
+    let (x, y) = at(&w);
+    assert_eq!(x, column, "the walk W stopped on the clip's column");
+    assert!(w.allowed("CLIP N") && !w.allowed("MOVE W 8") && !w.allowed("MOVE E 8"), "{}", w.s.mask());
+    // The whirlwind gone by: summoned, none out (`whirlwind::Plan::Missed`).
+    zelda::Nes::poke(w.s.nes_mut(), zelda::whirlwind::SUMMONED, 1);
+    w.s.apply_ram(&[]);
+    w.wire();
+    assert!(!w.allowed("CLIP N") && w.allowed("MOVE W 8") && w.allowed("MOVE E 8"), "{}", w.s.mask());
+    w.act("MOVE W 8");
+    assert!(at(&w).0 < x && at(&w).1 == y, "walked W off the column: {:?}", at(&w));
 }

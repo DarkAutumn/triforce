@@ -387,6 +387,9 @@ pub struct Executor<S> {
     /// `crate::Session::set_warp`): RECORDER played in the water on a dock's row, or anywhere the whirlwind macro is
     /// offered, plays the whole sequence ([`Executor::run_warp`]).
     pub warp: Option<Warp>,
+    /// The session offers CLIP (`crate::Session::clips_effective`, set before every action): a dock-warp step's MOVE
+    /// W or E stops on the clip's column only then ([`Executor::run_timed`]).
+    pub dock_clips: bool,
     /// The latched buttons (A, B, Select, Start) the game read as held when this action began
     /// ([`latched_held`]): the action's first frame that presses one of them is preceded by one frame of no buttons.
     release: u8,
@@ -415,6 +418,7 @@ impl<S> Default for Executor<S> {
             blocks: None,
             vetoed_doorways: 0,
             warp: None,
+            dock_clips: false,
             release: 0,
         }
     }
@@ -550,9 +554,18 @@ impl<S> Executor<S> {
         let pushing = is_move && (state.is_push_block_direction(action.direction) || pushing_stone || armos);
         let mut first = true;
         // Round 36: on a dock-warp step a MOVE along the land below the dock's row ends on the clip's column (the
-        // water spot nearest the dock, `crate::clips::dock_spot`), where the session offers the clip.
+        // water spot nearest the dock, `crate::clips::dock_spot`), where the session offers the clip: only while it
+        // does (clips on, the whirlwind still to be called) and only where the clip is legal, the CLIP's own test
+        // (Noops52, Nov 27: with the whirlwind gone by the stop held Link facing N on the column with no CLIP to take,
+        // every MOVE W or E ending before its first frame, 887 decisions in one run).
         let dock_column = match (self.warp, action.direction) {
-            (Some(Warp::Dock { .. }), Direction::W | Direction::E) if is_move => crate::clips::dock_spot(state.room()),
+            (Some(Warp::Dock { level, .. }), Direction::W | Direction::E)
+                if is_move
+                    && self.dock_clips
+                    && matches!(crate::whirlwind::plan(state, level), crate::whirlwind::Plan::Play { .. }) =>
+            {
+                crate::clips::dock_spot(state.room()).map(|(x, _)| x)
+            }
             _ => None,
         };
         // Where a MOVE ends without another frame of its direction (round 27): on a grid point facing a gravestone
@@ -568,9 +581,11 @@ impl<S> Executor<S> {
                 return false;
             }
             let (px, py) = (i32::from(ram[ADDR_LINK_X]), i32::from(ram[ADDR_LINK_Y]));
-            if let Some((x, row)) = dock_column
+            if let Some(x) = dock_column
                 && px == x
-                && (row + 8..=row + 24).contains(&py)
+                && ram[ADDR_LINK_STATUS] == 0
+                && ram[ADDR_LINK_SHOVE_DIR] == 0
+                && crate::clips::dock_clip_at(state.room(), px, py).is_some()
             {
                 return true;
             }
