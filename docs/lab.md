@@ -571,7 +571,12 @@ its numbers are the defaults and the scale below. A teacher is named per family 
    and loadable by `lab.train --load`) and `distill.json`: per epoch the training KL, value and auxiliary losses, and
    on the held-out rows per key the KL, top-1 agreement (joint and per head), the value's error, the hit loss and
    the hit head's precision = recall on the actions taken and on every judged candidate. Refused: a student that
-   reads a block a source of the cache recorded with its switch off.
+   reads a block a source of the cache recorded with its switch off. In a checkout that plays the store (no models
+   folder) the run is a store run `NAME/RUN` (Stage52: origin `distill`, its parent the `--init` run, its data the
+   cache, the recordings and their teachers; sealed after the last epoch; an existing run id refused); the
+   generation's student is `gen1-one/<run>`. It plays every slot of the route as
+   `$(python scripts/experiments/r52_one_team.py gen1-one/RUN)` = `current+@overworld=gen1-one/RUN+@walkers=...`,
+   one `+@GROUP=` a group of `groups.yaml` (both slots of every family), for `--team` and the bench's `run --team`.
 4. **Correct on the student's own states** (DAgger): step 1 with `--student NAME/RUN` (the student acts, the
    named teachers label its decisions) into a new data dir, then steps 2 and 3 with `--data DATA DAGGER --init
    NAME/RUN`. With `--sources rooms --harvest DIR`, DIR an every-room harvest of the student's own chains, it is

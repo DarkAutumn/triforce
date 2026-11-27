@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 import torch
 
-from triforce import nets, registry
+from triforce import nets, paths, registry, store
 from triforce.lab import groups
 from triforce.lab.recipe import create_network
 from triforce.observation import observation_space
@@ -157,3 +157,51 @@ def test_imitation_refuses_a_student_reading_blocks_recorded_off(distill, tmp_pa
     today = {'tokens': ['type', 'features', 'rel'], 'feed': True, 'hidden_dim': 32, 'depth': 1, 'd_model': 16,
              'layers': 1, 'link_out': 16, 'hit_dim': 32, 'hit_depth': 1}
     distill.train(_args(tmp_path / 'cache', epochs=1, arch_config=json.dumps(today)))   # reads neither: trains
+
+
+@pytest.fixture
+def shared(tmp_path, monkeypatch):
+    """An empty store (``$TRIFORCE_SHARED``) and no models folder: the checkout plays the store."""
+    root = tmp_path / 'shared'
+    monkeypatch.setenv(paths.SHARED_ENV, str(root))
+    monkeypatch.delenv(registry.MODELS_DIR_ENV, raising=False)
+    monkeypatch.setenv(store.TEAM_ENV, 'recorded-so-it-is-restored')
+    monkeypatch.delenv(store.TEAM_ENV)
+    monkeypatch.setattr(paths, 'legacy_models_dir', lambda: tmp_path / 'no-models')
+    monkeypatch.setattr(store, '_TEAMS', {})
+    monkeypatch.setattr(store, '_VIEWS', {})
+    store.init()
+    yield root
+    store.make_writable(root)
+
+
+def test_imitation_files_its_run_in_the_store_sealed_with_its_parent_and_data(distill, shared, tmp_path):
+    """Stage52: in a checkout that plays the store the student is a store run (as `lab.train --team` makes one):
+    origin `distill`, its data the cache and the recordings with their teachers, sealed after the last epoch; a
+    second pass names the first as its parent; a run id the store has is refused before anything trains."""
+    _recording(tmp_path / 'data', 'zol@d3first', 1, 2, True, 1)
+    meta = tmp_path / 'data' / 'zol@d3first' / 'resets' / 'meta.json'
+    meta.write_text(json.dumps({**json.loads(meta.read_text()), 'teacher': 'gen1-walkers/s1'}))
+    distill.build_cache([str(tmp_path / 'data')], tmp_path / 'cache')
+    distill.train(_args(tmp_path / 'cache', name='gen1-one', run_id='im', epochs=1))
+    first = store.get_run(store.Run('gen1-one', 'im'))
+    assert first['status'] == store.SEALED and first['origin'] == 'distill' and first['parent'] is None
+    data, = json.loads(first['data'])
+    assert data['cache'] == str((tmp_path / 'cache').resolve()) and data['teachers'] == ['gen1-walkers/s1']
+    assert data['from'] == [str((tmp_path / 'data').resolve())] and data['rows'] == 2 * 512
+    assert (Path(first['path']) / 'distill.json').is_file()
+    assert first['sha1'] == registry.checkpoint_sha1(Path(first['path']) / 'ckpt.pt')
+    distill.train(_args(tmp_path / 'cache', name='gen1-one', run_id='c1', init='gen1-one/im', epochs=1))
+    assert store.get_run(store.Run('gen1-one', 'c1'))['parent'] == 'gen1-one/im'
+    with pytest.raises(store.StoreError, match='gen1-one/im exists in the store'):
+        distill.train(_args(tmp_path / 'cache', name='gen1-one', run_id='im', epochs=1))
+
+
+def test_one_network_in_every_slot_of_the_generation():
+    """`r52_one_team.py`: `current+@GROUP=RUN` for every group, which sets both slots of every family of the route."""
+    spec = _script('r52_one_team').one_team('gen1-one/im256')
+    base, overrides = store.parse_team_spec(spec)
+    assert base == 'current' and {value for _, value in overrides} == {'gen1-one/im256'}
+    slots = {slot for key, _ in overrides for slot in store.group_slots(key[1:])}
+    families = {family for group in groups.load().values() for family in group.families}
+    assert slots == {store.slot_key(f, 'd3first', late) for f in families for late in (False, True)}

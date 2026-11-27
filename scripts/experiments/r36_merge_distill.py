@@ -27,8 +27,13 @@ key on the held-out rows (``distill.json`` in the run): KL, top-1 agreement of t
 it has a choice (kind; direction and duration given the teacher's kind), the value's squared error and, per
 auxiliary output, its loss and (``hit`` targets) precision = recall on the actions taken and on every judged
 candidate (``auxiliary.matched_precision``).  The checkpoint is a normal run (``registry.save_checkpoint``), playable
-by the bench and loadable by ``lab.train --load``. Both are jobs of the machine's queue (``jobs.require_job``:
-``triforce job run ... --timeout 3h -- .venv/bin/python scripts/experiments/r36_merge_distill.py train ...``)."""
+by the bench and loadable by ``lab.train --load``. In a checkout that plays the store (no models folder:
+``$TRIFORCE_MODELS_DIR``, ``<repo>/models``) it is a store run ``NAME/RUN``, as ``lab.train --team`` makes one
+(``store.allocate_run``, origin ``distill``, its parent the ``--init`` run, its data the cache and the recordings it
+came from with their teachers; an existing run id is refused), written every epoch and sealed after the last; a
+team slot then names it (``current+@GROUP=NAME/RUN`` for each group, ``scripts/experiments/r52_one_team.py``).
+Both are jobs of the machine's queue (``jobs.require_job``: ``triforce job run ... --timeout 3h --
+.venv/bin/python scripts/experiments/r36_merge_distill.py train ...``)."""
 
 import argparse
 import json
@@ -43,7 +48,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from triforce import nets, registry
+from triforce import nets, paths, registry, store
 from triforce.jobs import require_job
 from triforce.lab.auxiliary import JUDGED, AuxLoss, aux_loss, joint_index, matched_precision, target_values, \
     tried_labels
@@ -284,6 +289,29 @@ def initial_network(args):
     return create_network(args.arch, json.loads(args.arch_config)), None
 
 
+def plays_store() -> bool:
+    """Whether the run goes to the store: this checkout has no models folder (``$TRIFORCE_MODELS_DIR``,
+    ``<repo>/models``, ``registry.models_root``'s first places) and the store is made."""
+    return (not os.environ.get(registry.MODELS_DIR_ENV) and not paths.legacy_models_dir().exists()
+            and paths.store_exists())
+
+
+def file_in_store(args, data, init) -> 'store.Run':
+    """The open store run ``NAME/RUN`` (``store.allocate_run``: an existing one is refused), origin ``distill``, its
+    parent the ``--init`` network's run when that is a store run, its data the cache, the recordings it holds and
+    their teachers and students; sealed by ``train`` after the last epoch (a run stopped before stays open)."""
+    recorded = data.meta.get('recorded', [])
+    provenance = {'kind': 'distill-cache', 'cache': str(Path(args.cache).resolve()), 'rows': data.meta['rows'],
+                  'from': [str(Path(d).resolve()) for d in data.meta.get('from', [])],
+                  'teachers': sorted({str(r['teacher']) for r in recorded if r.get('teacher')}),
+                  'students': sorted({str(r['student']) for r in recorded if r.get('student')})}
+    parent = store.run_of_path(init['file']) if init else None
+    run = store.allocate_run(args.name, args.run_id, parent=parent, origin='distill', data=[provenance])
+    print(f"[distill] store run {run.identity} (open until the last epoch)"
+          + (f", from {parent.identity}" if parent else ''), flush=True)
+    return run
+
+
 def train(args):
     # pylint: disable=too-many-locals, too-many-statements
     torch.manual_seed(args.seed)
@@ -324,7 +352,8 @@ def train(args):
     warmup = min(500, total_steps // 20)
     schedule = torch.optim.lr_scheduler.LambdaLR(optimizer, lambda s: min(1.0, (s + 1) / max(1, warmup))
                                                  * 0.5 * (1 + math.cos(math.pi * min(1.0, s / max(1, total_steps)))))
-    root = registry.models_root(None)
+    stored = file_in_store(args, data, init) if plays_store() else None
+    root = paths.runs_dir() if stored is not None else registry.models_root(None)
     print(f"[distill] {args.name}/{args.run_id}: {nets.arch_of(network.config.to_dict())}, {params:,} parameters, "
           f"{len(train_rows):,} train rows, {len(val_rows):,} held out, {total_steps} steps ({args.epochs} epochs, "
           f"lr {args.lr}, value {args.value_coeff}, aux {args.aux or 'none'}, from {args.init or 'scratch'})",
@@ -376,6 +405,9 @@ def train(args):
         {'args': vars(args), 'parameters': params, 'init': init, 'cache': data.meta,
          'train_rows': int(len(train_rows)), 'held_out_rows': int(len(val_rows)), 'history': history,
          'held_out': val}, indent=1, default=str))
+    if stored is not None:
+        store.seal_run(stored)
+        print(f"[distill] store run {stored.identity} sealed", flush=True)
     print(f"[distill] done: {path}", flush=True)
 
 
