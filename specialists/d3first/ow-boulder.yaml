@@ -4,4 +4,5 @@
 # f"{family}@d3first" (lab.collect.task_yaml).
 extends: [../ow-boulder.yaml, _generation.yaml]
 state_routes: [d3first]
+obs: {shooter: true}                    # schema 10's entity_shooter for the overworld teacher (round40.md "Every shooter")
 start_states: ['0_17*_[0-9]']                  # no d3first state enters 0:0x18 or 0:0x19

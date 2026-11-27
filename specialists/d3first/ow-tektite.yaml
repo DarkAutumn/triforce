@@ -31,6 +31,7 @@ reward:
 obs:
   objective: true
   target: true
+  shooter: true                           # schema 10's entity_shooter for the overworld teacher (round40.md "Every shooter")
 ram_randomization:
   hp:
   - 0.15

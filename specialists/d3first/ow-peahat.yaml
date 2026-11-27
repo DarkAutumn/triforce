@@ -4,4 +4,5 @@
 # f"{family}@d3first" (lab.collect.task_yaml).
 extends: [../ow-peahat.yaml, _generation.yaml]
 state_routes: [d3first]
+obs: {shooter: true}                    # schema 10's entity_shooter for the overworld teacher (round40.md "Every shooter")
 clips: {enabled: true, off_share: 0}     # 2.0.1.0 trains clips on only (the owner, Nov 18 and Nov 24)

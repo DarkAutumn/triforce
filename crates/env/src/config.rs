@@ -464,9 +464,9 @@ pub struct ObsConfig {
     /// today's networks were trained.
     #[serde(default, deserialize_with = "de_bool")]
     pub chase: bool,
-    /// Fill the `entity_shooter` observation block (schema 10, round 40, "The Goriya teacher": when each shooter fires
-    /// next, the Goriyas for now; `env::observation::shooter_block`). Default off: zeros, as today's networks were
-    /// trained.
+    /// Fill the `entity_shooter` observation block (schema 10, round 40, "The Goriya teacher" and "Every shooter":
+    /// when each shooter fires next, every type `zelda::shooter::throw` covers; `env::observation::shooter_block`).
+    /// Default off: zeros, as today's networks were trained.
     #[serde(default, deserialize_with = "de_bool", skip_serializing_if = "is_false")]
     pub shooter: bool,
 }

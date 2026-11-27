@@ -5731,3 +5731,125 @@ keeps four families, `8 6554 1831`), continued from s1r4's it001368 (the last ch
 run in 100) under this commit; a from-scratch arm beside it if the queue allows, judged by D6/D9 chains at equal
 steps. A team spec that keeps s1r4 for the Wizzrobes after the split must say so (`+@wizzrobe=gen1-others/s1r4`):
 without it the group's slots fall back to the base team's wizzrobe. Patra stays in `others`.
+
+## Every shooter (Shooters49, branch `shooters49`, Nov 27)
+
+The owner's approval of the Goriya feedback (Nov 26): "If the training goes well, apply that (b) not only to goriya
+but also all enemies that shoot." The Goriya teacher went well (the lead: Dungeon 7 76% against the previous team's
+58%, 7x1b 7 deaths in 118 visits against 34 in 318, no bomb, 7.4 shield blocks a visit), so schema 10's
+`entity_shooter` now fills every shooter on the route whose next shot the game's code fixes from the RAM, with the
+same three columns in the same places (only more types' rows); and a trained teacher takes the new input by being
+widened with zero weights and continued (the lead's brief, as the owner's order: no architecture change first,
+nothing trained thrown away). Nothing trained; the overworld teacher's widened continuation is dry-run only.
+
+### 1. The rules (`zelda::shooter::throw`; each type its own function, the game's code walked frame by frame)
+
+- **Lynels `$01/$02`, Moblins `$03/$04`, Octoroks `$07-$0A`** (`walking`; asm:Shooter_RunShootTimer): a shot is a stand
+  on ObjShootTimer `$451`, loaded with `$30` once "wants to shoot" holds and counted down by the update (not the NMI);
+  the shot leaves on the frame it reaches `$10`, then 16 more frames standing. "Wants to shoot" is set only while it
+  walks (a wanderer's turn at a grid point, asm:Wanderer_MoveAndTurn: toward the chase target in line on a turn rate at
+  least `Random+1,X`, or perpendicular when its turn timer `$478` ran out; a Lynel's Goriya rule), so nothing clears
+  it in the stand. Lost on its frame by the clock, a stun still running, no free slot or 4 counted shots; a hit's
+  invincibility timer still running at the next update (counted down on even frames before it,
+  asm:Obj_DecInvincibilityTimer) puts the timer back to 0. A red type starts a stand only on a frame whose `Random,X`
+  is `$F8` or more; the stand starts 33 frames or more before its shot, so no random byte falls inside the 16 frames and
+  `will_throw` is 1 or 0 for both colours. `loaded`: live, not stunned, no clock. `throw_time` reads the Goriya's
+  scale, 1 − the frames until the timer lets it shoot / 112: `$451` − `$10` in a stand, 33 at rest, `$451` + 33
+  standing after a shot.
+- **The Zora `$11`** (`zora`; asm:Zora_Update, asm:Burrower_Update): one fireball a surfacing, on the frame its update
+  reads ObjTimer `$FD` in state 3 (two frames in; the NMI counts the timer first, a state ends on the frame its update
+  reads 0), so `max(T, 1) + 17` frames from the mound, `max(T, 1) + 2` from the surfacing, `T − $FD` in state 3.
+  No hit or stun holds it; a fireball needs only a free slot. `loaded` from the mound to the fireball, no clock.
+- **Aquamentus `$3D`** (`aquamentus`; asm:Aquamentus_Shoot): the volley when its ObjTimer reads 0, as the Goriya's
+  timer (and its spawn cloud the same way); no clock. `throw_time` 1 − ObjTimer / 112 (reloaded `$70-$7F` or
+  `$F0-$FF`).
+- **Gohma `$33/$34`** (`gohma`; asm:Gohma_Update@ShootAnimateCollide): its own shoot timer `$380` counted down every
+  update, a fireball at 0, reloaded `$41`; no clock test.
+- **The red Wizzrobe `$24`** (`red_wizzrobe`; asm:Wizzrobe_Red_Update): ObjState counted down by the update, its magic
+  shot at `$B0`, once each appearance; `loaded` from the frame it took its place (`$FF`) to the shot; a counted shot.
+
+**Do the three columns make sense for the aimed fireballs and the magic shots?** Yes for every one filled: each shot
+comes on a timer the game counts down (the Zora's surfacing, Aquamentus's ObjTimer, Gohma's 65 frames, the red
+Wizzrobe's state), none of which the network sees anywhere else; the aim is not a column (the fireball aims at Link on
+its first update and the threat block covers it from then). **The blue Wizzrobe `$23` is left out** (its rows stay
+0): its shot can only come on a frame whose `FrameCounter AND $1F` is 0, but whether it comes then depends on its own
+walk over the room's tiles (a wall reverses it, a block or water starts a teleport), on a random teleport target and
+on Link standing exactly on its row or on its column rounded to 16 pixels (asm:Wizzrobe_Blue_TryShooting): a
+`will_throw` to the others' standard would have to walk it over the tile map and give the teleport as a chance over
+the four targets' tiles. Not done; the agent's call, for the lead. Manhandla, Gleeok's heads, Ganon and the statues
+(their fireballs, the corpus's unmatched `$55`/`$56` shots) were not asked for.
+
+### 2. Against recorded games (`tests/test_obs_shooter.py`)
+
+The probe of the frame before every shot (`_native.shooter_probe`'s `next`) against the shots made (a new shot object
+matched one to one with the nearest shooter of its maker's type, the one whose own rule fired that frame first), the
+16 frames before each shot, and the frames saying `will_throw` = 1; the test walks the two golden replays, the table
+the same walk over the five corpus replays (golden `d3first` 51 networks and single network, golden `d2first`, the
+2.0.0.15 single run, the planner's `d2first`):
+
+| Shooter | Shots, said on the frame before | Said, no shot | Shot, not said | Frames compared | Window frames before shots (excused) | `will_throw` 1 followed by the shot |
+|---|---:|---:|---:|---:|---:|---:|
+| Lynel | 98 | 0 | 0 | 27,129 | 1,568 (0) | 1,533 of 1,643 (93%) |
+| Moblin | 268 | 0 | 0 | 63,425 | 4,288 (47) | 4,081 of 4,520 (90%) |
+| Octorok | 215 | 0 | 0 | 82,730 | 3,440 (0) | 3,242 of 3,645 (89%) |
+| Zora | 167 | 0 | 0 | 31,218 | 2,672 (0) | 2,630 of 2,830 (93%) |
+| Aquamentus | 17 | 0 | 0 | 2,742 | 272 (0) | 272 of 282 (96%) |
+| Gohma | 7 | 0 | 0 | 1,046 | 47 (10) | 33 of 57 (58%) |
+| red Wizzrobe | 189 | 0 | 0 | 44,583 | 3,040 (3) | 2,966 of 3,113 (95%) |
+
+**Every shot said, nothing said that did not come**, but six frames in all excused where the rule's reading of the
+room moved under it inside the frame itself: five a shot of a higher slot (updated first) filled the room, or a lag
+frame (the frame counter did not move) held every update; one a higher slot's shot ended and freed the room. In the
+windows the excused frames are a shooter whose init had not run (Gohma's two first frames in its room) or a room with no
+space then that a shot ending freed. The frames saying 1 without the shot following (frames under a freeze, the
+submenu, the flute's tune or a lag frame, left out of that column) are Link's hits and stuns within the 16 frames and
+the room filling; Gohma's are its death (the arrow in its eye) before its next fireball.
+
+**The random gates, read from the register** (the game steps `$18-$24` before the frame's updates, so the frame's own
+bytes are the ones its updates read): over the five replays every walking shooter's stand started exactly when the
+rule allows it, 789 starts, a red one's only with `Random,X` at `$F8` or more and never in the 11,908 frames below
+it; every wanderer's grid-point wish was its turn (1,281 wishes, 2,024 none, no exception). The red gate passed on
+222 of the 12,130 frames a red shooter could start (1.83%), below a fair byte's 8 in 256: the register shifts one bit
+a frame, so after a frame that failed the next passes only when the old byte's top four bits were set, its fifth clear
+and the new bit set, 1 in 62. Neither gate is inside `will_throw`'s horizon (a stand is 33 frames from its shot).
+
+**The Goriya teacher's inputs are unchanged**: none of the newly filled types appears in its 16 rooms (41,766 play
+frames there over the five replays), so its observations are the ones it trained on; no schema bump (the key's shape
+and columns are as they were, more types' rows filled), `OLDEST_OBS_SCHEMA` stays 6.
+
+### 3. The overworld teacher widened (docs/lab.md "Continuing with a new input")
+
+`python -m triforce.lab.train --load` of a `hitnet` into a run whose tokens add groups widens it
+(`lab.recipe.widen_loaded`, `nets.hitnet.widen_tokens`): every weight copied, the new groups' input columns zero.
+`triforce/groups.yaml`'s `overworld` network adds `shooter`, its ten `ow-*@d3first` tasks turn `obs.shooter` on
+(nothing else in them changes; the bare tasks and `d2first` untouched). The proof
+(`scripts/experiments/r49_widen_proof.py`, job #2221; chains #2202 and #2204):
+
+- `gen1-overworld/s1r2-c1` and its widened copy on 1,511 observations recorded from the ten tasks (609 with a shooter
+  row filled): every head, the value and the hit logits **bit for bit on the CPU** in batches of 1,511, 20 and 1, and
+  on the GPU in whole batches; on the GPU in batches of 20 and 1 the copy differs by at most 7.9e-6 (the matrix kernels
+  follow the inner width) while the source itself differs by 1.9e-3 between those batch sizes; every argmax action the
+  same;
+- `post-d5` and `post-d7`, 200 runs each, seeds 0-199, team `current+@overworld=gen1-overworld/s1r2-c1` against the
+  same with the widened copy in the ten slots: **identical run for run** (157 and 195 of 200, 2,511,024 frames), every
+  record field but the served network's `act_entropy` and `surprisal` (within 1.5e-5; two chains of the source itself
+  differ by as much, within 1.6e-5);
+- **the dry call of the continuation** (`TRIFORCE_JOB_ESTIMATE`; every refusal checked, nothing created):
+  `python -m triforce.lab.train --name gen1-overworld --run-id s1r2-c2 --group overworld --load
+  ~/triforce-shared/runs/gen1-overworld/s1r2-c1 --parallel 20 --steps-per-update 16384 --iterations 400
+  --checkpoint-every 50 --seed 4113` prints `widened with the token group(s) shooter` and answers 6,552,000 steps. The
+  c1 run also had `--shares ow-lynel@d3first=3`: the lead's to keep or drop.
+
+### 4. Not done, and where the risk is
+
+- Not trained. The widened continuation starts a fresh optimizer (as every lab `--load`).
+- The blue Wizzrobe's rows are 0 (above): the `others` teacher (wizzrobe) gets nothing from the key until it is done.
+- `will_throw` reads the room as it stands: a freeze (the submenu, the flute's tune, a pause, a lighting room), a lag
+  frame, Link's hit or stun inside the 16 frames, and another shot filling or freeing the room are not foreseen. The
+  flute and the submenu matter for play: the recorder's tune holds every update for its frames while the NMI still
+  counts the Zora's and Aquamentus's timers.
+- On the GPU the widened network is equal to its source up to 7.9e-6 in small batches, not bit for bit; the chains
+  show it plays the same, as the source plays itself. A split projection (the new groups through their own zero matrix,
+  added) would make it exact everywhere at the cost of a second layout; not built.
+- Found on the way: the lab trainer's `--load` takes a path only (a store name `gen1-overworld/s1r2-c1` is not
+  resolved, as its `--team` help suggests); the lead's own command already used the store path.

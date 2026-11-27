@@ -115,10 +115,12 @@ GENERATION = {'arch': 'hitnet', 'arch_config': {'tokens': ['type', 'features', '
 
 def test_the_files_network_block_is_every_teachers_and_group_applies_it(capsys):
     """The owner's width (768 everywhere) and the lead's pins live in the file: ``--group NAME`` alone trains them.
-    The Goriya teacher's network reads schema 10's ``entity_shooter`` besides (its own ``network:`` keys, by key)."""
+    The Goriya and overworld teachers' networks read schema 10's ``entity_shooter`` besides (their own ``network:``
+    keys, by key)."""
     shooter = {**GENERATION, 'arch_config': {**GENERATION['arch_config'],
                                              'tokens': ['type', 'features', 'rel', 'threat', 'chase', 'shooter']}}
-    assert all(group.network == (shooter if name == 'goriya' else GENERATION) for name, group in groups.load().items())
+    assert all(group.network == (shooter if name in ('goriya', 'overworld') else GENERATION)
+               for name, group in groups.load().items())
     args = train.parse_args(['--name', 'rooms', '--group', 'rooms'])
     sources = train.apply_network(args, train.expand_group(args))
     assert (args.arch, json.loads(args.arch_config), args.aux, args.try_others) == (

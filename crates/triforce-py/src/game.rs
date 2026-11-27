@@ -944,9 +944,9 @@ pub fn shooter_blocks<'py>(py: Python<'py>, ram: &Bound<'py, PyAny>) -> PyResult
     Ok(PyArray::from_vec(py, out).reshape([n, NUM_ENTITY_SLOTS, ENTITY_SHOOTER_SIZE])?.into_any())
 }
 
-/// `zelda::shooter::goriya` of every object slot 1-12 of `N` RAM rows, raw: `[N, 12, 5]` float32 per slot `goriya`
-/// (1 a Goriya, else the row is 0), `loaded`, `throw_time`, `will_throw`, `next` (every condition of the throw but a
-/// red one's random byte holds on the next frame). For `tests/test_obs_shooter.py`'s replay check.
+/// `zelda::shooter::throw` of every object slot 1-12 of `N` RAM rows, raw: `[N, 12, 5]` float32 per slot `covered`
+/// (1 a shooter the rule covers, else the row is 0), `loaded`, `throw_time`, `will_throw`, `next` (every condition of
+/// the shot but a red Goriya's random byte holds on the next frame). For `tests/test_obs_shooter.py`'s replay check.
 #[pyfunction]
 pub fn shooter_probe<'py>(py: Python<'py>, ram: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
     let (ram, n, width) = ram_rows(py, ram)?;
@@ -955,7 +955,7 @@ pub fn shooter_probe<'py>(py: Python<'py>, ram: &Bound<'py, PyAny>) -> PyResult<
     for i in 0..n {
         let image = &ram[i * width..i * width + 0x800];
         for slot in 1..=12usize {
-            if let Some(t) = zelda::shooter::goriya(image, slot) {
+            if let Some(t) = zelda::shooter::throw(image, slot) {
                 out[(i * 12 + slot - 1) * 5..(i * 12 + slot) * 5].copy_from_slice(&[
                     1.0,
                     t.loaded as u8 as f32,
