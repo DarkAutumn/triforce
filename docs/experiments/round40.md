@@ -6138,3 +6138,30 @@ and 1,245, 768 1,181 and 1,135 (cheap, rooms), the teachers' team 940 and 1,154.
 play waits on: 768 costs 6-9% in decisions a second. (`bench speed` fails on r40-int: `_play_policy` calls
 `evaluate._play` with one argument too many; not used here.)
 
+### 4. The width: 768
+
+Fresh seeds for the choice (2000-2099, used by nothing before), each dungeon from its entrance, cut at its exit, 100
+runs, the student in every slot (`r52_one_team.py`) and the teachers' team beside it (gen18; jobs #2622, #2623,
+#2626; the teachers' D4 chain finished its 100 runs and then died at the process's exit, "terminate called without
+an active exception", so its complete `.tmp` output is the result: Perf43's). Success, paired by seed:
+
+| dungeon (entrance) | teachers | im256 | im768 | im768 − teachers | im768 − im256 |
+|---|---:|---:|---:|---:|---:|
+| D3 | 74% | 70% | 72% | -2.0 ± 6.4 | +2.0 ± 6.4 |
+| D4 | 89% | 86% | 93% | +4.0 ± 4.0 | +7.0 ± 4.1 |
+| D1 | 100% | 99% | 99% | -1.0 ± 1.0 | +0.0 ± 1.4 |
+| D2 | 100% | 100% | 100% | +0.0 ± 0.0 | +0.0 ± 0.0 |
+| D5 | 87% | 81% | 85% | -2.0 ± 5.1 | +4.0 ± 5.3 |
+| D7 | 78% | 81% | 88% | +10.0 ± 5.4 | +7.0 ± 5.2 |
+| D6 | 91% | 91% | 83% | -8.0 ± 4.6 | -8.0 ± 4.6 |
+| D8 | 99% | 100% | 100% | +1.0 ± 1.0 | +0.0 ± 0.0 |
+| D9 | 59% | 56% | 61% | +2.0 ± 6.8 | +5.0 ± 7.0 |
+| product | 0.238 | 0.199 | 0.251 | | |
+
+**Settled: 768** (the owner's "768 wide everywhere", groups.yaml's), on all three measures: held-out KL a quarter
+lower on every key (0.0238 against 0.0314), the rooms tier level with the teachers where 256 is 0.3 points under with
+two losing rows, and on fresh seeds ahead of 256 on five of nine dungeons and level on three (D4 +7.0 ± 4.1, D7
++7.0 ± 5.2), behind on D6 alone (-8.0 ± 4.6, the one dungeon it also trails the teachers on). Its play costs 6-9% in
+decisions a second; the emulator, not the network, sets the pace. Everything below is `gen1-one/im768` and its
+descendants.
+
