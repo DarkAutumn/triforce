@@ -512,7 +512,7 @@ def main(argv=None) -> int:
     if args.team:
         for entry in manifest['entries']:
             networks[entry['key']] = str(registry.policy_checkpoint(entry['key'], args.models_dir,
-                                                                    manifest['full']['route']))
+                                                                    manifest_route(manifest)))
     if args.network:
         for key in args.keys or [e['key'] for e in manifest['entries']]:
             networks[key] = args.network

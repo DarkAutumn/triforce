@@ -163,9 +163,12 @@ def test_the_rooms_manifest_keeps_the_room_entries_that_cost_the_team(tmp_path):
     assert entry['team_visits'] == 2 and entry['team_deaths'] == 1 and entry['team_hearts_lost'] == 1.0
     assert entry['states'] == [f'{bench.ROOMS}/darknut/d3first_3_59n_h5_7', f'{bench.ROOMS}/darknut/d3first_3_59n_h6_7']
     assert (states / bench.ROOMS / 'darknut' / 'd3first_3_59n_h6_7.state').is_file()
+    # its route is its own (no full tier): `run --team` and `speed` read it so (a KeyError on 'full' before)
+    assert 'full' not in manifest and bench.manifest_route({**manifest, 'route': 'd2first'}) == 'd2first'
 
 
 def test_the_committed_manifest_covers_the_team():
     manifest = bench.load_manifest()
     assert manifest['act'] == registry.DEFAULT_ACT and len(manifest['entries']) == 51
     assert manifest['full']['segments'][0].startswith('full:')
+    assert bench.manifest_route(manifest) == manifest['full']['route'] == 'd3first'
