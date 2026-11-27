@@ -6165,3 +6165,41 @@ two losing rows, and on fresh seeds ahead of 256 on five of nine dungeons and le
 decisions a second; the emulator, not the network, sets the pace. Everything below is `gen1-one/im768` and its
 descendants.
 
+### 5. `gen1-one/im768` against the teachers' team (seeds 1000-1299, every scope)
+
+The 18 scopes of §2 and the whole route, 300 runs each on the teachers' seeds (gen18; jobs #2628, #2629, #2630;
+`target/s52/paired.py`), paired by seed; frames are the medians of the finished runs:
+
+| dungeon | from | teachers | im768 | difference | frames im768 / teachers | where im768's runs end (of 300) |
+|---|---|---:|---:|---:|---|---|
+| D3 | start | 73.3% | 72.3% | -1.0 ± 3.8 | 11,006 / 10,989 | 3x4d 52, 3x69 15, 3x59 5 |
+| D3 | entrance | 77.0% | 73.7% | -3.3 ± 3.5 | 9,772 / 9,777 | 3x4d 55, 3x69 10, 3x59 4 |
+| D4 | D3's triforce | 82.7% | 81.3% | -1.3 ± 3.0 | 13,462 / 13,550 | 4x13 46, 4x12 7 |
+| D4 | entrance | 87.7% | 85.7% | -2.0 ± 2.8 | 12,121 / 12,009 | 4x13 41 |
+| D1 | D4's triforce | 99.7% | 99.7% | +0.0 ± 0.5 | 10,757 / 10,669 | |
+| D1 | entrance | 100.0% | 99.7% | -0.3 ± 0.3 | 8,743 / 8,775 | |
+| D2 | D1's triforce | 99.7% | 99.7% | +0.0 ± 0.5 | 10,433 / 10,485 | |
+| D2 | entrance | 99.7% | 100.0% | +0.3 ± 0.3 | 6,134 / 6,110 | |
+| D5 | D2's triforce | 77.0% | 80.7% | +3.7 ± 3.6 | 18,185 / 18,300 | 5x24 32, 5x64 5, 5x25 4 |
+| D5 | entrance | 87.3% | 86.7% | -0.7 ± 2.7 | 13,231 / 13,251 | 5x24 23, 5x25 5 |
+| D7 | D5's triforce | 78.3% | 81.7% | +3.3 ± 3.3 | 19,186 / 19,499 | 7x1b 22, 7x1c 9, 7x2a 7 |
+| D7 | entrance | 83.3% | 82.3% | -1.0 ± 3.1 | 13,517 / 13,523 | 7x1c 24, 7x2a 12, 7x1b 8 |
+| D6 | D7's triforce | 78.0% | 75.7% | -2.3 ± 3.4 | 14,739 / 14,836 | 6x3a 34, 6x38 9, 6x2c 7 |
+| D6 | entrance | 92.0% | 88.0% | -4.0 ± 2.3 | 9,048 / 9,091 | 6x3a 30 |
+| D8 | D6's triforce | 100.0% | 98.7% | -1.3 ± 0.7 | 9,133 / 9,108 | |
+| D8 | entrance | 99.0% | 99.7% | +0.7 ± 0.7 | 6,757 / 6,699 | |
+| D9 | D8's triforce | 47.3% | **36.7%** | **-10.7 ± 3.9** | 28,505 / 28,401 | 9x52 41, 9x42 28, 9x10 27, 9x30 18 |
+| D9 | entrance | 55.3% | 56.3% | +1.0 ± 4.1 | 23,745 / 23,871 | 9x52 34, 9x10 25, 9x42 24 |
+| whole route | start | 14.0% | **10.0%** | -4.0 ± 2.6 | 136,805 / 136,692 | 3x4d 52, 4x13 31, 6x3a 22 |
+
+The copy plays the teachers' game: every scope within two standard errors but one, and a finished run as fast (the paired frames
+of runs both finished within two standard errors everywhere but D6 from D7's triforce, where the student is 231 ±
+107 frames faster). **Where it loses**: Dungeon 9 entered from the leg (-10.7 ± 3.9: 9x52 41 deaths against the teachers' 34,
+9x30 18 against 6), entered at the hearts and items the leg brings, which from its entrance (a refilled state) it
+plays as the teachers do; and, inside two standard errors, Dungeon 6 from its entrance (-4.0 ± 2.3, 6x3a, as on the
+fresh seeds: -8.0 ± 4.6). 0x5f after D7: 5 runs of 300 end
+there (5 deaths), the teachers' 5 (2 deaths, 3 stuck): the knockback loss is the teachers' size, no worse.
+
+The whole route: 30 of 300 end the game (10.0%), median 136,805 frames, best 133,500 (37:01.3, 81 frames over the
+north star); none within 133,419 (the teachers' 4).
+
