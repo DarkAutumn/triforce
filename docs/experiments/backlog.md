@@ -602,3 +602,19 @@ thing and have to be taught again. Swept from this backlog Nov 23 (the lead):
   team's long overworld WAITs end after about 2 frames (an interrupt already in force, such as a monster near), so on
   the overworld its WAIT acted as a 2-frame pause; the new overworld teacher's long WAITs run into transitions (67
   and 87 frames). Measure again on the finished 2.0.1.0's saved 1000-run replays, per room, before choosing.
+
+- **The blue Wizzrobe's movement as an input, for a later retrain** (the owner, Nov 27: "Leave it out [of the
+  shooter key] but add to the backlog to investigate later. [...] the blue wizzrobes are less interesting in when
+  they fire but when they change direction. [...] Typically chasing a blue wizzrobe is safest. They seem to have a
+  clear movement pattern."). Today `entity_shooter`'s rows are 0 for the blue Wizzrobe `$23` (Shooters49: its shot
+  depends on its walk and teleports). Its movement (zelda-asm/enemies.md "Wizzrobe", `asm:Wizzrobe_Blue_WalkOrTeleport`,
+  `asm:Wizzrobe_Blue_TurnTowardLink`, `asm:Wizzrobe_Blue_ChooseTeleportTarget`) is almost all known from RAM: the
+  walking phase's length (`ObjTimer` = `Random,X` OR `$70`, set when the phase starts), the 14-frame stand before a
+  teleport try, the next turn toward Link (every `$40` walking steps of `Wizzrobe_ObjBlueTurnCounter`, 128 frames,
+  axis by its bit 6, alternating, flipped by each teleport; the new direction from Link's position on that frame),
+  the turn on landing, the bounce off walls and the straight teleport through blocks and water. Random: only the
+  phase length when a phase starts (short ~100 or long ~230 frames, even odds) and the teleport's diagonal (one of
+  four, taken only if its target tile is walkable). An input per blue Wizzrobe: frames to its next turn and that
+  turn's axis, frames to its stand / teleport try, teleporting or not (and the walkable candidate landings). Measure
+  first how many hearts blue Wizzrobes take on the then-current team (Wizz50, Nov 27, 2.0.0.15 vs the first new team
+  in 6x38: touch 1.07 vs 1.48 hits a visit; 9x05 magic 0.85 vs 1.71).
