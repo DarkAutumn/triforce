@@ -18,7 +18,7 @@ import torch
 from triforce import build, job, paths, registry, train
 from triforce.inputs import (MissingInput, check_curriculum, check_harvested, check_start_states, check_task,
                              declaration, track_starts, untracked)
-from triforce.runner import Policies, Route, RunnerError, check_configs, check_team, switched_reads
+from triforce.runner import Policies, Route, RunnerError, check_configs, check_inputs, check_team, switched_reads
 from triforce.specialist import SpecialistConfig, load_specialist, task_files
 
 from .conftest import REPO_STATES_DIR, require_rom
@@ -310,6 +310,19 @@ def test_a_chain_refuses_a_network_that_reads_a_block_its_switch_leaves_zero(tmp
     plain = _reader(['type', 'features', 'rel', 'contact'])
     assert switched_reads(plain) == {}
     assert Policies(tmp_path, networks={'darknut': plain}, names=['darknut'], route='d2first').names == ['darknut']
+
+
+def test_a_teacher_without_the_shooter_group_plays_a_task_that_fills_it():
+    """Stage52: every generation task fills `entity_shooter`; a teacher that reads threat and chase but not shooter
+    (the walkers', the bosses') is chained there as before: the guard refuses only a block read and left off."""
+    require_rom()
+    teacher = _reader(['type', 'features', 'rel', 'threat', 'chase'])
+    reads = switched_reads(teacher)
+    assert 'entity_shooter' not in reads
+    for trained in (False, True):
+        config = SpecialistConfig.for_chain('zol', 'd3first', trained=trained)
+        assert config.to_dict()['obs'].get('shooter')
+        check_inputs('zol@d3first', reads, config, 'd3first')     # no raise
 
 
 # `env::config::TRAINED_FROM_ROUTE_TASK`: the keys a slot whose network trained on the route's task takes from it.

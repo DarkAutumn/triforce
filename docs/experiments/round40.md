@@ -6025,7 +6025,9 @@ resolves every teacher and plans 50 keys × 2 sources; nothing there is refused.
 - **The yardstick played a generation network on the bare task.** `lab.bench` built every entry's config from
   `load_specialist(family)`: `obs.threat`, `obs.chase` and `obs.shooter` off (the blocks read zeros) and the bare
   rules of play (darknut's `bomb_catch` 0, wallmaster without CANDLE), where a chain plays the same network with its
-  route task (`runner.chain_config(..., trained=True)`, Tasks41). No generation network had been benched before.
+  route task (`runner.chain_config(..., trained=True)`, Tasks41). No generation network had been benched before
+  (no bench number of a generation network is quoted in the docs; any made before e093604c played the bare task,
+  its switched inputs zero, and is not comparable).
   **Changed:** `bench.network_task`: a network that reads a switched block (`runner.switched_reads`) plays each
   entry with its chain slot's config (and is refused where that config leaves a block off, as a chain is); today's
   networks keep the bare task, so `reference.json` and `reference-rooms.json` stay comparable for them. A store team
@@ -6037,4 +6039,6 @@ resolves every teacher and plans 50 keys × 2 sources; nothing there is refused.
 Tests: `test_inputs` (every generation task has the three switches), `test_lab_groups` (every teacher's block has
 `shooter`; 4,960,772 parameters at 768), `test_lab_recipe` (the group run's task with the switch), `test_lab_bench`
 (a generation network gets the route task's config and rules, today's the bare task, and a `d2first` bench of a
-generation network is refused); the Python suite 1,359 passed, `check` ok.
+generation network is refused), and after the review a teacher reading threat and chase but not shooter passes
+`check_inputs` on a shooter-on task (`test_inputs`); the Python suite 1,359 passed, `check` ok. Reviewed (Review46)
+and merged: r40-int e093604c; frozen worktree `triforce-gen16` for every run below.
