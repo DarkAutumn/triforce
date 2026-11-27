@@ -618,3 +618,13 @@ thing and have to be taught again. Swept from this backlog Nov 23 (the lead):
   turn's axis, frames to its stand / teleport try, teleporting or not (and the walkable candidate landings). Measure
   first how many hearts blue Wizzrobes take on the then-current team (Wizz50, Nov 27, 2.0.0.15 vs the first new team
   in 6x38: touch 1.07 vs 1.48 hits a visit; 9x05 magic 0.85 vs 1.71).
+
+- **Decisions during a knockback, for the next retrain** (the owner, Nov 27). Noop51's census: decisions are handed
+  out mid-shove (a hit interrupts the running action on the shove's first frames); the game ignores directions then
+  but reads A and B (419 attacks chosen mid-knockback, all effective). For 2.0.1.x (Noops52): MOVE masked during a
+  shove, attacks kept, one WAIT offered that ends when the shove ends. The owner: "the problem with letting link
+  move after the shove is that the agent sees the state of the world during the shove, not at the end of the shove.
+  So he's choosing to move from a position that he won't start walking from. I feel like there's a bigger fix to
+  this in the next retrain." Ideas: the observation says where the shove lands and how many frames are left
+  (`ObjShoveDistance` $D3, 4 px a frame, cut at an unwalkable tile on the grid); or a hit is an interrupt that
+  returns at the landing, with the mid-shove attack as its own decision.
