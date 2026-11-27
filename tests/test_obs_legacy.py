@@ -75,8 +75,8 @@ WIZZ50_HOLD_CHANGES = {'like-like': {
 # pose (`$AC` `$20`/`$21`) is played inside the running MOVE or WAIT and no decision comes in it. Compared step by
 # step with its base d735a666 (same seeds, the test's own procedure, Link's RAM dumped at every step), each of
 # these 203 traces first differs at one of the two: 87 at a decision in a shove (86 in the mask alone: the shove's
-# one MOVE, WAIT and every other MOVE gone; one also in a catch pose), 116 at a catch pose (75 a decision the base
-# handed out in the pose, 41 an action that ran the pose's frames longer, 7 or 8 more, fewer when cut short).
+# one MOVE, WAIT and every other MOVE gone; one also in a catch pose), 116 at a catch pose (82 a decision the base
+# handed out in the pose, 34 an action that ran the pose's frames longer, 7 or 8 more, fewer when cut short).
 NOOPS52_CHANGES = json.loads(
     (Path(__file__).parent / 'fixtures' / 'obs_schema5_noops52.json').read_text(encoding='utf-8'))
 # The traces both sides of the generation's merges changed, with their hashes on the merged code.

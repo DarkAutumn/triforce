@@ -505,6 +505,10 @@ impl<S> Executor<S> {
                 // with Link's shove keeps none either: the next decision comes on his first free frame.
                 if (action.kind != ActionKind::Move && !in_shove) || m.frame != walking || m.frame == start {
                     self.step(m, 0, 1);
+                    // A boomerang caught on that frame puts Link in its pose: no decision comes in it either.
+                    if m.read(ADDR_LINK_STATUS) & 0xF0 == CATCH_POSE {
+                        self.skip_uncontrollable(m, Some(location), capture)?;
+                    }
                 }
             }
             Ok(OptionResult {
@@ -1559,6 +1563,19 @@ pub(crate) mod tests {
         let mut m = scripted(ram, catch_on_frame_2);
         let result = execute(&mut m, "WAIT 4").unwrap();
         assert_eq!((result.control_frames, result.frames), (4 + 7, 4 + 7 + 1));
+        assert_ne!(m.nes.ram[ADDR_LINK_STATUS] & 0xF0, CATCH_POSE);
+
+        // Caught on a WAIT's closing frame (frame 5): the pose is skipped after it, 7 frames.
+        let mut m = scripted(ram, |frame, ram| {
+            ram[ADDR_LINK_STATUS] = match frame {
+                5 => 0x20,
+                6..=11 => 0x21,
+                12 => 0x31,
+                _ => 0,
+            }
+        });
+        let result = execute(&mut m, "WAIT 4").unwrap();
+        assert_eq!((result.control_frames, result.frames), (4, 4 + 1 + 7));
         assert_ne!(m.nes.ram[ADDR_LINK_STATUS] & 0xF0, CATCH_POSE);
     }
 
