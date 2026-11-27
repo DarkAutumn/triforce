@@ -324,14 +324,16 @@ trained teacher gets a new input by widening with zero weights (it plays exactly
 not read, it is rebuilt with them on today's observation layout, every weight copied, and the projections' input
 columns of the new groups (the token projection's; Link's own for `chase`) zero. The log says so (`[lab] --load ...:
 widened with the token group(s) shooter (their input columns zero: it acts exactly as loaded)`), `run.json`'s
-`model_config` has the new tokens and `source` the checkpoint loaded. A group the run would drop, or a layout that
-changes another layer's shape, is refused. As with every `--load`, the optimizer starts fresh; the new columns get
-gradient as soon as their blocks are non-zero.
+`model_config` has the new tokens and `source` the checkpoint loaded. A group the run would drop, a layout that
+changes another layer's shape, or a loaded parameter the rebuilt network has no place for is refused. As with every
+`--load`, the optimizer starts fresh; the new columns get gradient as soon as their blocks are non-zero. `--load`
+names what `triforce train`'s does (`train.resolve_warm_start`): a checkpoint or run dir, a store run `FAMILY/RUN`,
+a team slot `family@route`, a family.
 
 The overworld teacher with schema 10's `shooter` group (round40.md "Every shooter"): `triforce/groups.yaml`'s
 `overworld` reads it and its ten tasks turn `obs.shooter` on, so its continuation is
-`python -m triforce.lab.train --name gen1-overworld --run-id RUN --group overworld --load
-~/triforce-shared/runs/gen1-overworld/s1r2-c1 ...` (the dry call, `TRIFORCE_JOB_ESTIMATE`, passes every check and
+`python -m triforce.lab.train --name gen1-overworld --run-id RUN --group overworld --load gen1-overworld/s1r2-c1 ...`
+(the dry call, `TRIFORCE_JOB_ESTIMATE`, passes every check and
 widens it: 6,552,000 steps at the c1 run's 20 × 16384 × 400). **The proof that it plays as before**
 (`scripts/experiments/r49_widen_proof.py`, job #2221; chains #2202 and #2204):
 

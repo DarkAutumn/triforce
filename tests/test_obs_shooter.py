@@ -241,8 +241,8 @@ def _walk(path: Path) -> dict:
             prev = None
             continue
         probe = _native.shooter_probe(ram[None])[0]
-        history[player.frame] = {s: (float(probe[s - 1][P_WILL]), bool(ram[UNINITIALIZED + s]),
-                                     _room_for(ram, int(ram[OBJ_TYPE + s])), FAMILY[int(ram[OBJ_TYPE + s])])
+        history[player.frame] = {s: (float(probe[s - 1][P_WILL]), _room_for(ram, int(ram[OBJ_TYPE + s])),
+                                     FAMILY[int(ram[OBJ_TYPE + s])])
                                  for s in range(1, 12) if int(ram[OBJ_TYPE + s]) in FAMILY}
         if prev is not None:
             pram, pprobe = prev
@@ -279,17 +279,17 @@ def _walk(path: Path) -> dict:
         for g in range(f - 16, f):
             if g not in history or s not in history[g]:
                 continue                                            # before the room's first play frame
-            will, uninitialized, room, _ = history[g][s]
+            will, room, _ = history[g][s]
             out['windows'][family][0] += 1
             if will == 1.0:
                 continue
-            later = [history[k][s][2] for k in range(g, f) if k in history and s in history[k]]
-            if uninitialized or (not room and (any(later) or (f, s) in freed)):
-                out['windows'][family][1] += 1                      # its init not run yet; room freed since
+            later = [history[k][s][1] for k in range(g, f) if k in history and s in history[k]]
+            if not room and (any(later) or (f, s) in freed):
+                out['windows'][family][1] += 1                      # no room then, freed since
                 continue
             out['window_missed'].append((f, s, family, g))
     for g, rows in history.items():
-        for s, (will, _, _, family) in rows.items():
+        for s, (will, _, family) in rows.items():
             if will == 1.0 and not any(g + k in held for k in range(1, 17)):     # a freeze delays every shot
                 out['followed'][s, g] = (family, any((g + k, s) in made for k in range(1, 17)))
     return out
@@ -320,6 +320,8 @@ def _gates(out, pram, ram, s, t):
 
 # The fewest shots of each type a game holds (both golden runs hold more).
 FEWEST = {'lynel': 15, 'moblin': 45, 'octorok': 35, 'zora': 30, 'aquamentus': 4, 'gohma': 1, 'red wizzrobe': 35}
+# The least share of a type's frames saying `will_throw` = 1 (out of freezes) that its shot follows within 16 frames.
+FOLLOWED = 0.8
 
 
 @pytest.mark.parametrize('path', [GOLDEN, GOLDEN_D2], ids=['d3first', 'd2first'])
@@ -339,16 +341,22 @@ def test_every_shot_is_said_on_the_frame_before_it(path):
 @pytest.mark.parametrize('path', [GOLDEN, GOLDEN_D2], ids=['d3first', 'd2first'])
 def test_every_shot_had_will_throw_on_the_16_frames_before_it(path):
     """``will_throw`` = 1 on each of the 16 frames before every shot (the probe of frame g covers g+1..g+16), but where
-    the shooter's init had not run yet (Gohma's first frames in its room) or the room had no space then and a shot
-    ended since; and most frames saying 1 are followed by the shot (Link's hits, stuns and the room filling cancel the
-    rest)."""
+    the room had no space then and a shot ended since; and for each type most frames saying 1 are followed by the shot
+    (Link's hits, stuns and the room filling cancel the rest), but Gohma: Link's arrows into its eye kill it within a
+    few of its 65-frame cycles, and the frames saying 1 before its death are a large share of its few."""
     out = _walk(path)
     checked = sum(v[0] for v in out['windows'].values())
     excused = sum(v[1] for v in out['windows'].values())
     assert checked >= 2000 and not out['window_missed'], (checked, out['window_missed'][:10])
     assert excused <= checked // 50, (excused, checked)
-    followed = [hit for _, hit in out['followed'].values()]
-    assert len(followed) > 2000 and sum(followed) / len(followed) > 0.7, (sum(followed), len(followed))
+    followed = defaultdict(list)
+    for family, hit in out['followed'].values():
+        followed[family].append(hit)
+    rates = {family: (sum(hits), len(hits)) for family, hits in followed.items()}
+    for family in FEWEST:
+        if family != 'gohma':
+            hits, frames = rates.get(family, (0, 0))
+            assert frames >= 40 and hits / frames > FOLLOWED, (family, rates)
 
 
 def test_the_walking_shooters_random_gates_are_the_registers():

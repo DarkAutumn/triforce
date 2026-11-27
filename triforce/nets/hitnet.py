@@ -157,7 +157,8 @@ def widen_tokens(network: HitNet, tokens, obs_spec: dict) -> HitNet:
     """``network`` rebuilt to read the token groups ``tokens`` (its own and more) on the layout ``obs_spec``: every
     weight copied, the projections' input columns of the added groups zero, so the widened network computes exactly
     what ``network`` does whatever the new blocks hold (docs/lab.md "Continuing with a new input"), and training grows
-    them from there.  A dropped group, or a block or layer whose shape the new layout changes, is refused."""
+    them from there.  A dropped group, a block or layer whose shape the new layout changes, or a loaded parameter the
+    rebuilt network has no place for is refused (``ValueError``)."""
     old = network.config
     dropped = sorted(set(old['tokens']) - set(tokens))
     unknown = sorted(set(tokens) - set(TOKEN_GROUPS) - {'type'})
@@ -168,6 +169,9 @@ def widen_tokens(network: HitNet, tokens, obs_spec: dict) -> HitNet:
     wide = HitNet({**old.to_dict(), 'tokens': ordered, 'obs_spec': obs_spec})
     before, after = _blocks(old['tokens'], old.obs_spec, old['type_dim']), _blocks(ordered, obs_spec, old['type_dim'])
     state = network.state_dict()
+    lost = sorted(set(state) - set(wide.state_dict()))
+    if lost:
+        raise ValueError(f"widening would drop the loaded parameters {lost}: the rebuilt network has no place for them")
     with torch.no_grad():
         for name, value in wide.state_dict().items():
             if name in after:

@@ -11,8 +11,9 @@
 //!   one magic shot each appearance): shots on a timer, aimed or along the facing, the same three columns.
 //!
 //! Not covered: the blue Wizzrobe `$23` (its shot frame is the frame counter's, but whether it fires there depends on
-//! its own walk over the room's tiles, a random teleport and Link exactly on its row or column: round40.md "Every
-//! shooter"), and the other fireball shooters (Manhandla, Gleeok's heads, Ganon, the statues).
+//! its own walk over the room's tiles, a random teleport and Link in its 16-pixel row band (`Y AND $F0` equal) or
+//! exactly on its column (Link's X its X rounded down to 16): round40.md "Every shooter"), and the other fireball
+//! shooters (Manhandla, Gleeok's heads, Ganon, the statues).
 //!
 //! The columns read the same for every type: `loaded` (it holds its next shot and can act), `throw_time` (1 − the
 //! frames until its timer lets it shoot / [`TIMER_MAX`], at least 0; 0 when not loaded) and `will_throw` (the chance
@@ -34,14 +35,14 @@
 //! **The walking shooters' rule** (asm:Shooter_RunShootTimer, asm:Shooter_ShootAndSetTimer): the shot is a stand on
 //! ObjShootTimer (`$451`). With the timer at 0 and "wants to shoot" set it loads `$30` and the shooter stands; the
 //! update counts it down by one a frame (not the NMI) and the shot leaves on the frame it reaches `$10`, 32 frames
-//! after the stand began, then it stands 16 frames more. "Wants to shoot" is set only while it walks (a wanderer's
-//! turn at a grid point, asm:Wanderer_MoveAndTurn: toward the chase target in line when its turn rate is at least
-//! `Random+1,X`, or perpendicular when its turn timer ran out; a Lynel's Goriya rule at a grid point), so it holds
-//! through the stand. A red type (`$02`, `$04`, `$07`, `$08`) starts a stand
-//! only on a frame whose `Random,X` is `$F8` or more (8 of 256): a stand starts 33 frames or more before its shot, so
-//! no random byte falls inside the horizon and `will_throw` is 1 or 0 for both colours. The shot is lost when, on its
-//! frame, the clock or a stun holds, no slot is free or 4 counted shots fly; a hit (the invincibility timer, counted
-//! down on even frames before the update, asm:Obj_DecInvincibilityTimer) puts the timer back to 0.
+//! after the stand began, then it stands 15 frames more (`$0F` to 1; it walks at 0). "Wants to shoot" is set only
+//! while it walks (a wanderer's turn at a grid point, asm:Wanderer_MoveAndTurn: toward the chase target in line when
+//! its turn rate is at least `Random+1,X`, or perpendicular when its turn timer ran out; a Lynel's Goriya rule at a
+//! grid point), so it holds through the stand. A red type (`$02`, `$04`, `$07`, `$08`) starts a stand only on a frame
+//! whose `Random,X` is `$F8` or more (8 of 256): a stand starts 33 frames or more before its shot, so no random byte
+//! falls inside the horizon and `will_throw` is 1 or 0 for both colours. The shot is lost when, on its frame, the clock
+//! or a stun holds, no slot is free or 4 counted shots fly; a hit (the invincibility timer, counted down on even frames
+//! before the update, asm:Obj_DecInvincibilityTimer) puts the timer back to 0.
 
 use crate::chase;
 
@@ -90,6 +91,8 @@ const OBJ_INVINCIBILITY: usize = 0x4F0;
 const FRAME_COUNTER: usize = 0x15;
 /// asm:Gohma_ObjShootTimer ($380 + slot): frames to Gohma's next fireball, counted down in its update.
 const GOHMA_SHOOT_TIMER: usize = 0x380;
+/// asm:ObjUninitialized ($492 + slot): nonzero until the object's init routine runs.
+const OBJ_UNINITIALIZED: usize = 0x492;
 /// Object types.
 const ZORA: u8 = 0x11;
 const AQUAMENTUS: u8 = 0x3D;
@@ -267,7 +270,7 @@ pub fn goriya(ram: &[u8], slot: usize) -> Option<Throw> {
 /// ObjShootTimer `T`:
 /// - `loaded`: live (ObjMetastate 0), not stunned, no clock;
 /// - the frames until the timer lets it shoot: `T − $10` in its stand (`T` above `$10`), 33 at 0 (a stand starting
-///   next frame), `T + 33` in the 16 frames standing after a shot;
+///   next frame), `T + 33` on its shot's frame and the 15 frames standing after it (`T` from `$10` to 1);
 /// - `will_throw`: 1 when its stand releases the shot within the horizon (`T` from `$11` to `$10` + [`HORIZON`]) and on
 ///   that frame "wants to shoot" still holds (as it stands: no walk in a stand changes it), no clock, the stun reads 0,
 ///   the room has space as it stands, and its invincibility timer reads 0 at the next frame's update (a hit after this
@@ -343,10 +346,15 @@ pub fn aquamentus(ram: &[u8], slot: usize) -> Option<Throw> {
 
 /// Gohma's fireball (asm:Gohma_Update@ShootAnimateCollide): its own shoot timer (`$380`) counted down in its update,
 /// the fireball on the frame it reaches 0 (`S` frames on; 256 from 0) and reloaded with `$41`. No clock or stun test:
-/// `loaded` while live; a fireball needs only a free slot.
+/// `loaded` while live; a fireball needs only a free slot. Before its init has run (ObjUninitialized, metastate 1 on
+/// entering its room) the init sets the timer to 1 (asm:Gohma_Init) and the first fireball comes the frame after: 2
+/// frames on, read as loaded.
 pub fn gohma(ram: &[u8], slot: usize) -> Option<Throw> {
     if !matches!(ram[OBJ_TYPE + slot], 0x33 | 0x34) {
         return None;
+    }
+    if ram[OBJ_UNINITIALIZED + slot] != 0 {
+        return Some(timed(true, Some(2), room_for_shot(ram, false)));
     }
     let live = ram[OBJ_METASTATE + slot] == 0;
     let timer = ram[GOHMA_SHOOT_TIMER + slot];
@@ -633,6 +641,10 @@ mod tests {
             // No clock test: it shoots under the clock too.
             (r[GOHMA_SHOOT_TIMER + 1], r[INV_CLOCK]) = (16, 1);
             assert_eq!(gohma(&r, 1).unwrap().will_throw, 1.0);
+            // On entering its room, before its init (timer 0, metastate 1): the init sets 1, the fireball 2 frames on.
+            (r[GOHMA_SHOOT_TIMER + 1], r[INV_CLOCK], r[OBJ_METASTATE + 1], r[OBJ_UNINITIALIZED + 1]) = (0, 0, 1, 0xFF);
+            let t = gohma(&r, 1).unwrap();
+            assert_eq!((t.loaded, t.throw_time, t.will_throw, t.next), (true, 1.0 - 2.0 / TIMER_MAX, 1.0, false));
         }
 
         let mut r = room(RED_WIZZROBE);
