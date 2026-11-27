@@ -6007,12 +6007,13 @@ stage 1 (overworld `gen1-overworld/s1r2-c2-it000350`, walkers `gen1-walkers/s1r-
 
 Each step dry-run on the frozen `triforce-gen15` (4a90b087): the teachers' record of every group and boss
 (`r36_merge_record.py --group <all 14> --teacher-group ... --try-others 4:0.25 --sources resets entries --dry-run`)
-resolves every teacher and plans 50 keys × 2 sources; nothing there is refused. Three things were:
+resolves every teacher and plans 34 keys (every family's `family@d3first`) × 2 sources; nothing there is refused.
+Three things were:
 
 - **`shooter` in the student's inputs.** The overworld, Goriya and Wizzrobe teachers read schema 10's
   `entity_shooter`, so the student must (its token groups are the union of its teachers'). Only those twelve tasks
   turned `obs.shooter` on: a correction round's record with such a student (`--student`, any hitnet with the
-  `shooter` group) is refused on 38 other keys' tasks ("reads obs.shooter (entity_shooter), off in the task"), and so
+  `shooter` group) is refused on the other 22 keys' tasks ("reads obs.shooter (entity_shooter), off in the task"), and so
   would be its imitation on the walkers' rows (recorded with zeros), its PPO (`check_network_reads`) and every chain
   slot outside those families (`runner.check_inputs`). **Changed:** `obs.shooter: true` in
   `specialists/d3first/_generation.yaml` (every generation task; the twelve per-task lines removed), and
@@ -6084,4 +6085,21 @@ Zelda):
 
 0x5f, the knockback rule's loss after D7 (the brief: 99% → 90% on the teachers when the rule went in), ends 5 of
 300 runs from D7's triforce here (1.7%); the student is checked on the same seeds there.
+
+**The whole route** (from the start state, no cut; 300 runs, seeds 1000-1299, job #2602): **42 of 300 end the game
+(14.0%)**, median 136,693 frames (37:54.5), best **132,095 (36:38.0)**; 4 of the 42 are within the north star's
+133,419 frames. Where the other 258 end: 3:0x4d (Manhandla) 59, 4:0x13 (Gleeok) 41, 9:0x52 16, 5:0x24 13, 6:0x3a 12,
+9:0x10 10, 9:0x42 9, 3:0x5b 8.
+
+**The yardstick** (gen16, route tasks, `bench.network_task`; key chunks of separate processes, merged): cheap tier
+97.8% of 6,100 episodes, hearts lost -0.007 an episode (more healed than lost), 0.430 hits a visit, 47.2 decisions,
+0.334 bombs; rooms tier 96.0% of 5,980, 0.256 hearts lost, 0.607 hits a visit, 64.2 decisions, 0.378 bombs
+(2.0.0.7's 51 on it: 92.3%, 0.678, 1.003). Files `target/s52/bench/teachers-{cheap,rooms}.json`: the student's
+tiers are compared with these, pair by pair.
+
+**The record** (gen16; `r36_merge_record.py`, the 14 teachers named by group, `--try-others 4:0.25`, 20,480
+decisions a source, 10 envs): 34 keys × resets and entries, 1,392,640 rows (job #2574, 74 minutes, 440-620 decisions
+a second), and the every-room harvest of the teachers' own chains as a third source (`--sources rooms`; 18 scopes ×
+120 runs, seeds 400000-400119, 51,249 room entries; job #2603, 34 keys, 696,320 rows, 45 minutes): 2,088,960 rows,
+102 sources.
 
