@@ -45,6 +45,7 @@ the chains, filed in the store once every piece is in.  A comparison of a team h
 iteration and steps (``played_checkpoints``)."""
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -504,17 +505,41 @@ def _safe_tag(text: str) -> str:
     return ''.join(c if c.isalnum() or c in '-_.' else '-' for c in text)
 
 
+# The longest default tag `judge checkpoints` makes: a chain's file adds `-it<NNNNNN>-<scope file>.jsonl.meta.json`
+# (about 40 bytes), a batch's folder in the store the same tag, and a file name may hold 255 bytes (Nov 27: ten
+# `--with` runs in the control's tag, OSError 36, job #2289).
+TAG_LIMIT = 100
+
+
+def _digest8(text: str) -> str:
+    return hashlib.sha256(text.encode()).hexdigest()[:8]
+
+
+def _short_tag(text: str) -> str:
+    """``text`` as a tag (``_safe_tag``) of at most ``TAG_LIMIT`` characters: a longer one keeps its start and ends in
+    8 hex characters of its whole text's hash, so it stays stable and distinct."""
+    text = _safe_tag(text)
+    return text if len(text) <= TAG_LIMIT else f"{text[:TAG_LIMIT - 9]}-{_digest8(text)}"
+
+
+def control_tag(team: str, resolved: list[str], runs: int) -> str:
+    """The control's default tag: ``control-<team>[-w<8 hex>]-r<runs>``, the ``w`` part the hash of the sorted
+    ``--with`` runs (their names are in the control's team spec, ``--team`` of its chains and their meta)."""
+    others = f"-w{_digest8(chr(10).join(sorted(resolved)))}" if resolved else ''
+    return _short_tag(f"control-{team}{others}-r{runs}")
+
+
 def checkpoints_plan(teacher: str, its: Optional[str], runs: int, dungeons: Optional[str] = None,
                      scopes: Optional[str] = None, tag: Optional[str] = None, chains_dir: Optional[Path] = None,
                      base: Optional[str] = None, with_: Optional[list] = None,
                      control: Optional[str] = None) -> CheckpointsPlan:
     """The pieces of judging ``GROUP=FAMILY/RUN``'s numbered checkpoints (``its``: ``114,228`` or ``all``: every
     completely written one) on the group's scopes (``select_scopes``), ``runs`` a chain on seeds 0..runs-1: one chain
-    a checkpoint and scope, in batch ``<tag>-it<NNNNNN>`` (``tag`` default ``<family>-<run>-r<runs>``), done when its
-    records are in ``chains_dir`` or filed in the store (``find_files``).  ``with_``: other groups' runs
-    (``GROUP=FAMILY/RUN[@itN]``) in their slots too, for every piece and the control.  The control: the base team (with
-    ``with_``) without the teacher on the same scopes and seeds, tag ``control`` (default
-    ``control-<team>[-<with runs>]-r<runs>``).  ValueError for a wrong argument."""
+    a checkpoint and scope, in batch ``<tag>-it<NNNNNN>`` (``tag`` default ``<family>-<run>-r<runs>``, at most
+    ``TAG_LIMIT`` characters), done when its records are in ``chains_dir`` or filed in the store (``find_files``).
+    ``with_``: other groups' runs (``GROUP=FAMILY/RUN[@itN]``) in their slots too, for every piece and the control.  The
+    control: the base team (with ``with_``) without the teacher on the same scopes and seeds, tag ``control`` (default
+    ``control_tag``).  ValueError for a wrong argument."""
     from . import store  # pylint: disable=import-outside-toplevel
     route, groups = teacher_families([teacher])
     group = next(iter(groups))
@@ -548,7 +573,7 @@ def checkpoints_plan(teacher: str, its: Optional[str], runs: int, dungeons: Opti
     if not judged:
         raise ValueError(f"no family of {group} plays a step of {route}")
     chains_dir = Path(chains_dir or room_stats.CHAINS_DIR).resolve()
-    tag = tag or f"{parent.family.replace('/', '-')}-{parent.name}-r{runs}"
+    tag = tag or _short_tag(f"{parent.family.replace('/', '-')}-{parent.name}-r{runs}")
     pieces = []
     for iteration in chosen:
         piece_tag = f"{tag}-it{iteration:06d}"
@@ -566,7 +591,7 @@ def checkpoints_plan(teacher: str, its: Optional[str], runs: int, dungeons: Opti
         resolved.append(f"{name}={run}")
     team = store.read_team(base or 'current')['name']
     control_team = teacher_spec(team, resolved)
-    control = control or _safe_tag(f"control-{team}" + ''.join(f"-{item}" for item in resolved) + f"-r{runs}")
+    control = control or control_tag(team, resolved, runs)
     have = find_files(control, chains_dir)
     control_missing = [item for item in judged if item.scope.file not in have]
     return CheckpointsPlan(group, parent, route, runs, tag, chains_dir, base, pieces, with_, control, control_team,

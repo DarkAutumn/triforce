@@ -2450,14 +2450,17 @@ every step, so following an enemy that moves away pays again, and knockback rese
   store), lists the rest and writes one table by iteration (steps, each scope's rate ± its standard error, beside two
   bases on the same seeds, each paired by seed: **today's team on its own route** (`--base`, default `r40-2015-1k`:
   2.0.0.15's code and route) and **today's team on the generation's route** (the control, `--control TAG`, default
-  `control-<team>[-<with runs>]-r<N>`: the base team on this code, queued by `--plan`/`--submit` like the pieces);
+  `control-<team>[-w<8 hex>]-r<N>`, the hash of the sorted `--with` runs, whose names its team spec carries: the base
+  team on this code, queued by `--plan`/`--submit` like the pieces);
   hearts lost a run, the rooms where most runs end, the tracked goals) and, where the route crosses them, Dungeon 3's
   Darknut rooms (`judge.darknut_rooms`: 3x5b's first pass at drop cycle 0 with the Darknut killed and its bombs
   dropped and taken, 3x59 from N by the bombs brought, 3x69 in and out, the training's 3_59n curriculum point as
   recorded by the checkpoint's run, `store.parent_curricula`), as `<tag>-checkpoints.md` / `.json` (`-vs-<base>` for
   another base), filed in the store (kind `judge`) once every chain is in. The tag defaults to
-  `<family>-<run>-r<runs>`, so a second run count is a second set of chains. `--with GROUP=FAMILY/RUN[@itN]` (also
-  `eval-batch --with`) puts another group's run in its slots too, unjudged: a teacher other than the walkers judged on
+  `<family>-<run>-r<runs>`, so a second run count is a second set of chains; a default tag past 100 characters keeps
+  its start and ends in 8 hex characters of its hash (file names stay well under 255 bytes, `judge.TAG_LIMIT`).
+  `--with GROUP=FAMILY/RUN[@itN]` (also `eval-batch --with`) puts another group's run in its slots too, unjudged: a
+  teacher other than the walkers judged on
   Dungeon 3 is floored by today's darknut dying in 3x5b's first pass on the generation's route (2.0% from the start,
   1.3% from the entrance, round40.md "A teacher's checkpoints judged"), so its Dungeon 3 scope says little until the
   walkers' best checkpoint plays beside it. By hand, the team spec is `BASE+@overworld=RUN+@walkers=RUN`.

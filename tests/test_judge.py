@@ -1,6 +1,7 @@
 """Judging a teacher in chains (triforce.judge, eval-batch --teacher): where a group plays, the comparison with a
 base measurement, the files found in a folder or in the store."""
 
+import hashlib
 import json
 import shlex
 from pathlib import Path
@@ -223,7 +224,9 @@ def test_checkpoints_are_planned_one_chain_a_job_then_collected_in_one_table(sha
     # With the walkers' checkpoint beside: every chain and the control carry it.
     assert judge.main([*common, '--plan', '--with', 'walkers=gen1-walkers/s1@it2']) == 0
     out = capsys.readouterr().out
-    assert 'the control control-t1-walkers-gen1-walkers-s1-it000002-r4 (t1+@walkers=gen1-walkers/s1-it000002)' in out
+    tag = judge.control_tag('t1', ['walkers=gen1-walkers/s1-it000002'], 4)
+    assert tag == f"control-t1-w{hashlib.sha256(b'walkers=gen1-walkers/s1-it000002').hexdigest()[:8]}-r4"
+    assert f'the control {tag} (t1+@walkers=gen1-walkers/s1-it000002)' in out
     assert '--with: gen1-walkers/s1-it000002 (iteration 2 of gen1-walkers/s1) is made by --submit' in out
     assert '--teacher boss-gleeok=gen1-gleeok/s1@it2 --with walkers=gen1-walkers/s1@it2 --base t1' in out
     # The pieces of iteration 2 played (their jobs made its run); iteration 4's and the control not yet.
@@ -267,7 +270,7 @@ OTHERS = ('overworld', 'walkers', 'darknut', 'goriya', 'wizzrobe', 'others', 'ro
           'boss-aquamentus', 'boss-dodongo')
 
 
-def test_every_job_the_checkpoints_plan_writes_has_a_description_the_queue_takes(shared, tmp_path, capsys):
+def test_every_job_the_checkpoints_plan_writes_fits_the_queue_and_the_file_system(shared, tmp_path, capsys):
     store.create_team('t1', {'boss-gleeok': store.slot_of(_sealed('boss-gleeok', 'r1'))}, 'test')
     judged = 'gen1-boss-gleeok-a-teacher-with-a-long-name/s1r3-continued-from-s1r2'
     _training(*judged.split('/'))
@@ -276,6 +279,17 @@ def test_every_job_the_checkpoints_plan_writes_has_a_description_the_queue_takes
         family = f'gen1-{group}-a-teacher-with-a-long-name'
         _training(family, 's1r3-continued-from-s1r2')
         withs += ['--with', f'{group}={family}/s1r3-continued-from-s1r2@it2']
+    plan = judge.checkpoints_plan(f'boss-gleeok={judged}', None, 100, 'd4', chains_dir=tmp_path / 'chains',
+                                  base='t1', with_=withs[1::2])
+    # Every chain's files (`<tag>-<scope file>.jsonl.meta.json`, `.stats.json`, `.log`) and every batch's folder in
+    # the store (the tag) stay well under a file name's 255 bytes; the control's tag is short and stable.
+    names = [f"{piece.tag}-{piece.judged.scope.file}.jsonl.stats.json" for piece in plan.pieces]
+    names += [f"{plan.control}-{item.scope.file}.jsonl.stats.json" for item in plan.control_missing]
+    assert max(len(name.encode()) for name in names) < 150, names
+    resolved = [item.replace('@it2', '-it000002') for item in withs[1::2]]
+    assert plan.control == judge.control_tag('t1', resolved, 100) == judge.control_tag('t1', resolved[::-1], 100)
+    assert plan.control.startswith('control-t1-w') and len(plan.control) < 30 and len(plan.control_team) > 381
+    assert len(judge._short_tag('x' * 300)) == judge.TAG_LIMIT  # pylint: disable=protected-access
     assert judge.main(['checkpoints', f'boss-gleeok={judged}', '--dungeons', 'd4', '--runs', '100', '--chains-dir',
                        str(tmp_path / 'chains'), '--agent', 'Tester', '--team-base', 't1', '--plan', *withs]) == 0
     lines = _job_lines(capsys.readouterr().out)
