@@ -88,6 +88,25 @@ def test_a_bench_run_and_its_paired_comparison(states_dir, tmp_path, logs_dir):
     assert '| missing |' in bench.format_compare(against_old)
 
 
+def test_bench_speed_times_a_network_on_the_rust_actor_and_served_by_torch(states_dir, tmp_path, logs_dir):
+    """``python -m triforce.lab.bench speed`` end to end on a small network, the Rust actor and the CPU server (it
+    crashed on r40-int at affde0e6: ``_play_policy`` passed ``evaluate._play`` an argument it no longer takes)."""
+    manifest = {'format': 1, 'act': registry.DEFAULT_ACT, 'episodes': 2, 'seed': 7, 'clips': 'on',
+                'entries': [{'key': 'ow-start', 'family': 'ow-start', 'source': 'seed', 'states': ['start']}]}
+    manifest_path, out = tmp_path / 'bench.json', tmp_path / 'speed.json'
+    manifest_path.write_text(json.dumps(manifest))
+    checkpoint = registry.save_checkpoint('ow-start', 'n1', random_network(1), root=tmp_path)
+    assert bench.main(['speed', '--key', 'ow-start', '--paths', 'rust', 'cpu', '--network', str(checkpoint),
+                       '--manifest', str(manifest_path), '--states-dir', str(states_dir), '--parallel', '2',
+                       '--out', str(out)]) == 0
+    result = json.loads(out.read_text())
+    assert result['key'] == 'ow-start' and set(result['paths']) == {'rust', 'cpu'}
+    for row in result['paths'].values():
+        assert row['decisions'] > 0 and row['decisions_per_second'] > 0 and 0.0 <= row['success'] <= 1.0
+    assert result['paths']['rust']['decisions'] == result['paths']['cpu']['decisions']
+    assert any(logs_dir.glob('*_lab-speed'))
+
+
 def _row(successes):
     return {'records': [{'state': f's{i}', 'seed': i, 'success': s, 'hearts_lost': 0.0, 'hits': 0, 'visits': 1,
                          'decisions': 1, 'bombs': 0} for i, s in enumerate(successes)]}

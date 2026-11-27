@@ -402,13 +402,19 @@ def speed(key: str, manifest: dict, parallel: int, devices: list[str], states_di
     out = {}
     for path in devices:
         network = registry.load_model(checkpoint)[0]
+        server = None
         if path == 'rust':
             policy = network.to_native()
         else:
             device, _, half = path.partition('-')
-            policy = serve.Server(device=device, half=half == 'half').policy(network)
+            server = serve.Server(device=device, half=half == 'half')
+            policy = server.policy(network)
         began = time.time()
-        result = _play_policy(config, policy, manifest, parallel, directory)
+        try:
+            result = _play_policy(config, policy, manifest, parallel, directory)
+        finally:
+            if server is not None:
+                server.close()
         seconds = time.time() - began
         decisions = sum(r['steps'] for r in result)
         out[path] = {'decisions': decisions, 'seconds': round(seconds, 2), 'decisions_per_second': decisions / seconds,
@@ -423,7 +429,7 @@ def _play_policy(config, policy, manifest: dict, parallel: int, states_dir) -> l
                         None if states_dir is None else str(states_dir))
     task = _native.EvalTask(config, jobs, states_dir=None if states_dir is None else str(states_dir))
     with _native.EnvPool(task, num_envs=max(1, min(parallel, len(jobs))), threads=parallel, seed=0) as pool:
-        return _play(pool, policy, manifest['act'], len(jobs), None, None, False)
+        return _play(pool, policy, manifest['act'], len(jobs), None, None)
 
 
 def main(argv=None) -> int:
