@@ -22,8 +22,8 @@ use crate::policy::{PyPolicy, parse_act_mode};
 use policy::ActMode;
 use pool::rollout::{EnvRollout, Play, Record, TryOthers};
 use pool::zelda::{
-    ChainRunEnv, ClipsSwitch, EvalEnv, EvalJob, ExternalQueue, GumbelSearch, HybridActor, Net, PolicyActor, RgbFn,
-    SearchConfig, TaskEnv, TrainEnv, ZeldaAction,
+    ChainRunEnv, ClipsSwitch, EvalEnv, EvalJob, ExternalQueue, GumbelSearch, HybridActor, ModelLease, Net, PolicyActor,
+    RgbFn, SearchConfig, TaskEnv, TrainEnv, ZeldaAction,
     ZeldaEvent,
 };
 use pool::{Column, Dtype, EnvInit, Jobs, Pool, PoolOptions};
@@ -1258,13 +1258,13 @@ impl PyEnvPool {
         let (nets, external) = split_policies(&policies)?;
         // Training samples from the unmodified policy (PPO needs it); act modes are for plays.
         let mode = if deterministic { ActMode::ARGMAX } else { ActMode::SAMPLE };
-        if let Some((queue, which)) = external {
+        if let Some((queue, which, leases)) = external {
             if search.is_some() {
                 return Err(PyValueError::new_err("search needs Rust networks (an ExternalPolicy has no search)"));
             }
             let native = PolicyActor::new(&LAYOUT, nets.clone(), vec![mode; nets.len()]).map_err(PyValueError::new_err)?;
             let modes = vec![mode; which.len()];
-            let actor = Arc::new(HybridActor::new(native, queue, which, modes).map_err(PyValueError::new_err)?);
+            let actor = Arc::new(HybridActor::new(native, queue, which, modes, leases).map_err(PyValueError::new_err)?);
             let mut buffers = RolloutOut::borrow(out, self.pool.num_envs(), steps, None, tried_k)?;
             let rollouts = interruptible(
                 py,
@@ -1363,7 +1363,7 @@ impl PyEnvPool {
                 }
             },
         };
-        if let Some((queue, which)) = external {
+        if let Some((queue, which, leases)) = external {
             if replay.is_some() {
                 return Err(PyValueError::new_err(
                     "replays need Rust networks (an ExternalPolicy can't score a recorded action)",
@@ -1379,7 +1379,7 @@ impl PyEnvPool {
                 .map_err(PyValueError::new_err)?
                 .with_acting(true)
                 .with_distributions(true);
-            let actor = HybridActor::new(native, queue, which, modes).map_err(PyValueError::new_err)?;
+            let actor = HybridActor::new(native, queue, which, modes, leases).map_err(PyValueError::new_err)?;
             return py.detach(|| self.pool.play(Arc::new(actor), record)).map_err(pool_err);
         }
         let actor = match replay {
@@ -1579,13 +1579,15 @@ impl PyEnvPool {
 }
 
 /// The Rust networks of `policies` (each a `_native.Policy` or `_native.ExternalPolicy`) and, when some are
-/// external, their queue and which network acts for each policy index (one queue per call).
+/// external, their queue, which network acts for each policy index (one queue per call) and the external ones'
+/// leases (the actor holds them: its networks stay served while it lives).
 #[allow(clippy::type_complexity)]
 fn split_policies(
     policies: &[Bound<'_, PyAny>],
-) -> PyResult<(Vec<Arc<policy::Policy>>, Option<(Arc<ExternalQueue>, Vec<Net>)>)> {
+) -> PyResult<(Vec<Arc<policy::Policy>>, Option<(Arc<ExternalQueue>, Vec<Net>, Vec<Arc<ModelLease>>)>)> {
     let mut native = Vec::new();
     let mut which = Vec::new();
+    let mut leases = Vec::new();
     let mut queue: Option<Arc<ExternalQueue>> = None;
     for p in policies {
         if let Ok(p) = p.cast::<PyPolicy>() {
@@ -1598,12 +1600,13 @@ fn split_policies(
                 Some(q) if Arc::ptr_eq(q, &e.queue) => {}
                 Some(_) => return Err(PyValueError::new_err("every ExternalPolicy of a pool call needs the same queue")),
             }
-            which.push(Net::External(e.model));
+            which.push(Net::External(e.lease.model()));
+            leases.push(e.lease.clone());
         } else {
             return Err(PyTypeError::new_err("a policy must be a _native.Policy or a _native.ExternalPolicy"));
         }
     }
-    Ok((native, queue.map(|q| (q, which))))
+    Ok((native, queue.map(|q| (q, which, leases))))
 }
 
 /// (level, room, in_cave) tuples, for Python.

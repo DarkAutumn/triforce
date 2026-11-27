@@ -18,6 +18,7 @@ use crate::rollout::{Actor, Decision, Refused, Situation};
 use policy::act::Foresight;
 use policy::logits::{Heads, LogitScratch};
 use policy::{ActMode, Choose};
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
@@ -62,6 +63,34 @@ pub struct ExternalQueue {
     arrived: Condvar,
     answered: Condvar,
     slots: AtomicUsize,
+    /// Live leases per served network ([`ModelLease`]): the server frees a network none holds.
+    leases: Mutex<HashMap<usize, usize>>,
+}
+
+/// A hold on the server's network `model`: each `ExternalPolicy` takes one and every actor built from it shares
+/// it, so the network stays served while anything can still ask for it. The last one dropped forgets the model
+/// ([`ExternalQueue::leases`] 0), and the server may free its network and reuse the index.
+pub struct ModelLease {
+    queue: Arc<ExternalQueue>,
+    model: usize,
+}
+
+impl ModelLease {
+    pub fn model(&self) -> usize {
+        self.model
+    }
+}
+
+impl Drop for ModelLease {
+    fn drop(&mut self) {
+        let mut leases = self.queue.leases.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(count) = leases.get_mut(&self.model) {
+            *count -= 1;
+            if *count == 0 {
+                leases.remove(&self.model);
+            }
+        }
+    }
 }
 
 impl ExternalQueue {
@@ -78,7 +107,22 @@ impl ExternalQueue {
             arrived: Condvar::new(),
             answered: Condvar::new(),
             slots: AtomicUsize::new(0),
+            leases: Mutex::new(HashMap::new()),
         }
+    }
+
+    /// A new hold on network `model` (the queue counts it until it drops).
+    pub fn lease(self: &Arc<Self>, model: usize) -> Arc<ModelLease> {
+        *self.leases.lock().unwrap_or_else(|e| e.into_inner()).entry(model).or_insert(0) += 1;
+        Arc::new(ModelLease {
+            queue: self.clone(),
+            model,
+        })
+    }
+
+    /// How many leases on network `model` are alive (0: no policy or actor can ask for it any more).
+    pub fn leases(&self, model: usize) -> usize {
+        self.leases.lock().unwrap_or_else(|e| e.into_inner()).get(&model).copied().unwrap_or(0)
     }
 
     pub fn heads(&self) -> Heads {
@@ -241,6 +285,8 @@ pub struct HybridActor {
     nets: Vec<Net>,
     modes: Vec<ActMode>,
     mask: usize,
+    /// The served networks' leases, held while the actor lives (its pool can ask for them till then).
+    _leases: Vec<Arc<ModelLease>>,
 }
 
 pub struct HybridScratch {
@@ -259,12 +305,13 @@ pub struct HybridScratch {
 
 impl HybridActor {
     /// `nets[p]` acts for policy `p` by `modes[p]`; `native` holds the Rust networks the `Net::Native` entries
-    /// index (built with their modes).
+    /// index (built with their modes); `leases` hold the external ones served while the actor lives.
     pub fn new(
         native: PolicyActor,
         queue: Arc<ExternalQueue>,
         nets: Vec<Net>,
         modes: Vec<ActMode>,
+        leases: Vec<Arc<ModelLease>>,
     ) -> Result<HybridActor, String> {
         if modes.len() != nets.len() {
             return Err(format!("{} act modes for {} policies", modes.len(), nets.len()));
@@ -284,6 +331,7 @@ impl HybridActor {
             nets,
             modes,
             mask,
+            _leases: leases,
         })
     }
 

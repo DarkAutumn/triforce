@@ -87,8 +87,20 @@ forward is cheap, so answering sooner beats a fuller batch. The 200-run `d3first
 each copy under the id of a temporary that died at once; the next network often had the same id and replaced the
 earlier one at its index, so a chain serving two or more torch networks could play one family's rooms with
 another's network (2 processes of 3 when loading four; which family, random per process). A dead network's key is
-now forgotten and indices are never reused (`tests/test_lab_nets.py`). Unaffected: one served network per process
-(also loaded one after another, each arm replacing the last), networks the Rust actor plays.
+now forgotten and its index is never handed to another network while anything can still ask for it
+(`tests/test_lab_nets.py`). Unaffected: one served network per process (also loaded one after another, each arm
+replacing the last), networks the Rust actor plays.
+
+**A served network is freed once nothing holds it (Nov 27).** Indices were never reused and nothing was freed: a
+bench or evaluation loop that loads its checkpoint per entry (`evaluate_specialist`: `to_native()` per load) kept
+every copy and its CUDA graphs, and Stage52's job #2579 (a 768-wide hitnet) grew past 12 GB and died of CUDA OOM
+after 5,320 of 5,980 episodes. Each `ExternalPolicy` now holds a lease on its index, shared by every pool actor
+built from it (`pool::zelda::ModelLease`; `ExternalQueue.leases(model)` counts them). Once the network's key has
+died (`serve_copy`'s default key: the network object) and no lease is left, the server drops the copy, its graphs
+and recurrent states, and gives the index to the next new network. An index whose key lives (a training's learner,
+an explicit key) is kept as before. Eight loads served, played and dropped in a row: one index, nothing left
+served, the GPU memory allocated the same after each, every load's answer to a recorded batch identical bit for
+bit and its plays' actions the same (`tests/test_lab_nets.py`).
 
 **Chosen: (c) with (a) as the generic path.** A network the Rust actor knows (`ZeldaPolicy`) plays as before, bit
 for bit (100 chain runs of `d3first` from `3_7cs_0`, seeds 0-99, today's networks: every run's record identical,

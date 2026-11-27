@@ -22,7 +22,7 @@ mod search;
 mod thinking;
 
 pub use actor::{ActorScratch, PolicyActor};
-pub use external::{ExternalQueue, HybridActor, HybridScratch, Net, Request};
+pub use external::{ExternalQueue, HybridActor, HybridScratch, ModelLease, Net, Request};
 pub use envs::{ChainRunEnv, ClipsSwitch, EvalEnv, EvalJob, PoolChainEnv, PoolSpecialistEnv, TaskEnv, TrainEnv};
 pub use nes::{Origin, PoolNes, PoolState, PoolStore, RgbFn};
 pub use search::{GumbelSearch, SearchConfig, SearchScratch};

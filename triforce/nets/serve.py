@@ -222,7 +222,14 @@ class Server:
         self.models: dict[int, torch.nn.Module] = {}
         self._keys: dict = {}
         self._states: dict[tuple[int, int], tuple[int, torch.Tensor]] = {}
-        self._lock = threading.Lock()
+        # A served network whose key died (``serve_copy``'s default key: its network) waits in ``_orphans`` until
+        # no policy or pool holds its index (``queue.leases``); then its copy, graphs and states are dropped and
+        # the index goes to ``_free`` for the next new key (a bench loading a checkpoint per entry stays flat).
+        self._orphans: set[int] = set()
+        self._free: list[int] = []
+        self._next = 0
+        # Reentrant: a finalizer (``_forget``) may run in this thread while it holds the lock (a collection).
+        self._lock = threading.RLock()
         self._thread: Optional[threading.Thread] = None
         self.error: Optional[BaseException] = None
         self.batches = 0
@@ -233,12 +240,18 @@ class Server:
     def policy(self, network: torch.nn.Module, key=None):
         """``network`` (moved to the server's device, eval mode) as an ``_native.ExternalPolicy``.  The same
         ``key`` (default: the network object) reuses its model index and replaces the network there; a new key
-        always gets a new index.  The same object served again at its index keeps its CUDA graphs."""
+        gets an index no live policy or pool holds (a freed one, ``_collect``, or a new one).  The same object
+        served again at its index keeps its CUDA graphs."""
         key = id(network) if key is None else key
         with self._lock:
+            self._collect()
             index = self._keys.get(key)
             if index is None:
-                index = self._keys[key] = len(self.models)
+                if self._free:
+                    index = self._free.pop()
+                else:
+                    index, self._next = self._next, self._next + 1
+                self._keys[key] = index
             same = self.models.get(index) is network
             self.models[index] = network.to(self.device).eval()
             self._states = {k: v for k, v in self._states.items() if k[0] != index}
@@ -259,8 +272,7 @@ class Server:
         if key is None:
             key = id(network)
             if key not in self._keys:
-                weakref.finalize(network, self._keys.pop, key, None)
-                weakref.finalize(network, self._copies.pop, key, None)
+                weakref.finalize(network, self._forget, key)
         kept = self._copies.get(key) if self.capture_all else None
         if (kept is not None and type(kept) is type(network)
                 and kept.state_dict().keys() == network.state_dict().keys()):
@@ -273,6 +285,32 @@ class Server:
         if self.capture_all:
             self._copies[key] = served
         return self.policy(served, key)
+
+    def _forget(self, key):
+        """``key``'s network died: its index can no longer be served to a new policy; it is freed once nothing
+        holds it (``_collect``)."""
+        with self._lock:
+            self._copies.pop(key, None)
+            index = self._keys.pop(key, None)
+            if index is not None:
+                self._orphans.add(index)
+            self._collect()
+
+    def _collect(self):
+        """Frees every orphaned index no policy or pool actor holds any more: its network, CUDA graphs, recurrent
+        states; the index is reused.  Nothing can ask for it (an asking env's actor holds its lease till answered),
+        so the answering thread never meets a freed index."""
+        with self._lock:
+            for index in [i for i in self._orphans if self.queue.leases(i) == 0]:
+                self._orphans.discard(index)
+                self.models.pop(index, None)
+                for key in [k for k in list(self._graphs) if k[0] == index]:
+                    self._graphs.pop(key, None)
+                for key in [k for k in list(self._states) if k[0] == index]:
+                    self._states.pop(key, None)
+                self._eager.discard(index)
+                self._captured.discard(index)
+                self._free.append(index)
 
     def _start(self):
         if self._thread is None or not self._thread.is_alive():
@@ -289,6 +327,8 @@ class Server:
             batch = self.queue.take(timeout=0.1 if self._seen else IDLE_SECONDS, gather=self.gather,
                                     target=max(1, len(self._seen)))
             if batch is None:
+                if self._orphans:
+                    self._collect()
                 continue
             now = time.monotonic()
             for slot in batch['slot']:

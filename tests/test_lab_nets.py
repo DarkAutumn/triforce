@@ -530,6 +530,62 @@ def test_networks_served_from_temporaries_never_share_an_index():
         server.serve_copy(learner)
         server.serve_copy(learner)                                  # a live network's rollouts reuse one index
         assert len(server.models) == 7 and server._keys == {id(learner): 6}
+        policies.clear()                                            # the chain ends: its networks are freed
+        gc.collect()
+        server._collect()
+        assert list(server.models) == [6] and sorted(server._free) == list(range(6))
+    finally:
+        server.close()
+
+
+def test_a_bench_loop_of_served_networks_stays_flat(states_dir, observations):
+    """``evaluate_specialist`` loads its checkpoint per bench entry and serves a copy (``to_native``): every copy
+    and its CUDA graphs were kept, and Stage52's job #2579 (a 768-wide hitnet) grew to 12 GB and died of CUDA OOM
+    after 5320 episodes. Once a network and its policies are gone its index is freed and reused: the served set
+    and the GPU memory stay flat, every load answers a recorded batch bit for bit as the first and plays the same
+    actions (a play's float sums move in the last digit with how the envs' rows fall into batches)."""
+    import gc
+    config = _native.SpecialistConfig.load('ow-start').replace(start_states=['start'], max_steps=30)
+    task = _native.EvalTask(config, [('start', seed) for seed in range(2)], states_dir=str(states_dir))
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    server = Server(device=device, graphs=device == 'cuda')
+    torch.manual_seed(7)
+    saved = nets.create('wide', native_spec(), hidden_dim=64, depth=2).state_dict()
+    n = observations['action_mask'].shape[0]
+    batch = {'obs': observations, 'slot': np.arange(n), 'model': np.zeros(n, dtype=np.int64), 'job': np.arange(n),
+             'step': np.zeros(n, dtype=np.int64), 'bootstrap': np.zeros(n, dtype=bool)}
+    answers, plays, memory = [], [], []
+
+    @torch.no_grad()
+    def answer():
+        """The served network's answer to the recorded batch, as the server computes it (its graph when it has one;
+        no request is in flight: the server thread waits for one)."""
+        network = server.models[0]
+        out = server._graphed(0, network, batch, np.arange(n)) if server.graphs else None
+        if out is None:
+            heads, _ = network.heads({k: torch.from_numpy(v).to(server.device) for k, v in observations.items()})
+            out = serve_module._flat(heads, server.hits).cpu().numpy()
+        return out
+
+    try:
+        for _ in range(8):
+            network = nets.create('wide', native_spec(), hidden_dim=64, depth=2)
+            network.load_state_dict(saved)
+            policy = server.serve_copy(network)
+            assert policy.model == 0 and server.queue.leases(0) == 1
+            answers.append(answer())
+            records = _play(task, policy, 'argmax', parallel=2)
+            plays.append([(r['outcome'], [v['decisions']['actions'] for v in r['visits']]) for r in records])
+            del network, policy
+            gc.collect()
+            server._collect()
+            assert not server.models and not server._graphs and not server._states and not server._keys
+            assert server.queue.leases(0) == 0 and server._free == [0]
+            if device == 'cuda':
+                memory.append(torch.cuda.memory_allocated())
+        assert all(np.array_equal(a, answers[0], equal_nan=True) for a in answers)    # no hit head: NaN hit rows
+        assert len(plays[0]) == 2 and all(play == plays[0] for play in plays)
+        assert len(set(memory)) <= 1, memory
     finally:
         server.close()
 

@@ -5,7 +5,7 @@
 use crate::convert::LAYOUT;
 use numpy::{PyArray, PyArray1, PyArrayMethods, PyReadonlyArray1, PyReadonlyArray2, PyUntypedArrayMethods};
 use policy::logits::Heads;
-use pool::zelda::{ExternalQueue, Request};
+use pool::zelda::{ExternalQueue, ModelLease, Request};
 use pool::{Column, ObsColumns};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -25,7 +25,8 @@ pub struct PyExternalQueue {
 #[pyclass(name = "ExternalPolicy", module = "triforce._native", frozen)]
 pub struct PyExternalPolicy {
     pub(crate) queue: Arc<ExternalQueue>,
-    pub(crate) model: usize,
+    /// Its hold on the network: pools acting with it share it (`ExternalQueue.leases`).
+    pub(crate) lease: Arc<ModelLease>,
     #[pyo3(get)]
     hash: u64,
 }
@@ -55,7 +56,7 @@ impl PyExternalQueue {
     fn policy(&self, model: usize, hash: u64) -> PyExternalPolicy {
         PyExternalPolicy {
             queue: self.inner.clone(),
-            model,
+            lease: self.inner.lease(model),
             hash,
         }
     }
@@ -146,12 +147,18 @@ impl PyExternalQueue {
     fn closed(&self) -> bool {
         self.inner.is_closed()
     }
+
+    /// How many holds on network `model` are alive: its `ExternalPolicy` objects and the pool actors built from
+    /// them (0: nothing can ask for it any more; the server may free it).
+    fn leases(&self, model: usize) -> usize {
+        self.inner.leases(model)
+    }
 }
 
 #[pymethods]
 impl PyExternalPolicy {
     #[getter]
     fn model(&self) -> usize {
-        self.model
+        self.lease.model()
     }
 }
