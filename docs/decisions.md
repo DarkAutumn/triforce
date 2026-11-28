@@ -4174,3 +4174,14 @@ how people play it."
   topped up to one bomb for about a second in 9x17 and 9x20 and taken back unused, is a zero-cheat run: "That extra
   bomb doesn't count. This is a successful run." (The top-ups themselves go away in 2.0.2.0: backlog, "Bombs: no
   priming".)
+
+## 2026-11-28 — At parity in games finished, speed decides the best model; land what we built anyway (the owner)
+
+- **The next metric is speed**: with 2.0.1.1 level with 2.0.1.0 on whole games finished, "the next metric is 'how
+  fast'": a version's 1000-run whole route reports its fastest win and its fastest win with zero cheated items
+  beside its success, and the median frames of its wins, paired with the previous version on the same seeds.
+- **Landing is not "best"**: a model we spent a lot of time on is landed and tagged even if it is slower, for
+  comparison ("Some experiments won't be successful, but we still want to persist the model we built to compare
+  against"), unless it loses more games (outside noise). Which model is **the best** is recorded separately and may
+  not be the newest: better on games finished beyond noise wins; at parity, faster wins. `docs/model-versions.md`
+  names the best model at its top; the store's current team (what `play-zelda.py` plays) is the best model.

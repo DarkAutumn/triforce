@@ -532,6 +532,10 @@ thing and have to be taught again. Swept from this backlog Nov 23 (the lead):
   by state / row / wall so the harness runs the parts side by side (same coverage); estimated floor 60-70 s.
 - **A flaky test**: `tests/test_train_cli.py::test_an_interrupted_run_saves_but_exits_130` failed once in a full
   suite under load (exit 1 instead of 130) and passed three times alone.
+- **Another flaky test**: `tests/native/test_pool.py::test_a_finished_chain_run_can_hold_its_last_frame[False]`
+  failed once in a full suite under load (Nov 28, #2840; `frame_counter(0)` still 0 right after `wait_idle`: the
+  first reset's frame not yet published) and passed on the next full run (#2841). A race between `wait_idle` and
+  the reset's first rendered frame; untouched by the change under test (the replay slicer).
 - **For the retrain (decisions 2026-11-23, three entries on Dungeon 3):** the wrap in 0:0x76 and 0:0x75 as the
   route's way; 3:0x7b (key taken) and 3:0x6b crossed; 3:0x5b's first pass trained half at drop cycle 0 (kill one
   Darknut for its bombs) and half at 1 (cross); 3:0x59's starts at exactly 4 or 8 bombs with `bomb_reserve: 4` held
