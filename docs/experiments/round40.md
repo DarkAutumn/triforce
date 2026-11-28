@@ -6277,3 +6277,28 @@ last 40), while on the rooms tier's arrived states darknut 3_59n went 0.867 → 
 the entropy 1.18 → 1.34). Not kept. The same run with the teacher held at 1.0 throughout (`ppo-d3-hold`,
 `--teacher-fade 0`) is the next measurement; the fading plan is the lead's and the owner's to keep or change.
 
+**The decisions (the owner, Nov 27).** 19:15: `gen1-one/c1-768` is 2.0.1.0 (safe; the lead runs its official
+1000-run chains); PPO becomes an experiment, to find what happened and how to recover, its improvement on c1-768 being
+2.0.1.1 (beating it on the chains, losing nothing elsewhere); training from the student's own arrivals
+(`harvested_states`) is allowed. The plan, Dungeon 3 first, each arm from c1-768 and measured alike (seeds 1000-1299,
+D3 from the start and the entrance, both tiers, and the teachers' KL on held-out arrived rows by checkpoint,
+`target/s52/kl_probe.py`): (1) the teacher held at 1.0; (2) a floor (`lab.train --teacher-floor F`, 5e04ef78, merged
+in r40-int 80eda5ca, frozen worktree `triforce-gen20`) at 0.3; (3) the student's own D3 arrivals at 0.67 of the
+resets with the curriculum off, (a) with the old fade, (b) with the floor; (4) whatever those suggest, one change at
+a time. 20:00: **2.0.1.0 lands completely before any 2.0.1.1 work runs**: every arm job was stopped, nothing queued.
+
+**Where each stopped, and what is kept:**
+
+- `gen1-one/ppo-d3-hold` (arm 1; gen19, job #2644): **trained to the end** (100 iterations, teacher 1.0 throughout;
+  603 steps a second, half its normal beside 2.0.1.0's chains) and sealed in the store. Its measurement (D3 chains,
+  both tiers) was queued and stopped before it started: not measured.
+- c1-768's every-room harvest of Dungeon 3 (arm 3's starts; gen19, job #2645): **complete**, 2 × 300 runs on seeds
+  400000-400299 (to-D3 and D3 from its entrance): `target/s52/harvest-c1/` (darknut 4,047 D3 arrivals, zol 3,145,
+  trap-room 1,126, skg 602, equipment-room 571, boss-manhandla 557), chains `target/s52/chains/s52-harvest-c1-*.jsonl`.
+- The KL probe of ppo-d3's ten checkpoints and c1-768 (`kl_probe.py`, cache2's held-out D3 rows by data dir and
+  source): queued, stopped before it started.
+- Arms 2, 3a, 3b (`ppo-d3-floor3`, `ppo-d3-own-fade`, `ppo-d3-own-floor3`; gen20, jobs #2674-#2676): queued,
+  stopped before they started; nothing allocated in the store. Their commands are kept
+  (`target/s52/tasks/ppo-d3-{floor3,own-fade,own-floor3}.cmd`, tasks `target/s52/tasks/d3-g20/`, `d3-own/` with the
+  harvested links; all dry-called clean) to be queued again as they are.
+
