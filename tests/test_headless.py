@@ -83,10 +83,11 @@ def test_a_filter_keeps_only_its_ending_and_gives_up_after_max_runs(scripted_mod
 
 
 def test_a_power_on_argmax_run_is_the_same_file_every_time(scripted_models, tmp_path, capsys, short_runs):
-    def play(name, *extra):
+    def play(name, delay=5):
         out = tmp_path / name
-        status, _, _, _ = run(capsys, out, 2, '--power-on', '--delay', 5, '--act', 'argmax', '--first-seed', 7,
-                              '--parallel', 2, '--models-dir', scripted_models, *extra)
+        fixed = () if delay is None else ('--delay', delay)
+        status, _, _, _ = run(capsys, out, 2, '--power-on', *fixed, '--act', 'argmax', '--first-seed', 7,
+                              '--parallel', 2, '--models-dir', scripted_models)
         assert status == 0
         return {path.name: path.read_bytes() for path in out.iterdir()}
 
@@ -95,11 +96,12 @@ def test_a_power_on_argmax_run_is_the_same_file_every_time(scripted_models, tmp_
     recording = _native.Replay(next(iter(first.values())))
     assert recording.source == {'kind': 'power-on', 'name': 'LINK', 'delay': 5}
     assert [model['act'] for model in recording.meta['models']] == ['argmax'] * len(recording.meta['models'])
-    # A random delay is the seed's: the same again, and not the fixed one's game.
-    drawn = play('c', '--delay', 'random')
-    assert play('d', '--delay', 'random') == drawn
-    delays = {_native.Replay(data).source['delay'] for data in drawn.values()}
-    assert len(delays) == 2 and all(0 <= delay <= 32766 for delay in delays)
+    # Without --delay a run waits its seed's frame rules (seeds 7 and 8: 28 and 32 frames): the same again, and
+    # not the fixed one's game.
+    by_seed = play('c', delay=None)
+    assert play('d', delay=None) == by_seed and by_seed != first
+    delays = {name[:8]: _native.Replay(data).source['delay'] for name, data in by_seed.items()}
+    assert delays == {'00000007': 28, '00000008': 32}
 
 
 def test_runs_without_models_end_in_errors_and_a_failed_exit(tmp_path, capsys):

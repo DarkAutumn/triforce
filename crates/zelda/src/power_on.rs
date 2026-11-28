@@ -9,6 +9,16 @@
 //! [`IDLE_STEP`] frames ([`idle_state_name`], [`nearest_idle`]).  A run loads the nearest one at or below its
 //! delay and idles the rest; without the files it idles every frame.
 //!
+//! **The frame rule is [`FRAME_RULE`] = 4 frames** (the owner, Nov 27: "start runs deterministically from
+//! that frames.  From power on 0 frames delayed.  Then N frames ..., then 2*N and so on").  The start room
+//! (`$77`) reads the random numbers only for the chase timer, and the first cave or dungeon entrance Link walks
+//! into (the sword cave on every route) moves him 1 pixel only on frames with `FrameCounter AND 3 = 0`
+//! (asm:Mode10Stairs_Update_Full), so the walk ends on such a frame: four consecutive delays reach the cave on
+//! the same frame since power on, with the same RNG phase and `FrameCounter`, and a step of 4 always reaches it
+//! 4 frames later (another RNG phase, another game).  Inside one frame rule only the chase timer (`$4A`, `$60`
+//! to `$62`, drawn in the start room) can still differ.  So a run's delay is [`run_delay`] of its index (the
+//! run seed): 0, 4, 8, ..., one per frame rule.
+//!
 //! The inputs are those of `corpus/scripts/power_on_to_start.txt` (the base movie every start state comes
 //! from), with its asserts as [`ZeldaError::Boot`] errors.  Every frame runs unrendered.
 
@@ -23,6 +33,17 @@ pub const IDLE_STEP: u32 = 2000;
 pub const IDLE_STATES: u32 = 15;
 /// The name runs register by default (the base movie's).
 pub const DEFAULT_NAME: &str = "LINK";
+/// The frame rule: four consecutive delays reach the first cave on the same frame, a step of 4 frames always
+/// on another (module doc).
+pub const FRAME_RULE: u32 = 4;
+/// The frame-rule starts in the RNG's period: delays 0, 4, ..., 32764 (8192 of them).
+pub const FRAME_RULES: u32 = MAX_DELAY / FRAME_RULE + 1;
+
+/// The delay of power-on run `index` (its run seed): `index` frame rules, 0, 4, 8, ...; from index
+/// [`FRAME_RULES`] (8192) on, the delays start again at 0 (index 8192 is run 0's game).
+pub fn run_delay(index: u64) -> u32 {
+    (index % u64::from(FRAME_RULES)) as u32 * FRAME_RULE
+}
 
 /// The inputs from power on to the file-select screen, as `(buttons, frames)`: what ran before an idle state.
 pub const TO_FILE_SELECT: [(u8, u32); 3] = [(0, 120), (START, 1), (0, 30)];

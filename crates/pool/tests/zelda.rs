@@ -1089,7 +1089,7 @@ fn a_power_on_run_replays_from_its_inputs_alone() {
     let data = data();
     const DELAY: u32 = 4321;
     let route = Route::load(&data.map, &data.states_dir, "d2first", None, None).unwrap();
-    let route = route.with_power_on("LINK", Some(DELAY), 0).unwrap();
+    let route = route.with_power_on("LINK", Some(DELAY)).unwrap();
     fn play<St: StateStore<MachineState> + Send + 'static>(
         nes: Counted,
         store: St,

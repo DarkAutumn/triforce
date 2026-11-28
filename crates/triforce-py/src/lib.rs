@@ -357,8 +357,8 @@ mod _native {
     #[pymodule_export]
     use crate::game::{
         PyChange, PyGame, PyGameState, PySnapshot, chase_blocks, chase_probe, danger_blocks, exposed_probe,
-        hearts_encoding, observe, power_on_idle_states, power_on_name, lane_probe, shooter_blocks, shooter_probe,
-        threat_blocks,
+        hearts_encoding, observe, power_on_delay, power_on_idle_states, power_on_name, lane_probe, shooter_blocks,
+        shooter_probe, threat_blocks,
     };
     #[pymodule_export]
     use crate::policy::{PyPolicy, act_mode, act_probabilities, keyed_noise};
@@ -376,6 +376,7 @@ mod _native {
         m.add("VERSION", include_str!("../../../VERSION").trim())?;
         m.add("REPLAY_VERSION", ::replay::REPLAY_VERSION)?;
         m.add("MAX_POWER_ON_DELAY", zelda::power_on::MAX_DELAY)?;
+        m.add("POWER_ON_FRAME_RULE", zelda::power_on::FRAME_RULE)?;
         m.add("MIN_HARVESTED_ENTRY", env::start_states::MIN_HARVESTED_ENTRY)?;
         m.add("POWER_ON_IDLE_STEP", zelda::power_on::IDLE_STEP)?;
         m.add("OBS_SCHEMA_VERSION", obs::OBS_SCHEMA_VERSION)?;

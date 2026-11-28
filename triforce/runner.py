@@ -42,12 +42,12 @@ class RunnerError(RuntimeError):
 @dataclass
 class Route:
     """Where a route starts and what ends it.  The start: ``start_state`` (``'start'``: the game start state), or
-    ``power_on`` (``{'name', 'delay', 'max_delay'}``: console power on, ``delay`` None = drawn per run seed from
-    ``0..=max_delay``), or ``checkpoint`` (``{'state': bytes, 'step': int, 'granted': [bombs, keys, rupees],
-    'route_granted': [bombs, keys, rupees]}``: the state another run ended in, e.g. ``Replay.states()[-1]``, and the
-    items a room and a route step granted that Link still holds there).  The end: ``terminal`` (a room), or
-    ``stop_step`` (a route step, reached by the route's own exit), or neither: the route's last triforce.
-    ``start_step``: the route step the start is on."""
+    ``power_on`` (``{'name', 'delay'}``: console power on, ``delay`` None = the run seed's frame rule,
+    ``_native.power_on_delay``: seed k waits 4k frames), or ``checkpoint`` (``{'state': bytes, 'step': int,
+    'granted': [bombs, keys, rupees], 'route_granted': [bombs, keys, rupees]}``: the state another run ended in,
+    e.g. ``Replay.states()[-1]``, and the items a room and a route step granted that Link still holds there).  The
+    end: ``terminal`` (a room), or ``stop_step`` (a route step, reached by the route's own exit), or neither: the
+    route's last triforce.  ``start_step``: the route step the start is on."""
     name: str
     start_state: str
     terminal: Optional[MapLocation] = None
@@ -192,22 +192,20 @@ def chain_entry(route_name: str, runs: int, parallel: int, start_from: Optional[
 
 
 def _power_on(options: dict) -> dict:
-    """A power-on start's ``{'name', 'delay', 'max_delay'}`` checked and filled in (name LINK, a random delay over
-    the whole range); ``RunnerError`` for a name the game can't register or a delay out of range."""
-    unknown = sorted(set(options) - {'name', 'delay', 'max_delay'})
+    """A power-on start's ``{'name', 'delay'}`` checked and filled in (name LINK; delay None: the run seed's frame
+    rule, ``_native.power_on_delay``); ``RunnerError`` for a name the game can't register or a delay out of range."""
+    unknown = sorted(set(options) - {'name', 'delay'})
     if unknown:
-        raise RunnerError(f"unknown power-on options {unknown} (name, delay, max_delay)")
+        raise RunnerError(f"unknown power-on options {unknown} (name, delay)")
     limit = _native.MAX_POWER_ON_DELAY
     try:
         name = _native.power_on_name(options.get('name') or 'LINK')
     except ValueError as err:
         raise RunnerError(str(err)) from err
-    delay, max_delay = options.get('delay'), options.get('max_delay')
-    max_delay = limit if max_delay is None else max_delay
-    for what, value in (('delay', delay), ('max delay', max_delay)):
-        if value is not None and (not isinstance(value, int) or not 0 <= value <= limit):
-            raise RunnerError(f"the power-on {what} {value!r} must be a frame count in 0..={limit}")
-    return {'name': name, 'delay': delay, 'max_delay': max_delay}
+    delay = options.get('delay')
+    if delay is not None and (not isinstance(delay, int) or not 0 <= delay <= limit):
+        raise RunnerError(f"the power-on delay {delay!r} must be a frame count in 0..={limit}")
+    return {'name': name, 'delay': delay}
 
 
 def _start_state_path(name: str, states_dir=None) -> Path:
@@ -862,18 +860,19 @@ STOP_AT_HELP = ("end the route on entering this room (e.g. 1:0x73), or on reachi
 
 def add_power_on_arguments(parser) -> None:
     """``--power-on``, ``--name`` and ``--delay``: a start from console power on (``power_on_options``)."""
-    limit = _native.MAX_POWER_ON_DELAY
+    limit, rule = _native.MAX_POWER_ON_DELAY, _native.POWER_ON_FRAME_RULE
     parser.add_argument('--power-on', action='store_true',
                         help="start every run from console power on, by controller inputs alone (title screen, "
                              "name entry, game start): no state file and no memory write; the run's randomness is "
-                             "--delay")
+                             "its file-select delay")
     parser.add_argument('--name', default=None, metavar='NAME',
                         help="with --power-on: the name to register (1 to 8 of A-Z, 0-9 and space; default LINK; "
                              "ZELDA is refused, it starts the second quest)")
-    parser.add_argument('--delay', default=None, metavar='N|random',
+    parser.add_argument('--delay', default=None, metavar='N',
                         help=f"with --power-on: idle frames on the file-select screen before the name is entered, "
-                             f"which set the game's random numbers: N in 0..={limit} (every value is a different "
-                             f"game), or 'random' (default): drawn from that range by each run's seed")
+                             f"which set the game's random numbers: N in 0..={limit} for every run; default: each "
+                             f"run's seed in frame rules of {rule} frames (seed 0 waits 0 frames, seed 1 {rule}, "
+                             f"seed 2 {2 * rule}, ...)")
 
 
 def power_on_options(args) -> Optional[dict]:
@@ -885,10 +884,9 @@ def power_on_options(args) -> Optional[dict]:
             raise RunnerError(f"{' and '.join(given)} need{'s' if len(given) == 1 else ''} --power-on")
         return None
     delay = None
-    if args.delay not in (None, 'random'):
+    if args.delay is not None:
         if not args.delay.isdecimal():
-            raise RunnerError(f"--delay {args.delay!r} must be a frame count in 0..={_native.MAX_POWER_ON_DELAY}, "
-                              f"or 'random'")
+            raise RunnerError(f"--delay {args.delay!r} must be a frame count in 0..={_native.MAX_POWER_ON_DELAY}")
         delay = int(args.delay)
     return _power_on({'name': args.name, 'delay': delay})
 

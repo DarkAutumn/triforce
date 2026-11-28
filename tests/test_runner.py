@@ -162,9 +162,8 @@ def test_route_checks_a_stop_step_a_power_on_start_and_a_checkpoint():
     assert parse_stop('1:0x73') == (MapLocation(1, 0x73, False), None)
     route = Route.load('d2first', stop_step=24)
     assert (route.stop_step, route.terminal, route.start_state) == (24, None, 'start')
-    assert Route.load('d2first', power_on={}).power_on == {'name': 'LINK', 'delay': None, 'max_delay': 32766}
-    assert Route.load('d2first', power_on={'name': 'bob 2', 'delay': 9}).power_on == {
-        'name': 'BOB 2', 'delay': 9, 'max_delay': 32766}
+    assert Route.load('d2first', power_on={}).power_on == {'name': 'LINK', 'delay': None}
+    assert Route.load('d2first', power_on={'name': 'bob 2', 'delay': 9}).power_on == {'name': 'BOB 2', 'delay': 9}
     checkpoint = {'state': b'a state', 'step': 24, 'granted': [1, 0, 0], 'route_granted': [5, 0, 0], 'kind': 'end',
                   'frame': 7}
     route = Route.load('d2first', checkpoint=checkpoint, stop_step=25)
@@ -184,24 +183,29 @@ def test_route_checks_a_stop_step_a_power_on_start_and_a_checkpoint():
             ({'checkpoint': {**checkpoint, 'step': 10_000}}, "the checkpoint's step 10000 is not a step"),
             ({'power_on': {'name': 'ZELDA'}}, 'second quest'),
             ({'power_on': {'delay': 32767}}, r'the power-on delay 32767 must be a frame count in 0\.\.=32766'),
-            ({'power_on': {'max_delay': -1}}, 'the power-on max delay -1 must be'),
+            ({'power_on': {'max_delay': 40}}, r"unknown power-on options \['max_delay'\]"),
             ({'power_on': {'frames': 3}}, r"unknown power-on options \['frames'\]")]:
         with pytest.raises(RunnerError, match=message):
             Route.load('d2first', **kwargs)
 
 
-def test_power_on_runs_start_the_game_by_inputs_and_draw_their_delay_from_the_seed(states_dir, models_dir):
+def test_power_on_runs_start_the_game_by_inputs_and_wait_their_seeds_frame_rules(states_dir, models_dir):
     runner = Runner(models_dir=models_dir, max_steps=12, parallel=2, states_dir=states_dir)
-    drawn = Route.load('d2first', power_on={'max_delay': 40})
-    twice = [[r.to_dict() for r in runner.run_many(drawn, [1, 2, 3])] for _ in range(2)]
+    by_seed = Route.load('d2first', power_on={})
+    twice = [[r.to_dict() for r in runner.run_many(by_seed, [1, 2, 3])] for _ in range(2)]
     assert twice[0] == twice[1]
     for result in twice[0]:
         room = result['rooms'][0]
         assert (room['level'], room['room'], room['specialist'], room['health_in']) == (0, '0x77', 'ow-start', 3.0)
         assert result['steps'] == 12 or result['result'] == 'failure'
-    provenance = runner.provenance(drawn)
-    assert provenance['power_on'] == {'name': 'LINK', 'delay': None, 'max_delay': 40}
+    provenance = runner.provenance(by_seed)
+    assert provenance['power_on'] == {'name': 'LINK', 'delay': None}
     assert (provenance['start_from'], provenance['checkpoint'], provenance['stop_step']) == (None, None, None)
+    # A run's delay is its seed in frame rules of 4 frames; the cycle's 8192 frame rules wrap to 0.
+    assert _native.POWER_ON_FRAME_RULE == 4
+    assert [_native.power_on_delay(seed) for seed in (0, 1, 2, 249, 8191, 8192, 8193)] == [0, 4, 8, 996, 32764, 0, 4]
+    _, recording = _play_recorded(runner, by_seed, 3)
+    assert recording.source == {'kind': 'power-on', 'name': 'LINK', 'delay': 12}
 
 
 def _play_recorded(runner, route, seed):

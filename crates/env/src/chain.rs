@@ -23,7 +23,6 @@ use crate::reward_track::RewardTrack;
 use crate::rewards::Scored;
 use crate::specialist_env::{decisions_json, linger_json};
 use crate::start_states::{StateName, StateStore, harvest_filename, state_entry, state_visit};
-use rand::RngExt;
 use rand_chacha::ChaCha8Rng;
 use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet};
@@ -69,8 +68,8 @@ pub enum RunStart {
     /// From the route's start state ([`Route::start_state`]): a natural RNG state and the spawns are drawn per run.
     State,
     /// From console power on (`zelda::power_on`): `name` is registered after `delay` idle frames on the
-    /// file-select screen (None: drawn per run from `0..=max_delay`).  No memory is written.
-    PowerOn { name: String, delay: Option<u32>, max_delay: u32 },
+    /// file-select screen (None: the run seed's frame rule, `power_on::run_delay`).  No memory is written.
+    PowerOn { name: String, delay: Option<u32> },
     /// From a state another run reached (a state file's bytes: a replay's end state or keyframe), exactly as
     /// it is: Link is on route step `step` and holds `granted` cheat-granted items (a room's and the route's).  With
     /// `redraw_rng` a natural RNG state is drawn per run after the state is restored ([`Route::redrawing_rng`]).
@@ -199,11 +198,11 @@ impl Route {
     }
 
     /// The route started from console power on instead of its start state (see [`RunStart::PowerOn`]; `delay`
-    /// and `max_delay` at most `power_on::MAX_DELAY`).  Only for a route loaded without `start_from`.
-    pub fn with_power_on(mut self, name: &str, delay: Option<u32>, max_delay: u32) -> Result<Route, String> {
+    /// at most `power_on::MAX_DELAY`).  Only for a route loaded without `start_from`.
+    pub fn with_power_on(mut self, name: &str, delay: Option<u32>) -> Result<Route, String> {
         self.from_game_start("power on")?;
         power_on::name_cells(name).map_err(|e| e.to_string())?;
-        if delay.unwrap_or(0).max(max_delay) > power_on::MAX_DELAY {
+        if delay.is_some_and(|delay| delay > power_on::MAX_DELAY) {
             return Err(format!(
                 "the power-on delay is at most {} (the game RNG's period is 32767 frames)",
                 power_on::MAX_DELAY
@@ -212,7 +211,6 @@ impl Route {
         self.start = RunStart::PowerOn {
             name: name.to_ascii_uppercase(),
             delay,
-            max_delay,
         };
         Ok(self)
     }
@@ -994,17 +992,17 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
     }
 
     /// Console power on to the first controllable frame by inputs alone (`zelda::power_on`): the run's delay
-    /// (drawn from `rng` unless fixed) is idled on the file-select screen, from the store's nearest saved idle
-    /// state when it has one (the emulator is told the inputs that state stands for, so a recording is the
-    /// same either way).
+    /// (unless fixed, the frame rule of its seed: `power_on::run_delay`; a run without a seed counts as seed 0)
+    /// is idled on the file-select screen, from the store's nearest saved idle state when it has one (the
+    /// emulator is told the inputs that state stands for, so a recording is the same either way).
     fn start_from_power_on(
         &mut self,
         name: &str,
         delay: Option<u32>,
-        max_delay: u32,
+        seed: Option<u64>,
         rng: &mut ChaCha8Rng,
     ) -> Result<GameCompletion, EnvError> {
-        let delay = delay.unwrap_or_else(|| rng.random_range(0..=max_delay));
+        let delay = delay.unwrap_or_else(|| power_on::run_delay(seed.unwrap_or(0)));
         let base = power_on::nearest_idle(delay);
         let idle = if base > 0 { self.store.power_on_idle(base)? } else { None };
         let nes = self.session.nes_mut();
@@ -1048,8 +1046,8 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
     }
 
     /// Starts a run as the route says ([`RunStart`]); `rng` draws what the start leaves to chance (a start
-    /// state's RNG bytes and spawn, a power-on start's delay).  A start that can't be loaded ends the run as
-    /// `error`.
+    /// state's RNG bytes and spawn); a power-on start's delay comes from `seed`.  A start that can't be loaded
+    /// ends the run as `error`.
     pub fn reset(
         &mut self,
         seed: Option<u64>,
@@ -1076,9 +1074,7 @@ impl<N: Nes, St: StateStore<N::State>> ChainEnv<N, St> {
         self.decision = None;
         let (started, granted) = match self.route.start.clone() {
             RunStart::State => (self.start_from_state(rng), None),
-            RunStart::PowerOn { name, delay, max_delay } => {
-                (self.start_from_power_on(&name, delay, max_delay, rng), None)
-            }
+            RunStart::PowerOn { name, delay } => (self.start_from_power_on(&name, delay, seed, rng), None),
             RunStart::Checkpoint { state, step, granted, redraw_rng } => {
                 (self.start_from_checkpoint(&state, step, redraw_rng, rng), Some(granted))
             }

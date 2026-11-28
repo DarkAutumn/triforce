@@ -91,8 +91,9 @@ draws sharpened and from the whole policy once Link stalls: docs/rust-actor.md "
 model's registered act mode); the Options menu changes it while watching.  A run whose models don't all draw
 (argmax, escape) is decided by the game's random numbers alone,
 so those are redrawn from the run's seed whenever a start state is loaded (the game start, --from, and each
-checkpoint of a golden path); a run from console power on gets them from its idle delay instead, which must
-then be random (with a fixed --delay the menu offers only the modes that draw).
+checkpoint of a golden path); a run from console power on gets them from its idle delay instead: by default the
+run's seed in frame rules of 4 frames (the simulations' seeds FIRST_SEED, FIRST_SEED + 1, ... wait 4 x seed frames;
+zelda::power_on::run_delay), and with a fixed --delay the menu offers only the modes that draw.
 """
 
 import argparse
@@ -239,7 +240,7 @@ def parse_args(argv=None, parser: Optional[argparse.ArgumentParser] = None) -> a
     if (args.act != registry.MODEL_ACT and not registry.draws(args.act) and args.power_on is not None
             and args.power_on['delay'] is not None):
         parser.error(f"--act {args.act} with a fixed --delay can play the same game every time: nothing else is "
-                     "random from console power on (use --delay random, or leave --delay out)")
+                     "random from console power on (leave --delay out: each run's seed is its delay)")
     return args
 
 

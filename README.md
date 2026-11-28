@@ -192,7 +192,7 @@ triforce promote <specialist> <run-id>
 triforce --models-dir models convert-model --promoted --out target/converted-models   # widen 1.5.0 runs to schema 6's observation (copies; RUN_DIR... for single runs)
 triforce eval-chain --runs 20 --parallel 20                     # route d3first (the main route; --route d2first for the other); writes runs/eval-chain-<yymmdd-HHMMSS>.jsonl + .meta.json
 triforce eval-chain --from 4_71s_0 --runs 20 --clips off       # every run with clips off (the plain way through every stretch); --clips-off-from 4:0x31 turns them off on the way
-triforce eval-chain --runs 20 --parallel 20 --power-on --stop-at step:24   # from console power on (random idle delay per seed) to the overworld with Dungeon 3's triforce (d2first's step 24: Dungeon 2's)
+triforce eval-chain --runs 20 --parallel 20 --power-on --stop-at step:24   # from console power on (seed k idles 4k frames: one frame rule a seed) to the overworld with Dungeon 3's triforce (d2first's step 24: Dungeon 2's)
 triforce eval-chain --runs 20 --parallel 20 --replays runs/replays   # also record every run as runs/replays/<seed>-<ending>.tfreplay (its decisions, targets and masks; --streams rewards,keyframes)
 triforce eval-batch r71-1k --chains r71-1k --runs 1000 --act model   # the fourteen chain segments (full, d2, post-d2, d1, post-d1, d3, post-d3, d4, post-d4, d5, post-d5, d7, post-d7, d6) as one batch (one log folder, a GUI bar each) into target/r56-chains/r71-1k-*.jsonl, then yardstick + room-stats
 triforce eval-batch r71-families --families all --acts sample,argmax --jobs 4   # every family's promoted run in both act modes, 4 side by side

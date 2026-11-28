@@ -541,13 +541,13 @@ fn a_stop_step_ends_the_run_and_a_checkpoint_continues_it(nes: ZCore, data: &Arc
     assert!(error(load(None).with_stop_step(&data.map, steps)).contains("is not a step of route 'd2first'"));
     let stop_at = Route::load(&data.map, &data.states_dir, "d2first", Some(MapLocation::new(1, 0x73, false)), None);
     assert!(error(stop_at.unwrap().with_stop_step(&data.map, 3)).contains("exclusive"));
-    assert!(error(load(Some("0_3cc_0")).with_power_on("LINK", Some(0), 0)).contains("replaces the game start"));
+    assert!(error(load(Some("0_3cc_0")).with_power_on("LINK", Some(0))).contains("replaces the game start"));
     assert!(error(load(Some("0_3cc_0")).with_checkpoint(&data.map, end.clone(), 25, Grants::default()))
         .contains("replaces the game start"));
     assert!(error(load(None).with_checkpoint(&data.map, end.clone(), steps, Grants::default()))
         .contains("is not a step"));
-    assert!(error(load(None).with_power_on("ZELDA", None, 0)).contains("second quest"));
-    assert!(error(load(None).with_power_on("LINK", None, power_on::MAX_DELAY + 1)).contains("at most 32766"));
+    assert!(error(load(None).with_power_on("ZELDA", None)).contains("second quest"));
+    assert!(error(load(None).with_power_on("LINK", Some(power_on::MAX_DELAY + 1))).contains("at most 32766"));
     let checkpoint = load(None).with_checkpoint(&data.map, end.clone(), 25, Grants::default()).unwrap();
     assert!(error(checkpoint.clone().with_stop_step(&data.map, 25)).contains("after its start step 25"));
 
@@ -619,9 +619,10 @@ fn a_stop_step_after_a_triforce_ends_the_run_on_the_overworld(nes: ZCore, data: 
 }
 
 /// A power-on start plays the boot inputs and nothing else: the machine is the one a bare emulator reaches
-/// with `power_on::boot` (and control gained), on the route's first step; a random delay is the run seed's.
+/// with `power_on::boot` (and control gained), on the route's first step; without a fixed delay the run's
+/// seed gives it, a frame rule per seed (`power_on::run_delay`).
 fn a_power_on_start_boots_the_game_by_inputs_alone(nes: ZCore, data: &Arc<GameData>) -> ZCore {
-    let mut c = chain(nes, data, d2first(data).with_power_on("link", Some(0), 0).unwrap());
+    let mut c = chain(nes, data, d2first(data).with_power_on("link", Some(0)).unwrap());
     let status = c.reset(Some(9), &mut ChaCha8Rng::seed_from_u64(9)).unwrap();
     let ChainStatus::Act { specialist, .. } = status else { panic!("run ended at reset") };
     assert_eq!(&*specialist, "ow-start");
@@ -636,18 +637,19 @@ fn a_power_on_start_boots_the_game_by_inputs_alone(nes: ZCore, data: &Arc<GameDa
     assert!(session.nes().ram() == c.session().nes().ram(), "RAM");
     assert!(session.nes().prg_ram() == c.session().nes().prg_ram(), "PRG-RAM");
 
-    // A delay left to chance is drawn from the run's generator: the same run for the same seed.
-    let mut c = chain(c.into_parts().0.into_nes(), data, d2first(data).with_power_on("LINK", None, 50).unwrap());
-    let mut boot = |seed: u64| {
-        let status = c.reset(Some(seed), &mut ChaCha8Rng::seed_from_u64(seed)).unwrap();
+    // Without a fixed delay the seed is the run's index: seed k waits k frame rules (4k frames), whatever the
+    // run's generator.
+    let mut c = chain(c.into_parts().0.into_nes(), data, d2first(data).with_power_on("LINK", None).unwrap());
+    let mut boot = |seed: u64, draw: u64| {
+        let status = c.reset(Some(seed), &mut ChaCha8Rng::seed_from_u64(draw)).unwrap();
         assert!(matches!(status, ChainStatus::Act { .. }));
         (c.booted().unwrap().1, c.session().nes().ram().to_vec())
     };
-    let ((delay, ram), (again_delay, again), (other_delay, other)) = (boot(1), boot(1), boot(2));
-    assert!(delay <= 50 && other_delay <= 50);
-    assert!((delay, &ram) == (again_delay, &again), "seed 1 twice");
-    assert_ne!(delay, other_delay, "seeds 1 and 2 draw different delays");
+    let ((delay, ram), (again_delay, again), (other_delay, other)) = (boot(1, 1), boot(1, 7), boot(2, 2));
+    assert_eq!((delay, other_delay), (power_on::FRAME_RULE, 2 * power_on::FRAME_RULE));
+    assert!((delay, &ram) == (again_delay, &again), "seed 1 twice, whatever the generator");
     assert_ne!(ram[0x18..=0x24], other[0x18..=0x24], "another delay is another RNG phase");
+    assert_eq!(boot(0, 0).0, 0, "seed 0, the golden race's first run, waits no frame");
     c.into_parts().0.into_nes()
 }
 

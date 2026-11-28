@@ -81,9 +81,8 @@ def test_parse_args_grid_path_and_sources(tmp_path):
                                   'model', '--power-on', '--name', 'zed', '--delay', '77', '--stop-at', 'step:24'])
     assert (args.grid, args.show, args.parallel, args.capacity, args.patience) == ((3, 2), 'died', 4, 8, 0)
     assert (args.act, args.replays, args.streams, args.stop) == ('model', 'out', ('rewards', 'keyframes'), (None, 24))
-    assert args.power_on == {'name': 'ZED', 'delay': 77, 'max_delay': 32766}
-    assert play_zelda.parse_args(['--show', 'golden', '--power-on']).power_on == {
-        'name': 'LINK', 'delay': None, 'max_delay': 32766}
+    assert args.power_on == {'name': 'ZED', 'delay': 77}
+    assert play_zelda.parse_args(['--show', 'golden', '--power-on']).power_on == {'name': 'LINK', 'delay': None}
 
     # A path: one replay file plays in one cell unless a grid is given; a folder keeps the default grid.
     file, folder = tmp_path / 'run.tfreplay', tmp_path / 'runs'

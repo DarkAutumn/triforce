@@ -1,10 +1,12 @@
 //! `zelda::power_on` on zcore: the boot is the base movie's inputs, the delay alone moves the RNG, the
-//! file-select screen waits as long as the longest delay, and only registrable names are taken.
+//! file-select screen waits as long as the longest delay, only registrable names are taken, and the frame rule
+//! is 4 frames (a run's delay is its index in frame rules).
 
 mod common;
 
 use common::{open_core, repo};
 use zcore::ZCore;
+use zelda::executor::buttons::{LEFT, UP};
 use zelda::power_on::{self, IDLE_STATES, IDLE_STEP, MAX_DELAY};
 use zelda::{Nes, ZeldaError};
 
@@ -167,4 +169,88 @@ fn idle_states_are_named_by_their_frames() {
     assert_eq!(power_on::nearest_idle(MAX_DELAY), IDLE_STATES * IDLE_STEP);
     assert_eq!(power_on::idle_state_name(2000), "power_on/idle_02000");
     assert_eq!(power_on::idle_state_name(30000), "power_on/idle_30000");
+}
+
+/// Walks Link from the first gameplay frame into the sword cave (up, left, up onto the entrance) and waits out
+/// the walk down its steps, until the cave mode ($0B) begins.  Returns the frames run.
+fn into_the_sword_cave<N: Nes>(nes: &mut N) -> u32 {
+    let mut frames = 0;
+    let mut walk = |nes: &mut N, buttons: u8, more: &dyn Fn(&N) -> bool| {
+        for _ in 0..200 {
+            if !more(nes) {
+                return;
+            }
+            nes.run_frame(buttons, false);
+            frames += 1;
+        }
+        panic!("Link is stuck walking {buttons:#04x}");
+    };
+    walk(nes, UP, &|nes| nes.peek(0x84) > 93);
+    walk(nes, LEFT, &|nes| nes.peek(0x70) > 64);
+    walk(nes, UP, &|nes| nes.peek(0x12) == 5);
+    assert_eq!(nes.peek(0x12), 0x10, "the walk down the cave's steps");
+    walk(nes, 0, &|nes| nes.peek(0x12) == 0x10);
+    assert_eq!(nes.peek(0x12), 0x0B, "in the cave");
+    frames
+}
+
+/// The frame rule (`power_on::FRAME_RULE`, 4).  Every delay is another machine at the first controllable
+/// frame, but the walk down the first cave's steps moves Link only on frames with `FrameCounter AND 3 = 0`
+/// (asm:Mode10Stairs_Update_Full), so the delays fall in classes of exactly 4 consecutive ones that reach the
+/// cave on the same frame since power on, with the same random numbers and `FrameCounter`; the next class
+/// reaches it 4 frames later, another RNG phase; each class holds one multiple of 4.  Checked at the start of
+/// the cycle, around the corpus golden's delay (16610) and at its end.
+#[test]
+fn the_frame_rule_is_four_frames() {
+    let Some(mut nes) = open_core() else { return };
+    assert_eq!(power_on::FRAME_RULE, 4);
+    let to_file_select = power_on::to_file_select(&mut nes).unwrap();
+    let mut at = 0;
+    for delays in [0..24, 16_600..16_624, MAX_DELAY - 23..MAX_DELAY + 1] {
+        power_on::idle(&mut nes, delays.start - at);
+        at = delays.start;
+        let file_select = nes.snapshot();
+        // (delay, the first controllable frame's RNG and FrameCounter, frames since power on at the cave, its RNG
+        // and FrameCounter there)
+        let mut arrivals = Vec::new();
+        for delay in delays.clone() {
+            nes.restore(&file_select);
+            power_on::idle(&mut nes, delay - delays.start);
+            let started = power_on::register_and_start(&mut nes, "LINK").unwrap();
+            let start = (nes.ram()[RNG].to_vec(), nes.peek(0x15));
+            let frame = to_file_select + delay + started + into_the_sword_cave(&mut nes);
+            arrivals.push((delay, start, frame, nes.ram()[RNG].to_vec(), nes.peek(0x15)));
+        }
+        nes.restore(&file_select);
+        let mut classes: Vec<Vec<u32>> = Vec::new();
+        for (i, (delay, start, frame, rng, counter)) in arrivals.iter().enumerate() {
+            let Some((_, last_start, last_frame, last_rng, last_counter)) = i.checked_sub(1).map(|i| &arrivals[i])
+            else {
+                classes.push(vec![*delay]);
+                continue;
+            };
+            assert_ne!(start, last_start, "delay {delay}: another machine at the first controllable frame");
+            if frame == last_frame {
+                assert!((rng, counter) == (last_rng, last_counter), "delay {delay}: the same time is the same RNG");
+                classes.last_mut().unwrap().push(*delay);
+            } else {
+                assert_eq!(*frame, last_frame + power_on::FRAME_RULE, "delay {delay}: the next frame rule");
+                assert_ne!(rng, last_rng, "delay {delay}: another frame rule is another RNG phase");
+                classes.push(vec![*delay]);
+            }
+        }
+        let inner = &classes[1..classes.len() - 1];
+        assert!(inner.len() >= 4 && inner.iter().all(|class| class.len() == 4), "{classes:?}");
+        assert!(inner.iter().all(|class| class.iter().filter(|&&d| d % 4 == 0).count() == 1), "{classes:?}");
+    }
+}
+
+/// A power-on run's delay without a fixed one: its index (the run seed) in frame rules, 0, 4, 8, ...; the
+/// delays start again at 0 after the 8192 frame rules of the RNG's period.
+#[test]
+fn a_runs_delay_is_its_index_in_frame_rules() {
+    assert_eq!(power_on::FRAME_RULES, 8192);
+    assert_eq!([0, 1, 2, 249, 1499, 8191].map(power_on::run_delay), [0, 4, 8, 996, 5996, 32764]);
+    assert_eq!([8192, 8193, 8192 * 3 + 5].map(power_on::run_delay), [0, 4, 20]);
+    assert!((0..20_000).all(|index| power_on::run_delay(index) <= MAX_DELAY));
 }

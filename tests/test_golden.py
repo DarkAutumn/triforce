@@ -77,6 +77,22 @@ def test_a_golden_path_from_power_on_is_one_power_on_replay(scripted_models, sta
     assert _native.replay_verify(data)['frames'] == recording.frames
 
 
+def test_a_golden_race_from_power_on_waits_its_seeds_frame_rules(scripted_models, states_dir):
+    """Without a fixed delay a run of the race waits its seed's frame rules (``_native.power_on_delay``): the
+    first run (seed 0) none, seed 1 4 frames, seed 2 8, ...; the stitched replay starts with the winner's."""
+    policies = Policies(scripted_models)
+    data, summary = golden.golden_path(policies, 'd2first', 1, 0, options(policies), power_on={}, stops=[3],
+                                       states_dir=states_dir, attempts=1, max_steps=30)
+    assert summary['segments'][0]['seed'] == 0
+    assert _native.Replay(data).source == {'kind': 'power-on', 'name': 'LINK', 'delay': 0}
+    assert _native.replay_verify(data)['frames'] == summary['frames']
+    data, summary = golden.golden_path(policies, 'd2first', 2, 5, options(policies), power_on={}, stops=[3],
+                                       states_dir=states_dir, attempts=2, max_steps=30)
+    seed = summary['segments'][0]['seed']
+    assert seed in (5, 6) and _native.Replay(data).source['delay'] == 4 * seed
+    assert _native.replay_verify(data)['frames'] == summary['frames']
+
+
 def test_no_playable_run_is_an_error_not_a_path(states_dir, tmp_path):
     policies = Policies(tmp_path)           # no models at all
     with pytest.raises(RunnerError, match="no run of route 'd2first' played: .*ow-start"):

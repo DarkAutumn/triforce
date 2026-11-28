@@ -164,11 +164,12 @@ fn check_seeds(seeds: impl IntoIterator<Item = u64>) -> PyResult<()> {
 /// `harvest_every_room` every correct room entry does, also one from a room of the same family.
 ///
 /// A run starts from the game start state, or from one of: `start_from` (a state name or path); `power_on`
-/// (`{'name': 'LINK', 'delay': None, 'max_delay': 32766}`: console power on, the name registered after `delay`
-/// idle frames on the file-select screen, None = drawn per run seed from `0..=max_delay`; no memory is
-/// written); `checkpoint` (`{'state': bytes, 'step': int, 'granted': [bombs, keys, rupees], 'route_granted':
-/// [bombs, keys, rupees], 'randomize_rng': False}`: a state another run reached, as is (Link holds `granted` of a
-/// room's grant and `route_granted` of a route step's, `zelda::cheats`), or with `randomize_rng` a natural RNG state
+/// (`{'name': 'LINK', 'delay': None}`: console power on, the name registered after `delay` idle frames on the
+/// file-select screen, None = the run seed's frame rule, `zelda::power_on::run_delay`: seed 0 waits 0 frames,
+/// seed 1 4, seed 2 8, ...; no memory is written); `checkpoint` (`{'state': bytes, 'step': int, 'granted':
+/// [bombs, keys, rupees], 'route_granted': [bombs, keys, rupees], 'randomize_rng': False}`: a state another run
+/// reached, as is (Link holds `granted` of a room's grant and `route_granted` of a route step's,
+/// `zelda::cheats`), or with `randomize_rng` a natural RNG state
 /// drawn per run seed, so that runs acting by argmax differ; an entry of `Replay.states()` is one). It ends at the route's
 /// end, or on entering `stop_at` (a room) or route step `stop_step`'s room (on the route). `clips` / `clips_off_from`:
 /// the run-time clips switch every run starts with and where it turns off (round 22); `EnvPool.set_clips_allowed`
@@ -197,18 +198,17 @@ fn config_err(message: impl Into<String>) -> PyErr {
 
 /// `route` with a `power_on` dict's start.
 fn with_power_on(route: Route, options: &Bound<'_, PyDict>) -> PyResult<Route> {
-    let (mut name, mut delay, mut max_delay) = (zelda::power_on::DEFAULT_NAME.to_owned(), None, zelda::power_on::MAX_DELAY);
+    let (mut name, mut delay) = (zelda::power_on::DEFAULT_NAME.to_owned(), None);
     for (key, value) in options.iter() {
         let key: String = key.extract()?;
         let bad = |want: &str| config_err(format!("power_on[{key:?}] must be {want}, not {value:?}"));
         match key.as_str() {
             "name" => name = value.extract().map_err(|_| bad("a name"))?,
             "delay" => delay = value.extract().map_err(|_| bad("a frame count or None"))?,
-            "max_delay" => max_delay = value.extract().map_err(|_| bad("a frame count"))?,
-            _ => return Err(config_err(format!("unknown power_on key {key:?} (name, delay, max_delay)"))),
+            _ => return Err(config_err(format!("unknown power_on key {key:?} (name, delay)"))),
         }
     }
-    route.with_power_on(&name, delay, max_delay).map_err(config_err)
+    route.with_power_on(&name, delay).map_err(config_err)
 }
 
 /// `route` continued from a `checkpoint` dict's state.

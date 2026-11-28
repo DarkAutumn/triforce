@@ -11,7 +11,8 @@ the next segment starts from, and the other games are dropped.  The winners' rep
 When every model draws its actions (``sample`` or a rule such as ``floor:0.03``; ``registry.PLAY_ACT`` by
 default), the games of a segment differ only by the models' draws (keyed to the run seed): nothing is written to
 the machine and no frame is inserted at a checkpoint, so the stitched replay plays straight through, as one game.
-(A power-on start with a random delay also gives every game of the first segment its own delay.)  Models that act
+(A power-on start without a fixed delay also gives every game of the first segment its own: its seed in frame
+rules of 4 frames, so from seed 0 the first run waits 0 frames, the next 4, then 8.)  Models that act
 by argmax (or ``escape``: argmax until stuck) could play the same game from a checkpoint every time, so unless
 every model draws, each game of a later segment starts with the game's random numbers redrawn from
 its seed (``Route.load(checkpoint={..., 'randomize_rng': True})``, the write a start state's load makes); the

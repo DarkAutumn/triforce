@@ -2401,11 +2401,17 @@ every step, so following an enemy that moves away pays again, and knockback rese
   checkpoint=None, clips=True, clips_off_from=None)` reads `triforce/routes.yaml` (`clips`: the run-time switch a
   run starts with; `clips_off_from`: a route step (int) or room where it turns off; "The run-time clips switch"
   above). A route starts at the `start` savestate, or at one of:
-  `start_from` (a savestate); `power_on` (`{'name', 'delay', 'max_delay'}`: console power on, the game booted by
-  controller inputs alone, `zelda::power_on`; the delay, the idle frames on the file-select screen, 0..=32766, is
-  the run's only randomness and is drawn from the run seed when None; no memory is written and the load
-  randomization is skipped; the idle is skipped through `triforce/states/power_on/idle_<frames>.state` when the
-  files are there); `checkpoint` (`{'state': TFZSTATE bytes, 'step', 'granted'}`: the state another run ended
+  `start_from` (a savestate); `power_on` (`{'name', 'delay'}`: console power on, the game booted by controller
+  inputs alone, `zelda::power_on`; the delay, the idle frames on the file-select screen, 0..=32766, is the run's
+  only randomness; when None it is the run seed in **frame rules of 4 frames** (`zelda::power_on::run_delay`,
+  `_native.power_on_delay`: seed k waits 4k frames, so a golden race's first run, seed 0, waits none, the next 4,
+  then 8; from seed 8192 on the delays start again at 0, seed 8192 being seed 0's game). The frame rule: the
+  first cave walk (the sword cave) moves Link only on frames with `FrameCounter AND 3 = 0`
+  (asm:Mode10Stairs_Update_Full), so four consecutive delays reach the cave on the same frame with the same random
+  numbers and a step of 4 always reaches it on another (zelda-asm/mechanics.md "Random numbers", decisions
+  2026-11-27); no memory is written and the load randomization is skipped; the idle is skipped through
+  `triforce/states/power_on/idle_<frames>.state` when the files are there); `checkpoint` (`{'state': TFZSTATE
+  bytes, 'step', 'granted'}`: the state another run ended
   in, restored as is on its route step with the cheat ledger's grants, no frame run and nothing redrawn; an
   entry of a recording's `Replay.states()` is one). It ends on taking its last step's triforce, or on the end of
   the game for a last step `exit: end` (d2first since 1.9.0.0); `stop_at` (`L:0xRR[:cave]`) ends it on entering
@@ -2442,7 +2448,7 @@ every step, so following an enemy that moves away pays again, and knockback rese
   rendering on; `--video` checks its folder first, records the run's inputs, then renders them through `ffmpeg`
   (`-r 60.0988`, H.264) and fails with `ffmpeg not found on PATH` without it.
 - `triforce eval-chain [--route d2first] --runs 20 [--parallel N] [--threads T] [--from STATE | --power-on
-  [--name NAME] [--delay N|random]] [--stop-at L:0xRR | step:N]
+  [--name NAME] [--delay N]] [--stop-at L:0xRR | step:N]
   [--act MODE] [--checkpoint S=PATH] [--output PATH [--append]] [--replays DIR [--streams LIST]
   [--keyframe-frames N] [--state embed|path]] [--harvest [DIR]] [--clips on|off] [--clips-off-from ROOM|step:N]
   [--logs-dir DIR | --no-log]` → success
@@ -2809,7 +2815,7 @@ A record at frame `k` applies after input frame `k - 1` and before input frame `
 ## Headless play and the golden path (`zelda-headless.py`, `golden.py`)
 
 - `zelda-headless.py OUT [COUNT] [--wins-only | --deaths-only | --stuck-only] [--parallel N] [--first-seed S]
-  [--max-runs M] [--route R] [--from STATE | --power-on [--name NAME] [--delay N|random]]
+  [--max-runs M] [--route R] [--from STATE | --power-on [--name NAME] [--delay N]]
   [--stop-at ROOM|step:N] [--act MODE|model] [--streams LIST] [--keyframe-frames N]
   [--state embed|path] [--golden [--attempts A]] [--clips on|off] [--models-dir DIR]` plays the route in one
   chain pool without a window or rendering and writes
@@ -2876,8 +2882,8 @@ A power-on run is shown from the frame the models took over. When a replay ends 
   draws from the whole policy), `model` follows each model's registered mode. Runs
   that don't draw every action differ by the game's random numbers alone: those are redrawn from the run
   seed when a start state is loaded (the game start, `--from`) and at a golden path's checkpoints; from power on
-  they come from the idle delay, so a mode that doesn't draw (`argmax`, `escape`) with a fixed `--delay` is
-  refused.
+  they come from the idle delay (by default the run seed's frame rules: seed k waits 4k frames), so a mode that
+  doesn't draw (`argmax`, `escape`) with a fixed `--delay` is refused.
 - **Golden paths** (`--show golden`, key `g`): `play_grid.GoldenSource` makes golden paths one after another
   on a Python thread while fewer than one per cell wait; failed paths are dropped.
 - **Replay files** (PATH): one file plays on loop (in one cell unless a grid is given); a folder's top-level

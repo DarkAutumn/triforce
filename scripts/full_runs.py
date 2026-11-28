@@ -25,7 +25,8 @@ replay since version 2 carries its chain record and the route facts the report n
 the same report but the wall time, which only ``timing.json`` knows.
 
 ``runs250`` is the test every versioned build gets (the owner, Nov 23): 250 runs of ``d3first`` from console power
-on (``--power-on``: each seed its own file-select delay), every one recorded (``triforce job run --express`` puts
+on (``--power-on``: seed k waits 4k frames on the file-select screen, k frame rules: seeds 0-249 wait 0, 4, ...,
+996), every one recorded (``triforce job run --express`` puts
 it in the express place whatever the history estimates).  The team is frozen first:
 the family pointers of ``--models-dir`` (default ``<repo>/models``) are copied into ``OUT_DIR/models`` (their run
 folders linked), so a promotion during the test changes nothing.  Then ``stats``.  While it plays, the training GUI
@@ -274,7 +275,7 @@ def run(args) -> int:
     (out / 'replays').mkdir(parents=True, exist_ok=True)
     command = chain_command(out, args.runs, args.first_seed, args.parallel, args.models_dir)
     if args.power_on:
-        command.append('--power-on')      # from console power on (a random file-select delay a seed), not the start state
+        command.append('--power-on')      # from console power on (seed k waits k frame rules), not the start state
     start = time.time()
     code = subprocess.run(command, cwd=ROOT, check=False).returncode
     (out / 'timing.json').write_text(json.dumps({'seconds': round(time.time() - start, 1), 'runs': args.runs}) + '\n')

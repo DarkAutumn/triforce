@@ -19,10 +19,11 @@ triforce._native.Replay / ReplayPlayer).
 The models draw their actions by default (registry.PLAY_ACT: every seed is a different game); --act model plays
 each model's registered act mode, --act MODE any act mode (docs/rust-actor.md "Act modes"; with argmax the runs
 differ by the game's random numbers, redrawn from the seed when a start state or a golden path's checkpoint is
-loaded).  --power-on starts
-every run from console
-power on by controller inputs alone; the run's randomness is then --delay, the idle frames on the file-select
-screen (0..=32766, or random: drawn from each run's seed).
+loaded).  --power-on starts every run from console power on by controller inputs alone; the run's randomness is
+then its delay, the idle frames on the file-select screen: --delay N (0..=32766) for every run, or by default the
+run's seed in frame rules of 4 frames (seed 0 waits 0 frames, seed 1 4, seed 2 8, ...; zelda::power_on::run_delay).
+A golden race's first segment plays seeds FIRST_SEED, FIRST_SEED + 1, ...: from seed 0 its first run waits 0
+frames, the next 4, then 8.
 
 --golden plays the golden path instead: for each of the route's triforces in turn, --parallel games race to it
 from the same state; the first to stand on the overworld with it becomes the checkpoint every game restarts
@@ -133,7 +134,7 @@ def parse_args(argv=None) -> argparse.Namespace:
     if (args.golden and args.act != registry.MODEL_ACT and not registry.draws(args.act)
             and args.power_on is not None and args.power_on['delay'] is not None):
         parser.error(f"--golden --act {args.act} with a fixed --delay: every game of the first leg would be the "
-                     f"same (use --delay random, or --act {registry.PLAY_ACT})")
+                     f"same (leave --delay out: each run's seed is its delay, or use --act {registry.PLAY_ACT})")
     return args
 
 

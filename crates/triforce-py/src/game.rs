@@ -1021,6 +1021,13 @@ pub fn power_on_name(name: &str) -> PyResult<String> {
     Ok(name.to_ascii_uppercase())
 }
 
+/// The file-select delay of power-on run `index` (its run seed) without a fixed delay: `index` frame rules
+/// (`zelda::power_on::run_delay`: 0, 4, 8, ...; from index 8192 on the delays start again at 0).
+#[pyfunction]
+pub fn power_on_delay(index: u64) -> u32 {
+    zelda::power_on::run_delay(index)
+}
+
 /// Link's hp as the game holds it (`env::start_states::hearts_encoding`, the training resets' own): `half_hearts`
 /// (1 to 2 x `max_health`) as `{'hearts_and_containers': .., 'partial_hearts': ..}` (`Game.set_value` names).
 #[pyfunction]

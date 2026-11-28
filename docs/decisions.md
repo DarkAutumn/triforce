@@ -4122,3 +4122,40 @@ teachers' team 14.0%; 4 runs inside the north star) is the generation's network.
 and the whole route, replays kept on local disk: decisions 2026-11-26) are the official 2.0.1.0 measurement. The PPO
 experiments go on from it (round40.md §7); an arm that beats it on the chains without losing elsewhere becomes
 2.0.1.1.
+
+## 2026-11-27 — Power-on runs start on the frame rule: delays 0, 4, 8, ... by run seed (the owner)
+
+The owner, Nov 27: "stop randomizing the start windows. It makes no sense to wait 5+ minutes on the starting
+screen... Instead figure out the frame rule for the game. How many frames in a 'chunk' to change behavior. Then I
+want you to start runs deterministically from that frames. From power on 0 frames delayed. Then N frames (the frame
+rule that changes the RNG), then 2*N and so on. That makes things much more repeatable and more 'natural' in terms of
+how people play it."
+
+- **The frame rule is 4 frames** (`zelda::power_on::FRAME_RULE`; zelda-asm/mechanics.md "Random numbers"). At the
+  first controllable frame every delay is another machine (the random bytes `$18-$24` and `FrameCounter` `$15`
+  move every frame). But the start room `$77` has no monster, and the first thing every route does (`d2first`'s and
+  `d3first`'s step 0: the sword cave) is a walk down a cave entrance that moves Link 1 pixel only on frames with
+  `FrameCounter AND 3 = 0` (asm:Mode10Stairs_Update_Full): it ends on such a frame, so four consecutive delays reach
+  the cave on the same frame since power on, with the same random bytes and `FrameCounter`, and the next four 4
+  frames later.
+- **Measured** (the d3first golden replay's start-room inputs, then its inputs from the cave on, compared per
+  delay; delays 0-239 and 4000-4007, 16608-16613, 32760-32766): 68 timing classes, every whole one exactly 4 delays
+  wide (`{0,1,2}`, `{3,...,6}`, `{7,...,10}`, ...; where the boundaries fall depends on the frames Link takes to the
+  entrance), no game shared by two classes, and each class holds exactly one multiple of 4. Inside a class the
+  game is the same except for the chase timer (`ChaseLongTimer` `$4A`, `IsChasingOtherTarget` `$60`, the target
+  `$61-$62`), which the start room reloads from `Random+1` every few tens of frames: 58 of the 68 classes split into
+  2 or 3 variants by it (126 distinct plays over 261 delays). So a step of 4 always changes the game; a step of 1
+  sometimes does not. `cargo test -p zelda --test power_on` (`the_frame_rule_is_four_frames`) checks the classes
+  at the cycle's start, middle and end.
+- **A run's delay is its run seed in frame rules**: seed k waits 4k frames (`zelda::power_on::run_delay`,
+  `_native.power_on_delay`; `env::chain` without a fixed delay). Every power-on tool numbers its runs by seed, from
+  `--first-seed` (default 0): a golden race's first segment plays seeds 0, 1, 2, ... (its first run waits 0 frames,
+  then 4, then 8); `eval-chain --power-on` run i is seed FIRST_SEED + i; the 250 test is seeds 0-249 (0 to 996
+  frames); `zelda-headless.py --power-on` COUNT runs are seeds FIRST_SEED...; `play-zelda.py`'s simulations seeds
+  FIRST_SEED... (its live cell FIRST_SEED + 1,000,000...). The cycle holds 8192 frame rules (delays 0..32764 of
+  the RNG's 32767-frame period): from seed 8192 on the delays start again at 0 (seed 8192 is seed 0's game; with
+  argmax the same run, with drawing acts the same start and other draws). `--delay N` still fixes one delay for
+  every run. The random draw over 0..=32766 (and `max_delay`) is gone; nothing brings it back unless the owner
+  asks. Runs from a route's saved start state are unchanged.
+- **What it costs**: the 250 test idles 0 to 996 frames (at most 17 s of game time) instead of up to 9 minutes; the
+  idle states (`triforce/states/power_on`) are unchanged and still match.

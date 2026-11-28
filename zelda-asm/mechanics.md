@@ -13,25 +13,25 @@ Contents (generated; `L` = line in this file):
 - L37 Game modes and the frame loop
 - L106 Object slots and update order
 - L156 Random numbers
-- L185 Timers
-- L226 Link's movement: grid, speed and sub-pixels
-- L290 Tile collision and walking half into blocks
-- L347 Screen edges and room transitions
-- L401 Screen wrap (overworld)
-- L490 Grid-point skip: block clip, ladder clip and their run-up
-- L784 Doorways, doors, keys, shutters and bomb walls
-- L841 Push blocks and room secrets
-- L876 Stairs, cellars and caves
-- L919 Lost Woods and Lost Hills (mazes)
-- L934 Special-cased rooms
-- L975 Ladder and raft
-- L999 Monster spawning, edge spawns and respawn (room history)
-- L1064 Who chases what
-- L1118 Combat: collision boxes, damage, invincibility, knockback, stun
-- L1190 Hearts, rings and death
-- L1227 Room flags and saved state
-- L1256 Level data formats
-- L1269 Second quest differences
+- L197 Timers
+- L238 Link's movement: grid, speed and sub-pixels
+- L302 Tile collision and walking half into blocks
+- L359 Screen edges and room transitions
+- L413 Screen wrap (overworld)
+- L502 Grid-point skip: block clip, ladder clip and their run-up
+- L796 Doorways, doors, keys, shutters and bomb walls
+- L853 Push blocks and room secrets
+- L888 Stairs, cellars and caves
+- L931 Lost Woods and Lost Hills (mazes)
+- L946 Special-cased rooms
+- L987 Ladder and raft
+- L1011 Monster spawning, edge spawns and respawn (room history)
+- L1076 Who chases what
+- L1130 Combat: collision boxes, damage, invincibility, knockback, stun
+- L1202 Hearts, rings and death
+- L1239 Room flags and saved state
+- L1268 Level data formats
+- L1281 Second quest differences
 <!-- /toc -->
 
 # Game modes and the frame loop
@@ -181,6 +181,18 @@ One 13-byte shift register, `Random` at `$18`-`$24`, is the only random source; 
 - Can: pausing or opening the submenu, which freezes the timers and the world but not the register, so the world resumes against different random bytes. [`Nmi_Isr@UpdateTimers`](src/bank7/run-game-nmi.asm#L239) [`Mode5Play_Update@CheckPaused`](src/bank7/mode5-play-update.asm#L89)
 - Can: which slot a monster is in (kill order, room history lowering the count), since the slot is the byte index. [`Room_EnterCommon@StoreObjCount`](src/bank5/enter-room.asm#L331) [`Obj_FindEmptyMonsterSlot`](src/bank7/object-stubs-destroy-monster.asm#L169)
 - Spawn positions are not random: they walk a 9-entry list from `SpawnCycle`, which carries over between rooms. [`Spawn_AssignPositions`](src/bank5/spawn-positions.asm#L64) [`SpawnCycle`](src/Variables.inc#L460)
+
+**The frame rule (a start from power on)**
+
+"Frame rule" is the speedrunning term for the period of frames that changes the random numbers, or that counts towards something: the step of waiting after which the game's outcome changes. **For a game started from power on, every 4 frames is a frame rule.**
+- Every frame of waiting before control (on the title or file-select screen, in the name entry) gives another register and another `FrameCounter` on the first gameplay frame: both step once per frame, and (trace) one more frame of waiting on the file-select screen starts the game exactly one frame later. [`Nmi_Isr@LoopRandom`](src/bank7/run-game-nmi.asm#L295) [`FrameCounter`](src/Variables.inc#L22) [`Mode1Menu_Update_Sub0Choose`](src/bank2/mode1-menu-update.asm#L55)
+- The start room (`$77`) has no monster; the only random number it reads is `Random+1` AND 7 for `ChaseLongTimer` whenever that expires. [`Mode5Play_UpdateWorld@UpdateWeapons`](src/bank7/mode5-play-update.asm#L154) [`ChaseLongTimer`](src/Variables.inc#L58)
+- The walk down a cave or dungeon entrance (tile `$24`) moves Link 1 pixel only on frames with `FrameCounter` AND 3 = 0 and ends with the 16th such move, so it ends on a frame whose `FrameCounter` is a multiple of 4, 61 to 64 frames after it starts. [`Mode10Stairs_Update_Full`](src/bank5/mode8-continue-mode10-stairs.asm#L176) [`Mode10Stairs_Init`](src/bank5/mode-inits-obj-lists.asm#L82)
+- So 4 consecutive waits that walk Link the same way into the first entrance (the sword cave of room `$77`) end that walk on the same frame since power on: the same register, `FrameCounter` and `LongTimerCycle` there and from then on. Which 4 waits share a frame rule depends on how many frames Link takes to the entrance. (trace) Two walks to the sword cave: waits 1-4, 5-8, 9-12, ... share a frame rule in one, waits 3-6, 7-10, 11-14, ... in the other. [`Mode10Stairs_Update_Full`](src/bank5/mode8-continue-mode10-stairs.asm#L176) [`LongTimerCycle`](src/Variables.inc#L41)
+- A wait 4 frames longer always ends the walk 4 frames later: another register, so another game (monster turns, drops, edge spawns, the chase timer's reloads). [`Mode10Stairs_Update_Full`](src/bank5/mode8-continue-mode10-stairs.asm#L176) [`Nmi_Isr@ScrambleRandom`](src/bank7/run-game-nmi.asm#L279)
+- Inside one frame rule only what the start room drew before the walk can still differ: the chase state, `ChaseLongTimer` (`$4A`), `IsChasingOtherTarget` (`$60`) and the chase target (`$61`-`$62`), and Link's animation counter. (trace) Over 261 waits (0-239 and some near 4000, 16610 and 32766), 58 of 68 frame rules split into 2 or 3 games by the chase state, and no game is shared by two frame rules. [`ChaseLongTimer`](src/Variables.inc#L58) [`IsChasingOtherTarget`](src/Variables.inc#L141)
+- Use: one start per frame rule, waiting 0, 4, 8, ... frames on the file-select screen, gives a different game at every step and leaves out no frame rule; the register's period of 32767 frames holds 8192 of them (waits 0 to 32764). [`Mode10Stairs_Update_Full`](src/bank5/mode8-continue-mode10-stairs.asm#L176) [`Reset_ClearRam`](src/bank5/save-ram-clear-ram.asm#L81)
+- The step out of a cave or dungeon entrance is quantized the same way (1 pixel on frames with `FrameCounter` AND 3 = 0). [`Mode4Enter_StepOutside`](src/bank7/update-mode-dispatch.asm#L247)
 
 # Timers
 

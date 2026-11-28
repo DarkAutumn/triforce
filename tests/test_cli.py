@@ -1,5 +1,6 @@
 """The ``triforce`` command (``triforce.cli.main``) in-process: list, promote, argument errors and passthrough."""
 
+import functools
 import json
 import os
 import shutil
@@ -11,6 +12,7 @@ import torch
 
 import triforce
 from triforce import _native, cli, jobs, registry
+from triforce import runner as runner_module
 from triforce.model import ModelConfig
 from triforce.runner import Policies, RunnerError, chain_steps
 from triforce.specialist import list_specialists
@@ -114,7 +116,8 @@ def test_eval_chain_rejects_an_unknown_route(tmp_path, capsys):
     (['--name', 'BOB', '--delay', '3'], "--name and --delay need --power-on"),
     (['--power-on', '--name', 'ZELDA'], "power on: the name ZELDA starts the second quest"),
     (['--power-on', '--delay', '32767'], "the power-on delay 32767 must be a frame count in 0..=32766"),
-    (['--power-on', '--delay', 'soon'], "--delay 'soon' must be a frame count in 0..=32766, or 'random'"),
+    (['--power-on', '--delay', 'soon'], "--delay 'soon' must be a frame count in 0..=32766"),
+    (['--power-on', '--delay', 'random'], "--delay 'random' must be a frame count in 0..=32766"),
     (['--power-on', '--from', str(REPO_STATES_DIR / '2_7ds_0.state')], "are exclusive: each replaces the game start"),
     (['--checkpoint', 'models/goriya/x'], "is not SPECIALIST=PATH"),
     (['--checkpoint', 'gorya=models/goriya'], "unknown specialist(s) ['gorya']"),
@@ -208,6 +211,24 @@ def test_eval_chain_in_an_act_mode_with_the_switch_off(scripted_models, states_d
         recording = _native.Replay(path.read_bytes())
         assert {m['act'] for m in recording.meta['models']} == {'temperature:0.75'}
         assert _native.replay_verify(path.read_bytes(), states_dir=str(states_dir))['frames'] == recording.frames
+
+
+def test_eval_chain_power_on_runs_wait_their_seeds_frame_rules(scripted_models, states_dir, tmp_path, monkeypatch):
+    """``eval-chain --power-on --first-seed 3 --runs 2``: runs 0 and 1 are seeds 3 and 4, which wait 12 and 16
+    frames on the file-select screen (4 frames a seed, ``_native.power_on_delay``); the recordings replay bit for
+    bit from power on.  Every run stops after 20 steps."""
+    monkeypatch.setattr(runner_module, 'Runner', functools.partial(runner_module.Runner, max_steps=20))
+    output, folder = tmp_path / 'chain.jsonl', tmp_path / 'replays'
+    assert cli.main(['--models-dir', str(scripted_models), 'eval-chain', '--route', 'd2first', '--power-on',
+                     '--stop-at', 'step:3', '--first-seed', '3', '--runs', '2',
+                     '--parallel', '2', '--no-log', '--output', str(output), '--replays', str(folder)]) == 0
+    assert sorted(json.loads(line)['seed'] for line in output.read_text().splitlines()) == [3, 4]
+    delays = set()
+    for path in folder.iterdir():
+        recording = _native.Replay(path.read_bytes())
+        delays.add(recording.source['delay'])
+        assert _native.replay_verify(path.read_bytes(), states_dir=str(states_dir))['frames'] == recording.frames
+    assert delays == {12, 16}
 
 
 def test_eval_chain_events_into_a_folder_with_or_without_a_plan(models_dir, tmp_path, monkeypatch):
