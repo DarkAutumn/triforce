@@ -361,10 +361,12 @@ def test_a_killed_wrapper_takes_its_command_with_it_and_frees_its_place(queue, t
 
 
 def dead_or_zombie(pid: int) -> bool:
-    """Whether the process is gone or a zombie; it can vanish between two reads of /proc, which counts as gone."""
+    """Whether the process is gone or a zombie. It can vanish between two reads of /proc (FileNotFoundError), or
+    between opening its stat and reading it, which the kernel answers with ESRCH (ProcessLookupError: job #2666, 7 of
+    81 runs at load 47); both count as gone."""
     try:
         return 'Z' in Path(f'/proc/{pid}/stat').read_text().rsplit(')', 1)[1].split()[0]
-    except FileNotFoundError:
+    except (FileNotFoundError, ProcessLookupError):
         return True
 
 
