@@ -128,6 +128,9 @@ def parse_args(argv=None):
     parser.add_argument('--learning-rate', type=float, default=PPOConfig.learning_rate)
     parser.add_argument('--ent-coeff', type=float, default=PPOConfig.ent_coeff)
     parser.add_argument('--epochs', type=int, default=PPOConfig.num_epochs)
+    parser.add_argument('--vf-coeff', type=float, default=PPOConfig.vf_coeff,
+                        help="the critic's ½(V - R)² weight in PPO's loss (Ppo53: its gradient reaches the policy "
+                             "through the shared trunk)")
     parser.add_argument('--device', default='cuda', choices=['cpu', 'cuda'])
     parser.add_argument('--run-id', default=None)
     parser.add_argument('--models-dir', default=None)
@@ -661,7 +664,7 @@ def main(argv=None) -> Path:
             else int.from_bytes(os.urandom(4), 'little'))
     pool_seed = seed + RESUME_SEED_STRIDE * start_iteration
     cfg = PPOConfig(target_steps=steps_per_env * args.parallel, learning_rate=args.learning_rate,
-                    ent_coeff=args.ent_coeff, num_epochs=args.epochs,
+                    ent_coeff=args.ent_coeff, num_epochs=args.epochs, vf_coeff=args.vf_coeff,
                     demo_bc_coeff=args.demo_coeff if args.demos else 0.0)
     wants_teachers = args.teacher_coeff > 0 or args.mode == 'imitate'
     overrides = dict(item.split('=', 1) for item in args.teacher)

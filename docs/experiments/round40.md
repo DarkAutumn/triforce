@@ -6331,3 +6331,45 @@ a time. 20:00: **2.0.1.0 lands completely before any 2.0.1.1 work runs**: every 
   (`target/s52/tasks/ppo-d3-{floor3,own-fade,own-floor3}.cmd`, tasks `target/s52/tasks/d3-g20/`, `d3-own/` with the
   harvested links; all dry-called clean) to be queued again as they are.
 
+### 7b. The arms (Ppo53, branch `ppo53`, from Nov 27 22:00)
+
+anthropic/claude-opus-5-5 (Ppo53). Every run from the frozen `triforce-gen22` (6b6310c1, the landed code), the tasks
+regenerated there (`target/p53/tasks/`, Stage52's `ppo_tasks.py`; the own-arrival tasks link the same
+`target/s52/harvest-c1/` arrivals at 0.67). Chains: D3 from the start (`full`, cut at step 24) and from its entrance
+(`d3`, `3_7cs_0`), 300 runs, seeds 1000-1299, paired by seed with Stage52's c1-768 files; tiers paired with
+`target/s52/bench/c1-768-*.json`. Files `target/p53/` (ppo53 worktree).
+
+**Arm 1: the teacher held at 1.0 (`gen1-one/ppo-d3-hold`).** It loses too, a fifth of what the fade loses:
+
+| | D3 from the start | D3 from its entrance | where its runs end, from the start (c1-768) | cheap tier | rooms tier |
+|---|---:|---:|---|---:|---:|
+| c1-768 | 73.0% | 75.3% | 3x4d 51, 3x69 13, 3x5b 4, 3x59 3 | | |
+| ppo-d3 (fade) | 38.3% (-34.7 ± 3.7) | 30.0% (-45.3 ± 3.5) | 3x5b 49, 3x69 47, 3x59 46, 3x4d 36 | +0.0 ± 0.2 | -1.7 ± 0.3, 9 losing rows |
+| ppo-d3-hold | 65.0% (**-8.0 ± 3.7**) | 65.7% (**-9.7 ± 3.6**) | 3x4d 68, 3x5b 13, 3x59 12, 3x69 7 | -0.5 ± 0.2, 4 losing rows | -0.7 ± 0.3, 2 losing rows |
+
+Hold's losing rows: cheap boss-manhandla -6.7 ± 2.8 and boss-gleeok -5.8 ± 2.5 (each counted twice, bare and
+`@d3first`); rooms boss-gleeok 4_13w **-23.3 ± 7.3** and trap-room 4_02w -11.7 ± 4.2. Gleeok is not one of the six
+keys trained: it is rehearsed from the cache, and the rehearsal does not hold it.
+
+**The teacher KL on arrived states, by checkpoint** (`kl_probe.py`: cache2's held-out level-3 rows of the six keys;
+`dagger1/rooms` = im768's own room arrivals labelled by the teachers, 4,094 rows; the other four sources move the
+same way):
+
+| | it 0 (c1-768) | 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| ppo-d3, all six keys | 0.029 | 0.063 | 0.070 | 0.072 | 0.087 | 0.101 | 0.151 | 0.247 | 0.274 | 0.292 | 0.332 |
+| ppo-d3-hold, all six | 0.029 | 0.057 | 0.060 | 0.065 | 0.072 | 0.073 | 0.068 | 0.065 | 0.066 | 0.073 | 0.069 |
+| ppo-d3, boss-manhandla | 0.037 | 0.106 | 0.118 | 0.123 | 0.149 | 0.172 | 0.254 | 0.384 | 0.413 | 0.475 | 0.524 |
+| ppo-d3-hold, boss-manhandla | 0.037 | 0.085 | 0.095 | 0.100 | 0.123 | 0.119 | 0.109 | 0.102 | 0.110 | 0.123 | 0.112 |
+| ppo-d3, darknut | 0.074 | 0.105 | 0.124 | 0.123 | 0.133 | 0.169 | 0.235 | 0.359 | 0.416 | 0.391 | 0.516 |
+| ppo-d3-hold, darknut | 0.074 | 0.114 | 0.108 | 0.127 | 0.126 | 0.144 | 0.125 | 0.122 | 0.115 | 0.125 | 0.127 |
+
+Two drifts, not one. **(1) An early jump that the teacher does not stop:** in the first ten iterations both runs
+double their distance from the teachers (0.029 → 0.06; Manhandla's 0.037 → 0.09-0.11), with the teacher term at
+full weight in both; held, it then stays there (0.06-0.07) for the other 90. The rehearsed keys move with it
+(`losses/rehearse_kl` 0.014 → 0.020 by iteration 10 and 0.027 at the end in both runs). **(2) The fade's runaway:**
+once the weight is under about 0.4 (iteration 45) the KL climbs without bound, 0.10 → 0.33. Neither drift bought
+anything on the training tasks: success there is flat in both runs from the first iteration to the last
+(boss-manhandla 0.77 → 0.75-0.81, darknut 0.95 → 0.92-0.95, the other four 0.97-0.99), so what PPO changes is
+not what its reward measures as better: what it moves is noise the teacher no longer holds down.
+

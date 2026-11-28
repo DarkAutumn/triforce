@@ -126,6 +126,16 @@ def test_the_teacher_term_holds_fades_and_stops_at_its_floor(capsys):
     assert '--teacher-floor' in capsys.readouterr().err
 
 
+def test_the_critic_weight_is_a_flag_and_recorded():
+    """Ppo53: --vf-coeff sets PPO's critic weight (default PPOConfig's) and the manifest's ppo settings record it."""
+    base = ['--name', 'x', '--families', 'zol']
+    assert train.parse_args(base).vf_coeff == train.PPOConfig.vf_coeff
+    args = train.parse_args([*base, '--vf-coeff', '0.05'])
+    args.aux = []
+    cfg = train.PPOConfig(vf_coeff=args.vf_coeff)
+    assert train.training_settings(args, cfg, None, 64, False, {})['ppo']['vf_coeff'] == 0.05
+
+
 def test_imitation_alone_with_the_teachers_acting_and_the_recorder(tmp_path, logs_dir):
     _teachers(tmp_path)
     run = train.main(['--name', 'imit', '--run-id', 'r2', '--families', f'ow-start={start_task()}', '--parallel', '2',

@@ -543,7 +543,9 @@ once per rollout over its family's rows in batches of 4096 (`lab.collect.Teacher
   iterations, then falls linearly over `--teacher-fade` (0: stays) to `--teacher-floor` (0 by default), which it
   keeps (Stage52: the one network's PPO on Dungeon 3 with the teacher faded to 0 lost 45 points of D3 from its
   entrance as the term faded, round40.md §7). Logged: `losses/teacher_kl`, `charts/teacher_coeff`; the manifest's
-  `training.teacher` holds `floor` when one is set.
+  `training.teacher` holds `floor` when one is set. The critic's own weight is `--vf-coeff` (PPO's ½(V − R)², 0.5
+  by default): the value tower is the network's own, but its gradient reaches the policy through the shared trunk
+  (round40.md §7b).
 - **Imitation alone** (`--mode imitate`): no PPO, the student minimises the KL (and the value term) over each
   rollout for `--epochs` epochs; logged `charts/teacher_agreement` (the student's most likely joint action is the
   teacher's). `--actor student` (default) collects on the student's own states: DAgger, the distribution it will
