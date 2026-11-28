@@ -6203,3 +6203,53 @@ there (5 deaths), the teachers' 5 (2 deaths, 3 stuck): the knockback loss is the
 The whole route: 30 of 300 end the game (10.0%), median 136,805 frames, best 133,500 (37:01.3, 81 frames over the
 north star); none within 133,419 (the teachers' 4).
 
+### 6. One correction round: `gen1-one/c1-768`
+
+**The student's own states.** im768 played the 18 scopes, 120 runs each on the teachers' harvest seeds
+(400000-400119), with the every-room harvest on (job #2627, 27 minutes): 51,024 room entries, its hearts and items.
+Then `r36_merge_record.py --student gen1-one/im768 --sources resets rooms --harvest <that>`: the student acting, the
+fourteen teachers labelling its decisions, on every key's training resets and on its own room entries (job #2631,
+gen18, 64 minutes): 34 keys × 2 sources, 1,392,640 rows. Cache of all three data dirs, 3,481,600 rows; 5 epochs at
+lr 3e-4 from im768 (gen19, job #2635, 8 minutes). Held-out KL (now over a held-out set with the student's own rows)
+0.0267 after the first epoch → 0.0221 after the fifth, joint top-1 0.943; darknut 0.092 (im768 on its own held
+out: 0.106), wizzrobe 0.075, goriya 0.052, boss-gleeok 0.041.
+
+**Tiers**: against im768, cheap 0.0 ± 0.2 points, rooms 0.0 ± 0.2 (three rows -6.7 to -8.3 beyond two standard
+errors: digdogger 5_24e, gibdo 5_65w, wizzrobe 6_2ce); against the teachers, cheap -0.4 ± 0.2, rooms +0.3 ± 0.3, no
+losing row on either tier.
+
+**Chains** (seeds 1000-1299, gen19; jobs #2637-#2639), c1 − im768 / c1 − teachers, paired:
+
+| dungeon | from | teachers | im768 | c1-768 | c1 − im768 | c1 − teachers | where c1's runs end (of 300) |
+|---|---|---:|---:|---:|---:|---:|---|
+| D3 | start | 73.3% | 72.3% | 73.0% | +0.7 ± 3.6 | -0.3 ± 3.6 | 3x4d 51, 3x69 13 |
+| D3 | entrance | 77.0% | 73.7% | 75.3% | +1.7 ± 3.6 | -1.7 ± 3.5 | 3x4d 52, 3x69 8 |
+| D4 | D3's triforce | 82.7% | 81.3% | 80.0% | -1.3 ± 3.1 | -2.7 ± 3.3 | 4x13 52 |
+| D4 | entrance | 87.7% | 85.7% | 85.3% | -0.3 ± 2.8 | -2.3 ± 2.8 | 4x13 38 |
+| D1 | D4's triforce | 99.7% | 99.7% | 99.0% | -0.7 ± 0.7 | -0.7 ± 0.7 | |
+| D1 | entrance | 100.0% | 99.7% | 100.0% | +0.3 ± 0.3 | +0.0 ± 0.0 | |
+| D2 | D1's triforce | 99.7% | 99.7% | 99.7% | +0.0 ± 0.0 | +0.0 ± 0.5 | |
+| D2 | entrance | 99.7% | 100.0% | 100.0% | +0.0 ± 0.0 | +0.3 ± 0.3 | |
+| D5 | D2's triforce | 77.0% | 80.7% | 81.0% | +0.3 ± 3.1 | +4.0 ± 3.4 | 5x24 26, 5x47 7, 5x27 7 |
+| D5 | entrance | 87.3% | 86.7% | 86.0% | -0.7 ± 2.9 | -1.3 ± 2.8 | 5x24 24 |
+| D7 | D5's triforce | 78.3% | 81.7% | 83.7% | +2.0 ± 2.9 | +5.3 ± 3.3 | 7x1b 20, 7x1c 10 |
+| D7 | entrance | 83.3% | 82.3% | 81.7% | -0.7 ± 3.1 | -1.7 ± 3.1 | 7x1c 16, 7x29 11, 7x1b 10 |
+| D6 | D7's triforce | 78.0% | 75.7% | 74.0% | -1.7 ± 3.3 | -4.0 ± 3.4 | 6x3a 32, 6x38 13, 0x3f 8 |
+| D6 | entrance | 92.0% | 88.0% | 89.0% | +1.0 ± 2.6 | -3.0 ± 2.5 | 6x3a 24 |
+| D8 | D6's triforce | 100.0% | 98.7% | 98.7% | +0.0 ± 0.8 | -1.3 ± 0.7 | |
+| D8 | entrance | 99.0% | 99.7% | 100.0% | +0.3 ± 0.3 | +1.0 ± 0.6 | |
+| D9 | D8's triforce | 47.3% | 36.7% | 41.3% | +4.7 ± 4.1 | -6.0 ± 3.9 | 9x42 42, 9x10 36, 9x52 27 |
+| D9 | entrance | 55.3% | 56.3% | 52.7% | -3.7 ± 4.2 | -2.7 ± 4.0 | 9x42 33, 9x52 30, 9x10 29 |
+| whole route | start | 14.0% | 10.0% | **15.3%** | **+5.3 ± 2.7** | +1.3 ± 2.8 | 3x4d 51, 4x13 34, 5x24 16 |
+
+The whole route: **46 of 300 end the game**, best 132,611 frames (36:46.6), 4 within 133,419 (132,611, 132,704,
+132,776, 132,873; the teachers' 4 on these seeds too). Every scope is now within two standard errors of the
+teachers'.
+
+**Settled: one correction round.** It moved no scope beyond two standard errors (the whole route +5.3 ± 2.7, D9 from
+the leg +4.7 ± 4.1; the largest step back D9 from its entrance, -3.7 ± 4.2) and the tiers not at all; the held-out
+KL fell 0.106 → 0.092 on the worst key. A
+second round (another 1.4M rows the student plays, an hour of record and 3.5M+ rows a pass) would chase differences
+these chains cannot see; what is left against the teachers is Dungeon 9 from the leg and Dungeon 6, the two places
+the PPO stages are for.
+
