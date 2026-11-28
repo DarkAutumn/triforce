@@ -608,6 +608,17 @@ thing and have to be taught again. Swept from this backlog Nov 23 (the lead):
   the overworld its WAIT acted as a 2-frame pause; the new overworld teacher's long WAITs run into transitions (67
   and 87 frames). Measure again on the finished 2.0.1.0's saved 1000-run replays, per room, before choosing.
 
+- **Bombs: no priming, for 2.0.2.0** (the owner, Nov 28): "I want to stop editing memory to 'prime' bombs." Today a
+  wall that needs a bomb Link doesn't have gets one written into the bag up front (`zelda::cheats`, `wall_grant`),
+  and taken back if unused (seed 817's 9x17 and 9x20: a bomb for about a second, never used). Instead: write nothing
+  up front and unmask the BOMB action with zero bombs; when the network picks BOMB with an empty bag, the library
+  then adds the one bomb and plays the action. A BOMB with zero bombs is legal **only where a bomb is required to
+  progress**: test that, and backtest once at the end of 2.0.2.0's training (every replayed decision with BOMB
+  legal at zero bombs is at a required wall) that it leaked nowhere. Memory is then edited only when it matters.
+  - **Keys**: probably less relevant (in a locked room without the key, the key is simply needed); when building
+    this, test whether a key is ever granted and taken back unused, as bombs are, and fix it the same way if so.
+  - **Rupees**: today's behaviour stays; check it when this is built.
+
 - **The blue Wizzrobe's movement as an input, for a later retrain** (the owner, Nov 27: "Leave it out [of the
   shooter key] but add to the backlog to investigate later. [...] the blue wizzrobes are less interesting in when
   they fire but when they change direction. [...] Typically chasing a blue wizzrobe is safest. They seem to have a

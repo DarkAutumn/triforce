@@ -4159,3 +4159,18 @@ how people play it."
   asks. Runs from a route's saved start state are unchanged.
 - **What it costs**: the 250 test idles 0 to 996 frames (at most 17 s of game time) instead of up to 9 minutes; the
   idle states (`triforce/states/power_on`) are unchanged and still match.
+
+## 2026-11-28 — 2.0.1.1 lands when an arm clears the bar; late dungeons first; a grant never used is no cheat (the owner)
+
+- **The bar for 2.0.1.1, and landing on it**: better than 2.0.1.0 on Dungeon 3 beyond noise, no segment below noise
+  (pooled over 600 runs), and the 1000-run whole route at least level with 2.0.1.0's on the same seeds. An arm that
+  clears it is landed as 2.0.1.1 without waiting for a check-in ("We still have .0 around and I'll run tests on .1
+  too").
+- **Late dungeons before early ones**: "It's more important to have the late dungeons/rooms better than early rooms.
+  Far more important to optimize d9 than d4. [...] It wastes more time getting to d9 and dying to something we could
+  train the agent out of than it does to die in d4 2-3 times." Within reason: "If gleeok was a 90% death rate, it
+  would be far more important to optimize it." PPO after Dungeon 3 goes to Dungeon 9 first.
+- **A cheated item granted and taken back unused is no cheat**: seed 817's whole run (36:49.578), whose bag was
+  topped up to one bomb for about a second in 9x17 and 9x20 and taken back unused, is a zero-cheat run: "That extra
+  bomb doesn't count. This is a successful run." (The top-ups themselves go away in 2.0.2.0: backlog, "Bombs: no
+  priming".)
