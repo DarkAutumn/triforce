@@ -35,13 +35,18 @@ def record(runner, route, seed, **options):
     return result, recording
 
 
-def _full_runs():
-    """``scripts/full_runs.py`` as a module."""
-    spec = importlib.util.spec_from_file_location('full_runs', Path(__file__).resolve().parents[1] / 'scripts'
-                                                  / 'full_runs.py')
+def _script(name):
+    """``scripts/<name>.py`` as a module."""
+    spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parents[1] / 'scripts'
+                                                  / f'{name}.py')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def _full_runs():
+    """``scripts/full_runs.py`` as a module."""
+    return _script('full_runs')
 
 
 def end_of(recording, states_dir=None):
@@ -359,3 +364,54 @@ def test_replay_folders_keep_the_wanted_endings(chain_replays, tmp_path):
     with pytest.raises(ValueError, match='unknown replay stream'):
         replay.record_options({}, ['sound'])
     assert replay.parse_streams('keyframes, rewards') == ('rewards', 'keyframes') and replay.parse_streams('') == ()
+
+
+def test_the_slicer_cuts_runs_into_verified_room_visits_and_compilations(chain_replays, scripted_models, states_dir,
+                                                                          tmp_path):
+    """``scripts/replay_slicer.py``: pass 1 reads every run's room visits from its events alone (the frames and
+    families its chain recorded), pass 2 writes each chosen visit as a replay stripped to what watching needs,
+    starting from the machine at its entry and verifying bit for bit, and a run's visits back to back as one
+    replay joined by LOAD events."""
+    folder, results, _ = chain_replays
+    slicer = _script('replay_slicer')
+    runs = [slicer.read_visits(str(path)) for path in sorted(folder.iterdir())]
+    for run, result in zip(runs, results):
+        assert [v.exit - v.entry for v in run['visits']] == [room.frames for room in result.rooms]
+        assert [v.family for v in run['visits']] == [room.specialist for room in result.rooms]
+        assert run['visits'][0].tag == 'ox77' and run['visits'][0].number == 1
+    stats = slicer.room_stats(runs)
+    out = tmp_path / 'out'
+    args = slicer.parse_args([str(folder), '--out', str(out), '--rooms', '--families', '--speed', 'all'])
+    outputs, index = slicer.plan(args, runs, stats)
+    assert outputs and {Path(o.dest).relative_to(out).parts[0] for o in outputs} == {'rooms', 'families'}
+    mine = [o for o in outputs if o.visits[0].path == runs[0]['path']]
+    for done, o in zip(slicer.write(runs[0]['path'], mine, True), mine):
+        visit = o.visits[0]
+        assert done['verified'] and done['frames'] == visit.exit - visit.entry
+        assert Path(done['dest']).name == visit.name() and visit.name().startswith(f'{visit.seed:08d}-{visit.tag}-v')
+        sliced = _native.Replay(Path(done['dest']).read_bytes())
+        assert sliced.meta['stripped']['sections'] == ['REWARDS', 'DECISIONS', 'TARGETS', 'MASKS']
+        assert sliced.meta['clip']['room'] == visit.tag
+        assert 'room' in [e['type'] for e in sliced.events() if e['frame'] == 0]
+    slicer.write_index(index, False, out)
+    assert (out / 'rooms' / 'ox77' / 'v1' / 'index.md').exists()
+
+    # The scripted segment one step further: 0x3c, then 0x4c, where Link dies; its two visits back to back.
+    two = tmp_path / 'two'
+    runner = Runner(models_dir=scripted_models, max_steps=60, states_dir=states_dir)
+    segment = Route.load('d2first', start_from=str(require_state(SEGMENT_STATE)), stop_step=SEGMENT_STOP_STEP + 1)
+    runner.run_many(segment, [0], record=replay.record_options(runner.record_meta(segment)),
+                    replays=replay.ReplayDir(two))
+    best = tmp_path / 'best'
+    args = slicer.parse_args([str(two), '--out', str(best), '--losses-only', '--compile', '--speed', 'all'])
+    runs = [slicer.read_visits(str(path)) for path in sorted(two.iterdir())]
+    assert [v.tag for v in runs[0]['visits']] == ['ox3c', 'ox4c']
+    (compiled,), index = slicer.plan(args, runs, slicer.room_stats(runs))
+    done, = slicer.write(compiled.visits[0].path, [compiled], True)
+    assert done['verified'] and done['frames'] == sum(v.exit - v.entry for v in compiled.visits)
+    joined = _native.Replay(Path(done['dest']).read_bytes())
+    load, = [e for e in joined.events() if e['type'] == 'load']
+    assert load['frame'] == compiled.visits[0].exit - compiled.visits[0].entry
+    assert [part['room'] for part in joined.meta['clip']['parts']] == ['ox3c', 'ox4c']
+    slicer.write_index(index, True, best)
+    assert (best / f'{Path(runs[0]["path"]).stem}.all.md').exists()

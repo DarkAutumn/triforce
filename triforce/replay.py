@@ -8,7 +8,9 @@ the legal actions and the rule that blocked a kind; DECISIONS: every model decis
 distribution, the act mode's draw and the hit head's danger per action; all always recorded) and the optional
 streams of ``STREAMS`` (every reward term, a state every ``keyframe_frames`` frames).  ``_native.Replay`` reads one, ``_native.ReplayPlayer``
 plays one, ``_native.replay_verify`` checks one against the emulator, ``_native.replay_stitch`` and
-``_native.replay_truncate`` join and cut them.
+``_native.replay_truncate`` join and cut them, and ``_native.replay_rewrite`` cuts one down: only some streams
+(``watch=True``: what watching needs), only some stretches, each from the machine state there
+(``_native.replay_cut_states``), several joined by savestate loads (LOAD events, version 4).
 
 A pool records when it is built with ``record=record_options(meta(...), ...)`` and reports every finished run or
 episode as a ``replay`` event (``{'type': 'replay', 'env', 'job', 'data'}``); ``ReplayDir`` keeps those as files.

@@ -2718,7 +2718,7 @@ file; the tools write it themselves, nobody runs anything for it.
 
 ## Replays (`crates/replay`, `crates/pool/src/zelda`, `replay.py`)
 
-A replay (`.tfreplay`, `TFREPLAY`, `REPLAY_VERSION` 3; versions 0-2 still read) is one run or episode, exact enough to play back bit for
+A replay (`.tfreplay`, `TFREPLAY`, `REPLAY_VERSION` 4; versions 0-3 still read) is one run or episode, exact enough to play back bit for
 bit on the emulator alone: no env, reward or model code is needed, so a replay outlives changes to all three.
 Since version 2 (the owner, Nov 23) it also says on its own what the agent was steered to, what it could do and
 what it chose, named by its own META, so it can be shared and filmed without route data, networks or this code.
@@ -2731,8 +2731,8 @@ The file layout is in `crates/replay/src/lib.rs`. It holds:
 | INPUTS | the controller byte of every frame, run-length encoded |
 | EDITS | every memory write that was not the game's: `(frame, address, previous byte, new byte)` (load randomization, hp draws, cheat grants, anything poked) |
 | CHEATS | cheated items spent: `(frame, item, count)` |
-| STATES | `TFZSTATE` blobs: START (embedded source), END (always), KEYFRAME (optional, every N frames), CHECKPOINT (a stitch boundary); each with its route step and the cheat grants still held, a room's and (version 1, round 32) a route step's, so a chain can continue from it |
-| EVENTS | CONTROL (the models take over), ROOM (level, room, route step, acting policy), OUTCOME (a room visit's), EPISODE (a training-style episode's ending), SEGMENT (a stitch boundary), VISIT (version 2: a room visit's record as the chain wrote it, at its close), RESET (version 3: the console's RESET button, `ZCore::reset`, pressed before the frame and its edits; `emu-zelda.py --reset`) |
+| STATES | `TFZSTATE` blobs: START (embedded source), END (always), KEYFRAME (optional, every N frames), CHECKPOINT (a stitch boundary), LOADED (version 4: a savestate a LOAD put in place, stored where it is first loaded); each with its route step and the cheat grants still held, a room's and (version 1, round 32) a route step's, so a chain can continue from it |
+| EVENTS | CONTROL (the models take over), ROOM (level, room, route step, acting policy), OUTCOME (a room visit's), EPISODE (a training-style episode's ending), SEGMENT (a stitch boundary), VISIT (version 2: a room visit's record as the chain wrote it, at its close), RESET (version 3: the console's RESET button, `ZCore::reset`, pressed before the frame and its edits; `emu-zelda.py --reset`), LOAD (version 4: a savestate loaded, "Loading a savestate" below) |
 | REWARDS (optional) | every reward term of every step, scored by the code training uses (`rewards::score_step`, `env::RewardTrack`; chains are cut into the acting specialist's episodes) |
 | DECISIONS (always, version 2) | every model decision: policy, action, value, how the act mode drew it (META `tables.draws`), the factored distribution (143 log-probabilities: kind[11], direction[kind][8], duration[kind][4]; version 2 keeps the finite ones, a bitmap and one byte each, -byte/16 nats; META `actions` describes the space, so replays recorded with 7 kinds and 91, or 8 kinds and 104, still read), the hit head's P(Link is hit) per legal action where the network has one, and the planner's vetoes when the act mode plans |
 | TARGETS (version 2) | on change: the objective kind, its targets as (role, entity) (exit direction, monster slot and type, floor item slot and id, key, bomb wall tile and direction, push block, stairs, cave mouth, triforce, tile spot), each `obs` (in the observation's target) or `reward-only` (priced by the reward alone: drops, bag drops, heal targets), the rooms Link may leave to and the retreat rooms, the step's flags (treasure refused, drops first, bag drops, clips known), and a provenance label (route, step, way, stretch) no metric may depend on |
@@ -2778,14 +2778,62 @@ A record at frame `k` applies after input frame `k - 1` and before input frame `
   decision in the replay; the others by `replay.BRIEF_MODEL_KEYS` (index, name, family, run, checkpoint SHA-1,
   hash, act mode, version); a stitch keeps the full description either part has.
 - **Playing.** `_native.ReplayPlayer(data, states_dir=None)` (`step(frames, render)`, `seek(frame)`: from the
-  nearest state at or before it, `ram()`, `screen()`, `save_state()`); `replay_verify(data)` / `tf replay verify
-  FILE...` plays the whole replay and compares the machine with every recorded state (`ReplayError` naming the
-  frame where it diverges). `run.write_video` renders a replay to mp4.
+  nearest state before it, `ram()`, `screen()`, `save_state()`); `replay_verify(data)` / `tf replay verify
+  FILE...` plays the whole replay and compares the machine with every recorded keyframe, checkpoint and the END
+  (`ReplayError` naming the frame where it diverges). `run.write_video` renders a replay to mp4.
+- **Loading a savestate** (the owner, Nov 28; version 4). A LOAD event at frame `k` restores the machine to a
+  STATES record before input `k`: after the frame's RESET, at its place among the frame's EDITS and the STATES
+  records there (the event says how many of each come before it, so every order replays exactly); the inputs
+  and edits after it play on top of the loaded machine, and the states recorded there after it are compared with
+  it. The state is stored once: a LOADED record where it is first loaded (`Recorder::load_state`; never
+  compared, the machine there is it by construction), and a later LOAD of it (`Recorder::reload`, or of a
+  keyframe or the START) is the event alone. `LiveGame.load_savestate(bytes)` loads one mid-take (a
+  `state_file()` of the same game), recorded so. Verify, seek, play-zelda and every rewrite play it: a stretch cut
+  after a state's first load stores it again (a LOADED record) where the stretch first loads it; a stitch moves
+  the second replay's loads past the first's states and edits.
 - **Cutting and joining.** `replay_truncate(data, state_index)` ends a replay at one of its keyframes or
   checkpoints; a chain started from that state (`Route.load(checkpoint=replay.states()[i])`) records a replay
   whose embedded START is that state; `replay_stitch(a, b)` joins the two (frames shifted, a SEGMENT event and a
   CHECKPOINT state at the boundary, reward terms renumbered) when `b` starts in the machine `a` ends in and both
   were played by the same models with the same streams.
+- **Rewriting: only some streams, only some stretches** (the owner, Nov 28: slicing is done often, e.g. cutting a
+  replay down for a stretch of video). `replay::rewrite(replay, &Rewrite { sections, events, keyframes, windows,
+  ending })` (`crates/replay/src/edit.rs`) is the building block: it keeps the optional sections named (REWARDS,
+  DECISIONS, TARGETS, MASKS), the events named (RESET and LOAD always: playback needs them) and keyframes or not;
+  `Rewrite::watching()` keeps what watching needs (inputs, edits, cheats, START, END and LOADED states, CONTROL,
+  ROOM, SEGMENT, RESET and LOAD), META `stripped` naming what was left out. Without windows the output is the
+  source with those streams left out (a rewrite keeping everything is the file itself, byte for byte). A window
+  is the source's input frames `from..to` with the machine before input `from` (after a RESET there, before the
+  frame's loads and edits) as its embedded START and the machine before input `to` as its END: it carries those
+  frames' records of every kept stream moved back by `from` and the TARGETS, MASKS and ROOM event in force at
+  `from` again at frame 0. Several windows (in order, apart) make one replay of the stretches back to back: each
+  after the first is loaded where the one before ends (its START a LOADED state and a LOAD event, after the one
+  before's END as a KEYFRAME, so verify checks every stretch). META is the source's with `kind` `clip`, `source`
+  checkpoint, the ending (given, the source's when the last stretch reaches its end, else `unknown` "clipped") and
+  `clip`: the window's `about` with `from`/`to` and the source's `kind` (several: `parts`, one a window); no
+  `segments` or `rng_phase`. `replay::cut_states(rom, replay, resolve, frames)` gives the machine at each cut in
+  one pass (`start` after the frame's RESET, `end` before it); `replay::rewrite_played` finds the ENDs a window
+  leaves out by playing the output. Python: `_native.replay_rewrite(data, watch=False, sections=None,
+  events=None, keyframes=None, windows=[{'from', 'to', 'start', 'end'?, 'about'?}], ending=None)` and
+  `_native.replay_cut_states(data, frames)`.
+- **The slicer** (`scripts/replay_slicer.py`, the owner, Nov 28; a queue job): cuts recorded runs down to room
+  visits in two passes. Pass 1 reads every replay's ROOM events and VISIT records without the emulator: each visit's
+  room (`3x4d`, the overworld `ox55`, a cave `ox77cave`), visit number (the n-th entry into that room in the run),
+  family, frames (seconds = frames / 60.0988, the chain records' figure) and outcome; per room+visit over the
+  selected runs (`--wins-only`, `--losses-only`) the 10% mark, median, 90% mark, mean and lost (mean − 10% mark), a
+  room+visit in fewer than 80% of them a detour with no bucket. A visit's bucket: `slowest` above its
+  room+visit's 90% mark, `slow` above the median up to the 90% mark, `fastest` below the 10% mark. Groupings
+  (any together, each its own tree): `--rooms [N|ROOMS]` (`rooms/<room>/v<N>/`; N: the N room+visits losing the
+  most), `--bosses [N|NAMES]` (`bosses/<boss>/`: aquamentus, dodongo, manhandla, gleeok, digdogger, gohma, ganon),
+  `--families [N|NAMES]` (`families/<family>/`; a group's lost is its room+visits' added up), `--visits
+  SEED:ROOM:vN,...` (`--visits-into NAME`), each visit in the `--speed` bucket (`slowest` default, `slow`, `fastest`,
+  `all`; `--top N` caps a folder; `--seeds` limits what is written, not the statistics), a file a visit
+  (`00000148-9x42-v1-215.3s.tfreplay`) and `index.md` a folder. `--compile` writes instead a replay a run and bucket
+  of its visits back to back (`00000817-win.slow.tfreplay`, several windows joined by LOADs) and its list
+  (`.slow.md`: each visit with where it starts in the compilation, its seconds and its room+visit's marks).
+  Pass 2 walks only the replays with something to write, once each in `--parallel` processes (`replay_cut_states`
+  at every visit's first and last frame), writes each file stripped for watching (`replay_rewrite(watch=True)`) and
+  verifies it (`replay_verify`). A slice of one visit is about 70 KB (two states and the source's META).
 - **Clips: one room of a run** (the owner, Nov 26: "show me just one room"). `tf replay clip FILE|DIR... --room
   L:RR [--visit N|all] [--playable] --out DIR [--jobs N]` plays each replay and writes each visit to the room as a
   replay of its own, `<stem>_<L>x<RR>_v<N>.tfreplay` (`7:1b` -> `_7x1b_v1`; the room in hex, `0:77` an overworld
@@ -2797,17 +2845,12 @@ A record at frame `k` applies after input frame `k - 1` and before input frame `
   one's again until it is done (seen leaving 0:0x77): frames out of the room that Link comes back from without
   having played anywhere stay in the visit. `--playable` keeps from the visit's first frame in mode 5 (in a cave
   or cellar its own mode) to its last, so neither the scroll in nor the scroll out is shown and a death ends the
-  clip as the dying starts; a visit never playable is skipped with a line. `replay::clip(replay, from, to, start,
-  end, ending, about)` (`crates/replay/src/edit.rs`) makes the file: its embedded START is the machine before
-  input `from` (after a RESET there, before the frame's edits), its END the machine after input `to - 1`; it
-  carries those frames' inputs, edits, cheats, events, rewards, decisions, targets, masks and keyframes moved back
-  by `from`, and writes the TARGETS, MASKS and ROOM event in force at `from` again at frame 0. META is the
-  source's with `kind` `clip`, `source` checkpoint, the ending (`death`, `other` "left 7:0x1b for 7:0x1c", or the
-  source's when the replay ends in the room) and `clip` (source file name, room, visit and the number of visits,
-  the visit's frames, `from`/`to` in the source's frames, `playable`, the source's `kind`); no `segments` or
-  `rng_phase`, which describe the whole. A clip verifies and plays the source's frames machine for machine
-  (`crates/replay/tests/player.rs`, `crates/tools/tests/cli.rs`); `tf replay info` prints its `clip:`. Like any
-  replay from a state it starts silent.
+  clip as the dying starts; a visit never playable is skipped with a line. Each file is a `rewrite` with one
+  window keeping every stream, the ending `death`, `other` "left 7:0x1b for 7:0x1c", or the source's when the
+  replay ends in the room, and `clip` (source file name, room, visit and the number of visits, the visit's
+  frames, `from`/`to` in the source's frames, `playable`, the source's `kind`). A clip verifies and plays the
+  source's frames machine for machine (`crates/replay/tests/player.rs`, `crates/tools/tests/cli.rs`); `tf replay
+  info` prints its `clip:`. Like any replay from a state it starts silent.
 - **Compatibility.** `REPLAY_VERSION` is its own integer, bumped by every format change (the owner, Nov 23:
   replays never need to be readable by older readers); a reader refuses a newer version by name and reads every
   older one. `corpus/replays/` holds recorded replays that must keep verifying (`AGENTS.md`, Versioning).

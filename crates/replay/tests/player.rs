@@ -1,12 +1,14 @@
 //! Playback on zcore: a recording made by driving a machine by hand replays to the same machine, seeks to any
-//! frame, and a replay that no longer matches its recording is reported where it diverges.
+//! frame, a replay that no longer matches its recording is reported where it diverges, a savestate loaded mid-way
+//! plays on exactly, and a rewrite's stretches play as the source does there.
 
 use std::sync::Arc;
 
 use replay::{
-    Context, Ending, Event, Player, REPLAY_VERSION, RecordOptions, Recorder, Replay, ReplayError, Report, Source,
-    StateKind, file_hash, verify,
+    Context, Ending, Event, Player, REPLAY_VERSION, RecordOptions, Recorder, Replay, ReplayError, Report, Rewrite,
+    Source, StateKind, Window, cut_states, file_hash, rewrite, rewrite_played, stitch, verify,
 };
+use serde_json::{Map, json};
 use zcore::{Rom, ZCore, state_file};
 
 const START: u8 = 0x08;
@@ -224,29 +226,35 @@ fn a_replay_that_leaves_its_recording_says_where() {
     assert_eq!(error.to_string(), "diverged at frame 10: $0700 holds 0x00, the recording saw 0xff");
 }
 
-/// The machine states [`replay::clip`] cuts between: before input `from` (after its RESET), after input `to - 1`
-/// (before frame `to`'s RESET).
-fn clip_states(rom: &Arc<Rom>, replay: &Replay, from: u32, to: u32) -> (Vec<u8>, Vec<u8>) {
-    let mut player = Player::open(rom.clone(), replay.clone(), &no_files).unwrap();
-    let encode = |player: &Player| state_file::encode(rom, &player.nes().snapshot(), 0);
-    let mut start = Vec::new();
-    loop {
-        if player.frame() == to {
-            return (start, encode(&player));
-        }
-        player.press_resets();
-        if player.frame() == from {
-            start = encode(&player);
-        }
-        assert!(player.step(false).unwrap());
-    }
+/// The machine states a window of frames `from..to` cuts between ([`replay::cut_states`]): before input `from`
+/// (after its RESET), after input `to - 1` (before frame `to`'s RESET).
+fn window_states(rom: &Arc<Rom>, replay: &Replay, from: u32, to: u32) -> (Vec<u8>, Vec<u8>) {
+    let mut cuts = cut_states(rom.clone(), replay.clone(), &no_files, &[from, to]).unwrap();
+    let start = cuts.remove(&from).unwrap().0;
+    (start, cuts.remove(&to).unwrap().1)
 }
 
-/// A clip of frames `from..to` is a replay of its own: it starts from the machine there (a RESET at `from` already
+/// `cut` plays, frame by frame and machine for machine, what `source` plays over each of `parts` in turn.
+fn plays_like(rom: &Arc<Rom>, source: &Replay, cut: Replay, parts: &[(u32, u32)]) {
+    let mut cut = Player::open(rom.clone(), cut, &no_files).unwrap();
+    for &(from, to) in parts {
+        let mut there = Player::open(rom.clone(), source.clone(), &no_files).unwrap();
+        there.seek(from).unwrap();
+        while there.frame() < to {
+            assert!(cut.step(false).unwrap());
+            assert!(there.step(false).unwrap());
+            assert_eq!(cut.nes().ram()[..], there.nes().ram()[..], "frame {}", there.frame());
+            assert_eq!(cut.nes().prg_ram()[..], there.nes().prg_ram()[..]);
+        }
+    }
+    assert!(!cut.step(false).unwrap());
+}
+
+/// A window of frames `from..to` is a replay of its own: it starts from the machine there (a RESET at `from` already
 /// pressed), carries the edits, keyframes and events of those frames and the ROOM event in force, verifies, and
 /// plays the frames the source plays there, machine for machine.
 #[test]
-fn a_clip_plays_the_frames_it_was_cut_from() {
+fn a_window_plays_the_frames_it_was_cut_from() {
     let Some(rom) = rom() else { return };
     let mut nes = ZCore::power_on(rom.clone());
     let mut rec = Recorder::new(Arc::new(RecordOptions::default()));
@@ -263,28 +271,123 @@ fn a_clip_plays_the_frames_it_was_cut_from() {
         (200, 360, Report { frames: 160, edits: 3, states: 3 }),
         (60, 125, Report { frames: 65, edits: 2, states: 3 }),
     ] {
-        let (start, end) = clip_states(&rom, &replay, from, to);
+        let (start, end) = window_states(&rom, &replay, from, to);
         let ending = Ending { kind: replay::ENDING_OTHER, result: "left".into(), ..Ending::default() };
-        let mut about = serde_json::Map::new();
-        about.insert("visit".into(), serde_json::json!(1));
-        let clip = Replay::parse(replay::clip(&replay, from, to, &start, &end, &ending, about).unwrap()).unwrap();
+        let about = Map::from_iter([("visit".to_owned(), json!(1))]);
+        let window = Window { from, to, start: &start, end: Some(&end), about };
+        let spec = Rewrite { windows: vec![window], ending: Some(ending), ..Rewrite::default() };
+        let clip = Replay::parse(rewrite(&replay, &spec).unwrap()).unwrap();
         assert_eq!(verify(rom.clone(), clip.clone(), &no_files), Ok(report), "{from}..{to}");
         assert_eq!(clip.ending_name(), "other");
         let meta = clip.meta().unwrap();
         assert_eq!(meta["kind"], "clip");
-        assert_eq!(meta["clip"], serde_json::json!({"visit": 1, "from": from, "to": to, "kind": null}));
+        assert_eq!(meta["clip"], json!({"visit": 1, "from": from, "to": to, "kind": null}));
         assert_eq!(meta["ending"]["result"], "left");
         let events: Vec<_> = clip.events().map(|e| e.unwrap()).map(|e| (e.frame, e.event)).collect();
         assert_eq!(events, [(0, Event::Room { level: 7, room: 0x1b, in_cave: false, step: None, policy: None })]);
-
-        let mut source = Player::open(rom.clone(), replay.clone(), &no_files).unwrap();
-        source.seek(from).unwrap();
-        let mut cut = Player::open(rom.clone(), clip, &no_files).unwrap();
-        while cut.step(false).unwrap() {
-            assert!(source.step(false).unwrap());
-            assert_eq!(cut.nes().ram()[..], source.nes().ram()[..], "frame {}", source.frame());
-            assert_eq!(cut.nes().prg_ram()[..], source.nes().prg_ram()[..]);
-        }
-        assert_eq!(source.frame(), to);
+        plays_like(&rom, &replay, clip, &[(from, to)]);
     }
+}
+
+/// 400 frames from power on that save a state at frame 150, load it at frame 250 and again at frame 350 (a
+/// LOADED state, then a LOAD of it alone); with `wrong`, the second load restores another machine than it says.
+fn loading_replay(rom: &Arc<Rom>, wrong: bool) -> (Vec<u8>, ZCore) {
+    let mut nes = ZCore::power_on(rom.clone());
+    let mut rec = Recorder::new(Arc::new(RecordOptions::default()));
+    rec.set_source(Source::PowerOn { name: "LINK".into(), delay: 0 });
+    drive(&mut nes, &mut rec, rom, 150);
+    let saved = nes.snapshot();
+    let blob = state_file::encode(rom, &saved, 0);
+    drive(&mut nes, &mut rec, rom, 100);
+    let other = nes.snapshot();
+    nes.restore(&saved);
+    let first = rec.load_state(Context::default(), &blob);
+    drive(&mut nes, &mut rec, rom, 100);
+    nes.restore(if wrong { &other } else { &saved });
+    rec.reload(first);
+    drive(&mut nes, &mut rec, rom, 50);
+    (finish(&nes, rec, rom), nes)
+}
+
+/// A LOAD (version 4) restores its state where it was recorded and the inputs and edits after it play on top: the
+/// recording verifies, plays to the recorded machine and seeks across the loads both ways; a load of another
+/// machine than the recorded one is found.
+#[test]
+fn a_savestate_loaded_mid_replay_plays_on_from_it() {
+    let Some(rom) = rom() else { return };
+    let (bytes, nes) = loading_replay(&rom, false);
+    let replay = Replay::parse(bytes).unwrap();
+    assert_eq!(replay.version(), REPLAY_VERSION);
+    let kinds: Vec<_> = replay.states().map(|s| (s.frame, s.kind)).collect();
+    assert_eq!(kinds, [
+        (120, StateKind::Keyframe),
+        (240, StateKind::Keyframe),
+        (250, StateKind::Loaded),
+        (360, StateKind::Keyframe),
+        (400, StateKind::End),
+    ]);
+    assert_eq!(verify(rom.clone(), replay.clone(), &no_files), Ok(Report { frames: 400, edits: 8, states: 5 }));
+
+    let at = |frame: u32| {
+        let mut player = Player::open(rom.clone(), replay.clone(), &no_files).unwrap();
+        for _ in 0..frame {
+            assert!(player.step(false).unwrap());
+        }
+        player.nes().snapshot()
+    };
+    let mut player = Player::open(rom.clone(), replay.clone(), &no_files).unwrap();
+    for frame in [300, 260, 251, 250, 249, 380, 355, 350, 0, 360, 400] {
+        player.seek(frame).unwrap();
+        assert!(state_file::machines_equal(&player.nes().snapshot(), &at(frame)), "frame {frame}");
+    }
+    player.finish().unwrap();
+    assert!(state_file::machines_equal(&player.nes().snapshot(), &nes.snapshot()));
+
+    let wrong = Replay::parse(loading_replay(&rom, true).0).unwrap();
+    let error = verify(rom, wrong, &no_files).unwrap_err();
+    assert!(matches!(error, ReplayError::Diverged { frame: 360.., .. }), "{error}");
+}
+
+/// Rewrites of a replay with loads: stretches across them (the LOADED state kept where it is; stored again where a
+/// stretch first loads it), several stretches joined by loads with their ENDs found by playing, the replay with
+/// only what watching needs, and two stretches stitched back together: each verifies and plays as the source does.
+#[test]
+fn rewrites_of_a_replay_with_loads_play_as_it_does() {
+    let Some(rom) = rom() else { return };
+    let replay = Replay::parse(loading_replay(&rom, false).0).unwrap();
+    for (from, to, states) in [(200, 380, 5), (300, 400, 4), (250, 260, 3)] {
+        let (start, end) = window_states(&rom, &replay, from, to);
+        let window = Window { from, to, start: &start, end: Some(&end), about: Map::new() };
+        let cut = Replay::parse(rewrite(&replay, &Rewrite { windows: vec![window], ..Rewrite::default() }).unwrap()).unwrap();
+        assert_eq!(verify(rom.clone(), cut.clone(), &no_files).unwrap().states, states, "{from}..{to}");
+        plays_like(&rom, &replay, cut, &[(from, to)]);
+    }
+
+    let parts = [(60, 125), (200, 260), (340, 400)];
+    let starts: Vec<Vec<u8>> = parts.iter().map(|&(from, to)| window_states(&rom, &replay, from, to).0).collect();
+    let windows: Vec<Window<'_>> = parts
+        .iter()
+        .zip(&starts)
+        .map(|(&(from, to), start)| Window { from, to, start, end: None, about: Map::new() })
+        .collect();
+    let spec = Rewrite { windows, ..Rewrite::watching() };
+    let compiled = Replay::parse(rewrite_played(rom.clone(), &replay, &spec).unwrap()).unwrap();
+    assert_eq!(compiled.frames(), 65 + 60 + 60);
+    let loads = compiled.events().filter(|e| matches!(e.as_ref().unwrap().event, Event::Load { .. })).count();
+    assert_eq!(loads, 2 + 1 + 1, "the two joins, the load at 250, the load at 350 (of the state the second part stored)");
+    assert!(verify(rom.clone(), compiled.clone(), &no_files).is_ok());
+    plays_like(&rom, &replay, compiled, &parts);
+
+    let watch = Replay::parse(rewrite(&replay, &Rewrite::watching()).unwrap()).unwrap();
+    assert_eq!(verify(rom.clone(), watch, &no_files), Ok(Report { frames: 400, edits: 8, states: 2 }));
+
+    let halves = [(0, 250), (250, 400)].map(|(from, to)| {
+        let (start, end) = window_states(&rom, &replay, from, to);
+        let window = Window { from, to, start: &start, end: Some(&end), about: Map::new() };
+        Replay::parse(rewrite(&replay, &Rewrite { windows: vec![window], ..Rewrite::default() }).unwrap()).unwrap()
+    });
+    let same = |a: &[u8], b: &[u8]| state_file::same_machine(&rom, a, b).unwrap();
+    let joined = Replay::parse(stitch(&halves[0], &halves[1], &same).unwrap()).unwrap();
+    assert!(verify(rom.clone(), joined.clone(), &no_files).is_ok());
+    plays_like(&rom, &replay, joined, &[(0, 400)]);
 }

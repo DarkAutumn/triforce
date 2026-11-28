@@ -174,7 +174,7 @@ enum ReplayCmd {
         #[arg(long)]
         decisions: bool,
     },
-    /// Each visit to one room as a replay of its own (`tfreplay::clip`): it starts from the machine state at the
+    /// Each visit to one room as a replay of its own (`tfreplay::rewrite`): it starts from the machine state at the
     /// visit's first frame (an embedded START) and ends at its last; META `clip` names the source file, the room,
     /// the visit, the frames and how it ended (death, left for another room, the replay's end). A visit runs
     /// while `$10`/`$EB` (and caves/cellars by `$12`) say the room, and ends at a death there (the dying mode,

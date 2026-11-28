@@ -11,7 +11,8 @@ pub const MAGIC: &[u8; 8] = b"TFREPLAY";
 /// the TARGETS and MASKS sections, DECISIONS quantized (a byte an entry, the hit head's danger, the act mode's draw
 /// and the foresight's vetoes; version 0 and 1 hold `f32`s) and the VISIT event.  Version 3 (Nov 25): the RESET
 /// event (the console's RESET button, `zcore::ZCore::reset`, pressed before that frame; `emu-zelda.py --reset`).
-pub const REPLAY_VERSION: u32 = 3;
+/// Version 4 (Nov 28): the LOAD event and the LOADED state (a savestate loaded mid-replay, [`Event::Load`]).
+pub const REPLAY_VERSION: u32 = 4;
 
 pub(crate) const HEADER_LEN: usize = 48;
 pub(crate) const ENTRY_LEN: usize = 32;
@@ -31,6 +32,9 @@ pub mod section {
     pub const MASKS: u16 = 11;
     /// Sections every replay has.
     pub const REQUIRED: [u16; 7] = [META, SOURCE, INPUTS, EDITS, CHEATS, STATES, EVENTS];
+    /// Sections a replay may leave out (the recorder writes DECISIONS, TARGETS and MASKS always, REWARDS on request;
+    /// a rewrite may drop any of them).
+    pub const OPTIONAL: [u16; 4] = [REWARDS, DECISIONS, TARGETS, MASKS];
     /// Display names, indexed by kind (index 0 unused).
     pub const NAMES: [&str; 12] = [
         "", "META", "SOURCE", "INPUTS", "EDITS", "CHEATS", "STATES", "EVENTS", "REWARDS", "DECISIONS", "TARGETS",
@@ -68,7 +72,7 @@ pub const BUTTONS: [(&str, u8); 8] = [
 /// EPISODE `class` values, indexed by the byte.
 pub const OUTCOME_CLASSES: [&str; 4] = ["success", "hard-failure", "soft-failure", "neutral"];
 /// STATES `kind` values, indexed by the byte.
-pub const STATE_KINDS: [&str; 4] = ["start", "end", "keyframe", "checkpoint"];
+pub const STATE_KINDS: [&str; 5] = ["start", "end", "keyframe", "checkpoint", "loaded"];
 
 /// The action space a DECISIONS stream describes (META `actions`): the factored joint of
 /// `zelda::actions` (`crates/pool/tests/zelda.rs` checks the two agree). A replay carries its own META `actions`, so
@@ -104,6 +108,9 @@ pub(crate) const EVENT_EPISODE: u8 = 4;
 pub(crate) const EVENT_SEGMENT: u8 = 5;
 pub(crate) const EVENT_VISIT: u8 = 6;
 pub(crate) const EVENT_RESET: u8 = 7;
+pub(crate) const EVENT_LOAD: u8 = 8;
+/// EVENTS `code` values' names, indexed by the code (0 unused; [`Event::code`]).
+pub const EVENT_NAMES: [&str; 9] = ["", "control", "room", "outcome", "episode", "segment", "visit", "reset", "load"];
 
 /// DECISIONS (version 2): a natural-log probability as a byte (`255`: `-inf`, masked; else `-byte / 16` nats).
 pub fn quantize_log_prob(log_prob: f32) -> u8 {
@@ -204,11 +211,14 @@ pub enum StateKind {
     Keyframe = 2,
     /// The END of a stitched-in replay: where the next segment started.
     Checkpoint = 3,
+    /// A savestate a LOAD event put in place (version 4), stored where it was first loaded (its frame and edits are
+    /// that LOAD's); never compared, the machine there being this state by construction.
+    Loaded = 4,
 }
 
 impl StateKind {
     pub(crate) fn from_byte(byte: u8) -> Option<StateKind> {
-        [StateKind::Start, StateKind::End, StateKind::Keyframe, StateKind::Checkpoint]
+        [StateKind::Start, StateKind::End, StateKind::Keyframe, StateKind::Checkpoint, StateKind::Loaded]
             .get(byte as usize)
             .copied()
     }
@@ -247,6 +257,33 @@ pub enum Event {
     /// The console's RESET button was pressed before this frame (version 3; `zcore::ZCore::reset`): a player
     /// presses it before the frame's edits.
     Reset,
+    /// A savestate was loaded (version 4): before this frame, after its RESET, once `edits` EDITS records in all
+    /// have been applied and the first `states` STATES records compared (where they are at this point), the machine
+    /// became STATES record `state`: a LOADED state stored right here (`state == states`, its first load), or any
+    /// state recorded before it but the END, loaded again without storing it twice.  The inputs, edits and states
+    /// that follow play on top of it.
+    Load { state: u32, edits: u32, states: u32 },
+}
+
+impl Event {
+    /// The record's code byte ([`EVENT_NAMES`] names it).
+    pub fn code(&self) -> u8 {
+        match self {
+            Event::Control => EVENT_CONTROL,
+            Event::Room { .. } => EVENT_ROOM,
+            Event::Outcome(_) => EVENT_OUTCOME,
+            Event::Episode { .. } => EVENT_EPISODE,
+            Event::Segment => EVENT_SEGMENT,
+            Event::Visit(_) => EVENT_VISIT,
+            Event::Reset => EVENT_RESET,
+            Event::Load { .. } => EVENT_LOAD,
+        }
+    }
+
+    /// Whether playback needs the event (RESET, LOAD): a rewrite never leaves it out.
+    pub fn plays(&self) -> bool {
+        matches!(self, Event::Reset | Event::Load { .. })
+    }
 }
 
 /// How the recorded run ended.
@@ -568,6 +605,12 @@ impl Stream {
                 put_text(out, text);
             }
             Event::Reset => out.push(EVENT_RESET),
+            Event::Load { state, edits, states } => {
+                out.push(EVENT_LOAD);
+                put_varint(out, *state);
+                put_varint(out, *edits);
+                put_varint(out, *states);
+            }
         }
     }
 }

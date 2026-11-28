@@ -1,10 +1,12 @@
 //! `TFREPLAY`: a recorded run that replays bit-exactly on the emulator alone (no env, reward or model
 //! code): where it starts, every frame's buttons, every memory edit, the cheated-item ledger, the state it
 //! ends in, how it ended, what the agent was steered to and could do (TARGETS, MASKS), what it thought
-//! (DECISIONS), and optional streams (rewards, keyframe states).  This crate builds and parses the bytes; callers
-//! read and write the files.  Replays can be joined ([`stitch`]) and cut at a keyframe ([`truncate`]) so a run
-//! continues from there, and a stretch of frames taken out as a replay of its own that starts from the machine
-//! state there ([`clip`], `tf replay clip`).
+//! (DECISIONS), and optional streams (rewards, keyframe states); a savestate may be loaded mid-replay (LOAD).  This
+//! crate builds and parses the bytes; callers read and write the files.  Replays can be joined ([`stitch`]) and cut
+//! at a keyframe ([`truncate`]) so a run continues from there, and rewritten ([`rewrite`], the building block for
+//! cutting them down): only some streams (what watching needs, [`Rewrite::watching`]), only some stretches of
+//! frames, each starting from the machine state there ([`cut_states`]), the stretches after the first joined by
+//! LOAD events (`tf replay clip`, `scripts/replay_slicer.py`).
 //!
 //! # Versions
 //!
@@ -12,7 +14,17 @@
 //! readers).  A reader refuses a newer replay ("replay version N; this reader reads up to M: update") and reads
 //! every older one.  Version 0: the first; 1 (round 32): STATES' route grants; 2 (Nov 23): TARGETS, MASKS, the
 //! quantized DECISIONS with the draw, the danger and the foresight, the VISIT event, META `tables`, DECISIONS
-//! always recorded; 3 (Nov 25): the RESET event, the console's RESET button (`emu-zelda.py --reset`).
+//! always recorded; 3 (Nov 25): the RESET event, the console's RESET button (`emu-zelda.py --reset`); 4 (Nov 28):
+//! the LOAD event and the LOADED state, a savestate loaded mid-replay.
+//!
+//! # Loading a savestate
+//!
+//! A LOAD event at frame `k` restores the machine to a STATES record: before input `k`, after the frame's RESET, at
+//! the point of the frame's EDITS and of the STATES records there that it names (`edits`, `states`: how many come
+//! before it).  The state is stored once: a LOADED record right where it is first loaded ([`Recorder::load_state`]),
+//! referenced again by a later LOAD ([`Recorder::reload`]; a keyframe or the START may be loaded the same way).  A
+//! LOADED state is not compared (the machine there is it by construction); every other state at that point after
+//! the load is compared with the loaded machine; the inputs and edits that follow play on top of it.
 //!
 //! # Self-description
 //!
@@ -28,7 +40,7 @@
 //! and `tables` the names TARGETS, MASKS and DECISIONS index.  A new output, role or table entry is written with
 //! its META description.
 //!
-//! # File layout, version 3
+//! # File layout, version 4
 //!
 //! All integers are little-endian; `varint` is unsigned LEB128.
 //!
@@ -57,17 +69,19 @@
 //! | 3 | INPUTS | runs `(buttons: u8, varint count >= 1)`; `count` in the table is the number of runs; the run lengths sum to `frames` |
 //! | 4 | EDITS | `(varint dframe, addr: u16, prev: u8, value: u8)` |
 //! | 5 | CHEATS | `(varint dframe, item: u8 (0 bombs, 1 keys, 2 rupees), varint count)` |
-//! | 6 | STATES | `(varint dframe, kind: u8, step: u16 (0xFFFF none), granted: [u8; 3] (bombs, keys, rupees: a room's grants), route_granted: [u8; 3] (a route step's grants; version 1, absent in version 0), varint edits, len: u32, blob)`; kind 0 START, 1 END, 2 KEYFRAME, 3 CHECKPOINT; `edits` is the number of EDITS records that precede the state; `blob` is a `TFZSTATE` file |
-//! | 7 | EVENTS | `(varint dframe, code: u8, payload)`: 1 CONTROL (no payload); 2 ROOM `(level: u8, room: u8, flags: u8 (bit 0 in cave), step: u16 (0xFFFF none), policy: u8 (0xFF none))`; 3 OUTCOME `(varint len, text)`; 4 EPISODE `(varint len, ending text, class: u8, flags: u8 (bit 0 terminated, bit 1 truncated))`; 5 SEGMENT (no payload); 6 VISIT `(varint len, JSON object)`: a room visit's record as the env judged it, written when it closes (version 2); 7 RESET (no payload): the console's RESET button pressed before the frame, before its EDITS (version 3) |
+//! | 6 | STATES | `(varint dframe, kind: u8, step: u16 (0xFFFF none), granted: [u8; 3] (bombs, keys, rupees: a room's grants), route_granted: [u8; 3] (a route step's grants; version 1, absent in version 0), varint edits, len: u32, blob)`; kind 0 START, 1 END, 2 KEYFRAME, 3 CHECKPOINT, 4 LOADED (version 4: a savestate a LOAD put in place, stored where it is first loaded); `edits` is the number of EDITS records that precede the state; `blob` is a `TFZSTATE` file |
+//! | 7 | EVENTS | `(varint dframe, code: u8, payload)`: 1 CONTROL (no payload); 2 ROOM `(level: u8, room: u8, flags: u8 (bit 0 in cave), step: u16 (0xFFFF none), policy: u8 (0xFF none))`; 3 OUTCOME `(varint len, text)`; 4 EPISODE `(varint len, ending text, class: u8, flags: u8 (bit 0 terminated, bit 1 truncated))`; 5 SEGMENT (no payload); 6 VISIT `(varint len, JSON object)`: a room visit's record as the env judged it, written when it closes (version 2); 7 RESET (no payload): the console's RESET button pressed before the frame, before its EDITS (version 3); 8 LOAD `(varint state, varint edits, varint states)`: the machine restored to STATES record `state` once `edits` EDITS and `states` STATES records have been gone through (version 4; `state == states`: the LOADED record stored right there, else an earlier record, not the END) |
 //! | 8 | REWARDS | `(varint dframe, term: u8, value: f32)`; `term` indexes META `reward_terms` |
 //! | 9 | DECISIONS | version 2: `(varint dframe, policy: u8, kind: u8, direction: u8, duration: u8, draw: u8 (bits 0-6 index META tables.draws, bit 7 the act mode's low-health part), value: f32, flags: u8 (bit 0 danger, bit 1 foresight), finite: [u8; ceil(N/8)] (bit i%8 of byte i/8: entry i is finite; the others are masked, -inf), dist: one u8 per finite entry in order (the log-probability is -byte/16 nats), [danger: varint n, [u8; n]: P(hit) x 255 per legal joint action, joint order], [foresight: outcome: u8 (1 safe, 2 replaced, 3 unsafe), varint trials, varint frames, n: u8, [u16; n] vetoed joint actions in the order tried])`; versions 0-1: `(varint dframe, policy: u8, kind: u8, direction: u8, duration: u8, value: f32, dist: [f32; N])`; `N` = META `actions.distribution`, a joint action is legal when its kind's, direction's and duration's entries are finite ([`legal_joint`]) |
 //! | 10 | TARGETS | `(varint dframe, objective: u8 (META tables.objective_kinds), flags: u8 (bit 0 treasure refused, 1 drops first, 2 bag drops, 3 the path search knows the clips), route: u8 (tables.routes, 0xFF none), step: u16 (0xFFFF none), way: u8 (0 none, 1 clips, 2 plain), stretch: u8 (tables.stretches, 0xFF none), n: u8, n x (level, room, in_cave: u8) next rooms, n: u8, n x the same retreat rooms, n: u8, n x (role: u8 (tables.target_roles), flags: u8 (bit 0 obs, bit 1 reward-only), fields: [u8; 4] (the role's named fields)))`, written at a decision when it differs from the last (version 2) |
 //! | 11 | MASKS | `(varint dframe, kinds: u16 (bit k: META actions.kinds[k] legal), per legal kind in order (directions: u8, durations: u8 bits), n: u8, n x (kind: u8, reason: u8 (tables.mask_reasons)))`, written at a decision when it differs from the last (version 2) |
 //!
 //! META, SOURCE, INPUTS, EDITS, CHEATS, STATES and EVENTS are always present; STATES always has the END
-//! (last, at frame `frames`) and, for an embedded source, the START (first, at frame 0).  From version 2
-//! DECISIONS, TARGETS and MASKS are always written; REWARDS and KEYFRAME entries are optional.  The provenance
-//! label of TARGETS (route, step, way, stretch) is for people; no metric may depend on it.
+//! (last, at frame `frames`) and, for an embedded source, the START (first, at frame 0).  From version 2 the
+//! recorder always writes DECISIONS, TARGETS and MASKS; REWARDS and KEYFRAME entries are optional, and a rewrite may
+//! leave out any of the four optional sections ([`section::OPTIONAL`]), keyframes and the judging events (META
+//! `stripped` says which).  The provenance label of TARGETS (route, step, way, stretch) is for people; no metric may
+//! depend on it.
 //!
 //! # META
 //!
@@ -78,9 +92,10 @@
 //! bytes are the frame-0 EDITS of `$18-$24`); `buttons` (the controller byte's bits); `cheat_items`; with
 //! REWARDS `reward_terms` (names in first-use order); `actions` ([`actions`]); the env's entries
 //! ([`Recorder::set_meta`]: `tables`, a chain run's `run`); after a stitch `segments` (`{frames, seed, ending}` per
-//! joined replay, with its `rng_phase` when it has one).  A clip ([`clip`]) has `kind` `clip` and `clip`: the
-//! source's input frames `from..to` and `kind`, with what the caller adds (`tf replay clip`: the source file's
-//! name, the room, the visit and how it ended).
+//! joined replay, with its `rng_phase` when it has one).  A rewrite with windows ([`rewrite`]) has `kind` `clip` and
+//! `clip`: the source's input frames `from..to` and `kind`, with what the caller adds (`tf replay clip`: the source
+//! file's name, the room, the visit and how it ended); several windows: `kind` and `parts`, one such object a
+//! window; a rewrite that left something out has `stripped` (`sections`, `events`, `keyframes`).
 
 mod edit;
 mod format;
@@ -90,10 +105,10 @@ mod player;
 mod reader;
 mod recorder;
 
-pub use edit::{clip, stitch, truncate};
+pub use edit::{Rewrite, Window, rewrite, stitch, truncate};
 pub use format::{
     BUTTONS, CHEAT_ITEMS, Cheat, Context, Decision, Dist, ENDING_DEATH, ENDING_ERROR, ENDING_OTHER, ENDING_STUCK,
-    ENDING_UNKNOWN, ENDING_WIN, ENDINGS, Edit, Ending, Event, EventRecord, Foresight, MAGIC, Mask,
+    ENDING_UNKNOWN, ENDING_WIN, ENDINGS, EVENT_NAMES, Edit, Ending, Event, EventRecord, Foresight, MAGIC, Mask,
     OBJECTIVE_BAG_DROPS, OBJECTIVE_CLIPS, OBJECTIVE_DROPS_FIRST, OBJECTIVE_TREASURE_REFUSED, OUTCOME_CLASSES,
     REPLAY_VERSION, ReplayError, Reward, RoomRef, STATE_KINDS, Source, State, StateKind, TARGET_OBS,
     TARGET_REWARD_ONLY, TargetRef, Targets, actions, file_hash, legal_joint, log_prob_of, quantize_log_prob,
@@ -101,6 +116,6 @@ pub use format::{
 };
 pub use names::{Choice, Names, room_text};
 #[cfg(feature = "zcore")]
-pub use player::{Player, Report, verify};
+pub use player::{Player, Report, cut_states, rewrite_played, verify};
 pub use reader::{Records, Replay};
 pub use recorder::{Mark, RecordOptions, Recorder, Thought};

@@ -2,9 +2,9 @@
 //! other stream is decoded as it is iterated.
 
 use crate::format::{
-    Cheat, Context, Cursor, Decision, Dist, ENDINGS, ENTRY_LEN, EVENT_CONTROL, EVENT_EPISODE, EVENT_OUTCOME,
-    EVENT_RESET, EVENT_ROOM, EVENT_SEGMENT, EVENT_VISIT, Edit, Event, EventRecord, Foresight, HEADER_LEN, MAGIC, Mask,
-    NO_POLICY,
+    Cheat, Context, Cursor, Decision, Dist, ENDINGS, ENTRY_LEN, EVENT_CONTROL, EVENT_EPISODE, EVENT_LOAD,
+    EVENT_OUTCOME, EVENT_RESET, EVENT_ROOM, EVENT_SEGMENT, EVENT_VISIT, Edit, Event, EventRecord, Foresight,
+    HEADER_LEN, MAGIC, Mask, NO_POLICY,
     NO_STEP, REPLAY_VERSION, ReplayError, Reward, SOURCE_EMBEDDED, SOURCE_FILE, SOURCE_POWER_ON, Source, State,
     StateKind, Targets, format_error, section,
 };
@@ -153,7 +153,44 @@ impl Replay {
         if states.windows(2).any(|w| w[0].edits > w[1].edits) || states.iter().any(|s| s.edits > edits) {
             return format_error("STATES section: edit counts are out of order");
         }
+        if self.version >= 4 {
+            self.check_loads(&states, edits)?;
+        }
         Ok(())
+    }
+
+    /// Every LOAD event is at a point of the STATES order (`states`: the records before it, at or before its frame and
+    /// edits; the rest at or after) and loads a record before it, or the LOADED record stored right there (its first
+    /// load); the loads are in order; every LOADED state is first loaded where it is stored.
+    fn check_loads(&self, states: &[State<'_>], edits: u32) -> Result<(), ReplayError> {
+        let mut loaded = vec![false; states.len()];
+        let first = usize::from(self.source == SOURCE_EMBEDDED);
+        let mut last = (0, 0, 0);
+        for record in self.events() {
+            let record = record?;
+            let Event::Load { state, edits: at, states: before } = record.event else { continue };
+            let (point, (s, n)) = ((record.frame, at), (state as usize, before as usize));
+            let placed = n >= first
+                && n <= states.len()
+                && states[..n].last().is_none_or(|p| (p.frame, p.edits) <= point)
+                && states.get(n).is_none_or(|p| (p.frame, p.edits) >= point);
+            let fresh = s == n && states.get(s).is_some_and(|p| p.kind == StateKind::Loaded && (p.frame, p.edits) == point);
+            let earlier = s < n && states[s].kind != StateKind::End;
+            let key = (record.frame, at, before);
+            if !placed || !(fresh || earlier) || key < last || at > edits || record.frame > self.frames {
+                return format_error(format!(
+                    "EVENTS section: the LOAD at frame {} (after {at} edits and {before} states) of state {state} is \
+                     out of place",
+                    record.frame
+                ));
+            }
+            loaded[s] |= fresh;
+            last = key;
+        }
+        match states.iter().zip(&loaded).position(|(s, &l)| s.kind == StateKind::Loaded && !l) {
+            Some(i) => format_error(format!("STATES section: the LOADED state {i} is loaded by no LOAD where it is stored")),
+            None => Ok(()),
+        }
     }
 
     pub(crate) fn section(&self, kind: u16) -> Option<&Section> {
@@ -316,6 +353,7 @@ impl Replay {
                 EVENT_SEGMENT => Event::Segment,
                 EVENT_VISIT => Event::Visit(c.text()?),
                 EVENT_RESET => Event::Reset,
+                EVENT_LOAD => Event::Load { state: c.varint()?, edits: c.varint()?, states: c.varint()? },
                 _ => return c.error("an unknown event"),
             };
             Ok(EventRecord { frame, event })

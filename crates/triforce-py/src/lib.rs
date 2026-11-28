@@ -364,7 +364,8 @@ mod _native {
     use crate::policy::{PyPolicy, act_mode, act_probabilities, keyed_noise};
     #[pymodule_export]
     use crate::replay::{
-        PyReplay, PyReplayPlayer, replay_bomb_windows, replay_stitch, replay_truncate, replay_verify,
+        PyReplay, PyReplayPlayer, replay_bomb_windows, replay_cut_states, replay_rewrite, replay_stitch,
+        replay_truncate, replay_verify,
     };
     #[pymodule_export]
     use crate::theater::{PyReplayFeed, PyReplayScreen};

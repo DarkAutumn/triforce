@@ -1,16 +1,17 @@
 //! `TFREPLAY` files for Python: `Replay` (reading), `ReplayPlayer` (playing on zcore), `replay_verify`,
-//! `replay_stitch` and `replay_truncate` (`crates/replay`).
+//! `replay_stitch`, `replay_truncate`, `replay_rewrite` and `replay_cut_states` (`crates/replay`).
 
 use crate::context::{self, TfzStore};
-use crate::convert::json_to_py;
+use crate::convert::{json_to_py, py_to_json};
 use crate::errors::{ReplayError, StateFormatError};
 use crate::game::screen_with;
-use ::replay::{Event, Names, OUTCOME_CLASSES, Player, Replay};
+use ::replay::{ENDINGS, EVENT_NAMES, Ending, Event, Names, OUTCOME_CLASSES, Player, Replay, Rewrite, Window, section};
 use numpy::{PyArray, PyArray1, PyArrayMethods};
 use parking_lot::Mutex;
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyList};
-use serde_json::Value;
+use serde_json::{Map, Value};
 use std::path::PathBuf;
 use zcore::state_file;
 use zcore::tracks::Mix;
@@ -106,10 +107,11 @@ impl PyReplay {
             .collect()
     }
 
-    /// The events as dicts: `frame`, `type` ('control', 'room', 'outcome', 'episode', 'segment', 'visit' or 'reset':
-    /// the console's RESET button before the frame) and the
+    /// The events as dicts: `frame`, `type` ('control', 'room', 'outcome', 'episode', 'segment', 'visit', 'reset':
+    /// the console's RESET button before the frame, or 'load': a savestate loaded) and the
     /// type's fields (room: `level`, `room`, `in_cave`, `step`, `policy`; outcome: `outcome`; episode: `ending`,
-    /// `outcome`, `terminated`, `truncated`; visit: `record`, the room visit's record as the env judged it).
+    /// `outcome`, `terminated`, `truncated`; visit: `record`, the room visit's record as the env judged it; load:
+    /// `state`, the index in `states()` of the state loaded, `edits` and `states`, the edits and states before it).
     fn events<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
         let out = PyList::empty(py);
         for record in self.replay.events() {
@@ -139,6 +141,12 @@ impl PyReplay {
                 }
                 Event::Segment => d.set_item("type", "segment")?,
                 Event::Reset => d.set_item("type", "reset")?,
+                Event::Load { state, edits, states } => {
+                    d.set_item("type", "load")?;
+                    d.set_item("state", state)?;
+                    d.set_item("edits", edits)?;
+                    d.set_item("states", states)?;
+                }
                 Event::Visit(text) => {
                     d.set_item("type", "visit")?;
                     // Python's parser: serde_json's default float parsing can be one ulp off (no
@@ -338,6 +346,124 @@ pub fn replay_stitch<'py>(py: Python<'py>, a: &[u8], b: &[u8]) -> PyResult<Bound
 pub fn replay_truncate<'py>(py: Python<'py>, data: &[u8], state_index: usize) -> PyResult<Bound<'py, PyBytes>> {
     let cut = ::replay::truncate(&parse(data)?, state_index).map_err(replay_err)?;
     Ok(PyBytes::new(py, &cut))
+}
+
+/// A window of `replay_rewrite` as given: owned bytes the [`Window`] borrows.
+struct Given {
+    from: u32,
+    to: u32,
+    start: Vec<u8>,
+    end: Option<Vec<u8>>,
+    about: Map<String, Value>,
+}
+
+fn given(d: &Bound<'_, PyDict>) -> PyResult<Given> {
+    let need = |key: &str| d.get_item(key)?.ok_or_else(|| PyValueError::new_err(format!("a window needs '{key}'")));
+    let bytes = |v: Bound<'_, PyAny>| -> PyResult<Vec<u8>> { Ok(v.cast::<PyBytes>()?.as_bytes().to_vec()) };
+    let about = match d.get_item("about")? {
+        None => Map::new(),
+        Some(about) if about.is_none() => Map::new(),
+        Some(about) => match py_to_json(&about)? {
+            Value::Object(about) => about,
+            _ => return Err(PyValueError::new_err("a window's 'about' is a dict")),
+        },
+    };
+    let end = d.get_item("end")?.filter(|end| !end.is_none()).map(bytes).transpose()?;
+    Ok(Given { from: need("from")?.extract()?, to: need("to")?.extract()?, start: bytes(need("start")?)?, end, about })
+}
+
+/// The replay rewritten (`crates/replay` `rewrite`): only some of its streams and only some stretches of it.
+/// `watch`: start from what watching needs (no REWARDS, DECISIONS, TARGETS, MASKS, keyframes, OUTCOME, EPISODE or
+/// VISIT events) instead of everything; `sections` (names of REWARDS, DECISIONS, TARGETS, MASKS), `events` (event
+/// type names; 'reset' and 'load' are always kept) and `keyframes` say what is kept instead.  `windows`: the
+/// stretches kept, in order, each a dict `{'from', 'to'}` (input frames, `to` excluded), `'start'` (the machine
+/// before input `from` after its RESET, a TFZSTATE's bytes: `replay_cut_states`), optional `'end'` (before input
+/// `to`'s RESET; found by playing when left out) and `'about'` (META `clip` entries); the stretches after the first
+/// are loaded where the one before ends (LOAD events).  `ending`: `{'kind': one of ENDINGS, 'result', 'outcome',
+/// 'reason'}` for the output (default: the source's when the last stretch reaches its end).  Returns the bytes.
+#[pyfunction]
+#[pyo3(signature = (data, *, watch=false, sections=None, events=None, keyframes=None, windows=None, ending=None))]
+#[allow(clippy::too_many_arguments)]
+pub fn replay_rewrite<'py>(
+    py: Python<'py>,
+    data: &[u8],
+    watch: bool,
+    sections: Option<Vec<String>>,
+    events: Option<Vec<String>>,
+    keyframes: Option<bool>,
+    windows: Option<Vec<Bound<'py, PyDict>>>,
+    ending: Option<Bound<'py, PyDict>>,
+) -> PyResult<Bound<'py, PyBytes>> {
+    let replay = parse(data)?;
+    let base = if watch { Rewrite::watching() } else { Rewrite::default() };
+    let sections = match sections {
+        None => base.sections,
+        Some(names) => names
+            .iter()
+            .map(|name| {
+                section::OPTIONAL.into_iter().find(|&k| section::NAMES[k as usize] == name).ok_or_else(|| {
+                    PyValueError::new_err(format!("{name}: not an optional section (REWARDS, DECISIONS, TARGETS, MASKS)"))
+                })
+            })
+            .collect::<PyResult<_>>()?,
+    };
+    let events = match events {
+        None => base.events,
+        Some(names) => names
+            .iter()
+            .map(|name| match EVENT_NAMES.iter().position(|n| !n.is_empty() && n == name) {
+                Some(code) => Ok(code as u8),
+                None => Err(PyValueError::new_err(format!("{name}: not an event ({})", EVENT_NAMES[1..].join(", ")))),
+            })
+            .collect::<PyResult<_>>()?,
+    };
+    let given: Vec<Given> = windows.unwrap_or_default().iter().map(given).collect::<PyResult<_>>()?;
+    let ending = match ending {
+        None => None,
+        Some(d) => {
+            let text = |key: &str| -> PyResult<String> {
+                Ok(d.get_item(key)?.map(|v| v.extract()).transpose()?.unwrap_or_default())
+            };
+            let kind = text("kind")?;
+            let Some(kind) = ENDINGS.iter().position(|&e| e == kind) else {
+                return Err(PyValueError::new_err(format!("ending kind {kind:?}: one of {}", ENDINGS.join(", "))));
+            };
+            Some(Ending { kind: kind as u8, result: text("result")?, outcome: text("outcome")?, reason: text("reason")? })
+        }
+    };
+    let spec = Rewrite {
+        sections,
+        events,
+        keyframes: keyframes.unwrap_or(base.keyframes),
+        windows: given
+            .iter()
+            .map(|w| Window { from: w.from, to: w.to, start: &w.start, end: w.end.as_deref(), about: w.about.clone() })
+            .collect(),
+        ending,
+    };
+    let rom = context::rom(py)?;
+    let out = py.detach(|| ::replay::rewrite_played(rom, &replay, &spec)).map_err(replay_err)?;
+    Ok(PyBytes::new(py, &out))
+}
+
+/// The machine at each of `frames` (input frames, at most the replay's), in one pass over the replay: `{frame:
+/// (start, end)}`, TFZSTATE bytes of the machine before that input, `start` after the frame's RESET (a
+/// `replay_rewrite` window from it starts there), `end` before it (a window to it ends there).
+#[pyfunction]
+#[pyo3(signature = (data, frames, states_dir=None))]
+pub fn replay_cut_states<'py>(
+    py: Python<'py>,
+    data: &[u8],
+    frames: Vec<u32>,
+    states_dir: Option<PathBuf>,
+) -> PyResult<Bound<'py, PyDict>> {
+    let (rom, replay, resolve) = (context::rom(py)?, parse(data)?, resolver(py, states_dir)?);
+    let cuts = py.detach(|| ::replay::cut_states(rom, replay, &resolve, &frames)).map_err(replay_err)?;
+    let out = PyDict::new(py);
+    for (frame, (start, end)) in cuts {
+        out.set_item(frame, (PyBytes::new(py, &start), PyBytes::new(py, &end)))?;
+    }
+    Ok(out)
 }
 
 /// Plays the replay on the emulator, comparing the machine with every state it recorded; raises `ReplayError`
