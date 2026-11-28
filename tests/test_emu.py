@@ -249,6 +249,8 @@ def test_a_savestate_loaded_mid_take_replays_and_cuts_bit_for_bit():
     play(session, 'L20')
     loaded = session.frames
     session.game.load_savestate(saved)
+    with pytest.raises(RuntimeError, match='RESET right after load_savestate'):
+        session.game.reset_console()                 # RESET is pressed before loads: it would not replay here
     play(session, 'R25')
     data = session.replay()
     recording = _native.Replay(data)

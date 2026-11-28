@@ -249,6 +249,11 @@ impl PyLiveGame {
             return Err(PyRuntimeError::new_err("call load() or power_on() first"));
         }
         let nes = g.session.nes_mut();
+        if nes.recorder().is_some_and(|rec| rec.loaded_this_frame()) {
+            return Err(PyRuntimeError::new_err(
+                "a RESET right after load_savestate does not replay (RESET is pressed before loads): step a frame first",
+            ));
+        }
         nes.inner_mut().reset();
         if let Some(rec) = nes.recorder_mut() {
             rec.event(Event::Reset);

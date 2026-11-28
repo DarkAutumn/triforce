@@ -153,35 +153,49 @@ impl Replay {
         if states.windows(2).any(|w| w[0].edits > w[1].edits) || states.iter().any(|s| s.edits > edits) {
             return format_error("STATES section: edit counts are out of order");
         }
-        if self.version >= 4 {
-            self.check_loads(&states, edits)?;
-        }
+        self.check_loads(&states, edits)?;
         Ok(())
     }
 
-    /// Every LOAD event is at a point of the STATES order (`states`: the records before it, at or before its frame and
-    /// edits; the rest at or after) and loads a record before it, or the LOADED record stored right there (its first
-    /// load); the loads are in order; every LOADED state is first loaded where it is stored.
+    /// LOAD events and LOADED states are version 4's.  Every LOAD event is at a point of the STATES order (`states`:
+    /// the records before it, at or before its frame and edits; the rest at or after) and of the EDITS (`edits`: the
+    /// records before it, of its frame or earlier; the rest of its frame or later), and loads a record before it, or
+    /// the LOADED record stored right there (its first load); the loads are in order; every LOADED state is first
+    /// loaded where it is stored.
     fn check_loads(&self, states: &[State<'_>], edits: u32) -> Result<(), ReplayError> {
+        let mut loads = Vec::new();
+        for record in self.events() {
+            let record = record?;
+            if let Event::Load { state, edits, states } = record.event {
+                loads.push((record.frame, edits, states, state));
+            }
+        }
+        if loads.is_empty() && states.iter().all(|s| s.kind != StateKind::Loaded) {
+            return Ok(());
+        }
+        if self.version < 4 {
+            return format_error(format!("a LOAD event or LOADED state in a version {} replay (from version 4)", self.version));
+        }
+        let edit_frames: Vec<u32> = self.edits().map(|e| e.map(|e| e.frame)).collect::<Result<_, _>>()?;
         let mut loaded = vec![false; states.len()];
         let first = usize::from(self.source == SOURCE_EMBEDDED);
         let mut last = (0, 0, 0);
-        for record in self.events() {
-            let record = record?;
-            let Event::Load { state, edits: at, states: before } = record.event else { continue };
-            let (point, (s, n)) = ((record.frame, at), (state as usize, before as usize));
+        for (frame, at, before, state) in loads {
+            let (point, (s, n), e) = ((frame, at), (state as usize, before as usize), at as usize);
             let placed = n >= first
                 && n <= states.len()
                 && states[..n].last().is_none_or(|p| (p.frame, p.edits) <= point)
-                && states.get(n).is_none_or(|p| (p.frame, p.edits) >= point);
+                && states.get(n).is_none_or(|p| (p.frame, p.edits) >= point)
+                && at <= edits
+                && edit_frames[..e].last().is_none_or(|&f| f <= frame)
+                && edit_frames.get(e).is_none_or(|&f| f >= frame);
             let fresh = s == n && states.get(s).is_some_and(|p| p.kind == StateKind::Loaded && (p.frame, p.edits) == point);
             let earlier = s < n && states[s].kind != StateKind::End;
-            let key = (record.frame, at, before);
-            if !placed || !(fresh || earlier) || key < last || at > edits || record.frame > self.frames {
+            let key = (frame, at, before);
+            if !placed || !(fresh || earlier) || key < last || frame > self.frames {
                 return format_error(format!(
-                    "EVENTS section: the LOAD at frame {} (after {at} edits and {before} states) of state {state} is \
-                     out of place",
-                    record.frame
+                    "EVENTS section: the LOAD at frame {frame} (after {at} edits and {before} states) of state {state} \
+                     is out of place"
                 ));
             }
             loaded[s] |= fresh;

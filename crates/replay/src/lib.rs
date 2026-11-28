@@ -94,8 +94,9 @@
 //! ([`Recorder::set_meta`]: `tables`, a chain run's `run`); after a stitch `segments` (`{frames, seed, ending}` per
 //! joined replay, with its `rng_phase` when it has one).  A rewrite with windows ([`rewrite`]) has `kind` `clip` and
 //! `clip`: the source's input frames `from..to` and `kind`, with what the caller adds (`tf replay clip`: the source
-//! file's name, the room, the visit and how it ended); several windows: `kind` and `parts`, one such object a
-//! window; a rewrite that left something out has `stripped` (`sections`, `events`, `keyframes`).
+//! file's name, the room, the visit and how it ended); several windows: `kind`, `parts` (one such object a window)
+//! and `ends` `keyframes` (each part's END kept as a KEYFRAME, compared, whatever `keyframes` says of the source's);
+//! a rewrite that left something out has `stripped` (`sections`, `events`, `keyframes`).
 
 mod edit;
 mod format;

@@ -2810,7 +2810,8 @@ A record at frame `k` applies after input frame `k - 1` and before input frame `
   after the first is loaded where the one before ends (its START a LOADED state and a LOAD event, after the one
   before's END as a KEYFRAME, so verify checks every stretch). META is the source's with `kind` `clip`, `source`
   checkpoint, the ending (given, the source's when the last stretch reaches its end, else `unknown` "clipped") and
-  `clip`: the window's `about` with `from`/`to` and the source's `kind` (several: `parts`, one a window); no
+  `clip`: the window's `about` with `from`/`to` and the source's `kind` (several: `parts`, one a window, and `ends`
+  `keyframes`: the parts' ENDs are KEYFRAMEs whatever `keyframes` says of the source's); no
   `segments` or `rng_phase`. `replay::cut_states(rom, replay, resolve, frames)` gives the machine at each cut in
   one pass (`start` after the frame's RESET, `end` before it); `replay::rewrite_played` finds the ENDs a window
   leaves out by playing the output. Python: `_native.replay_rewrite(data, watch=False, sections=None,
@@ -2833,7 +2834,13 @@ A record at frame `k` applies after input frame `k - 1` and before input frame `
   (`.slow.md`: each visit with where it starts in the compilation, its seconds and its room+visit's marks).
   Pass 2 walks only the replays with something to write, once each in `--parallel` processes (`replay_cut_states`
   at every visit's first and last frame), writes each file stripped for watching (`replay_rewrite(watch=True)`) and
-  verifies it (`replay_verify`). A slice of one visit is about 70 KB (two states and the source's META).
+  verifies it (`replay_verify`). A slice of one visit is about 70 KB (two states and the source's META). The marks
+  are linearly interpolated quantiles (numpy's default, `time-wasters.md`'s); `run_stats.py`'s room statistics
+  use the nearest rank. A 0-frame record (the milestone a won run ends on) is no visit; a record whose frames
+  don't end at its own event is warned about; an input that is a slice itself (META kind `clip`), has no seed or
+  can't be read is skipped; two outputs of different replays under one name, or a `--visits` seed found in two
+  replays, stop the run before pass 2; `--compile` takes neither `--visits` nor `--top`; a replay or file that fails
+  in pass 2 is reported and left out of the index, and the run exits 1.
 - **Clips: one room of a run** (the owner, Nov 26: "show me just one room"). `tf replay clip FILE|DIR... --room
   L:RR [--visit N|all] [--playable] --out DIR [--jobs N]` plays each replay and writes each visit to the room as a
   replay of its own, `<stem>_<L>x<RR>_v<N>.tfreplay` (`7:1b` -> `_7x1b_v1`; the room in hex, `0:77` an overworld

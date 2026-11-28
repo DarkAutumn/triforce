@@ -476,7 +476,8 @@ struct OutState<'s> {
 /// excepted (`start` is after it); TARGETS, MASKS and the ROOM event in force at a stretch's first frame are written
 /// again there.  META is the source's; with windows `kind` `clip`, `source` `checkpoint`, no `segments` or
 /// `rng_phase` (they describe the whole) and `clip`: the window's `about` with `from`, `to` and the source's `kind`
-/// (several windows: `kind` and `parts`, one such object a window).  META `stripped` names the sections, events
+/// (several windows: `kind`, `parts`, one such object a window, and `ends` `keyframes`: each part's END is kept as a
+/// KEYFRAME before the next part's load, whatever `keyframes` says).  META `stripped` names the sections, events
 /// ([`EVENT_NAMES`]) and `keyframes` left out (with what the source had left out).
 pub fn rewrite(replay: &Replay, spec: &Rewrite<'_>) -> Result<Vec<u8>, ReplayError> {
     if let Some((kind, ..)) = replay.sections().find(|&(kind, ..)| kind > section::MASKS) {
@@ -559,7 +560,7 @@ pub fn rewrite(replay: &Replay, spec: &Rewrite<'_>) -> Result<Vec<u8>, ReplayErr
         }
 
         // The stretch's states and loads in their recorded order; a load of a state not written becomes a LOADED
-        // state where it is first loaded.
+        // state where it is first loaded.  A keyframe or checkpoint before any of `from`'s edits is the START again.
         let inside = |frame: u32| frame >= from && frame < limit;
         let mut kept = sources
             .iter()
@@ -568,7 +569,9 @@ pub fn rewrite(replay: &Replay, spec: &Rewrite<'_>) -> Result<Vec<u8>, ReplayErr
                 inside(s.frame)
                     && match s.kind {
                         StateKind::Start | StateKind::End => !windowed,
-                        StateKind::Keyframe | StateKind::Checkpoint => spec.keyframes,
+                        StateKind::Keyframe | StateKind::Checkpoint => {
+                            spec.keyframes && !(windowed && s.frame == from && s.edits == before)
+                        }
                         StateKind::Loaded => true,
                     }
             })
@@ -656,9 +659,12 @@ pub fn rewrite(replay: &Replay, spec: &Rewrite<'_>) -> Result<Vec<u8>, ReplayErr
                 clip.insert("kind".into(), kind);
                 clip
             }
+            // Each part's END is kept as a KEYFRAME before the next part's load (verify compares it), whatever
+            // `keyframes` says of the source's.
             many => Map::from_iter([
                 ("kind".to_owned(), kind),
                 ("parts".to_owned(), Value::Array(many.iter().map(|w| Value::Object(part(w))).collect())),
+                ("ends".to_owned(), json!("keyframes")),
             ]),
         };
         meta.remove("segments");

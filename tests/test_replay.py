@@ -376,9 +376,10 @@ def test_the_slicer_cuts_runs_into_verified_room_visits_and_compilations(chain_r
     slicer = _script('replay_slicer')
     runs = [slicer.read_visits(str(path)) for path in sorted(folder.iterdir())]
     for run, result in zip(runs, results):
-        assert [v.exit - v.entry for v in run['visits']] == [room.frames for room in result.rooms]
-        assert [v.family for v in run['visits']] == [room.specialist for room in result.rooms]
-        assert run['visits'][0].tag == 'ox77' and run['visits'][0].number == 1
+        recorded = [room for room in result.rooms if room.frames > 0]     # a 0-frame milestone record is no visit
+        assert [v.exit - v.entry for v in run['visits']] == [room.frames for room in recorded]
+        assert [v.family for v in run['visits']] == [room.specialist for room in recorded]
+        assert run['visits'][0].tag == 'ox77' and run['visits'][0].number == 1 and not run['warnings']
     stats = slicer.room_stats(runs)
     out = tmp_path / 'out'
     args = slicer.parse_args([str(folder), '--out', str(out), '--rooms', '--families', '--speed', 'all'])
@@ -415,3 +416,48 @@ def test_the_slicer_cuts_runs_into_verified_room_visits_and_compilations(chain_r
     assert [part['room'] for part in joined.meta['clip']['parts']] == ['ox3c', 'ox4c']
     slicer.write_index(index, True, best)
     assert (best / f'{Path(runs[0]["path"]).stem}.all.md').exists()
+    # A slice read back as input is no run.
+    assert 'META kind clip' in slicer.read_visits(done['dest'])['skip']
+
+    # Two folders holding the same seed: a --visits of it is ambiguous, and the files would clash.
+    first, second = tmp_path / 'a', tmp_path / 'b'
+    for where in (first, second):
+        where.mkdir()
+        shutil.copy(sorted(folder.iterdir())[0], where)
+    both = [slicer.read_visits(str(path)) for path in [*first.iterdir(), *second.iterdir()]]
+    seed = both[0]['seed']
+    for options, message in ((['--visits', f'{seed}:ox77:v1'], 'more than one replay'),
+                             (['--rooms', '--speed', 'all'], 'from two replays')):
+        with pytest.raises(SystemExit, match=message):
+            slicer.plan(slicer.parse_args([str(first), str(second), '--out', str(out), *options]), both,
+                        slicer.room_stats(both))
+    args = slicer.parse_args([str(first), '--out', str(out), '--visits', f'{seed}:ox77:v1'])
+    (named,), index = slicer.plan(args, both[:1], slicer.room_stats(both[:1]))
+    assert Path(named.dest).parent == out / 'visits' and named.visits[0].key == ('ox77', 1)
+    for bad in (['--compile', '--visits', f'{seed}:ox77:v1'], ['--compile', '--top', '3']):
+        with pytest.raises(SystemExit):
+            slicer.parse_args([str(first), '--out', str(out), *bad])
+
+
+def test_the_slicer_buckets_each_visit_against_its_room_and_visit():
+    """The marks are numpy's linear quantiles of the room+visit's seconds over the selected runs (as
+    ``time-wasters.md``): slowest above the 90% mark, slow above the median up to it, fastest below the 10% mark; a
+    room+visit in fewer than 80% of the runs (a detour) has no bucket."""
+    slicer = _script('replay_slicer')
+    assert [slicer.quantile([0.0, 10.0], q) for q in (0.1, 0.5, 0.9)] == pytest.approx([1.0, 5.0, 9.0])
+    assert slicer.quantile(list(map(float, range(11))), 0.9) == pytest.approx(9.0)
+
+    def visit(seed, room, seconds):
+        return slicer.Visit('x', seed, 'win', 3, room, False, 1, 'zol', 0, round(seconds * slicer.FPS), 'exit')
+
+    runs = [{'visits': [visit(seed, 0x59, seconds)] + ([visit(seed, 0x60, 5.0)] if seed < 7 else [])}
+            for seed, seconds in enumerate([10.0, 11, 12, 13, 14, 15, 16, 17, 18, 40])]
+    stats = slicer.room_stats(runs)
+    main, detour = stats[('3x59', 1)], stats[('3x60', 1)]
+    assert (main['fast'], main['median'], main['slow']) == pytest.approx((10.9, 14.5, 20.2), abs=0.01)
+    assert main['lost'] == pytest.approx(main['mean'] - main['fast']) and not main['detour']
+    assert detour['detour'] and detour['runs'] == 7               # 7 of 10 runs: under 80%
+    buckets = [slicer.bucket(run['visits'][0], stats) for run in runs]
+    assert buckets == ['fastest', None, None, None, None, 'slow', 'slow', 'slow', 'slow', 'slowest']
+    assert slicer.bucket(runs[0]['visits'][1], stats) is None
+    assert slicer.room_tag(0, 0x77, True) == 'ox77cave' and slicer.boss_name('boss-dodongo') == 'dodongo'

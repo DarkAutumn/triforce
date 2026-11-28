@@ -717,10 +717,17 @@ fn a_window_starts_where_it_was_cut() {
     assert_eq!(both.meta().unwrap()["clip"], json!({"kind": "chain", "parts": [
         {"visit": 1, "from": 10, "to": 40},
         {"from": 100, "to": 150},
-    ]}));
+    ], "ends": "keyframes"}));
     let open = blob(1);
     let no_end = Window { from: 10, to: 40, start: &open, end: None, about: Map::new() };
     assert!(rewrite(&replay, &Rewrite { windows: vec![no_end], ..Rewrite::default() }).is_err());
+
+    // A keyframe at a window's first frame, before its edits, is the START again: not kept twice.
+    let close = blob(5);
+    let at_keyframe = Window { from: 40, to: 90, start: &open, end: Some(&close), about: Map::new() };
+    let cut = Replay::parse(rewrite(&replay, &Rewrite { windows: vec![at_keyframe], ..Rewrite::default() }).unwrap());
+    let kinds: Vec<_> = cut.unwrap().states().map(|s| (s.frame, s.kind)).collect();
+    assert_eq!(kinds, [(0, StateKind::Start), (40, StateKind::Keyframe), (50, StateKind::End)]);
 }
 
 /// A loaded state is stored once, where it is first loaded; loading it again is an event alone, and a stretch cut
@@ -757,4 +764,30 @@ fn a_load_stores_its_state_once() {
     assert_eq!(states, [(0, StateKind::Start, start), (10, StateKind::Loaded, blob(30)), (30, StateKind::End, end)]);
     let at = edits_before(60) - edits_before(50);
     assert_eq!(loads(&cut), [EventRecord { frame: 10, event: Event::Load { state: 1, edits: at, states: 1 } }]);
+}
+
+/// LOAD events and LOADED states are version 4's: an older file holding one is refused at parse.
+#[test]
+fn a_load_in_an_older_version_is_refused() {
+    let mut rec = Recorder::new(options(false));
+    rec.set_source(Source::File { name: "0_77c_0".into(), file_hash: 1 });
+    play(&mut rec, 0, 30, &[], false);
+    rec.load_state(context(30), &blob(30));
+    play(&mut rec, 0, 40, &[], false);
+    let mut bytes = rec.finish(1, ending(1), context(40), &blob(40));
+    assert!(Replay::parse(bytes.clone()).is_ok());
+    bytes[8] = 3;
+    let error = Replay::parse(bytes).unwrap_err().to_string();
+    assert!(error.contains("a LOAD event or LOADED state in a version 3 replay"), "{error}");
+}
+
+/// A RESET recorded after a LOAD before the next frame would be pressed before the load on playback: refused.
+#[test]
+#[should_panic(expected = "a RESET after a LOAD")]
+fn a_reset_right_after_a_load_is_refused() {
+    let mut rec = Recorder::new(options(false));
+    play(&mut rec, 0, 10, &[], false);
+    rec.load_state(context(10), &blob(10));
+    assert!(rec.loaded_this_frame());
+    rec.event(Event::Reset);
 }

@@ -129,20 +129,8 @@ impl Player {
             let record = record?;
             match record.event {
                 Event::Reset => resets.push(record.frame),
-                Event::Load { state, edits: at, states } => {
-                    let at_frame = |i: usize| edits.get(i).map(|e: &Edit| e.frame);
-                    let i = at as usize;
-                    if i.checked_sub(1).and_then(at_frame).is_some_and(|f| f > record.frame)
-                        || at_frame(i).is_some_and(|f| f < record.frame)
-                    {
-                        return format_error(format!(
-                            "EVENTS section: the LOAD at frame {} comes after {at} edits, not all of which are \
-                             before it",
-                            record.frame
-                        ));
-                    }
-                    loads.push(Load { frame: record.frame, edits: at, states, state });
-                }
+                // Parse checked each LOAD's place among the edits and states.
+                Event::Load { state, edits, states } => loads.push(Load { frame: record.frame, edits, states, state }),
                 _ => {}
             }
         }

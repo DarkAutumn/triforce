@@ -14,12 +14,18 @@ PATH: replays, or folders of them (``*.tfreplay``; a chain's runs ``<seed>-<endi
    overworld ``ox55``, a cave ``ox77cave``), the visit (``v2``: the second time the run enters that room), the
    family that played it, its frames (seconds = frames / 60.0988, as the chain records) and outcome.  The
    statistics of each room+visit are over the selected runs (``--wins-only``: the wins): the 10% mark, median, 90%
-   mark, mean, and "lost" = mean - 10% mark; a room+visit in fewer than 80% of the runs is a detour and has no
-   bucket.  A visit's bucket: ``slowest`` above its room+visit's 90% mark, ``slow`` above the median up to the 90%
-   mark, ``fastest`` below the 10% mark (``all``: every visit).  Then every slice to write is decided.
+   mark (linearly interpolated quantiles, numpy's default and ``time-wasters.md``'s; ``run_stats.py`` uses the
+   nearest rank), mean, and "lost" = mean - 10% mark; a room+visit in fewer than 80% of the runs is a detour and
+   has no bucket.  A visit's bucket: ``slowest`` above its room+visit's 90% mark, ``slow`` above the median up to
+   the 90% mark, ``fastest`` below the 10% mark (``all``: every visit).  A 0-frame record (the milestone a won run
+   ends on) is no visit; a record whose frames don't end at its own event is warned about; a file that is a slice
+   itself (META kind ``clip``), has no seed or can't be read is skipped with a line.  Then every slice to write is
+   decided: two files of different replays under one name (the same seed or file name in two folders), or a
+   ``--visits`` seed in two replays given, stop the run.
 2. The replays with something to write, each walked once in the emulator (``--parallel`` processes): the machine
    at each chosen visit's first and last frame (``replay_cut_states``), then each slice written
-   (``replay_rewrite``) and verified bit-exactly (``replay_verify``; ``--no-verify`` skips it).
+   (``replay_rewrite``) and verified bit-exactly (``replay_verify``; ``--no-verify`` skips it).  A replay or file
+   that fails is reported and left out of the index; the run ends with exit 1.
 
 What is written, into ``--out``:
 
@@ -35,7 +41,8 @@ What is written, into ``--out``:
   (``00000148-9x42-v1-215.3s.tfreplay``), and ``index.md`` listing them with their room+visit's marks;
 - ``--compile``: instead, a replay a run and bucket of the run's visits (those of the groups given; none given:
   every room+visit) in the run's order, each after the first loaded where the one before ends (a LOAD event):
-  ``<run>.<bucket>.tfreplay`` (``00000817-win.slow.tfreplay``) and ``<run>.<bucket>.md`` beside it.
+  ``<run>.<bucket>.tfreplay`` (``00000817-win.slow.tfreplay``) and ``<run>.<bucket>.md`` beside it (not with
+  ``--visits`` or ``--top``).
 
 Every file verifies (``tf replay verify``) and plays in ``play-zelda.py`` (a folder of them).
 """
@@ -112,23 +119,34 @@ class Visit:
 
 def read_visits(path: str) -> dict:
     """Pass 1 for one replay: its seed, ending, frames and room visits (ROOM events paired with VISIT records; a
-    visit the replay ends in without a record runs to its last frame)."""
-    replay = _native.Replay(Path(path).read_bytes())
-    meta = replay.meta
-    models = meta.get('models') or []
+    visit the replay ends in without a record runs to its last frame; a 0-frame record, the milestone a won run
+    ends on, is no visit).  ``warnings``: a visit whose record's frames don't end at the record's own event.
+    ``skip``: why the file is no run to slice (unreadable, a slice itself (META kind ``clip``), no seed)."""
+    try:
+        replay = _native.Replay(Path(path).read_bytes())
+        meta = replay.meta
+    except (OSError, _native.ReplayError) as e:
+        return {'path': path, 'skip': f"unreadable: {e}"}
+    if meta.get('kind') == 'clip':
+        return {'path': path, 'skip': "a slice (META kind clip), not a run"}
     seed = meta.get('seed')
-    if seed is None:
-        seed = int(re.match(r'\d+', Path(path).name).group(0))
+    digits = re.match(r'\d+', Path(path).name)
+    if seed is None and digits is None:
+        return {'path': path, 'skip': "no seed (META seed, or a file name starting with it)"}
+    seed = int(seed if seed is not None else digits.group(0))
+    models = meta.get('models') or []
     entered: dict = defaultdict(int)
-    visits, open_ = [], None
+    visits, warnings, open_ = [], [], None
 
     def close(at: int, family: Optional[str], outcome: str):
         level, room, cave, frame, policy = open_
+        if at <= frame:
+            return
         if family is None:
             model = models[policy] if policy is not None and policy < len(models) else {}
             family = model.get('family') or model.get('name') or '-'
         entered[(level, room, cave)] += 1
-        visits.append(Visit(path, int(seed), replay.ending, level, room, cave, entered[(level, room, cave)],
+        visits.append(Visit(path, seed, replay.ending, level, room, cave, entered[(level, room, cave)],
                             family, frame, at, outcome))
 
     for event in replay.events():
@@ -138,15 +156,22 @@ def read_visits(path: str) -> dict:
             open_ = (event['level'], event['room'], bool(event['in_cave']), event['frame'], event['policy'])
         elif event['type'] == 'visit' and open_ is not None:
             record = event['record']
-            close(open_[3] + int(record['frames']), record.get('specialist'), str(record.get('outcome')))
+            end = open_[3] + int(record['frames'])
+            if end != event['frame']:
+                warnings.append(f"{room_tag(*open_[:3])} at frame {open_[3]}: the record's {record['frames']} frames "
+                                f"end at {end}, its event is at {event['frame']}")
+            close(end, record.get('specialist'), str(record.get('outcome')))
             open_ = None
     if open_ is not None:
         close(replay.frames, None, replay.ending)
-    return {'path': path, 'seed': int(seed), 'ending': replay.ending, 'frames': replay.frames, 'visits': visits}
+    return {'path': path, 'seed': seed, 'ending': replay.ending, 'frames': replay.frames, 'visits': visits,
+            'warnings': warnings}
 
 
 def quantile(values: list, q: float) -> float:
-    """The ``q`` quantile of sorted ``values``, linearly interpolated (numpy's default)."""
+    """The ``q`` quantile of sorted ``values``, linearly interpolated (numpy's default; ``time-wasters.md``'s
+    figures).  ``run_stats.py``'s room statistics use the nearest rank instead, so a "90%" there can differ from
+    the slicer's mark by up to one visit's step."""
     at = q * (len(values) - 1)
     low = int(at)
     high = min(low + 1, len(values) - 1)
@@ -287,7 +312,7 @@ def plan(args, runs: list, stats: dict) -> tuple:
                           'reason': f"{len(chosen)} {speed} visits of {Path(path).name}"}
                 outputs.append(Output(str(dest), chosen, ending))
                 index[str(dest.with_suffix('.md'))] = chosen
-        return outputs, index
+        return refuse_collisions(outputs), index
 
     for tree, folder, pick in groups:
         for speed in speeds:
@@ -308,10 +333,27 @@ def plan(args, runs: list, stats: dict) -> tuple:
             found = [v for v in visits if v.seed == seed and v.key == key]
             if not found:
                 raise SystemExit(f"--visits {spec}: no such visit in the selected runs")
+            if len({v.path for v in found}) > 1:
+                raise SystemExit(f"--visits {spec}: seed {seed} is in more than one replay given: "
+                                 f"{', '.join(sorted({v.path for v in found}))}; give one of them alone")
             where = out / args.visits_into
             outputs.append(Output(str(where / found[0].name()), found, slice_ending(found[0])))
             index[str(where)].append(found[0])
-    return outputs, index
+    return refuse_collisions(outputs), index
+
+
+def refuse_collisions(outputs: list) -> list:
+    """``outputs``, unless two of different replays would write the same file (the same seed or file name from two
+    folders): then the run stops, naming them."""
+    sources = defaultdict(set)
+    for o in outputs:
+        sources[o.dest].add(o.visits[0].path)
+    clashes = {dest: paths for dest, paths in sources.items() if len(paths) > 1}
+    if clashes:
+        dest, paths = next(iter(sorted(clashes.items())))
+        raise SystemExit(f"{len(clashes)} files would be written from two replays, e.g. {dest} from "
+                         f"{', '.join(sorted(paths))}: slice those folders apart (another --out)")
+    return outputs
 
 
 def slice_ending(v: Visit) -> dict:
@@ -322,33 +364,45 @@ def slice_ending(v: Visit) -> dict:
 
 
 def write(path: str, outputs: list, verify: bool) -> list:
-    """Pass 2 for one replay: the machine at every cut in one walk, then each output written (and verified)."""
-    data = Path(path).read_bytes()
-    frames = sorted({f for o in outputs for v in o.visits for f in (v.entry, v.exit)})
-    cuts = _native.replay_cut_states(data, frames)
+    """Pass 2 for one replay: the machine at every cut in one walk, then each output written (and verified).  A
+    failure is reported as the output's ``error`` (every output's when the walk fails), never raised."""
+    try:
+        data = Path(path).read_bytes()
+        frames = sorted({f for o in outputs for v in o.visits for f in (v.entry, v.exit)})
+        cuts = _native.replay_cut_states(data, frames)
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        return [{'dest': o.dest, 'error': f"{path}: {e}"} for o in outputs]
     done = []
     for o in outputs:
-        windows = [{'from': v.entry, 'to': v.exit, 'start': cuts[v.entry][0], 'end': cuts[v.exit][1],
-                    'about': v.about()} for v in o.visits]
-        sliced = _native.replay_rewrite(data, watch=True, windows=windows, ending=o.ending)
-        report = _native.replay_verify(sliced) if verify else None
-        dest = Path(o.dest)
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        tmp = dest.with_name(f'{dest.name}.{os.getpid()}.tmp')
-        tmp.write_bytes(sliced)
-        os.replace(tmp, dest)
-        done.append({'dest': o.dest, 'bytes': len(sliced), 'frames': _native.Replay(sliced).frames,
-                     'verified': report is not None})
+        try:
+            windows = [{'from': v.entry, 'to': v.exit, 'start': cuts[v.entry][0], 'end': cuts[v.exit][1],
+                        'about': v.about()} for v in o.visits]
+            sliced = _native.replay_rewrite(data, watch=True, windows=windows, ending=o.ending)
+            report = _native.replay_verify(sliced) if verify else None
+            dest = Path(o.dest)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            tmp = dest.with_name(f'{dest.name}.{os.getpid()}.tmp')
+            tmp.write_bytes(sliced)
+            os.replace(tmp, dest)
+            done.append({'dest': o.dest, 'bytes': len(sliced), 'frames': _native.Replay(sliced).frames,
+                         'verified': report is not None})
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            done.append({'dest': o.dest, 'error': f"{path}: {e}"})
     return done
 
 
-def write_index(index: dict, compile_: bool, out: Path):
+def write_index(index: dict, compile_: bool, out: Path, written: Optional[set] = None):
     """``index.md`` a folder (a compilation: ``<run>.<bucket>.md``, with where each visit starts in it): its visits
-    with their room+visit's marks."""
+    with their room+visit's marks; with ``written`` (the files pass 2 wrote), only those."""
     for where, visits in index.items():
+        path = Path(where) if compile_ else Path(where) / 'index.md'
+        if written is not None:
+            if compile_:
+                visits = visits if str(path.with_suffix(SUFFIX)) in written else []
+            else:
+                visits = [v for v in visits if str(Path(where) / v.name()) in written]
         if not visits:
             continue
-        path = Path(where) if compile_ else Path(where) / 'index.md'
         path.parent.mkdir(parents=True, exist_ok=True)
         lines = ['| File | Seed | Room | Visit | Family | Seconds | Bucket | 10% | Median | 90% | Mean | Outcome |',
                  '|---|---:|---|---:|---|---:|---|---:|---:|---:|---:|---|']
@@ -361,7 +415,7 @@ def write_index(index: dict, compile_: bool, out: Path):
             total += v.seconds
         title = path.stem if compile_ else str(Path(where).relative_to(out)) if Path(where) != out else out.name
         head = (f"# {title}\n\n{len(visits)} visits, {total:.1f} s in all; marks: the room+visit's over the "
-                f"selected runs (seconds).\n\n")
+                f"selected runs (seconds, linearly interpolated quantiles).\n\n")
         path.write_text(head + '\n'.join(lines) + '\n')
 
 
@@ -408,6 +462,8 @@ def parse_args(argv=None):
     if not args.compile and args.rooms is None and args.bosses is None and args.families is None \
             and args.visits is None:
         parser.error("nothing to write: --rooms, --bosses, --families, --visits or --compile")
+    if args.compile and (args.visits is not None or args.top is not None):
+        parser.error("--compile writes a run's visits by bucket: not with --visits or --top")
     return args
 
 
@@ -419,11 +475,16 @@ def main(argv=None) -> int:
 
     with ProcessPoolExecutor(max_workers=max(1, args.parallel), mp_context=get_context('spawn')) as pool:
         runs = []
-        for run in pool.map(read_visits, files, chunksize=8):
+        for count, run in enumerate(pool.map(read_visits, files, chunksize=8), 1):
+            jobs.progress(count, len(files), 'replays read')
+            if 'skip' in run:
+                print(f"skipped {run['path']}: {run['skip']}", flush=True)
+                continue
+            for warning in run['warnings']:
+                print(f"warning: {run['path']}: {warning}", flush=True)
             if (args.wins_only and run['ending'] != 'win') or (args.losses_only and run['ending'] == 'win'):
                 continue
             runs.append(run)
-            jobs.progress(len(runs), len(files), 'replays read')
         if not runs:
             raise SystemExit("no run selected")
         stats = room_stats(runs)
@@ -435,13 +496,15 @@ def main(argv=None) -> int:
         by_path = defaultdict(list)
         for o in outputs:
             by_path[o.visits[0].path].append(o)
-        written, done = [], 0
+        results, done = [], 0
         futures = [pool.submit(write, path, mine, not args.no_verify) for path, mine in sorted(by_path.items())]
         for future in futures:
-            written += future.result()
+            results += future.result()
             done += 1
             jobs.progress(done, len(futures), 'replays sliced')
-    write_index(index, args.compile, Path(args.out))
+    written = [r for r in results if 'error' not in r]
+    failed = [r for r in results if 'error' in r]
+    write_index(index, args.compile, Path(args.out), {w['dest'] for w in written})
 
     trees = defaultdict(lambda: [0, 0])
     root = Path(args.out)
@@ -452,10 +515,13 @@ def main(argv=None) -> int:
         tree[1] += w['bytes']
     for tree, (count, size) in sorted(trees.items()):
         print(f"  {tree}: {count} files, {size / 1e6:.1f} MB")
+    for f in failed:
+        print(f"FAILED {f['dest']}: {f['error']}")
     verified = sum(w['verified'] for w in written)
     print(f"pass 2: {len(written)} files from {len(by_path)} replays, {verified} verified bit-exactly, "
-          f"{sum(w['bytes'] for w in written) / 1e6:.1f} MB; {time.monotonic() - began:.1f} s in all")
-    return 0
+          f"{sum(w['bytes'] for w in written) / 1e6:.1f} MB, {len(failed)} failed; "
+          f"{time.monotonic() - began:.1f} s in all")
+    return 1 if failed else 0
 
 
 if __name__ == '__main__':

@@ -59,6 +59,8 @@ pub struct Recorder {
     meta: Map<String, Value>,
     /// The policies that made a decision (bit `policy`): META `models` describes the others briefly.
     acted: [u64; 4],
+    /// The frame of the last LOAD ([`Recorder::loaded_this_frame`]).
+    last_load: Option<u32>,
 }
 
 /// One decision as [`Recorder::decision`] takes it: who acted, the head indices taken, the value estimate, how the
@@ -103,6 +105,7 @@ impl Recorder {
             rng_phase: None,
             meta: Map::new(),
             acted: [0; 4],
+            last_load: None,
         }
     }
 
@@ -189,6 +192,10 @@ impl Recorder {
     }
 
     pub fn event(&mut self, event: Event) {
+        assert!(
+            !(event == Event::Reset && self.loaded_this_frame()),
+            "a RESET after a LOAD before the next frame does not replay (RESETs are pressed before loads)"
+        );
         self.events.event(self.frames(), &event);
     }
 
@@ -283,6 +290,7 @@ impl Recorder {
         self.events.event(frame, &Event::Load { state: index, edits: self.edits.count, states: index });
         self.states.state(frame, StateKind::Loaded, context, self.edits.count, blob);
         self.keyframe = frame;
+        self.last_load = Some(frame);
         index
     }
 
@@ -293,6 +301,13 @@ impl Recorder {
         let frame = self.frames();
         self.events.event(frame, &Event::Load { state: index, edits: self.edits.count, states: self.states.count });
         self.keyframe = frame;
+        self.last_load = Some(frame);
+    }
+
+    /// Whether a LOAD was recorded since the last frame.  A player presses a frame's RESETs before its loads, so a
+    /// RESET recorded now would not replay where it was pressed: the caller runs a frame first.
+    pub fn loaded_this_frame(&self) -> bool {
+        self.last_load == Some(self.frames())
     }
 
     /// Frames since the last START, KEYFRAME or CHECKPOINT state (since the start when there is none).
