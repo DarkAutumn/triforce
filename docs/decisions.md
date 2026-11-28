@@ -4113,3 +4113,12 @@ time the game completes standing next to zelda. That's our north star."
   is also judged by the frames it costs or saves.
 - **For scale:** the first golden path of 2.0.0.0 took 153,308 frames from power on (42.5 minutes, name entry
   included).
+
+## 2026-11-27 — `gen1-one/c1-768` is 2.0.1.0; an improvement on it is 2.0.1.1 (the owner)
+
+The owner, Nov 27 (after the fading PPO lost Dungeon 3): "c1-768 is [2.0].1.0. If you find a way to improve it,
+it's [2.0].1.1." The one network after imitation and one correction round (whole route 46 of 300, 15.3%; the
+teachers' team 14.0%; 4 runs inside the north star) is the generation's network. Its 1000-run chains (every segment
+and the whole route, replays kept on local disk: decisions 2026-11-26) are the official 2.0.1.0 measurement. The PPO
+experiments go on from it (round40.md §7); an arm that beats it on the chains without losing elsewhere becomes
+2.0.1.1.
