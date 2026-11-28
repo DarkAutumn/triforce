@@ -952,8 +952,8 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
 - **Replays are `TFREPLAY` files** (`crates/replay`, `triforce/replay.py`) with their own integer `REPLAY_VERSION`,
   independent of the repo version. Every format change bumps it (the owner, Nov 23: replays never need to be
   readable by older readers; version 2 added TARGETS, MASKS and the always-on DECISIONS, version 3 (Nov 25) the RESET
-  event, the console's RESET button `zcore::ZCore::reset` pressed by `emu-zelda.py --reset`); a reader refuses a newer
-  replay by name and
+  event, the console's RESET button `zcore::ZCore::reset` pressed by `emu-zelda.py --reset`, version 4 (Nov 28) the
+  LOAD event and LOADED state, a savestate loaded mid-replay, stored once); a reader refuses a newer replay by name and
   keeps reading every earlier version it can. `corpus/replays/` must keep verifying (`tf replay verify`, a cargo
   test): a deliberate break moves those files to `corpus/replays/retired/`, bumps `REPLAY_VERSION` and records new
   ones. Replacing a corpus file pins new facts: `crates/tools/tests/cli.rs` `the_replay_corpus_still_verifies`
@@ -988,6 +988,10 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   is a race, so which seed wins a segment can differ between two invocations; each saved replay is exact.
   `tf replay clip FILE|DIR... --room 7:1b [--visit N|all] [--playable] --out DIR`: each visit to one room as a
   replay of its own from the machine state there (`--playable`: mode 5 only; docs/architecture.md "Replays").
+  Cutting replays down is `replay::rewrite` (`_native.replay_rewrite`): only some streams (`watch=True`: what
+  watching needs), only some stretches (each from the machine there, `replay_cut_states`; several joined by LOAD
+  events). `scripts/replay_slicer.py` (a queue job) cuts whole runs into room visits by room, boss and family and
+  by speed bucket against each room+visit's marks over the runs, or `--compile`s a run's visits back to back.
   `play-zelda.py` plays replays: of runs it simulates in the background and files into queues
   (`best`, `success`, `stuck`, `died`, `random`, `golden`; `crates/theater`), or of the files of a PATH. Its
   simulations run unpaced on `--parallel` (8) cores until the queues are full: mind that next to a training

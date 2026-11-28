@@ -239,6 +239,42 @@ def test_the_saved_replay_verifies_replays_to_the_same_frame_and_keeps_the_bombs
     assert again.frames == recording.frames + 20
 
 
+def test_a_savestate_loaded_mid_take_replays_and_cuts_bit_for_bit():
+    """``LiveGame.load_savestate`` (replay version 4): the machine becomes the saved state and the take plays on
+    from it, recorded as a LOADED state and a LOAD event; the replay verifies and plays to the same picture, and
+    rewritten (``replay_rewrite``) to a stretch across the load with only what watching needs, it verifies too."""
+    session = session_of(Spec(3, 0x59), 9)
+    play(session, 'D20')
+    saved, at = session.game.state_file(), session.frames
+    play(session, 'L20')
+    loaded = session.frames
+    session.game.load_savestate(saved)
+    with pytest.raises(RuntimeError, match='RESET right after load_savestate'):
+        session.game.reset_console()                 # RESET is pressed before loads: it would not replay here
+    play(session, 'R25')
+    data = session.replay()
+    recording = _native.Replay(data)
+    assert recording.version == _native.REPLAY_VERSION == 4
+    states = recording.states()
+    load, = [e for e in recording.events() if e['type'] == 'load']
+    assert load['frame'] == loaded and states[load['state']]['kind'] == 'loaded'
+    assert states[load['state']]['frame'] == loaded and states[load['state']]['state'] == saved
+    assert _native.replay_verify(data)['frames'] == session.frames == loaded + 25
+    player = _native.ReplayPlayer(data)
+    player.step(recording.frames, True)
+    assert (player.screen() == session.screen()).all()
+
+    cuts = _native.replay_cut_states(data, [at])
+    window = {'from': at, 'to': recording.frames, 'start': cuts[at][0], 'about': {'what': 'across the load'}}
+    cut = _native.replay_rewrite(data, watch=True, windows=[window])
+    clip = _native.Replay(cut)
+    assert clip.frames == recording.frames - at and clip.meta['clip']['what'] == 'across the load'
+    assert [s['kind'] for s in clip.states()] == ['start', 'loaded', 'end']
+    assert _native.replay_verify(cut)['frames'] == clip.frames
+    with pytest.raises(ValueError):
+        _native.replay_rewrite(data, sections=['INPUTS'])
+
+
 def test_endings_of_a_done_take(tmp_path):
     session = session_of(Spec(3, 0x69, entry='cave', hearts=0.5), 1)     # the first touch kills (test_death_...)
     play(session, 'D4R200')

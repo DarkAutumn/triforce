@@ -76,7 +76,7 @@ def test_the_whole_game_from_power_on_hands_over_on_the_first_screen(tmp_path):
     data = path.read_bytes()
     replay = _native.Replay(data)
     assert replay.source == {'kind': 'power-on', 'name': 'LINK', 'delay': 0}
-    assert replay.version == _native.REPLAY_VERSION == 3
+    assert replay.version == _native.REPLAY_VERSION == 4
     assert events(data) == [(game.hand_over.frame, 'control')]
     assert _native.replay_verify(data)['frames'] == game.frames
     assert replay.meta['human']['hand_over'] == {'frame': game.hand_over.frame, 'rng': game.hand_over.rng.hex()}

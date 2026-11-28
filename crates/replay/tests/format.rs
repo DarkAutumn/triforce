@@ -4,10 +4,11 @@
 use std::sync::Arc;
 
 use replay::{
-    Cheat, Context, Edit, Ending, Event, EventRecord, Mask, RecordOptions, Recorder, Replay, ReplayError, RoomRef,
-    Source, StateKind, TargetRef, Targets, Thought, section, stitch, truncate,
+    Cheat, Context, Edit, Ending, Event, EventRecord, Mask, REPLAY_VERSION, RecordOptions, Recorder, Replay,
+    ReplayError, Rewrite, RoomRef, Source, StateKind, TargetRef, Targets, Thought, Window, rewrite, section, stitch,
+    truncate,
 };
-use serde_json::json;
+use serde_json::{Map, json};
 
 const DIST: usize = 11 + 11 * 8 + 11 * 4;
 
@@ -236,7 +237,7 @@ fn changes<T: Framed>(records: impl Iterator<Item = T>) -> Vec<T> {
 #[test]
 fn a_recording_reads_back_every_stream() {
     let replay = recorded(100, &[40, 80], true, true, 9);
-    assert_eq!((replay.version(), replay.frames(), replay.ending_name()), (3, 100, "win"));
+    assert_eq!((replay.version(), replay.frames(), replay.ending_name()), (REPLAY_VERSION, 100, "win"));
     assert_eq!(replay.rom_sha1(), [0xAB; 20]);
     assert_eq!(
         replay.source().unwrap(),
@@ -576,17 +577,17 @@ fn newer_and_damaged_files_are_refused_without_a_panic() {
 
     assert_eq!(Replay::parse(b"TFMOVIE\0 not one of ours, but long enough to hold a header".to_vec()).unwrap_err().to_string(), "not a TFREPLAY file");
     let mut newer = bytes.clone();
-    newer[8] = 4;
+    newer[8] = 5;
     let error = Replay::parse(newer.clone()).unwrap_err();
-    assert_eq!(error, ReplayError::Version { found: 4, recorded_by: Some("1.3.1.0".into()) });
+    assert_eq!(error, ReplayError::Version { found: 5, recorded_by: Some("1.3.1.0".into()) });
     assert_eq!(
         error.to_string(),
-        "replay version 4 (recorded by triforce 1.3.1.0); this reader reads up to 3: update"
+        "replay version 5 (recorded by triforce 1.3.1.0); this reader reads up to 4: update"
     );
     newer.truncate(60);
     assert_eq!(
         Replay::parse(newer).unwrap_err().to_string(),
-        "replay version 4; this reader reads up to 3: update"
+        "replay version 5; this reader reads up to 4: update"
     );
 
     for cut in (0..bytes.len()).step_by(97) {
@@ -627,4 +628,166 @@ fn newer_and_damaged_files_are_refused_without_a_panic() {
     let mut fewer = bytes;
     fewer[count] -= 1;
     assert!(Replay::parse(fewer).unwrap_err().to_string().contains("edit counts are out of order"));
+}
+
+/// A rewrite that keeps everything is the file itself; one for watching leaves out the optional sections, the
+/// keyframes and the judgements, says so in META `stripped`, and keeps the rest as it was.
+#[test]
+fn a_rewrite_keeps_the_streams_asked_for() {
+    let replay = recorded(100, &[40, 80], true, true, 9);
+    assert_eq!(rewrite(&replay, &Rewrite::default()).unwrap(), replay.bytes());
+
+    let watch = Replay::parse(rewrite(&replay, &Rewrite::watching()).unwrap()).unwrap();
+    assert_eq!(watch.sections().map(|(kind, ..)| kind).collect::<Vec<_>>(), section::REQUIRED);
+    assert_eq!((watch.frames(), watch.ending(), watch.source().unwrap()), (100, 1, replay.source().unwrap()));
+    assert_eq!(watch.inputs(), replay.inputs());
+    assert_eq!(all(watch.edits()), all(replay.edits()));
+    assert_eq!(all(watch.cheats()), all(replay.cheats()));
+    let played: Vec<_> =
+        all(replay.events()).into_iter().filter(|e| matches!(e.event, Event::Control | Event::Room { .. })).collect();
+    assert_eq!(all(watch.events()), played);
+    assert_eq!(watch.states().map(|s| (s.frame, s.kind)).collect::<Vec<_>>(), [(100, StateKind::End)]);
+    let meta = watch.meta().unwrap();
+    assert_eq!(meta["stripped"], json!({
+        "sections": ["REWARDS", "DECISIONS", "TARGETS", "MASKS"],
+        "events": ["outcome", "episode", "visit"],
+        "keyframes": true,
+    }));
+    assert_eq!(meta["ending"], replay.meta().unwrap()["ending"]);
+    // Again, keeping more: what was left out stays named.
+    let again = Replay::parse(rewrite(&watch, &Rewrite { keyframes: true, ..Rewrite::default() }).unwrap()).unwrap();
+    assert_eq!(again.meta().unwrap()["stripped"], meta["stripped"]);
+}
+
+/// A window's records move back to its first frame; what holds there (the objective, the mask, the room) is written
+/// again at frame 0; it starts from its START and ends in its END, and says where it came from.
+#[test]
+fn a_window_starts_where_it_was_cut() {
+    let replay = recorded(200, &[40, 80, 120, 160], true, true, 9);
+    let (start, end) = (blob(1), blob(2));
+    let window = Window { from: 50, to: 130, start: &start, end: Some(&end), about: Map::new() };
+    let cut = Replay::parse(rewrite(&replay, &Rewrite { windows: vec![window], ..Rewrite::default() }).unwrap()).unwrap();
+    let inside = |frame: u32| (50..130).contains(&frame);
+    assert_eq!((cut.frames(), cut.ending_name(), cut.source().unwrap()), (80, "unknown", Source::Embedded));
+    assert_eq!(cut.inputs(), replay.inputs()[50..130]);
+    let edits: Vec<_> =
+        all(replay.edits()).into_iter().filter(|e| inside(e.frame)).map(|e| Edit { frame: e.frame - 50, ..e }).collect();
+    assert_eq!(all(cut.edits()), edits);
+    let cheats: Vec<_> =
+        all(replay.cheats()).into_iter().filter(|c| inside(c.frame)).map(|c| Cheat { frame: c.frame - 50, ..c }).collect();
+    assert_eq!(all(cut.cheats()), cheats);
+    let states: Vec<_> = cut.states().map(|s| (s.frame, s.kind, s.blob.to_vec())).collect();
+    assert_eq!(states, [
+        (0, StateKind::Start, start.clone()),
+        (30, StateKind::Keyframe, blob(80)),
+        (70, StateKind::Keyframe, blob(120)),
+        (80, StateKind::End, end.clone()),
+    ]);
+    assert_eq!(all(cut.targets())[0], targets(48));
+    assert_eq!(all(cut.masks())[0], Mask { frame: 0, ..mask(48) });
+    let room = all(replay.events()).into_iter().find(|e| e.frame == 48 && matches!(e.event, Event::Room { .. })).unwrap();
+    assert_eq!(all(cut.events())[0], EventRecord { frame: 0, ..room });
+    let decided = all(replay.decisions().unwrap()).iter().filter(|d| inside(d.frame)).count();
+    assert_eq!(all(cut.decisions().unwrap()).len(), decided);
+    let meta = cut.meta().unwrap();
+    assert_eq!((&meta["kind"], &meta["source"]), (&json!("clip"), &json!({"kind": "checkpoint"})));
+    assert_eq!(meta["clip"], json!({"from": 50, "to": 130, "kind": "chain"}));
+    assert_eq!(meta["ending"]["result"], "clipped");
+    assert!(meta.get("stripped").is_none());
+
+    // Two windows: the second is loaded where the first ends, after that one's END as a keyframe.
+    let (second, last) = (blob(3), blob(4));
+    let windows = vec![
+        Window { from: 10, to: 40, start: &start, end: Some(&end), about: Map::from_iter([("visit".into(), json!(1))]) },
+        Window { from: 100, to: 150, start: &second, end: Some(&last), about: Map::new() },
+    ];
+    let both = Replay::parse(rewrite(&replay, &Rewrite { windows, ..Rewrite::watching() }).unwrap()).unwrap();
+    assert_eq!(both.frames(), 80);
+    assert_eq!(both.inputs(), [&replay.inputs()[10..40], &replay.inputs()[100..150]].concat());
+    let first_edits = all(replay.edits()).iter().filter(|e| (10..40).contains(&e.frame)).count() as u32;
+    let states: Vec<_> = both.states().map(|s| (s.frame, s.kind, s.edits, s.blob.to_vec())).collect();
+    assert_eq!(states, [
+        (0, StateKind::Start, 0, start),
+        (30, StateKind::Keyframe, first_edits, end),
+        (30, StateKind::Loaded, first_edits, second),
+        (80, StateKind::End, both.edits().count() as u32, last),
+    ]);
+    let loads: Vec<_> = all(both.events()).into_iter().filter(|e| matches!(e.event, Event::Load { .. })).collect();
+    assert_eq!(loads, [EventRecord { frame: 30, event: Event::Load { state: 2, edits: first_edits, states: 2 } }]);
+    assert_eq!(both.meta().unwrap()["clip"], json!({"kind": "chain", "parts": [
+        {"visit": 1, "from": 10, "to": 40},
+        {"from": 100, "to": 150},
+    ], "ends": "keyframes"}));
+    let open = blob(1);
+    let no_end = Window { from: 10, to: 40, start: &open, end: None, about: Map::new() };
+    assert!(rewrite(&replay, &Rewrite { windows: vec![no_end], ..Rewrite::default() }).is_err());
+
+    // A keyframe at a window's first frame, before its edits, is the START again: not kept twice.
+    let close = blob(5);
+    let at_keyframe = Window { from: 40, to: 90, start: &open, end: Some(&close), about: Map::new() };
+    let cut = Replay::parse(rewrite(&replay, &Rewrite { windows: vec![at_keyframe], ..Rewrite::default() }).unwrap());
+    let kinds: Vec<_> = cut.unwrap().states().map(|s| (s.frame, s.kind)).collect();
+    assert_eq!(kinds, [(0, StateKind::Start), (40, StateKind::Keyframe), (50, StateKind::End)]);
+}
+
+/// A loaded state is stored once, where it is first loaded; loading it again is an event alone, and a stretch cut
+/// after its first load stores it again where the stretch first loads it.
+#[test]
+fn a_load_stores_its_state_once() {
+    let mut rec = Recorder::new(options(false));
+    rec.set_source(Source::File { name: "0_77c_0".into(), file_hash: 1 });
+    play(&mut rec, 0, 30, &[], false);
+    let first = rec.load_state(context(30), &blob(30));
+    play(&mut rec, 0, 60, &[40], false);
+    rec.reload(first);
+    play(&mut rec, 0, 80, &[], false);
+    let edits_before = |frame: u32| (0..frame).map(|k| u32::from(k % 5 == 0) + u32::from(k % 20 == 0)).sum::<u32>();
+    let replay = Replay::parse(rec.finish(1, ending(1), context(80), &blob(80))).unwrap();
+    let states: Vec<_> = replay.states().map(|s| (s.frame, s.kind, s.edits)).collect();
+    assert_eq!(states, [
+        (30, StateKind::Loaded, edits_before(30)),
+        (40, StateKind::Keyframe, edits_before(40)),
+        (80, StateKind::End, edits_before(80)),
+    ]);
+    let loads = |replay: &Replay| -> Vec<_> {
+        all(replay.events()).into_iter().filter(|e| matches!(e.event, Event::Load { .. })).collect()
+    };
+    assert_eq!(loads(&replay), [
+        EventRecord { frame: 30, event: Event::Load { state: 0, edits: edits_before(30), states: 0 } },
+        EventRecord { frame: 60, event: Event::Load { state: 0, edits: edits_before(60), states: 2 } },
+    ]);
+
+    let (start, end) = (blob(50), blob(80));
+    let window = Window { from: 50, to: 80, start: &start, end: Some(&end), about: Map::new() };
+    let cut = Replay::parse(rewrite(&replay, &Rewrite { windows: vec![window], ..Rewrite::default() }).unwrap()).unwrap();
+    let states: Vec<_> = cut.states().map(|s| (s.frame, s.kind, s.blob.to_vec())).collect();
+    assert_eq!(states, [(0, StateKind::Start, start), (10, StateKind::Loaded, blob(30)), (30, StateKind::End, end)]);
+    let at = edits_before(60) - edits_before(50);
+    assert_eq!(loads(&cut), [EventRecord { frame: 10, event: Event::Load { state: 1, edits: at, states: 1 } }]);
+}
+
+/// LOAD events and LOADED states are version 4's: an older file holding one is refused at parse.
+#[test]
+fn a_load_in_an_older_version_is_refused() {
+    let mut rec = Recorder::new(options(false));
+    rec.set_source(Source::File { name: "0_77c_0".into(), file_hash: 1 });
+    play(&mut rec, 0, 30, &[], false);
+    rec.load_state(context(30), &blob(30));
+    play(&mut rec, 0, 40, &[], false);
+    let mut bytes = rec.finish(1, ending(1), context(40), &blob(40));
+    assert!(Replay::parse(bytes.clone()).is_ok());
+    bytes[8] = 3;
+    let error = Replay::parse(bytes).unwrap_err().to_string();
+    assert!(error.contains("a LOAD event or LOADED state in a version 3 replay"), "{error}");
+}
+
+/// A RESET recorded after a LOAD before the next frame would be pressed before the load on playback: refused.
+#[test]
+#[should_panic(expected = "a RESET after a LOAD")]
+fn a_reset_right_after_a_load_is_refused() {
+    let mut rec = Recorder::new(options(false));
+    play(&mut rec, 0, 10, &[], false);
+    rec.load_state(context(10), &blob(10));
+    assert!(rec.loaded_this_frame());
+    rec.event(Event::Reset);
 }

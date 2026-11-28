@@ -59,6 +59,8 @@ pub struct Recorder {
     meta: Map<String, Value>,
     /// The policies that made a decision (bit `policy`): META `models` describes the others briefly.
     acted: [u64; 4],
+    /// The frame of the last LOAD ([`Recorder::loaded_this_frame`]).
+    last_load: Option<u32>,
 }
 
 /// One decision as [`Recorder::decision`] takes it: who acted, the head indices taken, the value estimate, how the
@@ -103,6 +105,7 @@ impl Recorder {
             rng_phase: None,
             meta: Map::new(),
             acted: [0; 4],
+            last_load: None,
         }
     }
 
@@ -189,6 +192,10 @@ impl Recorder {
     }
 
     pub fn event(&mut self, event: Event) {
+        assert!(
+            !(event == Event::Reset && self.loaded_this_frame()),
+            "a RESET after a LOAD before the next frame does not replay (RESETs are pressed before loads)"
+        );
         self.events.event(self.frames(), &event);
     }
 
@@ -265,13 +272,42 @@ impl Recorder {
         self.meta.insert(key.to_owned(), value);
     }
 
-    /// A machine state (`blob`: `TFZSTATE` bytes) at the current frame.
+    /// A machine state (`blob`: `TFZSTATE` bytes) at the current frame (a loaded one is [`Recorder::load_state`]'s).
     pub fn state(&mut self, kind: StateKind, context: Context, blob: &[u8]) {
+        assert_ne!(kind, StateKind::Loaded, "a loaded state is recorded by load_state");
         let frame = self.frames();
         self.states.state(frame, kind, context, self.edits.count, blob);
         if kind != StateKind::End {
             self.keyframe = frame;
         }
+    }
+
+    /// The machine was just restored to a savestate (`blob`: `TFZSTATE` bytes; `context` what a run continuing from
+    /// it needs), after the frames, edits and states recorded so far: a LOADED state and the LOAD event of it.
+    /// Returns the state's index, for [`Recorder::reload`].
+    pub fn load_state(&mut self, context: Context, blob: &[u8]) -> u32 {
+        let (frame, index) = (self.frames(), self.states.count);
+        self.events.event(frame, &Event::Load { state: index, edits: self.edits.count, states: index });
+        self.states.state(frame, StateKind::Loaded, context, self.edits.count, blob);
+        self.keyframe = frame;
+        self.last_load = Some(frame);
+        index
+    }
+
+    /// The machine was just restored to state `index` of this recording again (a LOADED state, a keyframe or the
+    /// START; the first state is index 0): a LOAD event only, the state stored once.
+    pub fn reload(&mut self, index: u32) {
+        assert!(index < self.states.count, "state {index} is not recorded ({} are)", self.states.count);
+        let frame = self.frames();
+        self.events.event(frame, &Event::Load { state: index, edits: self.edits.count, states: self.states.count });
+        self.keyframe = frame;
+        self.last_load = Some(frame);
+    }
+
+    /// Whether a LOAD was recorded since the last frame.  A player presses a frame's RESETs before its loads, so a
+    /// RESET recorded now would not replay where it was pressed: the caller runs a frame first.
+    pub fn loaded_this_frame(&self) -> bool {
+        self.last_load == Some(self.frames())
     }
 
     /// Frames since the last START, KEYFRAME or CHECKPOINT state (since the start when there is none).

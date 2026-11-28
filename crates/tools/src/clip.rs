@@ -1,14 +1,14 @@
-//! `tf replay clip`: each visit of recorded runs to one room, as a replay of its own (`tfreplay::clip`) that
-//! starts from the machine state at the visit's first frame.
+//! `tf replay clip`: each visit of recorded runs to one room, as a replay of its own (`tfreplay::rewrite` with one
+//! window) that starts from the machine state at the visit's first frame.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use ::zcore::{Rom, state_file};
+use ::zcore::Rom;
 use anyhow::{Context, Result, bail, ensure};
 use serde_json::{Map, Value, json};
-use tfreplay::{ENDING_DEATH, ENDING_OTHER, Ending, Player, Replay};
+use tfreplay::{ENDING_DEATH, ENDING_OTHER, Ending, Player, Replay, Rewrite, Window};
 use zelda::executor::MODE_GAMEPLAY;
 use zelda::game::{MODE_CAVE, MODE_CELLAR, MODE_DYING, MODE_GAME_OVER};
 use zelda::vars::Var;
@@ -188,31 +188,6 @@ fn scan(rom: &Arc<Rom>, replay: &Replay, resolve: Resolve<'_>) -> Result<Vec<Loo
     }
 }
 
-/// The `TFZSTATE` of the machine at each `(frame, start)` asked: a start after the frame's RESET, an end before it.
-fn states_at(
-    rom: &Arc<Rom>,
-    replay: &Replay,
-    resolve: Resolve<'_>,
-    wanted: &[(u32, bool)],
-) -> Result<BTreeMap<(u32, bool), Vec<u8>>> {
-    let mut out = BTreeMap::new();
-    let Some(&(last, _)) = wanted.iter().max() else { return Ok(out) };
-    let mut player = Player::open(rom.clone(), replay.clone(), resolve)?;
-    let take = |player: &Player, start: bool, out: &mut BTreeMap<_, _>| {
-        if wanted.contains(&(player.frame(), start)) {
-            out.insert((player.frame(), start), state_file::encode(rom, &player.nes().snapshot(), 0));
-        }
-    };
-    loop {
-        take(&player, false, &mut out);
-        player.press_resets();
-        take(&player, true, &mut out);
-        if player.frame() >= last || !player.step(false)? {
-            return Ok(out);
-        }
-    }
-}
-
 /// The ending the source replay records (META `ending` and the header's kind).
 fn source_ending(replay: &Replay, meta: &Map<String, Value>) -> Ending {
     let text = |key: &str| {
@@ -257,8 +232,8 @@ pub fn clip_file(rom: &Arc<Rom>, file: &Path, options: &Options, resolve: Resolv
             }
         }
     }
-    let wanted: Vec<(u32, bool)> = cuts.iter().flat_map(|&(_, (from, to))| [(from, true), (to, false)]).collect();
-    let states = states_at(rom, &replay, resolve, &wanted)?;
+    let wanted: Vec<u32> = cuts.iter().flat_map(|&(_, (from, to))| [from, to]).collect();
+    let states = tfreplay::cut_states(rom.clone(), replay.clone(), resolve, &wanted)?;
 
     let name = file.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     let stem = file.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
@@ -288,9 +263,9 @@ pub fn clip_file(rom: &Arc<Rom>, file: &Path, options: &Options, resolve: Resolv
         about.insert("visit_frames".into(), json!([visit.first, visit.last + 1]));
         about.insert("playable".into(), json!(options.playable));
         about.insert("ending".into(), json!(how));
-        let start = &states[&(from, true)];
-        let end = &states[&(to, false)];
-        let bytes = tfreplay::clip(&replay, from, to, start, end, &ending, about)?;
+        let window = Window { from, to, start: &states[&from].0, end: Some(&states[&to].1), about };
+        let spec = Rewrite { windows: vec![window], ending: Some(ending), ..Rewrite::default() };
+        let bytes = tfreplay::rewrite(&replay, &spec)?;
         let path = options.out.join(format!("{stem}_{}_v{}.tfreplay", room.tag(), visit.number));
         std::fs::write(&path, bytes).with_context(|| format!("writing {}", path.display()))?;
         let line = format!(

@@ -1,11 +1,14 @@
-//! Playing a replay on zcore, and checking that it still lands on the machine states it recorded.
+//! Playing a replay on zcore, checking that it still lands on the machine states it recorded, and the machine
+//! states a [`crate::rewrite`] cuts between.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use zcore::state_file::{self, StateFormatError};
 use zcore::tracks::{Mix, Tracks};
 use zcore::{MachineState, Rom, ZCore};
 
+use crate::edit::{Rewrite, Window, rewrite};
 use crate::format::{Edit, Event, ReplayError, Source, StateKind, file_hash, format_error};
 use crate::reader::Replay;
 
@@ -19,9 +22,26 @@ struct Entry {
     kind: StateKind,
 }
 
+/// A LOAD event: at its frame, once `edits` edits are applied and `states` states processed, the machine becomes
+/// STATES record `state`.
+#[derive(Debug, Clone, Copy)]
+struct Load {
+    frame: u32,
+    edits: u32,
+    states: u32,
+    state: u32,
+}
+
+impl Load {
+    fn key(&self) -> (u32, u32, u32) {
+        (self.frame, self.edits, self.states)
+    }
+}
+
 /// A replay being played.  Before input frame `k` runs, a RESET event tagged `k` presses the console's RESET
 /// button (`ZCore::reset`), then the EDITS records tagged `k` are applied; a state recorded at frame `k` is the
-/// machine after that frame's RESET.
+/// machine after that frame's RESET.  A LOAD event restores its state where it was recorded among the frame's edits
+/// and the states recorded there (before the states it precedes, after the others).
 pub struct Player {
     nes: ZCore,
     replay: Replay,
@@ -30,12 +50,16 @@ pub struct Player {
     edits: Vec<Edit>,
     /// The frames of the RESET events, in order.
     resets: Vec<u32>,
+    /// The LOAD events, in order.
+    loads: Vec<Load>,
     states: Vec<Entry>,
     frame: u32,
     edit: usize,
     /// The next RESET to press.
     reset: usize,
-    /// The next STATES entry [`verify`] compares.
+    /// The next LOAD to apply.
+    load: usize,
+    /// The next STATES entry: [`verify`] compares it when the machine is at its point.
     state: usize,
     /// The controller byte of the last frame run.
     buttons: u8,
@@ -100,11 +124,14 @@ impl Player {
             }
             edits.push(edit);
         }
-        let mut resets = Vec::new();
+        let (mut resets, mut loads) = (Vec::new(), Vec::new());
         for record in replay.events() {
             let record = record?;
-            if record.event == Event::Reset {
-                resets.push(record.frame);
+            match record.event {
+                Event::Reset => resets.push(record.frame),
+                // Parse checked each LOAD's place among the edits and states.
+                Event::Load { state, edits, states } => loads.push(Load { frame: record.frame, edits, states, state }),
+                _ => {}
             }
         }
         let states = replay
@@ -117,11 +144,13 @@ impl Player {
             inputs: replay.inputs(),
             edits,
             resets,
+            loads,
             states,
             replay,
             frame: 0,
             edit: 0,
             reset: 0,
+            load: 0,
             state: 0,
             buttons: 0,
             sound: None,
@@ -211,33 +240,38 @@ impl Player {
         }
     }
 
-    /// Compares the machine with every STATES entry recorded at this exact point.
-    fn compare_states(&mut self) -> Result<(), ReplayError> {
-        while let Some(entry) = self.states.get(self.state).copied() {
-            if entry.frame != self.frame || entry.edits as usize != self.edit {
-                break;
-            }
-            let recorded = self.replay.states().nth(self.state).expect("indexed at open");
-            let file = state_file::decode(self.nes.rom(), recorded.blob)
-                .map_err(|e| state_error(&format!("the {} state at frame {}", entry.kind.name(), entry.frame), e))?;
-            if !state_file::machines_equal(&file.machine, &self.nes.snapshot()) {
-                return Err(ReplayError::Diverged {
-                    frame: self.frame,
-                    what: format!("machine state differs from the recorded {}", match entry.kind {
-                        StateKind::End => "end state",
-                        StateKind::Start => "start state",
-                        _ => "keyframe",
-                    }),
-                });
-            }
-            self.state += 1;
+    /// Compares the machine with the STATES entry `entry` (a keyframe, checkpoint or the END).
+    fn compare(&self, index: usize, entry: Entry) -> Result<(), ReplayError> {
+        let recorded = self.replay.states().nth(index).expect("indexed at open");
+        let file = state_file::decode(self.nes.rom(), recorded.blob)
+            .map_err(|e| state_error(&format!("the {} state at frame {}", entry.kind.name(), entry.frame), e))?;
+        if !state_file::machines_equal(&file.machine, &self.nes.snapshot()) {
+            return Err(ReplayError::Diverged {
+                frame: self.frame,
+                what: format!("machine state differs from the recorded {}", match entry.kind {
+                    StateKind::End => "end state",
+                    _ => "keyframe",
+                }),
+            });
+        }
+        Ok(())
+    }
+
+    /// Restores the machine to STATES entry `index` (a LOAD).  Sound picks up from the loaded machine.
+    fn load_state(&mut self, index: u32) -> Result<(), ReplayError> {
+        let recorded = self.replay.states().nth(index as usize).expect("checked at parse");
+        let file = state_file::decode(self.nes.rom(), recorded.blob)
+            .map_err(|e| state_error(&format!("the {} state loaded at frame {}", recorded.kind.name(), self.frame), e))?;
+        self.nes.restore(&file.machine);
+        if let Some(tracks) = &mut self.sound {
+            tracks.resume(&self.nes);
         }
         Ok(())
     }
 
     /// Presses RESET where a RESET event is tagged with the current frame (once: the next [`Player::step`] does
     /// not press it again).  The machine is then the one a state recorded at this frame holds, before the
-    /// frame's edits: what [`crate::clip`] starts from.
+    /// frame's loads and edits: what a [`crate::Window`] starting at this frame starts from.
     pub fn press_resets(&mut self) {
         while self.resets.get(self.reset) == Some(&self.frame) {
             self.nes.reset();
@@ -245,13 +279,24 @@ impl Player {
         }
     }
 
-    /// Presses RESET where a RESET event is tagged with the current frame, then applies the frame's edits, each
+    /// Presses RESET where a RESET event is tagged with the current frame, then goes through the frame's loads,
+    /// states (compared when `compare`; START and LOADED never are) and edits in their recorded order, each edit
     /// after checking the byte it replaces.
     fn apply_edits(&mut self, compare: bool) -> Result<(), ReplayError> {
         self.press_resets();
         loop {
-            if compare {
-                self.compare_states()?;
+            let point = (self.frame, self.edit as u32);
+            if let Some(load) = self.loads.get(self.load).copied().filter(|l| l.key() == (point.0, point.1, self.state as u32)) {
+                self.load_state(load.state)?;
+                self.load += 1;
+                continue;
+            }
+            if let Some(entry) = self.states.get(self.state).copied().filter(|s| (s.frame, s.edits) == point) {
+                if compare && !matches!(entry.kind, StateKind::Start | StateKind::Loaded) {
+                    self.compare(self.state, entry)?;
+                }
+                self.state += 1;
+                continue;
             }
             let Some(edit) = self.edits.get(self.edit).copied().filter(|e| e.frame == self.frame) else {
                 return Ok(());
@@ -301,16 +346,30 @@ impl Player {
         self.advance(render, false, watch)
     }
 
-    /// Moves to `frame` (that many inputs run, its own edits not yet applied): from the nearest recorded
+    /// Whether STATES entry `index` is the machine of `frame` inputs run, before that frame's loads and edits (a
+    /// state at that frame is after its RESET): one of an earlier frame, or a keyframe or checkpoint before every
+    /// edit and load of the frame.
+    fn lands(&self, index: usize, frame: u32) -> bool {
+        let s = self.states[index];
+        match s.kind {
+            StateKind::Start | StateKind::End => false,
+            _ if s.frame < frame => true,
+            StateKind::Keyframe | StateKind::Checkpoint if s.frame == frame => {
+                let before = self.edits.partition_point(|e| e.frame < frame) as u32;
+                let loaded = self.loads.iter().any(|l| l.frame == frame && l.key() <= (frame, s.edits, index as u32));
+                s.edits == before && !loaded
+            }
+            _ => false,
+        }
+    }
+
+    /// Moves to `frame` (that many inputs run, its own loads and edits not yet applied): from the nearest recorded
     /// state at or before it when that is closer than playing on from here.
     pub fn seek(&mut self, frame: u32) -> Result<(), ReplayError> {
         if frame > self.frames() {
             return format_error(format!("frame {frame} is past the replay's {} frames", self.frames()));
         }
-        let nearest = self
-            .states
-            .iter()
-            .rposition(|s| s.frame <= frame && s.kind != StateKind::End);
+        let nearest = (0..self.states.len()).rev().find(|&i| self.lands(i, frame));
         let ahead = nearest.is_some_and(|i| self.states[i].frame > self.frame);
         if frame < self.frame || ahead {
             match nearest {
@@ -322,12 +381,18 @@ impl Player {
                     self.frame = recorded.frame;
                     self.edit = recorded.edits as usize;
                     self.reset = self.resets.partition_point(|&r| r <= recorded.frame);
+                    // The loads before the state was recorded have happened; so has the state itself.
+                    let key = (recorded.frame, recorded.edits, index as u32);
+                    self.load = self.loads.partition_point(|l| l.key() <= key);
+                    self.state = index + 1;
                 }
                 None => {
                     self.nes.restore(&self.origin);
                     self.frame = 0;
                     self.edit = 0;
                     self.reset = 0;
+                    self.load = 0;
+                    self.state = 0;
                 }
             }
         }
@@ -352,8 +417,8 @@ impl Player {
     }
 }
 
-/// Plays the whole replay, comparing the machine with every recorded state on the way (START, keyframes,
-/// checkpoints) and with the END after the last frame and edit.
+/// Plays the whole replay, comparing the machine with every recorded keyframe and checkpoint on the way and with
+/// the END after the last frame and edit, and loading every LOAD's state where it was recorded.
 pub fn verify(rom: Arc<Rom>, replay: Replay, resolve: Resolve<'_>) -> Result<Report, ReplayError> {
     let mut player = Player::open(rom, replay, resolve)?;
     while player.advance(false, true, &mut |_, _| {})? {}
@@ -368,9 +433,74 @@ pub fn verify(rom: Arc<Rom>, replay: Replay, resolve: Resolve<'_>) -> Result<Rep
             ),
         });
     }
+    if let Some(missed) = player.loads.get(player.load) {
+        return Err(ReplayError::Diverged {
+            frame: missed.frame,
+            what: format!("the LOAD of state {} (after {} edits) is at no point of the replay", missed.state, missed.edits),
+        });
+    }
     Ok(Report {
         frames: player.frame,
         edits: player.edit as u32,
         states: player.states.len() as u32,
     })
+}
+
+/// The machine at each of `frames` (at most the replay's frames), in one pass over the replay: per frame `k`
+/// `(start, end)`, `TFZSTATE`s of the machine before input `k`, `start` after that frame's RESET (a [`Window`] from
+/// `k` starts there), `end` before it (a window to `k` ends there).
+pub fn cut_states(
+    rom: Arc<Rom>,
+    replay: Replay,
+    resolve: Resolve<'_>,
+    frames: &[u32],
+) -> Result<BTreeMap<u32, (Vec<u8>, Vec<u8>)>, ReplayError> {
+    let mut wanted = frames.to_vec();
+    wanted.sort_unstable();
+    wanted.dedup();
+    if let Some(&last) = wanted.last().filter(|&&last| last > replay.frames()) {
+        return format_error(format!("frame {last} is past the replay's {} frames", replay.frames()));
+    }
+    let mut player = Player::open(rom.clone(), replay, resolve)?;
+    let mut out = BTreeMap::new();
+    for frame in wanted {
+        while player.frame() < frame {
+            player.step(false)?;
+        }
+        let end = state_file::encode(&rom, &player.nes().snapshot(), 0);
+        let pressed = player.reset;
+        player.press_resets();
+        let start = if player.reset == pressed { end.clone() } else { state_file::encode(&rom, &player.nes().snapshot(), 0) };
+        out.insert(frame, (start, end));
+    }
+    Ok(out)
+}
+
+/// [`rewrite`], finding the END of each window that has none by playing the output (the emulator alone): a draft
+/// whose every window ends where it starts, played to where each window ends.
+pub fn rewrite_played(rom: Arc<Rom>, replay: &Replay, spec: &Rewrite<'_>) -> Result<Vec<u8>, ReplayError> {
+    if spec.windows.iter().all(|w| w.end.is_some()) {
+        return rewrite(replay, spec);
+    }
+    let draft = Rewrite {
+        windows: spec.windows.iter().map(|w| Window { end: Some(w.start), ..w.clone() }).collect(),
+        ..spec.clone()
+    };
+    let mut player = Player::open(rom.clone(), Replay::parse(rewrite(replay, &draft)?)?, &|name| {
+        Err(std::io::Error::new(std::io::ErrorKind::NotFound, name.to_owned()))
+    })?;
+    let mut ends = Vec::with_capacity(spec.windows.len());
+    let mut at = 0;
+    for w in &spec.windows {
+        at += w.to - w.from;
+        while player.frame() < at {
+            player.step(false)?;
+        }
+        ends.push(state_file::encode(&rom, &player.nes().snapshot(), 0));
+    }
+    let full = Rewrite {
+        windows: spec.windows.iter().zip(&ends).map(|(w, end)| Window { end: Some(w.end.unwrap_or(end)), ..w.clone() }).collect(),
+        ..spec.clone()
+    };
+    rewrite(replay, &full)
 }

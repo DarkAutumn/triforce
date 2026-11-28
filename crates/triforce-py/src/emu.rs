@@ -249,11 +249,35 @@ impl PyLiveGame {
             return Err(PyRuntimeError::new_err("call load() or power_on() first"));
         }
         let nes = g.session.nes_mut();
+        if nes.recorder().is_some_and(|rec| rec.loaded_this_frame()) {
+            return Err(PyRuntimeError::new_err(
+                "a RESET right after load_savestate does not replay (RESET is pressed before loads): step a frame first",
+            ));
+        }
         nes.inner_mut().reset();
         if let Some(rec) = nes.recorder_mut() {
             rec.event(Event::Reset);
         }
         g.session.apply_ram(&[]);
+        g.view()
+    }
+
+    /// Loads a savestate (TFZSTATE bytes, as `state_file()` gives them) before the next frame: the machine becomes
+    /// it and the run plays on from there, recorded as a LOADED state and a LOAD event (replay version 4), so the
+    /// replay plays the same.
+    fn load_savestate(&self, state: &[u8]) -> PyResult<PyGameState> {
+        let mut g = self.inner.lock();
+        if !g.loaded {
+            return Err(PyRuntimeError::new_err("call load() or power_on() first"));
+        }
+        let machine = g.store.decode(state).map_err(|e| PyValueError::new_err(e.to_string()))?.machine;
+        let nes = g.session.nes_mut();
+        nes.inner_mut().restore(&machine.inner);
+        if let Some(rec) = nes.recorder_mut() {
+            rec.load_state(Context::default(), state);
+        }
+        g.session.apply_ram(&[]);
+        g.restart_sound();
         g.view()
     }
 
