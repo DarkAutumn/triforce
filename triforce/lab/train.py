@@ -9,9 +9,10 @@ link ``<models>/<family>/<run-id>`` to it, so ``promote``, ``evaluate``, ``eval-
 ``triforce list`` treat it as each family's run (``runner.Policies`` loads it once).
 
 Modes: ``ppo`` (default; the teacher term KL(teacher ‖ student) beside PPO with ``--teacher-coeff``, held
-``--teacher-hold`` iterations, then fading linearly to 0 over ``--teacher-fade``) and ``imitate`` (no PPO: the
-student minimises the KL alone; ``--actor student`` collects on the student's own states, DAgger-style, the
-distribution it will play; ``--actor teacher`` on the teachers', a fixed distribution for capacity tests).
+``--teacher-hold`` iterations, then fading linearly over ``--teacher-fade`` to ``--teacher-floor``, 0 by default)
+and ``imitate`` (no PPO: the student minimises the KL alone; ``--actor student`` collects on the student's own
+states, DAgger-style, the distribution it will play; ``--actor teacher`` on the teachers', a fixed distribution for
+capacity tests).
 Metrics are logged per family (``family/<key>/...``) beside the merged ones.  The job's log folder (``--logs-dir``)
 holds a plan of kind ``lab-train`` and a stream a family (``RunLog``), so the training GUI draws the run: one group,
 a row a family.
@@ -116,7 +117,10 @@ def parse_args(argv=None):
     parser.add_argument('--teacher-value-coeff', type=float, default=0.0, help="½(V - V_teacher)² weight")
     parser.add_argument('--teacher-hold', type=int, default=0, help="iterations at the full weight")
     parser.add_argument('--teacher-fade', type=int, default=0,
-                        help="iterations over which the weight then falls to 0 (0: stays)")
+                        help="iterations over which the weight then falls to --teacher-floor (0: stays)")
+    parser.add_argument('--teacher-floor', type=float, default=0.0,
+                        help="the weight the fade stops at and keeps (Stage52: a teacher faded to 0 let the student "
+                             "drift off the teachers' play; 0: faded out)")
     parser.add_argument('--teacher', nargs='*', default=[], metavar='KEY=CKPT', help="teacher overrides")
     parser.add_argument('--parallel', type=int, default=8)
     parser.add_argument('--iterations', type=int, default=100)
@@ -181,6 +185,9 @@ def parse_args(argv=None):
     parser.add_argument('--logs-dir', default=None,
                         help="the root of the run's log folder (default logs/, $TRIFORCE_LOGS_DIR)")
     args = parser.parse_args(argv)
+    if not 0.0 <= args.teacher_floor <= max(args.teacher_coeff, 0.0):
+        parser.error(f"--teacher-floor {args.teacher_floor}: the weight the fade stops at lies in [0, --teacher-coeff "
+                     f"{args.teacher_coeff}]")
     for flag, value in (('--name', args.name), ('--run-id', args.run_id)):
         if value and '+' in value:
             parser.error(f"{flag}: '+' separates the slots of a team spec, so no --team could name this run; use '-' "
@@ -189,10 +196,12 @@ def parse_args(argv=None):
 
 
 def teacher_coeff(args, iteration: int) -> float:
-    """The teacher term's weight at (1-based) ``iteration``: held, then fading linearly to 0."""
+    """The teacher term's weight at (1-based) ``iteration``: held, then fading linearly to ``--teacher-floor`` (0: off)
+    and staying there."""
     if args.teacher_fade <= 0 or iteration <= args.teacher_hold:
         return args.teacher_coeff
-    return args.teacher_coeff * max(0.0, 1.0 - (iteration - args.teacher_hold) / args.teacher_fade)
+    faded = args.teacher_coeff * max(0.0, 1.0 - (iteration - args.teacher_hold) / args.teacher_fade)
+    return max(args.teacher_floor, faded)
 
 
 def initial_network(args, models):
@@ -526,6 +535,8 @@ def training_settings(args, cfg: PPOConfig, tried, steps_per_env: int, recurrent
     if args.teacher_coeff > 0 or args.mode == 'imitate':
         teacher = {'coeff': args.teacher_coeff, 'hold': args.teacher_hold, 'fade': args.teacher_fade,
                    'value_coeff': args.teacher_value_coeff, 'weights': teacher_weights}
+        if args.teacher_floor > 0:      # only when set: a run without one keeps the recipe it always had (--resume)
+            teacher['floor'] = args.teacher_floor
     sampling = {'kind': args.sampling}
     if args.sampling == 'need':
         sampling.update(target=args.need_target, floor=args.need_floor, window=args.need_window,
