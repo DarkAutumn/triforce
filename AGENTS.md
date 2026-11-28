@@ -8,19 +8,17 @@ there).
 
 ## Where things stand (Nov 27)
 
-- **Now: the fresh generation, 2.0.1.0, is in its stage 1 → stage 2 handover.** Its documents are on `r40-int`
-  (read them in `../triforce-r40-int`): `docs/experiments/round40.md` "Stage 1 restarted" onward,
-  `docs/model-versions.md` "The current workflow", `docs/decisions.md` (Nov 24-26, the version numbers). Stage 1's
-  teachers, one network per group of families (`triforce/groups.yaml`), are trained in the shared
-  store as `gen1-<group>/<run>`; each is judged by a quick read (100 runs from each dungeon's entrance against the
-  previous team on the same seeds) and its checkpoint chosen by `triforce judge checkpoints` and then **confirmed on
-  fresh seeds** (Nov 27: two of three picks made on seeds 0-99 reversed on seeds 100-299). Chosen for stage 2 so far:
-  darknut `gen1-darknut/s1r` (last), goriya `gen1-goriya/s1` (last), walkers `gen1-walkers/s1r-c2-it000440`,
-  overworld `gen1-overworld/s1r2-c2-it000350`, rooms `gen1-rooms/s1r3-c1`; the Wizzrobes train as their own teacher
-  (`gen1-wizzrobe/s1c1368` continued, `gen1-wizzrobe/s1` from scratch: the better on D6/D9 is kept); the bosses and
-  `others` are still to be judged. Then stage 2 (record, imitate, correct, PPO a dungeon at a time with the teacher
-  fading), the 1000-run chains (= 2.0.1.0, replays kept on local disk), landing. The owner's check-in file is
-  `target/owner-review/CHECKIN.md` in the main checkout (only what's new since he last read it; older ones beside it).
+- **Now: 2.0.1.0 is landing (Nov 27): the fresh generation's one network, `gen1-one/c1-768`**, a 768-wide `hitnet`
+  copied from the fourteen stage-1 group teachers (trained from scratch, `triforce/groups.yaml`) and corrected once on
+  its own states (decisions 2026-11-27; `docs/experiments/round40.md` "Summary" and "Stage 2";
+  `docs/model-versions.md` "2.0.1.0"). Its 1000-run chains against 2.0.0.15, paired: every dungeon better or level
+  from both starts (from the previous triforce D3 43.2 → 73.5%, D4 45.8 → 79.9%, D6 18.2 → 73.6%, D9 22.6 → 41.6%);
+  **the whole route 133 of 1000 (13.3%; 2.0.0.15: 3), 18 inside the north star of 37:00, the best without a
+  cheated item 36:49.578.**
+  **Next: 2.0.1.1**, PPO from `c1-768` as an experiment, Dungeon 3 first (the teacher held, a floor, the student's
+  own arrivals; one change at a time; round40.md §7): an arm that beats 2.0.1.0 on the chains without losing
+  elsewhere becomes 2.0.1.1. The owner's check-in file is `target/owner-review/CHECKIN.md` in the main checkout (only
+  what's new since he last read it; older ones beside it).
 - **Branches and worktrees for the generation.** `main` holds the 2.0.0.16 team and the tools; **all generation work
   is on `r40-int`** (worktree `../triforce-r40-int`, the integration branch; `r40-gen` points at its last green
   commit). A piece of work is a branch from r40-int in its own worktree: `triforce job setup NAME --from r40-int

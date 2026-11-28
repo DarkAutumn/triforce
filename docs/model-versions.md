@@ -23,9 +23,9 @@ branches, the backup's index (`/backup/triforce/INDEX.md`) and the old developme
   2.0.0.16 was a fresh generation; none was renumbered.
 - **`REV`**: every other change to what plays or how it trains (rewards, env or training code, networks continued or
   replaced, route data, a widened observation).
-- **The current numbers** (decisions 2026-11-26): the generation training now is stamped **2.0.1.0** when its finished
-  network is measured on the 1000-run chains; changes after that are 2.0.1.1, 2.0.1.2, ...; the next fresh retrain is
-  2.0.2.0.
+- **The current numbers** (decisions 2026-11-26 and 2026-11-27): the first fresh generation's one network,
+  `gen1-one/c1-768`, is **2.0.1.0**, stamped at its 1000-run chains; an improvement on it is 2.0.1.1, 2.0.1.2, ...;
+  the next fresh retrain is 2.0.2.0.
 
 **How to read an entry.** Each version (small REV bumps grouped, every number listed) has a short paragraph saying
 what the model was, a list of what it changed against the versions before it, by theme, and **Results**. A "segment"
@@ -549,30 +549,50 @@ previous triforce | from the entrance): Dungeon 3 43.2 | 45.7%, 4 45.8 | 68.4%, 
 66.1%, 7 42.5 | 77.3%, 6 18.2 | 35.7%, 8 88.9 | 88.6%, 9 22.6 | 51.2%; **the full route 3 of 1000 (0.3%)**. 250 test: 1 of
 250 won on 2.0.0.15 and 2.0.0.16, every run identical between the two.
 
-### 2.0.1.0 (Nov 23 to now: round 40's first commit to Nov 27; in progress, the fresh generation)
+### 2.0.1.0 (Nov 23-27: round 40's first commit to the owner's decision `80eda5ca`; landing Nov 27; round 40)
 
-The first fresh generation and the first version whose product is one network (decisions 2026-11-23, "2.0.1.0's team
-is the one network"): every network trained from scratch by today's pipeline, teachers by group first, then one
-student from them. Not stamped yet: the `VERSION` file says 2.0.0.16 until the finished network's 1000-run check
-(next section).
+The first fresh generation and the first version that is one network: `gen1-one/c1-768`, a 768-wide `hitnet` that
+plays every room of `d3first` from the game start to the ending. It was copied from fourteen group teachers trained
+from scratch in stage 1 (decisions 2026-11-23, "2.0.1.0's team is the one network"), then corrected once on its own
+states; no weight came from 2.0.0.x. The owner named it 2.0.1.0 on Nov 27 after the PPO stage lost Dungeon 3 and was
+set aside as an experiment (decisions 2026-11-27; `round40.md` "Stage 2", §6-§7).
 
-- New observations (behind switches in the route's task files): schema 8's `entity_threat` (range-aware contact, the
-  shooter's threat lane, the bomb carrier), schema 9's `chase` and `entity_chase` (where the monsters are sent, what a
-  grid-point walker may do next), schema 10's `entity_shooter` (when each shooter throws next) for the Goriya,
-  Wizzrobe and overworld teachers.
-- New network: `hitnet`, Link's token over the monster tokens with a hit head trained in the same pass and fed to the
-  policy, 768 wide everywhere (the owner, Nov 24).
+- One network in every slot instead of 55 specialists with hit heads; teachers by group (overworld, walkers, others,
+  rooms) and on their own where a group could not learn a family (darknut, goriya, wizzrobe, each of the seven
+  bosses), all from scratch.
+- New network: `hitnet` (Link's token over the monster tokens), its hit head trained in the same pass and fed to the
+  policy, 768 wide (4,960,772 parameters), chosen over 256 by held-out KL, the rooms tier and fresh-seed chains.
+- New training method for the product: the teachers' play recorded with hit labels (2,088,960 rows from 102
+  sources, the every-room harvest included), imitated in one pass, then one correction round (the student plays, the
+  teachers label: 1,392,640 rows more). PPO with a fading teacher was tried on Dungeon 3 and not kept.
+- New observations, on in every task: schema 8's `entity_threat` (range-aware contact, the shooter's threat lane, the
+  bomb carrier), schema 9's `chase` and `entity_chase` (where the monsters are sent, what a grid-point walker may do
+  next), schema 10's `entity_shooter` (when each shooter throws next).
 - The owner's replay feedback built in: Dungeon 3 by his plan (two rooms crossed, one Darknut fought for its bombs,
   3:0x69 crossed by a line, the reserve of 5 in 3:0x59), Darknuts fought his way (`docs/owner/darknuts.md`), the
   executor's closing no-button frame removed, the docks played with no help from the engine, a cheated wall bomb only
-  when the wall is the objective, no weapon bomb in a room fought for its bombs, real spawn layouts and drop counters
-  only, Link's hearts as the game holds them.
+  when the wall is the objective, no weapon bomb in a room fought for its bombs, no MOVE in a Like-Like's hold, real
+  spawn layouts and drop counters only, Link's hearts as the game holds them.
+- Decisions that did nothing removed: the mask offers no MOVE or CLIP the game refuses, and frames where Link cannot
+  act belong to the executor (`round40.md` "Decisions that did nothing, fixed").
 - Rewards: the aimless-walking penalty, the Bubble touch, the exposed-attack penalty (Goriyas and the walkers), a
   stronger block reward for the Goriyas; rupees per pickup and the beam terms trained from the start.
 - Training data: start states walked from power on (one per door), curricula re-explored in the route's layout,
   harvested states audited; clips on in every task (the owner, Nov 24).
 
-**Results:** none yet for the student. The teachers' first reads are in the next section.
+**Results** (the official 1000-run chains, seeds 0-999, every run recorded, paired by seed with 2.0.0.15's
+`r40-2015-1k`; `~/triforce-runs/2.0.1.0-1k/`), each dungeon from the previous triforce | from its entrance, 2.0.0.15
+in brackets: Dungeon 3 73.5 | 75.3% (43.2 | 45.7%), 4 79.9 | 88.9% (45.8 | 68.4%), 1 99.8 | 99.8% (98.5 | 98.9%), 2
+99.6 | 99.9% (93.8 | 99.8%), 5 77.9 | 85.1% (57.8 | 66.1%), 7 83.2 | 83.8% (42.5 | 77.3%), 6 73.6 | 88.9% (18.2 |
+35.7%), 8 99.2 | 99.6% (88.9 | 88.6%), 9 to the ending 41.6 | 53.0% (22.6 | 51.2%). Every scope is better or level
+(+0.1 to +55.4 points; the largest Dungeon 6 from Dungeon 7's triforce, +55.4 ± 1.9), and hearts lost a run fall
+everywhere but Dungeon 9 from the leg (+1.46). **The whole route: 133 of 1000 runs end the game (13.3%;** 2.0.0.15: 3
+of 1000), median 135,961 frames, 2.88 cheated items a run; 18 runs finish inside the north star (37:00, 133,419
+frames from control to Zelda; decisions 2026-11-27), and 7 wins cheat nothing. The best of those, seed 817, ends
+the game in **36:49.578 with no cheated bomb, key or rupee** (`~/triforce-review/watch/2.0.1.0-zero-cheat-sub37/`).
+Where runs still end most: Manhandla 3:0x4d (187 of 1000 on the whole route), Gleeok 4:0x13 (108), Digdogger 5:0x24
+(61), and Dungeon 9 entered from the leg (9:0x52, 9:0x10, 9:0x42 about 100 each). Golden race: (to come). 250 test:
+(to come).
 
 ## The current workflow: the fresh generation (2.0.1.0)
 
@@ -594,24 +614,22 @@ new starts (`triforce judge compare`). The generation is judged from the previou
 **Stage 2: one network from the teachers** (`docs/lab.md` "Stage 2"; round 38 made its one network this way). Record
 the named teachers' play on every member's task with hit labels (`r36_merge_record.py`), cache it, imitate it into
 one `hitnet` student (KL over the 352 joint actions, the value, the hit head in the same pass), correct it on its own
-states (DAgger: the student plays, the teachers label), then PPO one dungeon at a time with the teacher's term fading
-(`lab.train --load ... --teacher ... --teacher-fade`).
+states (DAgger: the student plays, the teachers label). 2.0.1.0 stopped there: PPO one dungeon at a time with the
+teacher's term fading (`lab.train --load ... --teacher ... --teacher-fade`) lost Dungeon 3's Darknuts and became the
+2.0.1.1 experiments (held teacher, a floor, the student's own arrivals; `round40.md` §7).
 
 **The check and landing.** The finished network gets 1000-run chains on every segment and the full route, every run
 recorded as a replay and kept on local disk to be watched and mined; that check is officially 2.0.1.0, and it lands
 on `main` with its 250 test and golden race like any version. Changes after it are 2.0.1.x; the next fresh retrain is
 2.0.2.0 (WAIT with a direction, statues as entities and the backlog's other "next retrain" entries).
 
-**Where it stands (Nov 27; `round40.md`, the queue).** Stage 1's seed 1 is trained for every teacher but the
-Wizzrobes, some restarted after fixes (the start-state draw, Nov 25; the overworld's exit table) or continued
-(`gen1-walkers/s1r-c2`, `gen1-overworld/s1r2-c2`, `gen1-boss-gleeok/s1r-c3`). Against 2.0.0.15's team on the
-generation's new starts (300 runs paired, `round40.md` "Stage 1 restarted"), the Darknut and walkers teachers took
-Dungeon 3 from 1.3% to 61.3% from the previous triforce, Dungeon 5 27.0 → 63.0%, Dungeon 2 76.0 → 96.0%, Dungeon 8
-87.0 → 99.3%; Dungeon 7 fell (61.0 → 9.3% from the entrance: 7:0x1b's Goriyas, which led to the Goriya teacher).
-The first read of the whole new team (100 runs a segment) was good everywhere but Dungeons 6 (0%) and 9 (5%), traced
-to the others teacher's Wizzrobes, which learned to shelter in a Like-Like's hold (masked since) and never learned
-the two fights: the Wizzrobe teacher trains now in two arms (continued from `gen1-others/s1r4` and from scratch).
-Checkpoints of the Darknut and walkers teachers are being confirmed on 300-run chains. Stage 2 has not started.
+**Where it stands (Nov 27; `round40.md`).** The generation is done and 2.0.1.0 is landing: fourteen stage-1
+teachers (seed 1 each), the student `gen1-one/im768`, one correction round `gen1-one/c1-768`, and its official 1000-run
+chains (above). Before the student, the teachers' own team (2.0.0.15 with every group slot filled, 300 runs on fresh
+seeds 1000-1299) ended the game in 14.0% of whole-route runs; the student copied it to within two standard errors on
+every scope after the correction round (15.3% of 300 on the same seeds). Next: 2.0.1.1, PPO from `c1-768` as an
+experiment, Dungeon 3 first, each arm measured alike; an arm that beats 2.0.1.0 on the chains without losing
+elsewhere becomes 2.0.1.1.
 
 ## History not in this repository
 

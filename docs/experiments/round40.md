@@ -1,7 +1,36 @@
-# Round 40: the fresh generation's pieces (2.0.1.0, before it trains)
+# Round 40: the fresh generation (2.0.1.0)
 
 Each piece of the fresh generation (backlog "The fresh generation (2.0.1.0): what goes in before it trains") has its
-own section here, written by the agent that built it.
+own section here, written by the agent that built it; the lead's sections say what was run with them.
+
+## Summary
+
+- **Built (Nov 23-26):** everything the generation changes before it trains, each a switch or a rule of the
+  route's task files: the whirlwinds as engine macros and the docks unaided ("Engine macros and run lineage"); new
+  inputs, schema 8's danger block ("Observation v7's danger block"), schema 9's chase target ("The chase target") and
+  schema 10's shooters ("The Goriya teacher", "Every shooter"); the carriers and the wall's grant ("Carriers, the
+  wall's grant and the goals", "The carriers on the merged generation"); 3:0x69 crossed by a line; the route data
+  and start states, walked from power on one per door ("The fresh generation's `d3first` route data", "The real
+  walk"); the closing no-button frame removed ("0x1e's row and 0x1f's line"); the owner's Darknut fighter; the
+  curricula, task files, lab trainer, stage 2's tools and the teacher judge; the baseline, 2.0.0.15's team at 1000
+  runs a segment ("The baseline the fresh generation is compared with"); and on the way the queues file, main on the
+  store, hearts as the game holds them, real spawn layouts, and the decisions that did nothing removed.
+- **Stage 1 (Nov 24-27):** fourteen group teachers from scratch ("The rehearsal and the start of stage 1"),
+  restarted on a fixed start-state draw ("What the teachers train on"), with Darknuts, Goriyas and Wizzrobes split
+  off as teachers of their own where a group could not learn them ("Darknuts their own teacher", "The Goriya
+  teacher", "Why the others teacher loses Dungeons 6 and 9", "The Wizzrobe teacher"); judged in chains beside
+  2.0.0.15 ("Stage 1 restarted: the Darknut and walkers teachers judged").
+- **Stage 2 (Nov 27):** one 768-wide `hitnet` copied from the fourteen (`gen1-one/im768`) and corrected once on its own
+  states (`gen1-one/c1-768`): within two standard errors of the teachers' team on every scope, the whole route 15.3%
+  of 300 against their 14.0% ("Stage 2", §1-§6). PPO on Dungeon 3 with the teacher fading lost the Darknuts and was
+  set aside (§7).
+- **The result:** `gen1-one/c1-768` is 2.0.1.0 (the owner, Nov 27). On the official 1000-run chains it is better or
+  level against 2.0.0.15 on every dungeon from both starts (Dungeon 6 from Dungeon 7's triforce 18.2 → 73.6%, Dungeon
+  3 from the start 43.2 → 73.5%) and ends the game in **133 of 1000 whole-route runs (13.3%**; 2.0.0.15: 3), 18 of
+  them inside the north star of 37:00, the best zero-cheat run 36:49.578 (`docs/model-versions.md` "2.0.1.0").
+- **Next: 2.0.1.1**, PPO from `c1-768` as an experiment, Dungeon 3 first: the teacher held, a floor, the student's
+  own arrivals, one change at a time, each measured alike (§7 "The decisions"). What still ends runs most: Manhandla,
+  Gleeok, Digdogger, and Dungeon 9 entered from the leg.
 
 ## Engine macros and run lineage (Gen40eng, branch `r40-gen-eng`)
 
