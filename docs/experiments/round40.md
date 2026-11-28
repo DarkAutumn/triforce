@@ -6253,3 +6253,27 @@ second round (another 1.4M rows the student plays, an hour of record and 3.5M+ r
 these chains cannot see; what is left against the teachers is Dungeon 9 from the leg and Dungeon 6, the two places
 the PPO stages are for.
 
+### 7. PPO on Dungeon 3 with the teacher fading: `gen1-one/ppo-d3` loses the Darknuts
+
+`lab.train --name gen1-one --run-id ppo-d3 --team current --load gen1-one/c1-768`, the six keys that play D3
+(boss-manhandla, darknut, equipment-room, stalfos-keese-gel, trap-room, zol `@d3first`), each on its d3first task
+with its start states cut to Dungeon 3's (`target/s52/ppo_tasks.py`), its teacher per key (`--teacher`), the teacher
+KL at 1.0 for 20 iterations and faded to 0 over 40, `--aux hit=hit:0.5 --try-others 4:0.25`, the other 28 keys
+rehearsed from the cache (`--rehearse`, 299,992 rows), `--no-task-demos` (darknut's task demonstrations hold no
+`entity_shooter`: refused otherwise), 20 envs, 16,384 steps an iteration, 100 iterations (1.64M steps; job #2640, 31
+minutes, 884 steps a second). The curriculum stays on (the tracks start a share of the episodes mid-room).
+
+| | D3 from the start | D3 from its entrance | rooms tier | cheap tier |
+|---|---:|---:|---:|---:|
+| c1-768 | 73.0% | 75.3% | | |
+| ppo-d3 | **38.3% (-34.7 ± 3.7)** | **30.0% (-45.3 ± 3.5)** | -1.7 ± 0.3, 9 losing rows | +0.0 ± 0.2 |
+
+(seeds 1000-1299; ppo-d3's runs end in 3x5b 59, 3x59 58, 3x69 56 of 300 from the entrance.) Its training success
+hardly moved (darknut 0.93-0.97; 3:0x59 from N from its seed start 0.85 in the first 20 iterations, 0.80 in the
+last 40), while on the rooms tier's arrived states darknut 3_59n went 0.867 → 0.600, 3_5bw 0.933 → 0.750, 3_69n
+0.917 → 0.833, and the three compound to the chain. By checkpoint (the rooms tier's D3 keys): 3_59n 0.85 / 0.92 /
+0.67 / 0.82 / 0.72 / 0.60 at iterations 10 / 30 / 50 / 70 / 90 / 100, 3_5bw 0.87 / 0.88 / 0.88 / 0.78 / 0.80 /
+0.75: the drift comes as the teacher term fades (its KL to the teachers rose 0.034 → 0.084 while it was still on,
+the entropy 1.18 → 1.34). Not kept. The same run with the teacher held at 1.0 throughout (`ppo-d3-hold`,
+`--teacher-fade 0`) is the next measurement; the fading plan is the lead's and the owner's to keep or change.
+
