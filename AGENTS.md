@@ -8,7 +8,7 @@ there).
 
 ## Where things stand (Nov 27)
 
-- **Now: 2.0.1.0 is landing (Nov 27): the fresh generation's one network, `gen1-one/c1-768`**, a 768-wide `hitnet`
+- **Now: 2.0.1.0 landed (Nov 27): the fresh generation's one network, `gen1-one/c1-768`**, a 768-wide `hitnet`
   copied from the fourteen stage-1 group teachers (trained from scratch, `triforce/groups.yaml`) and corrected once on
   its own states (decisions 2026-11-27; `docs/experiments/round40.md` "Summary" and "Stage 2";
   `docs/model-versions.md` "2.0.1.0"). Its 1000-run chains against 2.0.0.15, paired: every dungeon better or level

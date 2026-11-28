@@ -549,7 +549,7 @@ previous triforce | from the entrance): Dungeon 3 43.2 | 45.7%, 4 45.8 | 68.4%, 
 66.1%, 7 42.5 | 77.3%, 6 18.2 | 35.7%, 8 88.9 | 88.6%, 9 22.6 | 51.2%; **the full route 3 of 1000 (0.3%)**. 250 test: 1 of
 250 won on 2.0.0.15 and 2.0.0.16, every run identical between the two.
 
-### 2.0.1.0 (Nov 23-27: round 40's first commit to the owner's decision `80eda5ca`; landing Nov 27; round 40)
+### 2.0.1.0 (Nov 23-27: round 40's first commit to the owner's decision `80eda5ca`; landed Nov 27, tag `v2.0.1.0`; round 40)
 
 The first fresh generation and the first version that is one network: `gen1-one/c1-768`, a 768-wide `hitnet` that
 plays every room of `d3first` from the game start to the ending. It was copied from fourteen group teachers trained
@@ -591,8 +591,10 @@ of 1000), median 135,961 frames, 2.88 cheated items a run; 18 runs finish inside
 frames from control to Zelda; decisions 2026-11-27), and 7 wins cheat nothing. The best of those, seed 817, ends
 the game in **36:49.578 with no cheated bomb, key or rupee** (`~/triforce-review/watch/2.0.1.0-zero-cheat-sub37/`).
 Where runs still end most: Manhandla 3:0x4d (187 of 1000 on the whole route), Gleeok 4:0x13 (108), Digdogger 5:0x24
-(61), and Dungeon 9 entered from the leg (9:0x52, 9:0x10, 9:0x42 about 100 each). Golden race: (to come). 250 test:
-(to come).
+(61), and Dungeon 9 entered from the leg (9:0x52, 9:0x10, 9:0x42 about 100 each). **Golden race: 35:50.858** from
+power on (board time; 28 runs over the nine segments). **250 test** (from power on, waits of 0, 4, 8, ... frames;
+`docs/runs250/2.0.1.0.json`): **34 of 250 end the game (13.6%; 2.0.0.16: 1 of 250)**, every triforce taken by 23-32
+points more runs than 2.0.0.16, median 135,763 frames to the end (2.0.0.16: 140,229).
 
 ## The current workflow: the fresh generation (2.0.1.0)
 
@@ -623,7 +625,7 @@ recorded as a replay and kept on local disk to be watched and mined; that check 
 on `main` with its 250 test and golden race like any version. Changes after it are 2.0.1.x; the next fresh retrain is
 2.0.2.0 (WAIT with a direction, statues as entities and the backlog's other "next retrain" entries).
 
-**Where it stands (Nov 27; `round40.md`).** The generation is done and 2.0.1.0 is landing: fourteen stage-1
+**Where it stands (Nov 27; `round40.md`).** The generation is done and 2.0.1.0 landed: fourteen stage-1
 teachers (seed 1 each), the student `gen1-one/im768`, one correction round `gen1-one/c1-768`, and its official 1000-run
 chains (above). Before the student, the teachers' own team (2.0.0.15 with every group slot filled, 300 runs on fresh
 seeds 1000-1299) ended the game in 14.0% of whole-route runs; the student copied it to within two standard errors on
