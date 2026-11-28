@@ -1029,11 +1029,15 @@ the standing invitation is to come up with ideas, test them, keep what helps, an
   `linger/max_steps`, `linger/tail_steps`, `linger/worst_steps` (and frames), eval's per-room summaries and chain
   `RoomRecord.linger`, alongside success, health and selected replays. Metric semantics are in architecture.md.
 - **A run can start from console power on, and its only randomness is then one number** (Nov 11; `zelda::power_on`,
-  `eval-chain --power-on [--name NAME] [--delay N|random]`). The game's random numbers (`$18–$24`) shift once per
+  `eval-chain --power-on [--name NAME] [--delay N]`). The game's random numbers (`$18–$24`) shift once per
   frame in every game mode and depend on nothing else, with a period of 32767 frames. So the run idles `delay`
   frames on the file-select screen before entering the name: **valid delays are 0..=32766**, every value a
-  different game, and no memory is written (no RNG poke, no spawn-cycle or edge-cell draw). `random` (the
-  default) draws the delay from the run's seed. The idle frames are skipped through saved machine states
+  different game, and no memory is written (no RNG poke, no spawn-cycle or edge-cell draw). **Without `--delay` a
+  run's delay is its seed in frame rules of 4 frames** (the owner, Nov 27: no random start windows; r40-int's
+  decisions 2026-11-27 and zelda-asm/mechanics.md "The frame rule"): seed k waits 4k frames
+  (`zelda::power_on::run_delay`), so the golden race's first run waits 0, then 4, 8, ...; the 250 test waits
+  0..996; past seed 8192 the delays start again at 0. The frame rule: the sword cave's walk down moves Link only when
+  `FrameCounter AND 3 = 0` (asm:Mode10Stairs_Update_Full). The idle frames are skipped through saved machine states
   (`triforce/states/power_on/idle_<frames>.state`, one every 2000 frames); the run is the same with or without
   them. **Regenerate them with `python -m triforce.entry_states idle` whenever the state format or the emulator's
   behaviour changes** (`cargo test -p env --test power_on_idle` fails until then). The name is 1 to 8 of A–Z, 0–9
