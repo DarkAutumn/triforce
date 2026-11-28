@@ -439,6 +439,30 @@ def test_the_slicer_cuts_runs_into_verified_room_visits_and_compilations(chain_r
             slicer.parse_args([str(first), '--out', str(out), *bad])
 
 
+@pytest.mark.parametrize('relative', [True, False])
+def test_the_slicer_index_lists_exactly_the_slices_written(chain_replays, tmp_path, monkeypatch, relative):
+    """A folder's ``index.md`` lists the slices pass 2 wrote there and no other (a failed one is left out): the
+    planned and written paths are compared as strings, so ``--out`` given relative or absolute must match."""
+    folder, _, _ = chain_replays
+    slicer = _script('replay_slicer')
+    monkeypatch.chdir(tmp_path)
+    out = Path('slices') if relative else tmp_path / 'slices'
+    runs = [slicer.read_visits(str(path)) for path in sorted(folder.iterdir())]
+    args = slicer.parse_args([str(folder), '--out', str(out), '--rooms', '--speed', 'all'])
+    outputs, index = slicer.plan(args, runs, slicer.room_stats(runs))
+    # Pass 2 for the first run alone: the other runs' slices stand for files that failed.
+    mine = [o for o in outputs if o.visits[0].path == runs[0]['path']]
+    results = slicer.write(runs[0]['path'], mine, False)
+    assert len(mine) < len(outputs) and not [r for r in results if 'error' in r]
+    slicer.write_index(index, False, out, {r['dest'] for r in results})
+    indexes = sorted(out.glob('rooms/*/v*/index.md'))
+    assert indexes
+    for path in indexes:
+        listed = {line.split('|')[1].strip() for line in path.read_text().splitlines()[6:]}
+        on_disk = {p.name for p in path.parent.glob('*.tfreplay')}
+        assert listed == on_disk and all(name.startswith(f"{runs[0]['seed']:08d}-") for name in listed)
+
+
 def test_the_slicer_buckets_each_visit_against_its_room_and_visit():
     """The marks are numpy's linear quantiles of the room+visit's seconds over the selected runs (as
     ``time-wasters.md``): slowest above the 90% mark, slow above the median up to it, fastest below the 10% mark; a
