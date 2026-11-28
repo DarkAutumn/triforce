@@ -540,8 +540,10 @@ once per rollout over its family's rows in batches of 4096 (`lab.collect.Teacher
 - **With PPO** (`--mode ppo`): `loss += c · KL(teacher ‖ student)` over the 352 joint actions (the exact factored
   KL: kind, direction and duration together), plus `--teacher-value-coeff` · ½(V − V_teacher)² (off by default:
   teachers' values are on their own reward scales). The weight `c` is `--teacher-coeff` for `--teacher-hold`
-  iterations, then falls linearly to 0 over `--teacher-fade` (0: stays). Logged: `losses/teacher_kl`,
-  `charts/teacher_coeff`.
+  iterations, then falls linearly over `--teacher-fade` (0: stays) to `--teacher-floor` (0 by default), which it
+  keeps (Stage52: the one network's PPO on Dungeon 3 with the teacher faded to 0 lost 45 points of D3 from its
+  entrance as the term faded, round40.md §7). Logged: `losses/teacher_kl`, `charts/teacher_coeff`; the manifest's
+  `training.teacher` holds `floor` when one is set.
 - **Imitation alone** (`--mode imitate`): no PPO, the student minimises the KL (and the value term) over each
   rollout for `--epochs` epochs; logged `charts/teacher_agreement` (the student's most likely joint action is the
   teacher's). `--actor student` (default) collects on the student's own states: DAgger, the distribution it will

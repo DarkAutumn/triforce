@@ -6007,12 +6007,13 @@ stage 1 (overworld `gen1-overworld/s1r2-c2-it000350`, walkers `gen1-walkers/s1r-
 
 Each step dry-run on the frozen `triforce-gen15` (4a90b087): the teachers' record of every group and boss
 (`r36_merge_record.py --group <all 14> --teacher-group ... --try-others 4:0.25 --sources resets entries --dry-run`)
-resolves every teacher and plans 50 keys × 2 sources; nothing there is refused. Three things were:
+resolves every teacher and plans 34 keys (every family's `family@d3first`) × 2 sources; nothing there is refused.
+Three things were:
 
 - **`shooter` in the student's inputs.** The overworld, Goriya and Wizzrobe teachers read schema 10's
   `entity_shooter`, so the student must (its token groups are the union of its teachers'). Only those twelve tasks
   turned `obs.shooter` on: a correction round's record with such a student (`--student`, any hitnet with the
-  `shooter` group) is refused on 38 other keys' tasks ("reads obs.shooter (entity_shooter), off in the task"), and so
+  `shooter` group) is refused on the other 22 keys' tasks ("reads obs.shooter (entity_shooter), off in the task"), and so
   would be its imitation on the walkers' rows (recorded with zeros), its PPO (`check_network_reads`) and every chain
   slot outside those families (`runner.check_inputs`). **Changed:** `obs.shooter: true` in
   `specialists/d3first/_generation.yaml` (every generation task; the twelve per-task lines removed), and
@@ -6042,3 +6043,237 @@ Tests: `test_inputs` (every generation task has the three switches), `test_lab_g
 generation network is refused), and after the review a teacher reading threat and chase but not shooter passes
 `check_inputs` on a shooter-on task (`test_inputs`); the Python suite 1,359 passed, `check` ok. Reviewed (Review46)
 and merged: r40-int e093604c; frozen worktree `triforce-gen16` for every run below.
+
+Later fixes on the branch: `bench run --team` on the rooms tier (KeyError `full`, e56ccca4, reviewed and merged);
+the imitation files its run in the store (`gen1-one/<run>`, origin `distill`, parent and data recorded, sealed;
+93111f7f) and `scripts/experiments/r52_one_team.py RUN` writes the spec that puts one network in every slot
+(`current+@GROUP=RUN` for each of the 14 groups). Found and left to Perf43: `nets.serve.Server` keeps every served
+copy (a bench of ~100 entries of a 768-wide teacher reached 12.2 GB of GPU memory and died, job #2579); the tiers
+run in key chunks of separate processes until that is fixed.
+
+### 2. The teachers' team: what the student is measured against
+
+The teachers' team is `current` (2.0.0.15) with all fourteen group slots filled (`+@overworld=...+@ganon=...`; every
+family of the route). It played the 18 scopes of a judgement (each dungeon from the previous triforce and from its
+entrance, cut at its exit; `triforce judge`'s plan) at 300 runs each on **fresh seeds 1000-1299** (the teachers'
+checkpoints were chosen on seeds 0-299), from the frozen `triforce-gen15` (jobs #2567, #2568; the lead's smoke on
+gen16 replayed D3's seeds 1000-1049 identically). Files `target/s52/chains/s52-teachers-<scope>.jsonl` (stage52
+worktree). Against 2.0.0.15's 1000-run baseline (`r40-2015-1k`, seeds 0-999: unpaired), success, then the frames a
+successful run takes (median, best; the owner's north star, Nov 27: 37 minutes = 133,419 frames from control to
+Zelda):
+
+| dungeon | from | 2.0.0.15 | teachers | rooms where teachers' runs end (2.0.0.15) | frames, median (best) |
+|---|---|---:|---:|---|---|
+| D3 | start | 43.2% | **73.3%** | 3x4d 19.7% (18.8%), 3x5b 2.7%, 3x69 2.0% (13.9%) | 10,989 (9,970) |
+| D3 | entrance | 45.7% | **77.0%** | 3x4d 19.0% (18.1%) | 9,777 (8,555) |
+| D4 | D3's triforce | 45.8% | **82.7%** | 4x13 14.3% (37.4%) | 13,550 (11,938) |
+| D4 | entrance | 68.4% | **87.7%** | 4x13 10.7% (26.8%) | 12,009 (10,396) |
+| D1 | D4's triforce | 98.5% | 99.7% | | 10,669 (9,701) |
+| D1 | entrance | 98.9% | 100.0% | | 8,775 (7,731) |
+| D2 | D1's triforce | 93.8% | 99.7% | | 10,485 (9,522) |
+| D2 | entrance | 99.8% | 99.7% | | 6,110 (5,366) |
+| D5 | D2's triforce | 57.8% | **77.0%** | 5x24 12.0% (4.1%), 5x65 2.3%, 5x47 2.0% | 18,300 (16,738) |
+| D5 | entrance | 66.1% | **87.3%** | 5x24 7.0% (2.7%) | 13,251 (12,011) |
+| D7 | D5's triforce | 42.5% | **78.3%** | 7x1b 8.3% (21.2%), 7x0d 4.0%, 7x1c 3.3% | 19,499 (17,302) |
+| D7 | entrance | 77.3% | 83.3% | 7x1c 7.0% (5.6%), 7x1b 3.0% | 13,523 (12,229) |
+| D6 | D7's triforce | 18.2% | **78.0%** | 6x3a 10.3% (32.9%), 6x38 3.3% (27.4%), **0x5f 1.7%** (0.0%) | 14,836 (13,483) |
+| D6 | entrance | 35.7% | **92.0%** | 6x3a 8.0% (32.7%) | 9,091 (7,706) |
+| D8 | D6's triforce | 88.9% | **100.0%** | | 9,108 (8,123) |
+| D8 | entrance | 88.6% | **99.0%** | | 6,699 (5,697) |
+| D9 | D8's triforce | 22.6% | **47.3%** | 9x10 12.0%, 9x42 11.7% (4.9%), 9x52 11.3% (2.2%) | 28,401 (26,371) |
+| D9 | entrance | 51.2% | 55.3% | 9x42 10.7% (5.2%), 9x10 9.7% (14.3%), 9x52 7.0% | 23,871 (21,979) |
+
+0x5f, the knockback rule's loss after D7 (the brief: 99% → 90% on the teachers when the rule went in), ends 5 of
+300 runs from D7's triforce here (1.7%); the student is checked on the same seeds there.
+
+**The whole route** (from the start state, no cut; 300 runs, seeds 1000-1299, job #2602): **42 of 300 end the game
+(14.0%)**, median 136,693 frames (37:54.5), best **132,095 (36:38.0)**; 4 of the 42 are within the north star's
+133,419 frames. Where the other 258 end: 3:0x4d (Manhandla) 59, 4:0x13 (Gleeok) 41, 9:0x52 16, 5:0x24 13, 6:0x3a 12,
+9:0x10 10, 9:0x42 9, 3:0x5b 8.
+
+**The yardstick** (gen16, route tasks, `bench.network_task`; key chunks of separate processes, merged): cheap tier
+97.8% of 6,100 episodes, hearts lost -0.007 an episode (more healed than lost), 0.430 hits a visit, 47.2 decisions,
+0.334 bombs; rooms tier 96.0% of 5,980, 0.256 hearts lost, 0.607 hits a visit, 64.2 decisions, 0.378 bombs
+(2.0.0.7's 51 on it: 92.3%, 0.678, 1.003). Files `target/s52/bench/teachers-{cheap,rooms}.json`: the student's
+tiers are compared with these, pair by pair.
+
+**The record** (gen16; `r36_merge_record.py`, the 14 teachers named by group, `--try-others 4:0.25`, 20,480
+decisions a source, 10 envs): 34 keys × resets and entries, 1,392,640 rows (job #2574, 74 minutes, 440-620 decisions
+a second), and the every-room harvest of the teachers' own chains as a third source (`--sources rooms`; 18 scopes ×
+120 runs, seeds 400000-400119, 51,249 room entries; job #2603, 34 keys, 696,320 rows, 45 minutes): 2,088,960 rows,
+102 sources.
+
+### 3. Imitation: `gen1-one/im256` and `gen1-one/im768`
+
+One cache of the 102 sources (2,088,960 rows, 15 GB; 1,880,064 train, 208,896 held out: the last env of each
+rollout), then `r36_merge_distill.py train --arch hitnet --arch-config '{"tokens": [type, features, rel, threat,
+chase, shooter], "feed": true, "room": true, "hidden_dim": W}' --aux hit=hit:0.5`, round 38's first pass (20 epochs,
+lr 1e-3, value 0.02, batch 4,096), both widths side by side from the frozen `triforce-gen18` (affde0e6; jobs #2617,
+#2618, 20 minutes each, about a minute an epoch). Both are sealed store runs (origin `distill`).
+
+| | parameters | held-out KL | joint top-1 | kind | direction | duration | value SE | hit loss (train / held out) | hit P=R taken / judged |
+|---|---:|---:|---:|---:|---:|---:|---:|---|---|
+| im256 | 1,609,220 | 0.0314 | 0.928 | 0.986 | 0.977 | 0.955 | 0.238 | 0.0096 / 0.0195 | 0.645 / 0.668 |
+| im768 | 4,960,772 | **0.0238** | **0.941** | 0.988 | 0.980 | 0.966 | 0.187 | 0.0083 / 0.0192 | 0.657 / 0.680 |
+
+(Round 38's 768-wide student: 0.118 on its first data, 0.089 after the every-room rows and a correction round.) 768
+is lower on every one of the 34 keys (by about a quarter). The keys whose KL stays highest, 256 / 768: darknut
+0.138 / 0.106 (joint 0.80 / 0.83), wizzrobe 0.097 / 0.077, goriya 0.075 / 0.057, boss-gleeok 0.053 / 0.047,
+like-like 0.050 / 0.035, gibdo 0.044 / 0.035, boss-manhandla 0.040 / 0.031; the overworld keys and the simple rooms
+0.001-0.04 (per key: `target/s52/im-keys.md`). The hit head (256): train loss 0.054 → 0.0096 over the 20 epochs,
+held-out loss 0.0325 → 0.0192 by epoch 12 and flat after (0.0195 at 20); held-out P=R on judged candidates 0.41 →
+0.67 by epoch 11, flat after: the last eight epochs fit the head's labels and gain nothing held out.
+
+**The yardstick** (gen18; one network for every key, route tasks; paired with the teachers' team on the same
+episodes; ± one standard error):
+
+| | cheap: success | hearts lost | hits a visit | losing rows | rooms: success | hearts lost | hits a visit | losing rows |
+|---|---:|---:|---:|---|---:|---:|---:|---|
+| teachers | 97.8% | -0.007 | 0.430 | | 96.0% | 0.256 | 0.607 | |
+| im256 | 97.3% (-0.5 ± 0.2) | +0.011 ± 0.009 | +0.014 ± 0.008 | none | 95.6% (-0.3 ± 0.2) | +0.031 ± 0.014 | +0.030 ± 0.011 | wizzrobe 9_07s -8.3 ± 3.6, darknut 5_37s -6.7 ± 3.2 |
+| im768 | 97.4% (-0.4 ± 0.2) | +0.017 ± 0.009 | +0.018 ± 0.009 | none | **96.3% (+0.4 ± 0.3)** | -0.007 ± 0.014 | -0.005 ± 0.011 | **none** |
+
+Play speed (decisions a second over the tiers, the two benches running side by side on the same machine): 256 1,254
+and 1,245, 768 1,181 and 1,135 (cheap, rooms), the teachers' team 940 and 1,154. The served network is not what the
+play waits on: 768 costs 6-9% in decisions a second. (`bench speed` fails on r40-int: `_play_policy` calls
+`evaluate._play` with one argument too many; not used here.)
+
+### 4. The width: 768
+
+Fresh seeds for the choice (2000-2099, used by nothing before), each dungeon from its entrance, cut at its exit, 100
+runs, the student in every slot (`r52_one_team.py`) and the teachers' team beside it (gen18; jobs #2622, #2623,
+#2626; the teachers' D4 chain finished its 100 runs and then died at the process's exit, "terminate called without
+an active exception", so its complete `.tmp` output is the result: Perf43's). Success, paired by seed:
+
+| dungeon (entrance) | teachers | im256 | im768 | im768 − teachers | im768 − im256 |
+|---|---:|---:|---:|---:|---:|
+| D3 | 74% | 70% | 72% | -2.0 ± 6.4 | +2.0 ± 6.4 |
+| D4 | 89% | 86% | 93% | +4.0 ± 4.0 | +7.0 ± 4.1 |
+| D1 | 100% | 99% | 99% | -1.0 ± 1.0 | +0.0 ± 1.4 |
+| D2 | 100% | 100% | 100% | +0.0 ± 0.0 | +0.0 ± 0.0 |
+| D5 | 87% | 81% | 85% | -2.0 ± 5.1 | +4.0 ± 5.3 |
+| D7 | 78% | 81% | 88% | +10.0 ± 5.4 | +7.0 ± 5.2 |
+| D6 | 91% | 91% | 83% | -8.0 ± 4.6 | -8.0 ± 4.6 |
+| D8 | 99% | 100% | 100% | +1.0 ± 1.0 | +0.0 ± 0.0 |
+| D9 | 59% | 56% | 61% | +2.0 ± 6.8 | +5.0 ± 7.0 |
+| product | 0.238 | 0.199 | 0.251 | | |
+
+**Settled: 768** (the owner's "768 wide everywhere", groups.yaml's), on all three measures: held-out KL a quarter
+lower on every key (0.0238 against 0.0314), the rooms tier level with the teachers where 256 is 0.3 points under with
+two losing rows, and on fresh seeds ahead of 256 on five of nine dungeons and level on three (D4 +7.0 ± 4.1, D7
++7.0 ± 5.2), behind on D6 alone (-8.0 ± 4.6, the one dungeon it also trails the teachers on). Its play costs 6-9% in
+decisions a second; the emulator, not the network, sets the pace. Everything below is `gen1-one/im768` and its
+descendants.
+
+### 5. `gen1-one/im768` against the teachers' team (seeds 1000-1299, every scope)
+
+The 18 scopes of §2 and the whole route, 300 runs each on the teachers' seeds (gen18; jobs #2628, #2629, #2630;
+`target/s52/paired.py`), paired by seed; frames are the medians of the finished runs:
+
+| dungeon | from | teachers | im768 | difference | frames im768 / teachers | where im768's runs end (of 300) |
+|---|---|---:|---:|---:|---|---|
+| D3 | start | 73.3% | 72.3% | -1.0 ± 3.8 | 11,006 / 10,989 | 3x4d 52, 3x69 15, 3x59 5 |
+| D3 | entrance | 77.0% | 73.7% | -3.3 ± 3.5 | 9,772 / 9,777 | 3x4d 55, 3x69 10, 3x59 4 |
+| D4 | D3's triforce | 82.7% | 81.3% | -1.3 ± 3.0 | 13,462 / 13,550 | 4x13 46, 4x12 7 |
+| D4 | entrance | 87.7% | 85.7% | -2.0 ± 2.8 | 12,121 / 12,009 | 4x13 41 |
+| D1 | D4's triforce | 99.7% | 99.7% | +0.0 ± 0.5 | 10,757 / 10,669 | |
+| D1 | entrance | 100.0% | 99.7% | -0.3 ± 0.3 | 8,743 / 8,775 | |
+| D2 | D1's triforce | 99.7% | 99.7% | +0.0 ± 0.5 | 10,433 / 10,485 | |
+| D2 | entrance | 99.7% | 100.0% | +0.3 ± 0.3 | 6,134 / 6,110 | |
+| D5 | D2's triforce | 77.0% | 80.7% | +3.7 ± 3.6 | 18,185 / 18,300 | 5x24 32, 5x64 5, 5x25 4 |
+| D5 | entrance | 87.3% | 86.7% | -0.7 ± 2.7 | 13,231 / 13,251 | 5x24 23, 5x25 5 |
+| D7 | D5's triforce | 78.3% | 81.7% | +3.3 ± 3.3 | 19,186 / 19,499 | 7x1b 22, 7x1c 9, 7x2a 7 |
+| D7 | entrance | 83.3% | 82.3% | -1.0 ± 3.1 | 13,517 / 13,523 | 7x1c 24, 7x2a 12, 7x1b 8 |
+| D6 | D7's triforce | 78.0% | 75.7% | -2.3 ± 3.4 | 14,739 / 14,836 | 6x3a 34, 6x38 9, 6x2c 7 |
+| D6 | entrance | 92.0% | 88.0% | -4.0 ± 2.3 | 9,048 / 9,091 | 6x3a 30 |
+| D8 | D6's triforce | 100.0% | 98.7% | -1.3 ± 0.7 | 9,133 / 9,108 | |
+| D8 | entrance | 99.0% | 99.7% | +0.7 ± 0.7 | 6,757 / 6,699 | |
+| D9 | D8's triforce | 47.3% | **36.7%** | **-10.7 ± 3.9** | 28,505 / 28,401 | 9x52 41, 9x42 28, 9x10 27, 9x30 18 |
+| D9 | entrance | 55.3% | 56.3% | +1.0 ± 4.1 | 23,745 / 23,871 | 9x52 34, 9x10 25, 9x42 24 |
+| whole route | start | 14.0% | **10.0%** | -4.0 ± 2.6 | 136,805 / 136,692 | 3x4d 52, 4x13 31, 6x3a 22 |
+
+The copy plays the teachers' game: every scope within two standard errors but one, and a finished run as fast (the paired frames
+of runs both finished within two standard errors everywhere but D6 from D7's triforce, where the student is 231 ±
+107 frames faster). **Where it loses**: Dungeon 9 entered from the leg (-10.7 ± 3.9: 9x52 41 deaths against the teachers' 34,
+9x30 18 against 6), entered at the hearts and items the leg brings, which from its entrance (a refilled state) it
+plays as the teachers do; and, inside two standard errors, Dungeon 6 from its entrance (-4.0 ± 2.3, 6x3a, as on the
+fresh seeds: -8.0 ± 4.6). 0x5f after D7: 5 runs of 300 end
+there (5 deaths), the teachers' 5 (2 deaths, 3 stuck): the knockback loss is the teachers' size, no worse.
+
+The whole route: 30 of 300 end the game (10.0%), median 136,805 frames, best 133,500 (37:01.3, 81 frames over the
+north star); none within 133,419 (the teachers' 4).
+
+### 6. One correction round: `gen1-one/c1-768`
+
+**The student's own states.** im768 played the 18 scopes, 120 runs each on the teachers' harvest seeds
+(400000-400119), with the every-room harvest on (job #2627, 27 minutes): 51,024 room entries, its hearts and items.
+Then `r36_merge_record.py --student gen1-one/im768 --sources resets rooms --harvest <that>`: the student acting, the
+fourteen teachers labelling its decisions, on every key's training resets and on its own room entries (job #2631,
+gen18, 64 minutes): 34 keys × 2 sources, 1,392,640 rows. Cache of all three data dirs, 3,481,600 rows; 5 epochs at
+lr 3e-4 from im768 (gen19, job #2635, 8 minutes). Held-out KL (now over a held-out set with the student's own rows)
+0.0267 after the first epoch → 0.0221 after the fifth, joint top-1 0.943; darknut 0.092 (im768 on its own held
+out: 0.106), wizzrobe 0.075, goriya 0.052, boss-gleeok 0.041.
+
+**Tiers**: against im768, cheap 0.0 ± 0.2 points, rooms 0.0 ± 0.2 (three rows -6.7 to -8.3 beyond two standard
+errors: digdogger 5_24e, gibdo 5_65w, wizzrobe 6_2ce); against the teachers, cheap -0.4 ± 0.2, rooms +0.3 ± 0.3, no
+losing row on either tier.
+
+**Chains** (seeds 1000-1299, gen19; jobs #2637-#2639), c1 − im768 / c1 − teachers, paired:
+
+| dungeon | from | teachers | im768 | c1-768 | c1 − im768 | c1 − teachers | where c1's runs end (of 300) |
+|---|---|---:|---:|---:|---:|---:|---|
+| D3 | start | 73.3% | 72.3% | 73.0% | +0.7 ± 3.6 | -0.3 ± 3.6 | 3x4d 51, 3x69 13 |
+| D3 | entrance | 77.0% | 73.7% | 75.3% | +1.7 ± 3.6 | -1.7 ± 3.5 | 3x4d 52, 3x69 8 |
+| D4 | D3's triforce | 82.7% | 81.3% | 80.0% | -1.3 ± 3.1 | -2.7 ± 3.3 | 4x13 52 |
+| D4 | entrance | 87.7% | 85.7% | 85.3% | -0.3 ± 2.8 | -2.3 ± 2.8 | 4x13 38 |
+| D1 | D4's triforce | 99.7% | 99.7% | 99.0% | -0.7 ± 0.7 | -0.7 ± 0.7 | |
+| D1 | entrance | 100.0% | 99.7% | 100.0% | +0.3 ± 0.3 | +0.0 ± 0.0 | |
+| D2 | D1's triforce | 99.7% | 99.7% | 99.7% | +0.0 ± 0.0 | +0.0 ± 0.5 | |
+| D2 | entrance | 99.7% | 100.0% | 100.0% | +0.0 ± 0.0 | +0.3 ± 0.3 | |
+| D5 | D2's triforce | 77.0% | 80.7% | 81.0% | +0.3 ± 3.1 | +4.0 ± 3.4 | 5x24 26, 5x47 7, 5x27 7 |
+| D5 | entrance | 87.3% | 86.7% | 86.0% | -0.7 ± 2.9 | -1.3 ± 2.8 | 5x24 24 |
+| D7 | D5's triforce | 78.3% | 81.7% | 83.7% | +2.0 ± 2.9 | +5.3 ± 3.3 | 7x1b 20, 7x1c 10 |
+| D7 | entrance | 83.3% | 82.3% | 81.7% | -0.7 ± 3.1 | -1.7 ± 3.1 | 7x1c 16, 7x29 11, 7x1b 10 |
+| D6 | D7's triforce | 78.0% | 75.7% | 74.0% | -1.7 ± 3.3 | -4.0 ± 3.4 | 6x3a 32, 6x38 13, 0x3f 8 |
+| D6 | entrance | 92.0% | 88.0% | 89.0% | +1.0 ± 2.6 | -3.0 ± 2.5 | 6x3a 24 |
+| D8 | D6's triforce | 100.0% | 98.7% | 98.7% | +0.0 ± 0.8 | -1.3 ± 0.7 | |
+| D8 | entrance | 99.0% | 99.7% | 100.0% | +0.3 ± 0.3 | +1.0 ± 0.6 | |
+| D9 | D8's triforce | 47.3% | 36.7% | 41.3% | +4.7 ± 4.1 | -6.0 ± 3.9 | 9x42 42, 9x10 36, 9x52 27 |
+| D9 | entrance | 55.3% | 56.3% | 52.7% | -3.7 ± 4.2 | -2.7 ± 4.0 | 9x42 33, 9x52 30, 9x10 29 |
+| whole route | start | 14.0% | 10.0% | **15.3%** | **+5.3 ± 2.7** | +1.3 ± 2.8 | 3x4d 51, 4x13 34, 5x24 16 |
+
+The whole route: **46 of 300 end the game**, best 132,611 frames (36:46.6), 4 within 133,419 (132,611, 132,704,
+132,776, 132,873; the teachers' 4 on these seeds too). Every scope is now within two standard errors of the
+teachers'.
+
+**Settled: one correction round.** It moved no scope beyond two standard errors (the whole route +5.3 ± 2.7, D9 from
+the leg +4.7 ± 4.1; the largest step back D9 from its entrance, -3.7 ± 4.2) and the tiers not at all; the held-out
+KL fell 0.106 → 0.092 on the worst key. A
+second round (another 1.4M rows the student plays, an hour of record and 3.5M+ rows a pass) would chase differences
+these chains cannot see; what is left against the teachers is Dungeon 9 from the leg and Dungeon 6, the two places
+the PPO stages are for.
+
+### 7. PPO on Dungeon 3 with the teacher fading: `gen1-one/ppo-d3` loses the Darknuts
+
+`lab.train --name gen1-one --run-id ppo-d3 --team current --load gen1-one/c1-768`, the six keys that play D3
+(boss-manhandla, darknut, equipment-room, stalfos-keese-gel, trap-room, zol `@d3first`), each on its d3first task
+with its start states cut to Dungeon 3's (`target/s52/ppo_tasks.py`), its teacher per key (`--teacher`), the teacher
+KL at 1.0 for 20 iterations and faded to 0 over 40, `--aux hit=hit:0.5 --try-others 4:0.25`, the other 28 keys
+rehearsed from the cache (`--rehearse`, 299,992 rows), `--no-task-demos` (darknut's task demonstrations hold no
+`entity_shooter`: refused otherwise), 20 envs, 16,384 steps an iteration, 100 iterations (1.64M steps; job #2640, 31
+minutes, 884 steps a second). The curriculum stays on (the tracks start a share of the episodes mid-room).
+
+| | D3 from the start | D3 from its entrance | rooms tier | cheap tier |
+|---|---:|---:|---:|---:|
+| c1-768 | 73.0% | 75.3% | | |
+| ppo-d3 | **38.3% (-34.7 ± 3.7)** | **30.0% (-45.3 ± 3.5)** | -1.7 ± 0.3, 9 losing rows | +0.0 ± 0.2 |
+
+(seeds 1000-1299; ppo-d3's runs end in 3x5b 59, 3x59 58, 3x69 56 of 300 from the entrance.) Its training success
+hardly moved (darknut 0.93-0.97; 3:0x59 from N from its seed start 0.85 in the first 20 iterations, 0.80 in the
+last 40), while on the rooms tier's arrived states darknut 3_59n went 0.867 → 0.600, 3_5bw 0.933 → 0.750, 3_69n
+0.917 → 0.833, and the three compound to the chain. By checkpoint (the rooms tier's D3 keys): 3_59n 0.85 / 0.92 /
+0.67 / 0.82 / 0.72 / 0.60 at iterations 10 / 30 / 50 / 70 / 90 / 100, 3_5bw 0.87 / 0.88 / 0.88 / 0.78 / 0.80 /
+0.75: the drift comes as the teacher term fades (its KL to the teachers rose 0.034 → 0.084 while it was still on,
+the entropy 1.18 → 1.34). Not kept. The same run with the teacher held at 1.0 throughout (`ppo-d3-hold`,
+`--teacher-fade 0`) is the next measurement; the fading plan is the lead's and the owner's to keep or change.
+

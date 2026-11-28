@@ -6,6 +6,7 @@ import subprocess
 import sys
 
 import numpy as np
+import pytest
 import torch
 
 from triforce import jobs, nets, registry
@@ -103,6 +104,26 @@ def test_a_two_family_run_with_teachers_trains_links_and_loads_once(tmp_path, lo
 
 def run_summary(run):
     return json.loads((run / 'train_summary.json').read_text())
+
+
+def test_the_teacher_term_holds_fades_and_stops_at_its_floor(capsys):
+    """Stage52: held for --teacher-hold iterations, then linear over --teacher-fade down to --teacher-floor, which it
+    keeps; the floor is recorded only when set (a run without one keeps its recipe), in [0, --teacher-coeff]."""
+    base = ['--name', 'x', '--families', 'zol', '--teacher-coeff', '1.0', '--teacher-hold', '10',
+            '--teacher-fade', '20']
+    faded = train.parse_args(base)
+    assert [train.teacher_coeff(faded, i) for i in (1, 10, 20, 30, 31, 100)] == [1.0, 1.0, 0.5, 0.0, 0.0, 0.0]
+    floor = train.parse_args([*base, '--teacher-floor', '0.3'])
+    assert [train.teacher_coeff(floor, i) for i in (1, 10, 20, 26, 30, 100)] == [1.0, 1.0, 0.5, 0.3, 0.3, 0.3]
+    kept = train.parse_args([*base[:-2], '--teacher-fade', '0', '--teacher-floor', '0.3'])
+    assert train.teacher_coeff(kept, 100) == 1.0
+    faded.aux = floor.aux = []
+    record = lambda args: train.training_settings(args, train.PPOConfig(), None, 64, False, {})['teacher']
+    assert 'floor' not in record(faded) and record(floor)['floor'] == 0.3
+    for bad in ('-0.1', '1.5'):
+        with pytest.raises(SystemExit):
+            train.parse_args([*base, '--teacher-floor', bad])
+    assert '--teacher-floor' in capsys.readouterr().err
 
 
 def test_imitation_alone_with_the_teachers_acting_and_the_recorder(tmp_path, logs_dir):
